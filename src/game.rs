@@ -12,6 +12,11 @@ use std::time::{Duration, Instant};
 use crate::snake::{Direction, Point, Snake};
 use serde::{Deserialize, Serialize};
 
+pub fn beep() {
+    print!("\x07");
+    let _ = io::stdout().flush();
+}
+
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub enum GameState {
     Menu,
@@ -42,10 +47,12 @@ pub struct Game {
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
     pub skin: char,
+    pub theme: String,
+    pub lives: u32,
 }
 
 impl Game {
-    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char) -> Self {
+    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String) -> Self {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
         let start_y = height / 2;
@@ -67,6 +74,8 @@ impl Game {
             rng,
             just_died: false,
             skin,
+            theme,
+            lives: 3,
         }
     }
 
@@ -163,8 +172,18 @@ impl Game {
         self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
         self.bonus_food = None;
         self.score = 0;
+        self.lives = 3;
         self.state = GameState::Playing;
         self.just_died = false;
+    }
+
+    fn respawn(&mut self) {
+        let start_x = self.width / 2;
+        let start_y = self.height / 2;
+        self.snake = Snake::new(Point { x: start_x, y: start_y });
+        // Ensure snake doesn't spawn on obstacle
+        // For simplicity in this game, we assume center is safe or we clear obstacles there.
+        self.obstacles.retain(|p| !(p.x == start_x && (p.y >= start_y && p.y <= start_y + 2)));
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -198,22 +217,84 @@ impl Game {
             self.snake.direction = dir;
         }
 
-        // Manage bonus food
+        self.manage_bonus_food();
+
+        let head = self.snake.head();
+        let next_head = self.calculate_next_head(head);
+
+        // Check collision with walls and obstacles
+        let mut hit_wall = false;
+        let final_head = if self.wrap_mode {
+            self.calculate_wrapped_head(next_head)
+        } else {
+            if next_head.x == 0 || next_head.x >= self.width - 1 || next_head.y == 0 || next_head.y >= self.height - 1 {
+                hit_wall = true;
+            }
+            next_head
+        };
+
+        if self.obstacles.contains(&final_head) {
+            hit_wall = true;
+        }
+
+        if hit_wall {
+            self.handle_death();
+            return;
+        }
+
+        // Check bonus food collision
+        let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+             self.score += 5;
+             self.bonus_food = None;
+             beep();
+             true
+        } else {
+             false
+        };
+
+        // Refined self collision check
+        if self.snake.body.contains(&final_head) {
+             if !grow && final_head == *self.snake.body.back().unwrap() {
+                 // We are moving into the tail, but the tail will move. Safe.
+             } else {
+                 self.handle_death();
+                 return;
+             }
+        }
+
+        if final_head == self.food {
+             grow = true;
+        }
+
+        if grow && final_head == self.food {
+            self.score += 1;
+            beep();
+            // Add a new obstacle every 5 points
+            if self.score.is_multiple_of(5) {
+                let new_obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 1);
+                self.obstacles.extend(new_obstacles);
+            }
+            self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
+        }
+
+        self.snake.move_to(final_head, grow);
+    }
+
+    fn manage_bonus_food(&mut self) {
         if let Some((_, spawn_time)) = self.bonus_food {
              if spawn_time.elapsed() > Duration::from_secs(5) {
                  self.bonus_food = None;
              }
         } else if self.rng.gen_bool(0.01) {
-             // 1% chance per tick to spawn bonus food
-             // Use temporary obstacles vector including food to prevent overlap
              let mut obstructions = self.obstacles.clone();
              obstructions.push(self.food);
              let bonus = Self::generate_food(self.width, self.height, &self.snake, &obstructions, &mut self.rng);
              self.bonus_food = Some((bonus, Instant::now()));
         }
+    }
 
-        let head = self.snake.head();
-        let next_head = match self.snake.direction {
+    const fn calculate_next_head(&self, head: Point) -> Point {
+        match self.snake.direction {
             Direction::Up => Point {
                 x: head.x,
                 y: head.y.wrapping_sub(1),
@@ -230,80 +311,33 @@ impl Game {
                 x: head.x + 1,
                 y: head.y,
             },
-        };
-
-        // Check collision with walls
-        let mut hit_wall = false;
-        let final_head = if self.wrap_mode {
-            let mut x = next_head.x;
-            let mut y = next_head.y;
-            if x == 0 { x = self.width - 2; }
-            else if x >= self.width - 1 { x = 1; }
-
-            if y == 0 { y = self.height - 2; }
-            else if y >= self.height - 1 { y = 1; }
-            Point { x, y }
-        } else {
-            if next_head.x == 0 || next_head.x >= self.width - 1 || next_head.y == 0 || next_head.y >= self.height - 1 {
-                hit_wall = true;
-            }
-            next_head
-        };
-
-        // Check collision with obstacles
-        if self.obstacles.contains(&final_head) {
-            hit_wall = true;
         }
+    }
 
-        if hit_wall {
+    const fn calculate_wrapped_head(&self, next_head: Point) -> Point {
+        let mut x = next_head.x;
+        let mut y = next_head.y;
+        if x == 0 { x = self.width - 2; }
+        else if x >= self.width - 1 { x = 1; }
+
+        if y == 0 { y = self.height - 2; }
+        else if y >= self.height - 1 { y = 1; }
+        Point { x, y }
+    }
+
+    fn handle_death(&mut self) {
+        self.lives -= 1;
+        self.just_died = true;
+        beep();
+        if self.lives == 0 {
             self.state = GameState::GameOver;
-            self.just_died = true;
             if self.score > self.high_score {
                 self.high_score = self.score;
                 Self::save_high_score(self.high_score);
             }
-            return;
-        }
-
-        // Check bonus food collision
-        let grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
-             self.score += 5;
-             self.bonus_food = None;
-             true
         } else {
-             final_head == self.food
-        };
-
-        // Refined self collision check
-        if self.snake.body.contains(&final_head) {
-             if !grow && final_head == *self.snake.body.back().unwrap() {
-                 // We are moving into the tail, but the tail will move. Safe.
-             } else {
-                 self.state = GameState::GameOver;
-                 self.just_died = true;
-                 if self.score > self.high_score {
-                     self.high_score = self.score;
-                     Self::save_high_score(self.high_score);
-                 }
-                 return;
-             }
+            self.respawn();
         }
-
-        if grow && final_head == self.food {
-            self.score += 1;
-            // Add a new obstacle every 5 points
-            if self.score.is_multiple_of(5) {
-                let new_obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 1);
-                self.obstacles.extend(new_obstacles);
-            }
-            self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
-        }
-
-        // We need to override the snake move because we might have wrapped
-        // But snake.move_forward calculates next head internally based on direction.
-        // We need to allow snake to accept a specific next position or update it logic.
-        // Let's modify snake.move_forward to take the next_head.
-        self.snake.move_to(final_head, grow);
     }
 
     pub fn draw(&self, stdout: &mut Stdout) -> io::Result<()> {
@@ -359,11 +393,18 @@ impl Game {
     }
 
     fn draw_game(&self, stdout: &mut Stdout) -> io::Result<()> {
+         let (border_color, food_color, snake_color, obs_color) = match self.theme.as_str() {
+             "dark" => (Color::DarkGrey, Color::DarkRed, Color::Green, Color::DarkMagenta),
+             "retro" => (Color::Green, Color::Green, Color::Green, Color::Green),
+             "neon" => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red),
+             _ => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta),
+         };
+
          // Draw borders
          if self.just_died {
              stdout.queue(SetForegroundColor(Color::Red))?;
          } else {
-             stdout.queue(SetForegroundColor(Color::Blue))?;
+             stdout.queue(SetForegroundColor(border_color))?;
          }
 
         for y in 0..self.height {
@@ -377,11 +418,11 @@ impl Game {
 
         // Draw food
         stdout.queue(cursor::MoveTo(self.food.x, self.food.y))?;
-        stdout.queue(SetForegroundColor(Color::Red))?;
+        stdout.queue(SetForegroundColor(food_color))?;
         write!(stdout, "●")?;
 
         // Draw obstacles
-        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        stdout.queue(SetForegroundColor(obs_color))?;
         for obs in &self.obstacles {
             stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
             write!(stdout, "X")?;
@@ -395,7 +436,7 @@ impl Game {
         }
 
         // Draw snake
-        stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+        stdout.queue(SetForegroundColor(snake_color))?;
         for (i, part) in self.snake.body.iter().enumerate() {
             stdout.queue(cursor::MoveTo(part.x, part.y))?;
             if i == 0 {
@@ -416,7 +457,7 @@ impl Game {
         // Draw score
         stdout.queue(SetForegroundColor(Color::Reset))?;
         stdout.queue(cursor::MoveTo(0, self.height))?;
-        write!(stdout, "Score: {} | High Score: {}", self.score, self.high_score)?;
+        write!(stdout, "Score: {} | High Score: {} | Lives: {}", self.score, self.high_score, self.lives)?;
 
         // Draw Game Over
         if self.state == GameState::GameOver {

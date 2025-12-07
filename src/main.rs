@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Parser, Debug, Clone, Copy)]
+#[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(long, default_value_t = 40)]
@@ -29,6 +29,9 @@ struct Args {
 
     #[arg(long, default_value_t = '█')]
     skin: char,
+
+    #[arg(long, default_value_t = String::from("classic"))]
+    theme: String,
 }
 
 fn main() -> io::Result<()> {
@@ -76,7 +79,7 @@ fn main() -> io::Result<()> {
 }
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin);
+    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme);
     let mut last_tick = Instant::now();
     let base_tick_rate = Duration::from_millis(150);
 
