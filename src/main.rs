@@ -58,13 +58,21 @@ fn main() -> io::Result<()> {
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
     let mut game = Game::new(args.width, args.height, args.wrap);
     let mut last_tick = Instant::now();
-    let tick_rate = Duration::from_millis(150);
+    let base_tick_rate = Duration::from_millis(150);
 
     // Initial draw
     game.draw(stdout)?;
 
     loop {
-        let timeout = tick_rate
+        // Calculate dynamic tick rate based on score
+        // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
+        let current_tick_rate = if game.score > 0 {
+             base_tick_rate.saturating_sub(Duration::from_millis(u64::from(game.score) * 5)).max(Duration::from_millis(50))
+        } else {
+             base_tick_rate
+        };
+
+        let timeout = current_tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
@@ -101,14 +109,6 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
                  _ => {}
              }
         }
-
-        // Calculate dynamic tick rate based on score
-        // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
-        let current_tick_rate = if game.score > 0 {
-             tick_rate.saturating_sub(Duration::from_millis(u64::from(game.score) * 5)).max(Duration::from_millis(50))
-        } else {
-             tick_rate
-        };
 
         if last_tick.elapsed() >= current_tick_rate {
             if game.state == GameState::Playing {
