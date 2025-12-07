@@ -119,6 +119,7 @@ fn draw_help(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
+#[expect(clippy::too_many_lines)]
 fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
      let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
          "dark" => (Color::DarkGrey, Color::DarkRed, Color::Green, Color::DarkMagenta),
@@ -162,6 +163,13 @@ fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
          write!(stdout, "★")?;
     }
 
+    if let Some(power_up) = &game.power_up
+        && power_up.activation_time.is_none() {
+            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            write!(stdout, "P")?;
+        }
+
     // Draw snake
     stdout.queue(SetForegroundColor(snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
@@ -185,7 +193,21 @@ fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     let level = game.score / 20 + 1;
     stdout.queue(SetForegroundColor(Color::Reset))?;
     stdout.queue(cursor::MoveTo(0, game.height))?;
-    write!(stdout, "Score: {} | High: {} | Lives: {} | Level: {}", game.score, game.high_score, game.lives, level)?;
+    write!(
+        stdout,
+        "Score: {} | High: {} | Lives: {} | Level: {}",
+        game.score, game.high_score, game.lives, level
+    )?;
+
+    if let Some(power_up) = &game.power_up
+        && let Some(activation_time) = power_up.activation_time {
+            let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+            if elapsed < 5 {
+                let remaining = 5 - elapsed;
+                let power_up_msg = format!(" | Slowdown: {remaining}s");
+                write!(stdout, "{power_up_msg}")?;
+            }
+        }
 
     // Draw Game Over
     if game.state == GameState::GameOver {

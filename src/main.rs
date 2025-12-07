@@ -99,11 +99,22 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
         }
         // Calculate dynamic tick rate based on score
         // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
-        let current_tick_rate = if game.score > 0 {
-             base_tick_rate.saturating_sub(Duration::from_millis(u64::from(game.score) * 5)).max(Duration::from_millis(50))
+        let mut current_tick_rate = if game.score > 0 {
+            base_tick_rate
+                .saturating_sub(Duration::from_millis(u64::from(game.score) * 5))
+                .max(Duration::from_millis(50))
         } else {
-             base_tick_rate
+            base_tick_rate
         };
+
+        if let Some(power_up) = &mut game.power_up
+            && let Some(activation_time) = power_up.activation_time {
+                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+                    current_tick_rate += Duration::from_millis(100); // Slow down
+                } else {
+                    game.power_up = None; // Power-up expired
+                }
+            }
 
         let timeout = current_tick_rate
             .checked_sub(last_tick.elapsed())

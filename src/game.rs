@@ -5,6 +5,22 @@ use std::time::{Duration, Instant};
 
 use crate::snake::{Direction, Point, Snake};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::time::SystemTime;
+
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum PowerUpType {
+    SlowDown,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct PowerUp {
+    pub p_type: PowerUpType,
+    pub location: Point,
+    #[serde_as(as = "Option<serde_with::TimestampSeconds<i64>>")]
+    pub activation_time: Option<SystemTime>,
+}
 
 pub fn beep() {
     print!("\x07");
@@ -43,6 +59,7 @@ pub struct Game {
     pub snake: Snake,
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
+    pub power_up: Option<PowerUp>,
     pub obstacles: Vec<Point>,
     pub score: u32,
     pub high_score: u32,
@@ -75,6 +92,7 @@ impl Game {
             snake,
             food,
             bonus_food: None,
+            power_up: None,
             obstacles,
             score: 0,
             high_score,
@@ -243,6 +261,7 @@ impl Game {
         }
 
         self.manage_bonus_food();
+        self.manage_power_ups();
 
         let head = self.snake.head();
         let next_head = self.calculate_next_head(head);
@@ -268,6 +287,13 @@ impl Game {
         }
 
         // Check bonus food collision
+        if let Some(p) = self.power_up.as_mut() {
+            if final_head == p.location {
+                p.activation_time = Some(SystemTime::now());
+                beep();
+            }
+        }
+
         let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
              self.score += 5;
              self.bonus_food = None;
@@ -303,6 +329,25 @@ impl Game {
         }
 
         self.snake.move_to(final_head, grow);
+    }
+
+    fn manage_power_ups(&mut self) {
+        if self.power_up.is_none() && self.rng.gen_bool(0.02) {
+            let mut obstructions = self.obstacles.clone();
+            obstructions.push(self.food);
+            if let Some((bonus_food_pos, _)) = self.bonus_food {
+                obstructions.push(bonus_food_pos);
+            }
+
+            let location =
+                Self::generate_food(self.width, self.height, &self.snake, &obstructions, &mut self.rng);
+
+            self.power_up = Some(PowerUp {
+                p_type: PowerUpType::SlowDown,
+                location,
+                activation_time: None,
+            });
+        }
     }
 
     fn manage_bonus_food(&mut self) {
