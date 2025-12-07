@@ -1,5 +1,3 @@
-#![allow(clippy::collapsible_if)]
-
 mod game;
 mod snake;
 
@@ -71,8 +69,9 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             .unwrap_or_else(|| Duration::from_secs(0));
 
         if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+             // Use match to avoid collapsible_if lint without unstable features
+             match event::read()? {
+                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     match key.code {
                         KeyCode::Char('q') => break,
                         KeyCode::Char(' ') => {
@@ -98,8 +97,9 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
                         KeyCode::Right => if game.snake.direction != Direction::Left { game.snake.direction = Direction::Right; },
                         _ => {}
                     }
-                }
-            }
+                 }
+                 _ => {}
+             }
         }
 
         // Calculate dynamic tick rate based on score
