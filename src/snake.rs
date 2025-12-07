@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Direction {
     Up,
     Down,
@@ -8,15 +9,17 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Point {
     pub x: u16,
     pub y: u16,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Snake {
     pub body: VecDeque<Point>,
     pub direction: Direction,
+    pub next_direction: Option<Direction>,
 }
 
 impl Snake {
@@ -30,6 +33,7 @@ impl Snake {
         Self {
             body,
             direction: Direction::Up,
+            next_direction: None,
         }
     }
 

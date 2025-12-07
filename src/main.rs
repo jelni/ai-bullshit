@@ -26,6 +26,9 @@ struct Args {
 
     #[arg(long, default_value_t = false)]
     wrap: bool,
+
+    #[arg(long, default_value_t = '█')]
+    skin: char,
 }
 
 fn main() -> io::Result<()> {
@@ -36,6 +39,23 @@ fn main() -> io::Result<()> {
         eprintln!("Error: Width and height must be at least 10.");
         std::process::exit(1);
     }
+
+    // Check terminal size
+    if let Ok((term_width, term_height)) = terminal::size() {
+         // Use match or combinators to avoid collapsible_if lint in strict mode
+         if term_width < args.width || term_height < args.height {
+             eprintln!("Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.", args.width, args.height);
+             std::process::exit(1);
+         }
+    }
+
+    // Panic Hook
+    let default_panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = terminal::disable_raw_mode();
+        let _ = execute!(io::stdout(), cursor::Show, terminal::LeaveAlternateScreen);
+        default_panic(info);
+    }));
 
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
@@ -56,7 +76,7 @@ fn main() -> io::Result<()> {
 }
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap);
+    let mut game = Game::new(args.width, args.height, args.wrap, args.skin);
     let mut last_tick = Instant::now();
     let base_tick_rate = Duration::from_millis(150);
 
@@ -99,10 +119,21 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
                                 game.state = GameState::Playing;
                             }
                         }
-                        KeyCode::Up => if game.snake.direction != Direction::Down { game.snake.direction = Direction::Up; },
-                        KeyCode::Down => if game.snake.direction != Direction::Up { game.snake.direction = Direction::Down; },
-                        KeyCode::Left => if game.snake.direction != Direction::Right { game.snake.direction = Direction::Left; },
-                        KeyCode::Right => if game.snake.direction != Direction::Left { game.snake.direction = Direction::Right; },
+                        KeyCode::Char('s') => {
+                            if game.state == GameState::Paused {
+                                game.save_game();
+                                break;
+                            }
+                        }
+                        KeyCode::Char('l') => {
+                            if game.state == GameState::Menu && game.load_game() {
+                                // Game loaded, state is set to Paused by load_game
+                            }
+                        }
+                        KeyCode::Up => game.handle_input(Direction::Up),
+                        KeyCode::Down => game.handle_input(Direction::Down),
+                        KeyCode::Left => game.handle_input(Direction::Left),
+                        KeyCode::Right => game.handle_input(Direction::Right),
                         _ => {}
                     }
                  }
