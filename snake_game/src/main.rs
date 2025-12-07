@@ -4,7 +4,7 @@ use crossterm::{
     execute,
     style::{Color, SetForegroundColor},
     terminal::{self, Clear, ClearType},
-    ExecutableCommand,
+    QueueableCommand,
 };
 use rand::Rng;
 use std::{
@@ -85,7 +85,7 @@ struct Game {
     snake: Snake,
     food: Point,
     score: u32,
-    game_over: bool,
+    is_over: bool,
     rng: rand::rngs::ThreadRng,
 }
 
@@ -95,12 +95,12 @@ impl Game {
         let start_x = WIDTH / 2;
         let start_y = HEIGHT / 2;
         let snake = Snake::new(Point { x: start_x, y: start_y });
-        let food = Game::generate_food(&snake.body, &mut rng);
+        let food = Self::generate_food(&snake.body, &mut rng);
         Self {
             snake,
             food,
             score: 0,
-            game_over: false,
+            is_over: false,
             rng,
         }
     }
@@ -118,7 +118,7 @@ impl Game {
     }
 
     fn update(&mut self) {
-        if self.game_over {
+        if self.is_over {
             return;
         }
 
@@ -145,7 +145,7 @@ impl Game {
         // Check collision with walls
         if next_head.x == 0 || next_head.x >= WIDTH - 1 || next_head.y == 0 || next_head.y >= HEIGHT - 1
         {
-            self.game_over = true;
+            self.is_over = true;
             return;
         }
 
@@ -164,14 +164,14 @@ impl Game {
              if !grow && next_head == *self.snake.body.back().unwrap() {
                  // We are moving into the tail, but the tail will move. Safe.
              } else {
-                 self.game_over = true;
+                 self.is_over = true;
                  return;
              }
         }
 
         if grow {
             self.score += 1;
-            self.food = Game::generate_food(&self.snake.body, &mut self.rng);
+            self.food = Self::generate_food(&self.snake.body, &mut self.rng);
         }
 
         self.snake.move_forward(grow);
@@ -179,51 +179,55 @@ impl Game {
 
     fn draw(&self, stdout: &mut Stdout) -> io::Result<()> {
         // Clear screen
-        stdout.execute(Clear(ClearType::All))?;
+        stdout.queue(Clear(ClearType::All))?;
 
         // Draw borders
-        stdout.execute(SetForegroundColor(Color::White))?;
+        stdout.queue(SetForegroundColor(Color::White))?;
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
                 if x == 0 || x == WIDTH - 1 || y == 0 || y == HEIGHT - 1 {
-                    stdout.execute(cursor::MoveTo(x, y))?;
-                    print!("#");
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "#")?;
                 }
             }
         }
 
         // Draw food
-        stdout.execute(cursor::MoveTo(self.food.x, self.food.y))?;
-        stdout.execute(SetForegroundColor(Color::Red))?;
-        print!("O");
+        stdout.queue(cursor::MoveTo(self.food.x, self.food.y))?;
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        write!(stdout, "O")?;
 
         // Draw snake
-        stdout.execute(SetForegroundColor(Color::Green))?;
+        stdout.queue(SetForegroundColor(Color::Green))?;
         for part in &self.snake.body {
-            stdout.execute(cursor::MoveTo(part.x, part.y))?;
-            print!("█");
+            stdout.queue(cursor::MoveTo(part.x, part.y))?;
+            write!(stdout, "█")?;
         }
 
         // Draw score
-        stdout.execute(SetForegroundColor(Color::Reset))?;
-        stdout.execute(cursor::MoveTo(0, HEIGHT))?;
-        print!("Score: {}", self.score);
+        stdout.queue(SetForegroundColor(Color::Reset))?;
+        stdout.queue(cursor::MoveTo(0, HEIGHT))?;
+        write!(stdout, "Score: {}", self.score)?;
 
         // Draw Game Over
-        if self.game_over {
+        if self.is_over {
              let msg = "GAME OVER";
-             let x_pos = (WIDTH / 2).saturating_sub(msg.len() as u16 / 2);
+             // Safe unwrap because message is short constant
+             let msg_len = u16::try_from(msg.len()).unwrap();
+             let x_pos = (WIDTH / 2).saturating_sub(msg_len / 2);
              let y_pos = HEIGHT / 2;
 
-             stdout.execute(SetForegroundColor(Color::Red))?;
-             stdout.execute(cursor::MoveTo(x_pos, y_pos))?;
-             print!("{}", msg);
+             stdout.queue(SetForegroundColor(Color::Red))?;
+             stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+             write!(stdout, "{msg}")?;
 
              let sub_msg = "Press 'q' to quit, 'r' to restart";
-             let x_sub = (WIDTH / 2).saturating_sub(sub_msg.len() as u16 / 2);
-             stdout.execute(cursor::MoveTo(x_sub, y_pos + 1))?;
-             print!("{}", sub_msg);
-             stdout.execute(SetForegroundColor(Color::Reset))?;
+             // Safe unwrap because message is short constant
+             let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
+             let x_sub = (WIDTH / 2).saturating_sub(sub_msg_len / 2);
+             stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
+             write!(stdout, "{sub_msg}")?;
+             stdout.queue(SetForegroundColor(Color::Reset))?;
         }
 
         stdout.flush()?;
@@ -244,7 +248,7 @@ fn main() -> io::Result<()> {
     terminal::disable_raw_mode()?;
 
     if let Err(e) = res {
-        eprintln!("Error: {:?}", e);
+        eprintln!("Error: {e:?}");
     }
 
     Ok(())
@@ -263,30 +267,28 @@ fn run_game(stdout: &mut Stdout) -> io::Result<()> {
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char('r') => {
-                            if game.game_over {
-                                game = Game::new();
-                                last_tick = Instant::now(); // Reset tick so we don't jump
-                                game.draw(stdout)?;
-                            }
+        if event::poll(timeout)?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Char('r') => {
+                        if game.is_over {
+                            game = Game::new();
+                            last_tick = Instant::now(); // Reset tick so we don't jump
+                            game.draw(stdout)?;
                         }
-                        KeyCode::Up => if game.snake.direction != Direction::Down { game.snake.direction = Direction::Up },
-                        KeyCode::Down => if game.snake.direction != Direction::Up { game.snake.direction = Direction::Down },
-                        KeyCode::Left => if game.snake.direction != Direction::Right { game.snake.direction = Direction::Left },
-                        KeyCode::Right => if game.snake.direction != Direction::Left { game.snake.direction = Direction::Right },
-                        _ => {}
                     }
+                    KeyCode::Up => if game.snake.direction != Direction::Down { game.snake.direction = Direction::Up; },
+                    KeyCode::Down => if game.snake.direction != Direction::Up { game.snake.direction = Direction::Down; },
+                    KeyCode::Left => if game.snake.direction != Direction::Right { game.snake.direction = Direction::Left; },
+                    KeyCode::Right => if game.snake.direction != Direction::Left { game.snake.direction = Direction::Right; },
+                    _ => {}
                 }
-            }
         }
 
         if last_tick.elapsed() >= tick_rate {
-            if !game.game_over {
+            if !game.is_over {
                 game.update();
                 game.draw(stdout)?;
             }
