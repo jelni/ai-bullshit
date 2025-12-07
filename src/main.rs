@@ -1,5 +1,6 @@
 mod game;
 mod snake;
+mod ui;
 
 use clap::Parser;
 use crossterm::{
@@ -84,9 +85,18 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
     let base_tick_rate = Duration::from_millis(150);
 
     // Initial draw
-    game.draw(stdout)?;
+    ui::draw(&game, stdout)?;
 
     loop {
+        if game.state == GameState::Playing && game.just_died {
+             // We just died (lost a life), show countdown before resuming
+             game.just_died = false; // Reset flag so we don't loop here
+             for i in (1..=3).rev() {
+                 ui::draw_countdown(&game, stdout, i)?;
+                 std::thread::sleep(Duration::from_secs(1));
+             }
+             last_tick = Instant::now();
+        }
         // Calculate dynamic tick rate based on score
         // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
         let current_tick_rate = if game.score > 0 {
@@ -103,42 +113,9 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
              // Use match to avoid collapsible_if lint without unstable features
              match event::read()? {
                  Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char(' ') => {
-                            if game.state == GameState::Menu {
-                                game.reset();
-                            }
-                        }
-                        KeyCode::Char('r') => {
-                            if game.state == GameState::GameOver {
-                                game.reset();
-                            }
-                        }
-                        KeyCode::Char('p') => {
-                            if game.state == GameState::Playing {
-                                game.state = GameState::Paused;
-                            } else if game.state == GameState::Paused {
-                                game.state = GameState::Playing;
-                            }
-                        }
-                        KeyCode::Char('s') => {
-                            if game.state == GameState::Paused {
-                                game.save_game();
-                                break;
-                            }
-                        }
-                        KeyCode::Char('l') => {
-                            if game.state == GameState::Menu && game.load_game() {
-                                // Game loaded, state is set to Paused by load_game
-                            }
-                        }
-                        KeyCode::Up => game.handle_input(Direction::Up),
-                        KeyCode::Down => game.handle_input(Direction::Down),
-                        KeyCode::Left => game.handle_input(Direction::Left),
-                        KeyCode::Right => game.handle_input(Direction::Right),
-                        _ => {}
-                    }
+                     if !handle_key_event(key.code, &mut game, stdout) {
+                         break;
+                     }
                  }
                  _ => {}
              }
@@ -148,10 +125,94 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             if game.state == GameState::Playing {
                 game.update();
             }
-            game.draw(stdout)?;
+            ui::draw(&game, stdout)?;
             last_tick = Instant::now();
         }
     }
 
     Ok(())
+}
+
+fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+    match code {
+        KeyCode::Char('q') => {
+            if game.state == GameState::Playing || game.state == GameState::Paused {
+                game.state = GameState::Menu;
+            } else {
+                return false;
+            }
+        }
+        KeyCode::Char(' ') | KeyCode::Enter => {
+            if game.state == GameState::Menu {
+                match game.menu_selection {
+                    0 => game.reset(),
+                    1 => { let _ = game.load_game(); },
+                    2 => game.state = GameState::Help,
+                    3 => return false,
+                    _ => {}
+                }
+            }
+        }
+        KeyCode::Char('r') => {
+            if game.state == GameState::GameOver {
+                game.reset();
+            }
+        }
+        KeyCode::Char('p') => {
+            if game.state == GameState::Playing {
+                game.state = GameState::Paused;
+            } else if game.state == GameState::Paused {
+                game.state = GameState::Playing;
+            }
+        }
+        KeyCode::Char('s') => {
+            if game.state == GameState::Paused {
+                game.save_game();
+                game.save_stats();
+                game.state = GameState::Menu;
+            }
+        }
+        KeyCode::Char('b') => {
+            // Boss Key: Fake terminal mode
+            let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+            let _ = terminal::disable_raw_mode();
+
+            println!("user@workstation:~/projects/reports$ ");
+            println!("user@workstation:~/projects/reports$ ./compile_report.sh");
+            println!("Compiling report... [=================>         ] 65%");
+
+            let mut input = String::new();
+            let _ = std::io::stdin().read_line(&mut input);
+
+            let _ = terminal::enable_raw_mode();
+            let _ = execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide);
+            let _ = ui::draw(game, stdout);
+        }
+        KeyCode::Up => {
+            if game.state == GameState::Menu {
+                if game.menu_selection > 0 {
+                    game.menu_selection -= 1;
+                } else {
+                    game.menu_selection = 3;
+                }
+            } else {
+                game.handle_input(Direction::Up);
+            }
+        },
+        KeyCode::Down => {
+            if game.state == GameState::Menu {
+                if game.menu_selection < 3 {
+                    game.menu_selection += 1;
+                } else {
+                    game.menu_selection = 0;
+                }
+            } else {
+                game.handle_input(Direction::Down);
+            }
+        },
+        KeyCode::Left => game.handle_input(Direction::Left),
+        KeyCode::Right => game.handle_input(Direction::Right),
+        _ => {}
+    }
+    true
 }

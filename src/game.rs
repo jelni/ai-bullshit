@@ -1,12 +1,6 @@
-use crossterm::{
-    cursor,
-    style::{Color, SetForegroundColor},
-    terminal::{Clear, ClearType},
-    QueueableCommand,
-};
 use rand::Rng;
 use std::fs;
-use std::io::{self, Stdout, Write};
+use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 use crate::snake::{Direction, Point, Snake};
@@ -23,6 +17,7 @@ pub enum GameState {
     Playing,
     Paused,
     GameOver,
+    Help,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,6 +26,14 @@ pub struct SaveState {
     pub food: Point,
     pub obstacles: Vec<Point>,
     pub score: u32,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct Statistics {
+    pub games_played: u32,
+    pub total_score: u32,
+    pub total_food_eaten: u32,
+    pub total_time_s: u64,
 }
 
 pub struct Game {
@@ -49,6 +52,10 @@ pub struct Game {
     pub skin: char,
     pub theme: String,
     pub lives: u32,
+    pub menu_selection: usize,
+    pub stats: Statistics,
+    pub start_time: Instant,
+    pub death_message: String,
 }
 
 impl Game {
@@ -59,7 +66,8 @@ impl Game {
         let snake = Snake::new(Point { x: start_x, y: start_y });
         let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
         let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
-        let high_score = *Self::load_high_scores().first().unwrap_or(&0);
+        let high_score = *Self::load_high_scores_static().first().unwrap_or(&0);
+        let stats = Self::load_stats();
         Self {
             width,
             height,
@@ -76,10 +84,14 @@ impl Game {
             skin,
             theme,
             lives: 3,
+            menu_selection: 0,
+            stats,
+            start_time: Instant::now(),
+            death_message: String::new(),
         }
     }
 
-    fn load_high_scores() -> Vec<u32> {
+    pub fn load_high_scores_static() -> Vec<u32> {
         fs::read_to_string("highscore.txt").map_or_else(
             |_| Vec::new(),
             |content| {
@@ -91,8 +103,21 @@ impl Game {
         )
     }
 
+    fn load_stats() -> Statistics {
+        fs::read_to_string("stats.json")
+            .ok()
+            .and_then(|c| serde_json::from_str(&c).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_stats(&self) {
+        if let Ok(json) = serde_json::to_string(&self.stats) {
+            let _ = fs::write("stats.json", json);
+        }
+    }
+
     fn save_high_score(score: u32) {
-        let mut scores = Self::load_high_scores();
+        let mut scores = Self::load_high_scores_static();
         scores.push(score);
         scores.sort_unstable_by(|a, b| b.cmp(a));
         scores.truncate(5);
@@ -238,7 +263,7 @@ impl Game {
         }
 
         if hit_wall {
-            self.handle_death();
+            self.handle_death("Hit Wall/Obstacle");
             return;
         }
 
@@ -257,7 +282,7 @@ impl Game {
              if !grow && final_head == *self.snake.body.back().unwrap() {
                  // We are moving into the tail, but the tail will move. Safe.
              } else {
-                 self.handle_death();
+                 self.handle_death("Hit Self");
                  return;
              }
         }
@@ -325,12 +350,19 @@ impl Game {
         Point { x, y }
     }
 
-    fn handle_death(&mut self) {
+    fn handle_death(&mut self, cause: &str) {
         self.lives -= 1;
         self.just_died = true;
         beep();
+
+        // Update stats
+        self.stats.games_played += 1;
+        self.stats.total_time_s += self.start_time.elapsed().as_secs();
+        self.save_stats();
+
         if self.lives == 0 {
             self.state = GameState::GameOver;
+            self.death_message = cause.to_string();
             if self.score > self.high_score {
                 self.high_score = self.score;
                 Self::save_high_score(self.high_score);
@@ -338,164 +370,5 @@ impl Game {
         } else {
             self.respawn();
         }
-    }
-
-    pub fn draw(&self, stdout: &mut Stdout) -> io::Result<()> {
-        // Clear screen
-        stdout.queue(Clear(ClearType::All))?;
-
-        match self.state {
-            GameState::Menu => self.draw_menu(stdout)?,
-            GameState::Playing | GameState::GameOver | GameState::Paused => self.draw_game(stdout)?,
-        }
-
-        stdout.flush()?;
-        Ok(())
-    }
-
-    fn draw_menu(&self, stdout: &mut Stdout) -> io::Result<()> {
-        let title = "SNAKE GAME";
-        let msg = "Press SPACE to Start";
-        let load = "Press 'l' to Load Game";
-        let quit = "Press 'q' to Quit";
-
-        stdout.queue(SetForegroundColor(Color::Green))?;
-        stdout.queue(cursor::MoveTo((self.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2), self.height / 2 - 3))?;
-        write!(stdout, "{title}")?;
-
-        stdout.queue(SetForegroundColor(Color::White))?;
-        stdout.queue(cursor::MoveTo((self.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2), self.height / 2 - 1))?;
-        write!(stdout, "{msg}")?;
-
-        stdout.queue(SetForegroundColor(Color::Cyan))?;
-        stdout.queue(cursor::MoveTo((self.width / 2).saturating_sub(u16::try_from(load.len()).unwrap() / 2), self.height / 2 + 1))?;
-        write!(stdout, "{load}")?;
-
-        stdout.queue(SetForegroundColor(Color::Red))?;
-        stdout.queue(cursor::MoveTo((self.width / 2).saturating_sub(u16::try_from(quit.len()).unwrap() / 2), self.height / 2 + 3))?;
-        write!(stdout, "{quit}")?;
-
-        // Draw Leaderboard
-        let scores = Self::load_high_scores();
-        if !scores.is_empty() {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            stdout.queue(cursor::MoveTo((self.width / 2).saturating_sub(10), self.height / 2 + 6))?;
-            write!(stdout, "Top Scores:")?;
-            for (i, s) in scores.iter().enumerate().take(5) {
-                stdout.queue(cursor::MoveTo(
-                    (self.width / 2).saturating_sub(10),
-                    self.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
-                ))?;
-                write!(stdout, "{}. {}", i + 1, s)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn draw_game(&self, stdout: &mut Stdout) -> io::Result<()> {
-         let (border_color, food_color, snake_color, obs_color) = match self.theme.as_str() {
-             "dark" => (Color::DarkGrey, Color::DarkRed, Color::Green, Color::DarkMagenta),
-             "retro" => (Color::Green, Color::Green, Color::Green, Color::Green),
-             "neon" => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red),
-             _ => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta),
-         };
-
-         // Draw borders
-         if self.just_died {
-             stdout.queue(SetForegroundColor(Color::Red))?;
-         } else {
-             stdout.queue(SetForegroundColor(border_color))?;
-         }
-
-        for y in 0..self.height {
-            for x in 0..self.width {
-                if x == 0 || x == self.width - 1 || y == 0 || y == self.height - 1 {
-                    stdout.queue(cursor::MoveTo(x, y))?;
-                    write!(stdout, "#")?;
-                }
-            }
-        }
-
-        // Draw food
-        stdout.queue(cursor::MoveTo(self.food.x, self.food.y))?;
-        stdout.queue(SetForegroundColor(food_color))?;
-        write!(stdout, "●")?;
-
-        // Draw obstacles
-        stdout.queue(SetForegroundColor(obs_color))?;
-        for obs in &self.obstacles {
-            stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
-            write!(stdout, "X")?;
-        }
-
-        // Draw bonus food
-        if let Some((bonus_p, _)) = self.bonus_food {
-             stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-             stdout.queue(SetForegroundColor(Color::Yellow))?;
-             write!(stdout, "★")?;
-        }
-
-        // Draw snake
-        stdout.queue(SetForegroundColor(snake_color))?;
-        for (i, part) in self.snake.body.iter().enumerate() {
-            stdout.queue(cursor::MoveTo(part.x, part.y))?;
-            if i == 0 {
-                 // Head
-                 let head_char = match self.snake.direction {
-                     Direction::Up => '^',
-                     Direction::Down => 'v',
-                     Direction::Left => '<',
-                     Direction::Right => '>',
-                 };
-                 write!(stdout, "{head_char}")?;
-            } else {
-                 // Body
-                 write!(stdout, "{}", self.skin)?;
-            }
-        }
-
-        // Draw score
-        stdout.queue(SetForegroundColor(Color::Reset))?;
-        stdout.queue(cursor::MoveTo(0, self.height))?;
-        write!(stdout, "Score: {} | High Score: {} | Lives: {}", self.score, self.high_score, self.lives)?;
-
-        // Draw Game Over
-        if self.state == GameState::GameOver {
-             let msg = "GAME OVER";
-             let msg_len = u16::try_from(msg.len()).unwrap();
-             let x_pos = (self.width / 2).saturating_sub(msg_len / 2);
-             let y_pos = self.height / 2;
-
-             stdout.queue(SetForegroundColor(Color::Red))?;
-             stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
-             write!(stdout, "{msg}")?;
-
-             let sub_msg = "Press 'q' to quit, 'r' to restart";
-             let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
-             let x_sub = (self.width / 2).saturating_sub(sub_msg_len / 2);
-             stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
-             write!(stdout, "{sub_msg}")?;
-             stdout.queue(SetForegroundColor(Color::Reset))?;
-        }
-
-        if self.state == GameState::Paused {
-             let msg = "PAUSED";
-             let msg_len = u16::try_from(msg.len()).unwrap();
-             let x_pos = (self.width / 2).saturating_sub(msg_len / 2);
-             let y_pos = self.height / 2;
-
-             stdout.queue(SetForegroundColor(Color::Yellow))?;
-             stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
-             write!(stdout, "{msg}")?;
-
-             let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
-             let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
-             let x_sub = (self.width / 2).saturating_sub(sub_msg_len / 2);
-             stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
-             write!(stdout, "{sub_msg}")?;
-
-             stdout.queue(SetForegroundColor(Color::Reset))?;
-        }
-        Ok(())
     }
 }
