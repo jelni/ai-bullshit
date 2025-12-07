@@ -20,6 +20,7 @@ pub struct Snake {
     pub body: VecDeque<Point>,
     pub direction: Direction,
     pub next_direction: Option<Direction>,
+    pub speed_multiplier: u32,
 }
 
 impl Snake {
@@ -34,6 +35,7 @@ impl Snake {
             body,
             direction: Direction::Up,
             next_direction: None,
+            speed_multiplier: 1,
         }
     }
 
