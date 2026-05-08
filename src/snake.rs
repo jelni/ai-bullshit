@@ -44,7 +44,7 @@ impl Snake {
     }
 
     pub fn head(&self) -> Point {
-        *self.body.front().unwrap()
+        *self.body.front().expect("Snake body should never be empty")
     }
 
     pub fn move_to(&mut self, new_head: Point, grow: bool) {

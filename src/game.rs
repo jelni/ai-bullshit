@@ -14,7 +14,7 @@ pub enum PowerUpType {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
@@ -42,6 +42,9 @@ pub struct SaveState {
     pub food: Point,
     pub obstacles: Vec<Point>,
     pub score: u32,
+    pub lives: u32,
+    pub bonus_food: Option<(Point, u64)>, // u64 for elapsed seconds
+    pub power_up: Option<PowerUp>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -183,6 +186,9 @@ impl Game {
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
+            lives: self.lives,
+            bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
+            power_up: self.power_up.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write("savegame.json", json);
@@ -200,6 +206,11 @@ impl Game {
                 self.food = state.food;
                 self.obstacles = state.obstacles;
                 self.score = state.score;
+                self.lives = state.lives;
+                self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
+                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
+                });
+                self.power_up = state.power_up;
                 self.state = GameState::Paused;
                 true
             })
@@ -366,7 +377,8 @@ impl Game {
 
         // Refined self collision check
         if self.snake.body.contains(&final_head) {
-            if !grow && final_head == *self.snake.body.back().unwrap() {
+            let is_moving_into_tail = self.snake.body.back().is_some_and(|tail| final_head == *tail);
+            if !grow && is_moving_into_tail {
                 // We are moving into the tail, but the tail will move. Safe.
             } else {
                 self.handle_death("Hit Self");
@@ -505,5 +517,44 @@ impl Game {
         } else {
             self.respawn();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_next_head() {
+        let mut game = Game::new(20, 20, false, 'O', "dark".to_string());
+
+        let head = Point { x: 10, y: 10 };
+        game.snake.direction = Direction::Up;
+        assert_eq!(game.calculate_next_head(head), Point { x: 10, y: 9 });
+
+        game.snake.direction = Direction::Down;
+        assert_eq!(game.calculate_next_head(head), Point { x: 10, y: 11 });
+
+        game.snake.direction = Direction::Left;
+        assert_eq!(game.calculate_next_head(head), Point { x: 9, y: 10 });
+
+        game.snake.direction = Direction::Right;
+        assert_eq!(game.calculate_next_head(head), Point { x: 11, y: 10 });
+    }
+
+    #[test]
+    fn test_calculate_wrapped_head() {
+        let game = Game::new(20, 20, true, 'O', "dark".to_string());
+
+        // Wrap right
+        assert_eq!(game.calculate_wrapped_head(Point { x: 19, y: 10 }), Point { x: 1, y: 10 });
+        // Wrap left
+        assert_eq!(game.calculate_wrapped_head(Point { x: 0, y: 10 }), Point { x: 18, y: 10 });
+        // Wrap bottom
+        assert_eq!(game.calculate_wrapped_head(Point { x: 10, y: 19 }), Point { x: 10, y: 1 });
+        // Wrap top
+        assert_eq!(game.calculate_wrapped_head(Point { x: 10, y: 0 }), Point { x: 10, y: 18 });
+        // No wrap
+        assert_eq!(game.calculate_wrapped_head(Point { x: 10, y: 10 }), Point { x: 10, y: 10 });
     }
 }

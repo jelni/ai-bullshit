@@ -25,7 +25,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
-    let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2);
+    let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2);
     let y_pos = game.height / 2;
 
     stdout.queue(SetForegroundColor(Color::White))?;
@@ -40,7 +40,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Green))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 5,
     ))?;
     write!(stdout, "{title}")?;
@@ -50,14 +50,14 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2) - 2,
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2) - 2,
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "> {item} <")?;
         } else {
             stdout.queue(SetForegroundColor(Color::White))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2),
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "{item}")?;
@@ -105,7 +105,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         3,
     ))?;
     write!(stdout, "{title}")?;
@@ -113,7 +113,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     stdout.queue(SetForegroundColor(Color::White))?;
     for (i, line) in controls.iter().enumerate() {
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             6 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -125,7 +125,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         // legend array constructed above creates temporaries.
         // Let's print directly.
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             14 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -134,7 +134,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let back = "Press 'q' to go back";
     stdout.queue(SetForegroundColor(Color::Red))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
         game.height - 2,
     ))?;
     write!(stdout, "{back}")?;
@@ -242,7 +242,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     // Draw Game Over
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
-        let msg_len = u16::try_from(msg.len()).unwrap();
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
@@ -251,14 +251,14 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "{msg}")?;
 
         let cause_msg = &game.death_message;
-        let cause_len = u16::try_from(cause_msg.len()).unwrap();
+        let cause_len = u16::try_from(cause_msg.len()).unwrap_or(0);
         let x_cause = (game.width / 2).saturating_sub(cause_len / 2);
         stdout.queue(SetForegroundColor(Color::White))?;
         stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
-        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
@@ -267,7 +267,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     if game.state == GameState::Paused {
         let msg = "PAUSED";
-        let msg_len = u16::try_from(msg.len()).unwrap();
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
@@ -276,7 +276,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
-        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
         write!(stdout, "{sub_msg}")?;
@@ -325,5 +325,27 @@ mod tests {
         let output = String::from_utf8(buf).unwrap();
         let expected = get_expected_ansi_tail(10, 10, "0");
         assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
+    }
+
+    #[test]
+    fn test_draw_menu() {
+        let mut game = Game::new(40, 20, false, 'O', "dark".to_string());
+        game.state = GameState::Menu;
+        let mut buf = Vec::new();
+        draw(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("SNAKE GAME"), "Menu should contain title");
+        assert!(output.contains("> Start Game <"), "Menu should highlight selection");
+    }
+
+    #[test]
+    fn test_draw_help() {
+        let mut game = Game::new(40, 20, false, 'O', "dark".to_string());
+        game.state = GameState::Help;
+        let mut buf = Vec::new();
+        draw(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("HELP & CONTROLS"), "Help should contain title");
+        assert!(output.contains("Arrow Keys: Move Snake"), "Help should contain controls");
     }
 }
