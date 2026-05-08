@@ -1,7 +1,9 @@
 use rand::Rng;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 use crate::snake::{Direction, Point, Snake};
 use serde::{Deserialize, Serialize};
@@ -130,7 +132,14 @@ impl Game {
 
     pub fn save_stats(&self) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = fs::write("stats.json", json);
+            let mut options = OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            options.custom_flags(libc::O_NOFOLLOW);
+
+            if let Ok(mut file) = options.open("stats.json") {
+                let _ = file.write_all(json.as_bytes());
+            }
         }
     }
 
@@ -144,7 +153,15 @@ impl Game {
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
-        let _ = fs::write("highscore.txt", content);
+
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        options.custom_flags(libc::O_NOFOLLOW);
+
+        if let Ok(mut file) = options.open("highscore.txt") {
+            let _ = file.write_all(content.as_bytes());
+        }
     }
 
     pub fn save_game(&self) {
@@ -159,7 +176,14 @@ impl Game {
             score: self.score,
         };
         if let Ok(json) = serde_json::to_string(&state) {
-            let _ = fs::write("savegame.json", json);
+            let mut options = OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            options.custom_flags(libc::O_NOFOLLOW);
+
+            if let Ok(mut file) = options.open("savegame.json") {
+                let _ = file.write_all(json.as_bytes());
+            }
         }
     }
 
