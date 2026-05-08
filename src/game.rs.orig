@@ -403,7 +403,7 @@ impl Game {
                     &mut self.rng,
                     1,
                 );
-                self.obstacles.extend(new_obstacles);
+                for obs in new_obstacles { self.obstacles.insert(obs); }
             }
             self.food = Self::generate_food(
                 self.width,
