@@ -214,7 +214,11 @@ impl Game {
     ) -> Vec<Point> {
         let mut obstacles = Vec::with_capacity(count);
         let mut obstacles_set = std::collections::HashSet::with_capacity(count);
-        let snake_body_set: std::collections::HashSet<_> = snake.body.iter().copied().collect();
+
+        let mut body_set = std::collections::HashSet::with_capacity(snake.body.len());
+        for p in &snake.body {
+            body_set.insert(*p);
+        }
 
         for _ in 0..count {
             loop {
@@ -223,7 +227,7 @@ impl Game {
                 let p = Point { x, y };
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
                 // Simple check: not on body.
-                if !snake_body_set.contains(&p) && !obstacles_set.contains(&p) {
+                if !body_set.contains(&p) && !obstacles_set.contains(&p) {
                     obstacles.push(p);
                     obstacles_set.insert(p);
                     break;

@@ -15,3 +15,6 @@ serde_with = "3.8.1"
 pedantic = "warn"
 nursery = "warn"
 allow_attributes = "warn"
+
+[dev-dependencies]
+fastrand = "2.4.1"
