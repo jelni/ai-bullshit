@@ -110,7 +110,11 @@ impl Game {
     }
 
     pub fn load_high_scores_static() -> Vec<u32> {
-        fs::read_to_string("highscore.txt").map_or_else(
+        Self::load_high_scores_from_file("highscore.txt")
+    }
+
+    fn load_high_scores_from_file(path: &str) -> Vec<u32> {
+        fs::read_to_string(path).map_or_else(
             |_| Vec::new(),
             |content| {
                 content
@@ -415,5 +419,37 @@ impl Game {
         } else {
             self.respawn();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_load_high_scores_missing_file() {
+        // Ensure the file does not exist
+        let _ = fs::remove_file("non_existent_scores.txt");
+        let scores = Game::load_high_scores_from_file("non_existent_scores.txt");
+        assert!(scores.is_empty());
+    }
+
+    #[test]
+    fn test_load_high_scores_valid_file() {
+        let content = "100\n200\n300";
+        fs::write("test_scores.txt", content).expect("Unable to write test file");
+        let scores = Game::load_high_scores_from_file("test_scores.txt");
+        assert_eq!(scores, vec![100, 200, 300]);
+        fs::remove_file("test_scores.txt").expect("Unable to remove test file");
+    }
+
+    #[test]
+    fn test_load_high_scores_mixed_content() {
+        let content = "100\nabc\n200\n\n300 ";
+        fs::write("mixed_scores.txt", content).expect("Unable to write test file");
+        let scores = Game::load_high_scores_from_file("mixed_scores.txt");
+        assert_eq!(scores, vec![100, 200, 300]);
+        fs::remove_file("mixed_scores.txt").expect("Unable to remove test file");
     }
 }
