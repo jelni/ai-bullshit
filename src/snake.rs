@@ -71,4 +71,30 @@ mod tests {
         assert_eq!(snake.direction, Direction::Up);
         assert_eq!(snake.next_direction, None);
     }
+
+    #[test]
+    fn test_snake_new_origin() {
+        let start = Point { x: 0, y: 0 };
+        let snake = Snake::new(start);
+
+        assert_eq!(snake.body.len(), 3);
+        assert_eq!(snake.body[0], start);
+        assert_eq!(snake.body[1], Point { x: 0, y: 1 });
+        assert_eq!(snake.body[2], Point { x: 0, y: 2 });
+        assert_eq!(snake.direction, Direction::Up);
+        assert_eq!(snake.next_direction, None);
+    }
+
+    #[test]
+    fn test_snake_new_large_coordinates() {
+        let start = Point { x: u16::MAX - 2, y: u16::MAX - 2 };
+        let snake = Snake::new(start);
+
+        assert_eq!(snake.body.len(), 3);
+        assert_eq!(snake.body[0], start);
+        assert_eq!(snake.body[1], Point { x: u16::MAX - 2, y: u16::MAX - 1 });
+        assert_eq!(snake.body[2], Point { x: u16::MAX - 2, y: u16::MAX });
+        assert_eq!(snake.direction, Direction::Up);
+        assert_eq!(snake.next_direction, None);
+    }
 }
