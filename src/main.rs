@@ -87,7 +87,14 @@ fn main() -> io::Result<()> {
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
     let diff = args.difficulty;
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
+    let mut game = Game::new(
+        args.width,
+        args.height,
+        args.wrap,
+        args.skin,
+        args.theme,
+        diff,
+    );
     let mut last_tick = Instant::now();
     let base_tick_rate = match diff {
         game::Difficulty::Easy => Duration::from_millis(200),
@@ -118,21 +125,24 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             base_tick_rate
         };
 
-        if let Some(power_up) = &mut game.power_up
-            && let Some(activation_time) = power_up.activation_time
-        {
-            if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                match power_up.p_type {
-                    game::PowerUpType::SlowDown => {
-                        current_tick_rate += Duration::from_millis(100); // Slow down
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(power_up) = &mut game.power_up {
+            if let Some(activation_time) = power_up.activation_time {
+                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+                    match power_up.p_type {
+                        game::PowerUpType::SlowDown => {
+                            current_tick_rate += Duration::from_millis(100); // Slow down
+                        }
+                        game::PowerUpType::SpeedBoost => {
+                            current_tick_rate = current_tick_rate
+                                .saturating_sub(Duration::from_millis(50))
+                                .max(Duration::from_millis(30)); // Speed boost
+                        }
+                        game::PowerUpType::Invincibility => {} // Tick rate unaffected
                     }
-                    game::PowerUpType::SpeedBoost => {
-                        current_tick_rate = current_tick_rate.saturating_sub(Duration::from_millis(50)).max(Duration::from_millis(30)); // Speed boost
-                    }
-                    game::PowerUpType::Invincibility => {} // Tick rate unaffected
+                } else {
+                    game.power_up = None; // Power-up expired
                 }
-            } else {
-                game.power_up = None; // Power-up expired
             }
         }
 
