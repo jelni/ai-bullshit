@@ -1,0 +1,46 @@
+use std::collections::VecDeque;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Point {
+    pub x: u16,
+    pub y: u16,
+}
+
+pub struct Snake {
+    pub body: VecDeque<Point>,
+}
+
+fn generate_food_baseline(width: u16, height: u16, snake: &Snake, obstacles: &[Point]) -> Point {
+    let mut i = 0;
+    loop {
+        i = (i + 13) % (width * height);
+        let x = i % width;
+        let y = i / width;
+        let p = Point { x: x.max(1).min(width-2), y: y.max(1).min(height-2) };
+        if !snake.body.contains(&p) && !obstacles.contains(&p) {
+            return p;
+        }
+    }
+}
+
+// Try optimization with `vec` initialized only once, maybe static array if size allows? No, dynamic width/height.
+// Also try just converting snake.body to a boolean grid if we know max grid size, but we do allocate every time in vec!
+// Let's use `vec![false; ...]` because it is ~3-4x faster than baseline.
+
+fn main() {
+    let width = 100;
+    let height = 100;
+    let mut snake = Snake { body: VecDeque::new() };
+    for x in 1..width-3 {
+        for y in 1..height-3 {
+            snake.body.push_back(Point { x, y });
+        }
+    }
+
+    let start = std::time::Instant::now();
+    for _ in 0..100 {
+        let p = generate_food_baseline(width, height, &snake, &[]);
+        std::hint::black_box(p);
+    }
+    println!("Baseline took: {:?}", start.elapsed());
+}
