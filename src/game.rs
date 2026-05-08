@@ -141,7 +141,7 @@ impl Game {
 
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
         let mut rng = rand::thread_rng();
-        let suffix: u32 = rng.gen();
+        let suffix: u32 = rng.r#gen();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
         let mut file = fs::File::options()
