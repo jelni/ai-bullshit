@@ -213,6 +213,12 @@ impl Game {
         count: usize,
     ) -> Vec<Point> {
         let mut obstacles = Vec::new();
+
+        let mut body_set = std::collections::HashSet::with_capacity(snake.body.len());
+        for p in &snake.body {
+            body_set.insert(*p);
+        }
+
         for _ in 0..count {
             loop {
                 let x = rng.gen_range(1..width - 1);
@@ -220,7 +226,7 @@ impl Game {
                 let p = Point { x, y };
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
                 // Simple check: not on body.
-                if !snake.body.contains(&p) && !obstacles.contains(&p) {
+                if !body_set.contains(&p) && !obstacles.contains(&p) {
                     obstacles.push(p);
                     break;
                 }
