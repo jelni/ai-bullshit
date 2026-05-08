@@ -130,7 +130,7 @@ impl Game {
 
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
         let mut rng = rand::thread_rng();
-        let suffix: u32 = rng.gen();
+        let suffix: u32 = rng.r#gen::<u32>();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
         let mut file = fs::File::options()
@@ -281,66 +281,21 @@ impl Game {
         let head = self.snake.head();
         let next_head = self.calculate_next_head(head);
 
-        // Check collision with walls and obstacles
-        let mut hit_wall = false;
-        let final_head = if self.wrap_mode {
-            self.calculate_wrapped_head(next_head)
-        } else {
-            if next_head.x == 0 || next_head.x >= self.width - 1 || next_head.y == 0 || next_head.y >= self.height - 1 {
-                hit_wall = true;
-            }
-            next_head
+        let Some(final_head) = self.handle_boundaries_and_obstacles(next_head) else {
+            self.handle_death("Hit Wall/Obstacle");
+            return;
         };
 
-        if self.obstacles.contains(&final_head) {
-            hit_wall = true;
-        }
+        let mut grow = self.check_power_up_and_bonus_collision(final_head);
 
-        if hit_wall {
-            self.handle_death("Hit Wall/Obstacle");
+        if self.check_self_collision(final_head, grow) {
+            self.handle_death("Hit Self");
             return;
         }
 
-        // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut() {
-            if final_head == p.location {
-                p.activation_time = Some(SystemTime::now());
-                beep();
-            }
-        }
-
-        let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
-             self.score += 5;
-             self.bonus_food = None;
-             beep();
-             true
-        } else {
-             false
-        };
-
-        // Refined self collision check
-        if self.snake.body.contains(&final_head) {
-             if !grow && final_head == *self.snake.body.back().unwrap() {
-                 // We are moving into the tail, but the tail will move. Safe.
-             } else {
-                 self.handle_death("Hit Self");
-                 return;
-             }
-        }
-
         if final_head == self.food {
-             grow = true;
-        }
-
-        if grow && final_head == self.food {
-            self.score += 1;
-            beep();
-            // Add a new obstacle every 5 points
-            if self.score.is_multiple_of(5) {
-                let new_obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 1);
-                self.obstacles.extend(new_obstacles);
-            }
-            self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
+            grow = true;
+            self.handle_food_consumption();
         }
 
         self.snake.move_to(final_head, grow);
@@ -375,6 +330,73 @@ impl Game {
              obstructions.push(self.food);
              let bonus = Self::generate_food(self.width, self.height, &self.snake, &obstructions, &mut self.rng);
              self.bonus_food = Some((bonus, Instant::now()));
+        }
+    }
+
+    fn handle_food_consumption(&mut self) {
+        self.score += 1;
+        beep();
+        // Add a new obstacle every 5 points
+        if self.score.is_multiple_of(5) {
+            let new_obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 1);
+            self.obstacles.extend(new_obstacles);
+        }
+        self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
+    }
+
+    fn check_self_collision(&self, final_head: Point, grow: bool) -> bool {
+        if self.snake.body.contains(&final_head) {
+            if !grow && final_head == *self.snake.body.back().unwrap() {
+                // We are moving into the tail, but the tail will move. Safe.
+                false
+            } else {
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    #[expect(clippy::collapsible_if, reason = "Using if let chaining is unstable")]
+    fn check_power_up_and_bonus_collision(&mut self, final_head: Point) -> bool {
+        // Check power-up collision
+        if let Some(p) = self.power_up.as_mut() {
+            if final_head == p.location {
+                p.activation_time = Some(SystemTime::now());
+                beep();
+            }
+        }
+
+        // Check bonus food collision
+        if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+            self.score += 5;
+            self.bonus_food = None;
+            beep();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn handle_boundaries_and_obstacles(&self, next_head: Point) -> Option<Point> {
+        let mut hit_wall = false;
+        let final_head = if self.wrap_mode {
+            self.calculate_wrapped_head(next_head)
+        } else {
+            if next_head.x == 0 || next_head.x >= self.width - 1 || next_head.y == 0 || next_head.y >= self.height - 1 {
+                hit_wall = true;
+            }
+            next_head
+        };
+
+        if self.obstacles.contains(&final_head) {
+            hit_wall = true;
+        }
+
+        if hit_wall {
+            None
+        } else {
+            Some(final_head)
         }
     }
 
