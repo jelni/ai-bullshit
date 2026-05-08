@@ -1,1 +1,9 @@
 /target
+
+# Benchmark binaries
+bench_fs
+bench_mem
+
+# Scratch files
+test.diff
+test_perf.rs
