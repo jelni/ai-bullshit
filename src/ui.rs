@@ -3,12 +3,12 @@ use crossterm::{
     style::{Color, SetForegroundColor},
     terminal::{Clear, ClearType},
 };
-use std::io::{self, Stdout, Write};
+use std::io::{self, Write};
 
 use crate::game::{Game, GameState};
 use crate::snake::Direction;
 
-pub fn draw(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     // Clear screen
     stdout.queue(Clear(ClearType::All))?;
 
@@ -22,7 +22,7 @@ pub fn draw(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-pub fn draw_countdown(game: &Game, stdout: &mut Stdout, count: u32) -> io::Result<()> {
+pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
     let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2);
@@ -35,7 +35,7 @@ pub fn draw_countdown(game: &Game, stdout: &mut Stdout, count: u32) -> io::Resul
     Ok(())
 }
 
-fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "SNAKE GAME";
 
     stdout.queue(SetForegroundColor(Color::Green))?;
@@ -65,7 +65,7 @@ fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     }
 
     // Draw Leaderboard
-    let scores = crate::game::Game::load_high_scores_static();
+    let scores = &game.high_scores;
     if !scores.is_empty() {
         stdout.queue(SetForegroundColor(Color::Yellow))?;
         stdout.queue(cursor::MoveTo(
@@ -84,7 +84,7 @@ fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_help(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "HELP & CONTROLS";
     let controls = [
         "Arrow Keys: Move Snake",
@@ -142,7 +142,7 @@ fn draw_help(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_borders(game: &Game, stdout: &mut Stdout, border_color: Color) -> io::Result<()> {
+fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
     if game.just_died {
         stdout.queue(SetForegroundColor(Color::Red))?;
     } else {
@@ -160,9 +160,9 @@ fn draw_borders(game: &Game, stdout: &mut Stdout, border_color: Color) -> io::Re
     Ok(())
 }
 
-fn draw_entities(
+fn draw_entities<W: Write>(
     game: &Game,
-    stdout: &mut Stdout,
+    stdout: &mut W,
     food_color: Color,
     snake_color: Color,
     obs_color: Color,
@@ -215,7 +215,7 @@ fn draw_entities(
     Ok(())
 }
 
-fn draw_score(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_score<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let level = game.score / 20 + 1;
     stdout.queue(SetForegroundColor(Color::Reset))?;
     stdout.queue(cursor::MoveTo(0, game.height))?;
@@ -238,7 +238,7 @@ fn draw_score(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_overlays(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
         let msg_len = u16::try_from(msg.len()).unwrap();
@@ -285,7 +285,7 @@ fn draw_overlays(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
         "dark" => (
             Color::DarkGrey,
@@ -304,4 +304,93 @@ fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     draw_overlays(game, stdout)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Game;
+
+    fn get_expected_ansi_tail(x: u16, y: u16, msg: &str) -> String {
+        let mut expected_buf = Vec::new();
+        expected_buf.queue(SetForegroundColor(Color::White)).unwrap();
+        expected_buf.queue(cursor::MoveTo(x, y)).unwrap();
+        write!(expected_buf, "{msg}").unwrap();
+        String::from_utf8(expected_buf).unwrap()
+    }
+
+    #[test]
+    fn test_draw_menu() {
+        let mut game = Game::new(20, 20, false, 'O', "dark".to_string());
+        game.menu_selection = 0; // "Start Game" selected
+
+        let mut buf = Vec::new();
+        draw_menu(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        // Check title
+        assert!(output.contains("SNAKE GAME"), "Menu should contain title");
+
+        // Check selection indicator
+        assert!(output.contains("> Start Game <"), "Menu should indicate selection");
+        assert!(output.contains("Load Game"), "Menu should contain other items");
+        assert!(!output.contains("> Load Game <"), "Unselected items should not have brackets");
+    }
+
+    #[test]
+    fn test_draw_help() {
+        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+
+        let mut buf = Vec::new();
+        draw_help(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        assert!(output.contains("HELP & CONTROLS"), "Help should contain title");
+        assert!(output.contains("Arrow Keys: Move Snake"), "Help should contain controls");
+        assert!(output.contains("O : Snake Body"), "Help should contain dynamic skin info");
+    }
+
+    #[test]
+    fn test_draw_countdown() {
+        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+
+        // Test single digit (count = 3)
+        let mut buf = Vec::new();
+        draw_countdown(&game, &mut buf, 3).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        // center is width/2 (10), msg.len() is 1, so 1/2 is 0. 10 - 0 = 10.
+        let expected = get_expected_ansi_tail(10, 10, "3");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '3' at (10, 10)");
+
+        // Test double digit (count = 10) to test centering subtraction
+        let mut buf = Vec::new();
+        draw_countdown(&game, &mut buf, 10).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        // msg.len() is 2, so 2/2 is 1. 10 - 1 = 9.
+        let expected = get_expected_ansi_tail(9, 10, "10");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '10' at (9, 10)");
+
+        // Test count = 0
+        let mut buf = Vec::new();
+        draw_countdown(&game, &mut buf, 0).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        let expected = get_expected_ansi_tail(10, 10, "0");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
+
+        // Test large width board
+        let large_game = Game::new(100, 100, false, 'O', "dark".to_string());
+        let mut buf = Vec::new();
+        draw_countdown(&large_game, &mut buf, 5).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        let expected = get_expected_ansi_tail(50, 50, "5");
+        assert!(output.ends_with(&expected), "Expected output to center correctly on large board");
+
+        // Test large digit (count = 12345)
+        let mut buf = Vec::new();
+        draw_countdown(&large_game, &mut buf, 12345).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        // msg.len() is 5, so 5/2 is 2. 50 - 2 = 48.
+        let expected = get_expected_ansi_tail(48, 50, "12345");
+        assert!(output.ends_with(&expected), "Expected output to center large digits correctly");
+    }
 }

@@ -1,6 +1,6 @@
 use rand::Rng;
-use std::fs;
-use std::io::{self, Write};
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
 
 use crate::snake::{Direction, Point, Snake};
@@ -63,6 +63,7 @@ pub struct Game {
     pub obstacles: Vec<Point>,
     pub score: u32,
     pub high_score: u32,
+    pub high_scores: Vec<u32>,
     pub state: GameState,
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
@@ -86,7 +87,8 @@ impl Game {
         });
         let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
         let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
-        let high_score = *Self::load_high_scores_static().first().unwrap_or(&0);
+        let high_scores = Self::load_high_scores_static();
+        let high_score = *high_scores.first().unwrap_or(&0);
         let stats = Self::load_stats();
         Self {
             width,
@@ -99,6 +101,7 @@ impl Game {
             obstacles,
             score: 0,
             high_score,
+            high_scores,
             state: GameState::Menu,
             rng,
             just_died: false,
@@ -113,21 +116,26 @@ impl Game {
     }
 
     pub fn load_high_scores_static() -> Vec<u32> {
-        fs::read_to_string("highscore.txt").map_or_else(
-            |_| Vec::new(),
-            |content| {
-                content
-                    .lines()
-                    .filter_map(|line| line.trim().parse::<u32>().ok())
-                    .collect()
-            },
-        )
+        let mut content = String::new();
+        File::open("highscore.txt")
+            .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
+            .map_or_else(
+                |_| Vec::new(),
+                |_| {
+                    content
+                        .lines()
+                        .filter_map(|line| line.trim().parse::<u32>().ok())
+                        .collect()
+                },
+            )
     }
 
     fn load_stats() -> Statistics {
-        fs::read_to_string("stats.json")
+        let mut content = String::new();
+        File::open("stats.json")
+            .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
-            .and_then(|c| serde_json::from_str(&c).ok())
+            .and_then(|_| serde_json::from_str(&content).ok())
             .unwrap_or_default()
     }
 
@@ -152,12 +160,12 @@ impl Game {
         }
     }
 
-    fn save_high_score(score: u32) {
-        let mut scores = Self::load_high_scores_static();
-        scores.push(score);
-        scores.sort_unstable_by(|a, b| b.cmp(a));
-        scores.truncate(5);
-        let content = scores
+    fn save_high_score(&mut self, score: u32) {
+        self.high_scores.push(score);
+        self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
+        self.high_scores.truncate(5);
+        let content = self
+            .high_scores
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
@@ -182,9 +190,11 @@ impl Game {
     }
 
     pub fn load_game(&mut self) -> bool {
-        fs::read_to_string("savegame.json")
+        let mut content = String::new();
+        File::open("savegame.json")
+            .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
-            .and_then(|content| serde_json::from_str::<SaveState>(&content).ok())
+            .and_then(|_| serde_json::from_str::<SaveState>(&content).ok())
             .is_some_and(|state| {
                 self.snake = state.snake;
                 self.food = state.food;
@@ -336,10 +346,11 @@ impl Game {
 
         // Check bonus food collision
         if let Some(p) = self.power_up.as_mut()
-            && final_head == p.location {
-                p.activation_time = Some(SystemTime::now());
-                beep();
-            }
+            && final_head == p.location
+        {
+            p.activation_time = Some(SystemTime::now());
+            beep();
+        }
 
         let mut grow = if self
             .bonus_food
@@ -489,7 +500,7 @@ impl Game {
             self.death_message = cause.to_string();
             if self.score > self.high_score {
                 self.high_score = self.score;
-                Self::save_high_score(self.high_score);
+                self.save_high_score(self.high_score);
             }
         } else {
             self.respawn();
