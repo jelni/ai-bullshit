@@ -57,7 +57,7 @@ fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     }
 
     // Draw Leaderboard
-    let scores = crate::game::Game::load_high_scores_static();
+    let scores = &game.high_scores;
     if !scores.is_empty() {
         stdout.queue(SetForegroundColor(Color::Yellow))?;
         stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(10), game.height / 2 + 6))?;

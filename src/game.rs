@@ -63,6 +63,7 @@ pub struct Game {
     pub obstacles: Vec<Point>,
     pub score: u32,
     pub high_score: u32,
+    pub high_scores: Vec<u32>,
     pub state: GameState,
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
@@ -83,7 +84,8 @@ impl Game {
         let snake = Snake::new(Point { x: start_x, y: start_y });
         let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
         let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
-        let high_score = *Self::load_high_scores_static().first().unwrap_or(&0);
+        let high_scores = Self::load_high_scores_static();
+        let high_score = *high_scores.first().unwrap_or(&0);
         let stats = Self::load_stats();
         Self {
             width,
@@ -96,6 +98,7 @@ impl Game {
             obstacles,
             score: 0,
             high_score,
+            high_scores,
             state: GameState::Menu,
             rng,
             just_died: false,
@@ -154,12 +157,11 @@ impl Game {
         }
     }
 
-    fn save_high_score(score: u32) {
-        let mut scores = Self::load_high_scores_static();
-        scores.push(score);
-        scores.sort_unstable_by(|a, b| b.cmp(a));
-        scores.truncate(5);
-        let content = scores
+    fn save_high_score(&mut self, score: u32) {
+        self.high_scores.push(score);
+        self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
+        self.high_scores.truncate(5);
+        let content = self.high_scores
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
@@ -309,12 +311,11 @@ impl Game {
         }
 
         // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut() {
-            if final_head == p.location {
+        if let Some(p) = self.power_up.as_mut()
+            && final_head == p.location {
                 p.activation_time = Some(SystemTime::now());
                 beep();
             }
-        }
 
         let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
              self.score += 5;
@@ -432,7 +433,7 @@ impl Game {
             self.death_message = cause.to_string();
             if self.score > self.high_score {
                 self.high_score = self.score;
-                Self::save_high_score(self.high_score);
+                self.save_high_score(self.high_score);
             }
         } else {
             self.respawn();
