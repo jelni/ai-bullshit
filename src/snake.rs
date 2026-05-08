@@ -28,8 +28,14 @@ impl Snake {
         // Head
         body.push_back(start);
         // Body segments below head (since we face UP)
-        body.push_back(Point { x: start.x, y: start.y + 1 });
-        body.push_back(Point { x: start.x, y: start.y + 2 });
+        body.push_back(Point {
+            x: start.x,
+            y: start.y + 1,
+        });
+        body.push_back(Point {
+            x: start.x,
+            y: start.y + 2,
+        });
         Self {
             body,
             direction: Direction::Up,
