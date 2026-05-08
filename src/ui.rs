@@ -17,6 +17,7 @@ pub fn draw(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
         GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
+        GameState::EnterName => draw_enter_name(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -62,14 +63,52 @@ fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
         stdout.queue(SetForegroundColor(Color::Yellow))?;
         stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(10), game.height / 2 + 6))?;
         write!(stdout, "Top Scores:")?;
-        for (i, s) in scores.iter().enumerate().take(5) {
+        for (i, (name, score)) in scores.iter().enumerate().take(5) {
             stdout.queue(cursor::MoveTo(
                 (game.width / 2).saturating_sub(10),
                 game.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
             ))?;
-            write!(stdout, "{}. {}", i + 1, s)?;
+            write!(stdout, "{}. {}: {}", i + 1, name, score)?;
         }
     }
+    Ok(())
+}
+
+fn draw_enter_name(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+    // clear screen first to avoid drawing the previous menu or game loop repeatedly over it?
+    // the main draw function already clears it. We just need to draw the game without the "GAME OVER" text.
+    // draw_game will draw game over text because state is game over?? No state is EnterName.
+
+    draw_game(game, stdout)?;
+
+    let msg1 = "NEW HIGH SCORE!";
+    let msg1_len = u16::try_from(msg1.len()).unwrap_or(0);
+    let x1 = (game.width / 2).saturating_sub(msg1_len / 2);
+    let y1 = game.height / 2 - 2;
+
+    stdout.queue(SetForegroundColor(Color::Green))?;
+    stdout.queue(cursor::MoveTo(x1, y1))?;
+    write!(stdout, "{msg1}")?;
+
+    let msg2 = "Enter your name:";
+    let msg2_len = u16::try_from(msg2.len()).unwrap_or(0);
+    let x2 = (game.width / 2).saturating_sub(msg2_len / 2);
+    let y2 = game.height / 2;
+
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(x2, y2))?;
+    write!(stdout, "{msg2}")?;
+
+    let name = format!("{}_", game.player_name);
+    let name_len = u16::try_from(name.len()).unwrap_or(0);
+    let x_name = (game.width / 2).saturating_sub(name_len / 2);
+    let y_name = game.height / 2 + 1;
+
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(x_name, y_name))?;
+    write!(stdout, "{name}")?;
+
+    stdout.queue(SetForegroundColor(Color::Reset))?;
     Ok(())
 }
 
@@ -201,10 +240,10 @@ fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
 
     if let Some(power_up) = &game.power_up
         && let Some(activation_time) = power_up.activation_time {
-            let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+            let elapsed = activation_time.elapsed().as_secs();
             if elapsed < 5 {
                 let remaining = 5 - elapsed;
-                let power_up_msg = format!(" | Slowdown: {remaining}s");
+                let power_up_msg = format!(" | Power-Up: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;
             }
         }

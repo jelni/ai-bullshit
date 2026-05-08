@@ -1,39 +1,22 @@
+mod config;
 mod game;
 mod snake;
 mod ui;
 
 use clap::Parser;
+use config::Args;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{self},
 };
-use game::{Game, GameState};
+use game::{Game, GameState, PowerUpType};
 use snake::Direction;
 use std::{
     io::{self, Stdout},
     time::{Duration, Instant},
 };
-
-#[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(long, default_value_t = 40)]
-    width: u16,
-
-    #[arg(long, default_value_t = 20)]
-    height: u16,
-
-    #[arg(long, default_value_t = false)]
-    wrap: bool,
-
-    #[arg(long, default_value_t = '█')]
-    skin: char,
-
-    #[arg(long, default_value_t = String::from("classic"))]
-    theme: String,
-}
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
@@ -109,8 +92,16 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
 
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time {
-                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                    current_tick_rate += Duration::from_millis(100); // Slow down
+                if activation_time.elapsed() < Duration::from_secs(5) {
+                    match power_up.p_type {
+                        PowerUpType::SlowDown => {
+                            current_tick_rate += Duration::from_millis(100); // Slow down
+                        }
+                        PowerUpType::SpeedBoost => {
+                            current_tick_rate = current_tick_rate.saturating_sub(Duration::from_millis(50)).max(Duration::from_millis(20)); // Speed up
+                        }
+                        PowerUpType::Invincibility => {}
+                    }
                 } else {
                     game.power_up = None; // Power-up expired
                 }
@@ -145,6 +136,30 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
 }
 
 fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+    if game.state == GameState::EnterName {
+        match code {
+            KeyCode::Enter => {
+                if !game.player_name.is_empty() {
+                    Game::save_high_score(&game.player_name, game.score);
+                    if game.score > game.high_score {
+                        game.high_score = game.score;
+                    }
+                    game.state = GameState::GameOver;
+                }
+            }
+            KeyCode::Backspace => {
+                game.player_name.pop();
+            }
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric() && game.player_name.len() < 10 {
+                    game.player_name.push(c);
+                }
+            }
+            _ => {}
+        }
+        return true;
+    }
+
     match code {
         KeyCode::Char('q') => {
             if game.state == GameState::Playing || game.state == GameState::Paused {
