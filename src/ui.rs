@@ -163,13 +163,21 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         stdout.queue(SetForegroundColor(border_color))?;
     }
 
-    for y in 0..game.height {
-        for x in 0..game.width {
-            if x == 0 || x == game.width - 1 || y == 0 || y == game.height - 1 {
-                stdout.queue(cursor::MoveTo(x, y))?;
-                write!(stdout, "#")?;
-            }
-        }
+    // Top border
+    stdout.queue(cursor::MoveTo(0, 0))?;
+    let horizontal_border = "#".repeat(usize::from(game.width));
+    write!(stdout, "{horizontal_border}")?;
+
+    // Bottom border
+    stdout.queue(cursor::MoveTo(0, game.height - 1))?;
+    write!(stdout, "{horizontal_border}")?;
+
+    // Side borders
+    for y in 1..game.height - 1 {
+        stdout.queue(cursor::MoveTo(0, y))?;
+        write!(stdout, "#")?;
+        stdout.queue(cursor::MoveTo(game.width - 1, y))?;
+        write!(stdout, "#")?;
     }
 
     // Draw food
