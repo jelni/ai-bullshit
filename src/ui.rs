@@ -1,7 +1,8 @@
 use crossterm::{
-    QueueableCommand, cursor,
+    cursor,
     style::{Color, SetForegroundColor},
     terminal::{Clear, ClearType},
+    QueueableCommand,
 };
 use std::io::{self, Write};
 
