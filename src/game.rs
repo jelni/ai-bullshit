@@ -27,7 +27,7 @@ pub fn beep() {
     let _ = io::stdout().flush();
 }
 
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum GameState {
     Menu,
     Playing,
@@ -80,7 +80,10 @@ impl Game {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
         let start_y = height / 2;
-        let snake = Snake::new(Point { x: start_x, y: start_y });
+        let snake = Snake::new(Point {
+            x: start_x,
+            y: start_y,
+        });
         let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
         let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
         let high_score = *Self::load_high_scores_static().first().unwrap_or(&0);
@@ -149,11 +152,11 @@ impl Game {
 
     pub fn save_game(&self) {
         let state = SaveState {
-             snake: Snake {
-                 body: self.snake.body.clone(),
-                 direction: self.snake.direction,
-                 next_direction: self.snake.next_direction,
-             },
+            snake: Snake {
+                body: self.snake.body.clone(),
+                direction: self.snake.direction,
+                next_direction: self.snake.next_direction,
+            },
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
@@ -177,7 +180,13 @@ impl Game {
             })
     }
 
-    fn generate_obstacles(width: u16, height: u16, snake: &Snake, rng: &mut rand::rngs::ThreadRng, count: usize) -> Vec<Point> {
+    fn generate_obstacles(
+        width: u16,
+        height: u16,
+        snake: &Snake,
+        rng: &mut rand::rngs::ThreadRng,
+        count: usize,
+    ) -> Vec<Point> {
         let mut obstacles = Vec::new();
         for _ in 0..count {
             loop {
@@ -195,7 +204,13 @@ impl Game {
         obstacles
     }
 
-    fn generate_food(width: u16, height: u16, snake: &Snake, obstacles: &[Point], rng: &mut rand::rngs::ThreadRng) -> Point {
+    fn generate_food(
+        width: u16,
+        height: u16,
+        snake: &Snake,
+        obstacles: &[Point],
+        rng: &mut rand::rngs::ThreadRng,
+    ) -> Point {
         loop {
             // Food must be within walls (1..WIDTH-1, 1..HEIGHT-1)
             let x = rng.gen_range(1..width - 1);
@@ -210,9 +225,19 @@ impl Game {
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
-        self.snake = Snake::new(Point { x: start_x, y: start_y });
-        self.obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 3);
-        self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
+        self.snake = Snake::new(Point {
+            x: start_x,
+            y: start_y,
+        });
+        self.obstacles =
+            Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 3);
+        self.food = Self::generate_food(
+            self.width,
+            self.height,
+            &self.snake,
+            &self.obstacles,
+            &mut self.rng,
+        );
         self.bonus_food = None;
         self.score = 0;
         self.lives = 3;
@@ -223,10 +248,14 @@ impl Game {
     fn respawn(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
-        self.snake = Snake::new(Point { x: start_x, y: start_y });
+        self.snake = Snake::new(Point {
+            x: start_x,
+            y: start_y,
+        });
         // Ensure snake doesn't spawn on obstacle
         // For simplicity in this game, we assume center is safe or we clear obstacles there.
-        self.obstacles.retain(|p| !(p.x == start_x && (p.y >= start_y && p.y <= start_y + 2)));
+        self.obstacles
+            .retain(|p| !(p.x == start_x && (p.y >= start_y && p.y <= start_y + 2)));
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -234,7 +263,7 @@ impl Game {
         // If we have a next_direction, it means we already queued a move for the *next* frame.
         // We only buffer 1 move ahead to prevent "laggy" feel if user mashes keys.
         if self.snake.next_direction.is_some() {
-             return;
+            return;
         }
 
         let current_dir = self.snake.direction;
@@ -271,7 +300,11 @@ impl Game {
         let final_head = if self.wrap_mode {
             self.calculate_wrapped_head(next_head)
         } else {
-            if next_head.x == 0 || next_head.x >= self.width - 1 || next_head.y == 0 || next_head.y >= self.height - 1 {
+            if next_head.x == 0
+                || next_head.x >= self.width - 1
+                || next_head.y == 0
+                || next_head.y >= self.height - 1
+            {
                 hit_wall = true;
             }
             next_head
@@ -287,34 +320,37 @@ impl Game {
         }
 
         // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut() {
-            if final_head == p.location {
-                p.activation_time = Some(SystemTime::now());
-                beep();
-            }
+        if let Some(p) = self.power_up.as_mut()
+            && final_head == p.location
+        {
+            p.activation_time = Some(SystemTime::now());
+            beep();
         }
 
-        let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
-             self.score += 5;
-             self.bonus_food = None;
-             beep();
-             true
+        let mut grow = if self
+            .bonus_food
+            .is_some_and(|(bonus_p, _)| final_head == bonus_p)
+        {
+            self.score += 5;
+            self.bonus_food = None;
+            beep();
+            true
         } else {
-             false
+            false
         };
 
         // Refined self collision check
         if self.snake.body.contains(&final_head) {
-             if !grow && final_head == *self.snake.body.back().unwrap() {
-                 // We are moving into the tail, but the tail will move. Safe.
-             } else {
-                 self.handle_death("Hit Self");
-                 return;
-             }
+            if !grow && final_head == *self.snake.body.back().unwrap() {
+                // We are moving into the tail, but the tail will move. Safe.
+            } else {
+                self.handle_death("Hit Self");
+                return;
+            }
         }
 
         if final_head == self.food {
-             grow = true;
+            grow = true;
         }
 
         if grow && final_head == self.food {
@@ -322,10 +358,22 @@ impl Game {
             beep();
             // Add a new obstacle every 5 points
             if self.score.is_multiple_of(5) {
-                let new_obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 1);
+                let new_obstacles = Self::generate_obstacles(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    &mut self.rng,
+                    1,
+                );
                 self.obstacles.extend(new_obstacles);
             }
-            self.food = Self::generate_food(self.width, self.height, &self.snake, &self.obstacles, &mut self.rng);
+            self.food = Self::generate_food(
+                self.width,
+                self.height,
+                &self.snake,
+                &self.obstacles,
+                &mut self.rng,
+            );
         }
 
         self.snake.move_to(final_head, grow);
@@ -339,8 +387,13 @@ impl Game {
                 obstructions.push(bonus_food_pos);
             }
 
-            let location =
-                Self::generate_food(self.width, self.height, &self.snake, &obstructions, &mut self.rng);
+            let location = Self::generate_food(
+                self.width,
+                self.height,
+                &self.snake,
+                &obstructions,
+                &mut self.rng,
+            );
 
             self.power_up = Some(PowerUp {
                 p_type: PowerUpType::SlowDown,
@@ -352,14 +405,20 @@ impl Game {
 
     fn manage_bonus_food(&mut self) {
         if let Some((_, spawn_time)) = self.bonus_food {
-             if spawn_time.elapsed() > Duration::from_secs(5) {
-                 self.bonus_food = None;
-             }
+            if spawn_time.elapsed() > Duration::from_secs(5) {
+                self.bonus_food = None;
+            }
         } else if self.rng.gen_bool(0.01) {
-             let mut obstructions = self.obstacles.clone();
-             obstructions.push(self.food);
-             let bonus = Self::generate_food(self.width, self.height, &self.snake, &obstructions, &mut self.rng);
-             self.bonus_food = Some((bonus, Instant::now()));
+            let mut obstructions = self.obstacles.clone();
+            obstructions.push(self.food);
+            let bonus = Self::generate_food(
+                self.width,
+                self.height,
+                &self.snake,
+                &obstructions,
+                &mut self.rng,
+            );
+            self.bonus_food = Some((bonus, Instant::now()));
         }
     }
 
@@ -387,11 +446,17 @@ impl Game {
     const fn calculate_wrapped_head(&self, next_head: Point) -> Point {
         let mut x = next_head.x;
         let mut y = next_head.y;
-        if x == 0 { x = self.width - 2; }
-        else if x >= self.width - 1 { x = 1; }
+        if x == 0 {
+            x = self.width - 2;
+        } else if x >= self.width - 1 {
+            x = 1;
+        }
 
-        if y == 0 { y = self.height - 2; }
-        else if y >= self.height - 1 { y = 1; }
+        if y == 0 {
+            y = self.height - 2;
+        } else if y >= self.height - 1 {
+            y = 1;
+        }
         Point { x, y }
     }
 
@@ -415,5 +480,47 @@ impl Game {
         } else {
             self.respawn();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_game_new() {
+        let width = 20;
+        let height = 20;
+        let wrap_mode = false;
+        let skin = 'O';
+        let theme = "default".to_string();
+
+        let game = Game::new(width, height, wrap_mode, skin, theme.clone());
+
+        assert_eq!(game.width, width);
+        assert_eq!(game.height, height);
+        assert_eq!(game.wrap_mode, wrap_mode);
+        assert_eq!(game.skin, skin);
+        assert_eq!(game.theme, theme);
+        assert_eq!(game.lives, 3);
+        assert_eq!(game.score, 0);
+        assert_eq!(game.state, GameState::Menu);
+        assert_eq!(game.obstacles.len(), 3);
+
+        let start_x = width / 2;
+        let start_y = height / 2;
+        assert_eq!(
+            game.snake.head(),
+            Point {
+                x: start_x,
+                y: start_y
+            }
+        );
+
+        // Ensure food is within bounds and not on snake or obstacles
+        assert!(game.food.x > 0 && game.food.x < width - 1);
+        assert!(game.food.y > 0 && game.food.y < height - 1);
+        assert!(!game.snake.body.contains(&game.food));
+        assert!(!game.obstacles.contains(&game.food));
     }
 }
