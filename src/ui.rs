@@ -3,12 +3,12 @@ use crossterm::{
     style::{Color, SetForegroundColor},
     terminal::{Clear, ClearType},
 };
-use std::io::{self, Stdout, Write};
+use std::io::{self, Write};
 
 use crate::game::{Game, GameState};
 use crate::snake::Direction;
 
-pub fn draw(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     // Clear screen
     stdout.queue(Clear(ClearType::All))?;
 
@@ -22,7 +22,7 @@ pub fn draw(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-pub fn draw_countdown(game: &Game, stdout: &mut Stdout, count: u32) -> io::Result<()> {
+pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
     let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2);
@@ -35,7 +35,7 @@ pub fn draw_countdown(game: &Game, stdout: &mut Stdout, count: u32) -> io::Resul
     Ok(())
 }
 
-fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "SNAKE GAME";
 
     stdout.queue(SetForegroundColor(Color::Green))?;
@@ -84,7 +84,7 @@ fn draw_menu(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_help(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "HELP & CONTROLS";
     let controls = [
         "Arrow Keys: Move Snake",
@@ -143,7 +143,7 @@ fn draw_help(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
 }
 
 #[expect(clippy::too_many_lines)]
-fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
+fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
         "dark" => (
             Color::DarkGrey,
@@ -284,4 +284,31 @@ fn draw_game(game: &Game, stdout: &mut Stdout) -> io::Result<()> {
         stdout.queue(SetForegroundColor(Color::Reset))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Game;
+
+    #[test]
+    fn test_draw_countdown() {
+        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+        let mut buf = Vec::new();
+
+        draw_countdown(&game, &mut buf, 3).unwrap();
+
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("3"));
+
+        let mut buf = Vec::new();
+        draw_countdown(&game, &mut buf, 2).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("2"));
+
+        let mut buf = Vec::new();
+        draw_countdown(&game, &mut buf, 1).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("1"));
+    }
 }
