@@ -305,7 +305,7 @@ impl Game {
 
         // Refined self collision check
         if self.snake.body.contains(&final_head) {
-             if !grow && final_head == *self.snake.body.back().unwrap() {
+             if !grow && final_head == *self.snake.body.back().expect("Snake body should never be empty") {
                  // We are moving into the tail, but the tail will move. Safe.
              } else {
                  self.handle_death("Hit Self");
