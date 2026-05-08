@@ -145,10 +145,16 @@ impl Game {
         let suffix: u32 = rng.r#gen();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
-        let mut file = fs::File::options()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)?;
+        let mut options = fs::File::options();
+        options.write(true).create_new(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
+
+        let mut file = options.open(&tmp_path)?;
 
         file.write_all(content.as_ref())?;
         file.sync_all()?;
