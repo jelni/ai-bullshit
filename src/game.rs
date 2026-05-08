@@ -128,9 +128,24 @@ impl Game {
             .unwrap_or_default()
     }
 
+    fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
+        let mut rng = rand::thread_rng();
+        let suffix: u32 = rng.gen();
+        let tmp_path = format!("{path}.{suffix}.tmp");
+
+        let mut file = fs::File::options()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)?;
+
+        file.write_all(content.as_ref())?;
+        file.sync_all()?;
+        fs::rename(tmp_path, path)
+    }
+
     pub fn save_stats(&self) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = fs::write("stats.json", json);
+            let _ = Self::atomic_write("stats.json", json);
         }
     }
 
@@ -144,7 +159,7 @@ impl Game {
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
-        let _ = fs::write("highscore.txt", content);
+        let _ = Self::atomic_write("highscore.txt", content);
     }
 
     pub fn save_game(&self) {
@@ -159,7 +174,7 @@ impl Game {
             score: self.score,
         };
         if let Ok(json) = serde_json::to_string(&state) {
-            let _ = fs::write("savegame.json", json);
+            let _ = Self::atomic_write("savegame.json", json);
         }
     }
 
