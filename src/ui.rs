@@ -291,24 +291,39 @@ mod tests {
     use super::*;
     use crate::game::Game;
 
+    fn get_expected_ansi_tail(x: u16, y: u16, msg: &str) -> String {
+        let mut expected_buf = Vec::new();
+        expected_buf.queue(SetForegroundColor(Color::White)).unwrap();
+        expected_buf.queue(cursor::MoveTo(x, y)).unwrap();
+        write!(expected_buf, "{msg}").unwrap();
+        String::from_utf8(expected_buf).unwrap()
+    }
+
     #[test]
     fn test_draw_countdown() {
         let game = Game::new(20, 20, false, 'O', "dark".to_string());
-        let mut buf = Vec::new();
 
+        // Test single digit (count = 3)
+        let mut buf = Vec::new();
         draw_countdown(&game, &mut buf, 3).unwrap();
-
         let output = String::from_utf8(buf).unwrap();
-        assert!(output.contains("3"));
+        // center is width/2 (10), msg.len() is 1, so 1/2 is 0. 10 - 0 = 10.
+        let expected = get_expected_ansi_tail(10, 10, "3");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '3' at (10, 10)");
 
+        // Test double digit (count = 10) to test centering subtraction
         let mut buf = Vec::new();
-        draw_countdown(&game, &mut buf, 2).unwrap();
+        draw_countdown(&game, &mut buf, 10).unwrap();
         let output = String::from_utf8(buf).unwrap();
-        assert!(output.contains("2"));
+        // msg.len() is 2, so 2/2 is 1. 10 - 1 = 9.
+        let expected = get_expected_ansi_tail(9, 10, "10");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '10' at (9, 10)");
 
+        // Test count = 0
         let mut buf = Vec::new();
-        draw_countdown(&game, &mut buf, 1).unwrap();
+        draw_countdown(&game, &mut buf, 0).unwrap();
         let output = String::from_utf8(buf).unwrap();
-        assert!(output.contains("1"));
+        let expected = get_expected_ansi_tail(10, 10, "0");
+        assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
     }
 }
