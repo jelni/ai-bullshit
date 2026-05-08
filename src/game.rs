@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use rand::Rng;
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
@@ -9,8 +9,17 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::time::SystemTime;
 
-
-#[derive(clap::ValueEnum, Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Default)]
+#[derive(
+    clap::ValueEnum,
+    Clone,
+    Copy,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    Default,
+)]
 pub enum Difficulty {
     Easy,
     #[default]
@@ -24,7 +33,6 @@ pub enum PowerUpType {
     SpeedBoost,
     Invincibility,
 }
-
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
@@ -95,7 +103,14 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String, difficulty: Difficulty) -> Self {
+    pub fn new(
+        width: u16,
+        height: u16,
+        wrap_mode: bool,
+        skin: char,
+        theme: String,
+        difficulty: Difficulty,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
         let start_y = height / 2;
@@ -152,11 +167,13 @@ impl Game {
                         .lines()
                         .filter_map(|line| {
                             let parts: Vec<&str> = line.split_whitespace().collect();
+                            #[expect(clippy::collapsible_if, reason = "stable rust")]
                             if parts.len() >= 2 {
-                                let score_str = parts.last().unwrap();
-                                let name = parts[..parts.len() - 1].join(" ");
-                                if let Ok(score) = score_str.parse::<u32>() {
-                                    return Some((name, score));
+                                if let Some(score_str) = parts.last() {
+                                    let name = parts[..parts.len() - 1].join(" ");
+                                    if let Ok(score) = score_str.parse::<u32>() {
+                                        return Some((name, score));
+                                    }
                                 }
                             }
                             None
@@ -313,7 +330,13 @@ impl Game {
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
         };
-        self.obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, obs_count);
+        self.obstacles = Self::generate_obstacles(
+            self.width,
+            self.height,
+            &self.snake,
+            &mut self.rng,
+            obs_count,
+        );
         self.food = Self::generate_food(
             self.width,
             self.height,
@@ -399,7 +422,8 @@ impl Game {
 
         let is_invincible = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
-                && p.activation_time.is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                && p.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
         if hit_wall && !is_invincible {
@@ -429,7 +453,12 @@ impl Game {
 
         // Refined self collision check
         if self.snake.body.contains(&final_head) && !is_invincible {
-            if !grow && final_head == *self.snake.body.back().unwrap() {
+            let is_tail = self
+                .snake
+                .body
+                .back()
+                .is_some_and(|tail| final_head == *tail);
+            if !grow && is_tail {
                 // We are moving into the tail, but the tail will move. Safe.
             } else {
                 self.handle_death("Hit Self");
@@ -569,7 +598,8 @@ impl Game {
 
         if self.lives == 0 {
             self.death_message = cause.to_string();
-            let is_high_score = self.high_scores.len() < 5 || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
+            let is_high_score = self.high_scores.len() < 5
+                || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
             if is_high_score && self.score > 0 {
                 self.state = GameState::EnterName;
                 self.player_name.clear();
@@ -594,12 +624,20 @@ mod tests {
     #[test]
     fn test_load_game_dos_protection() {
         let file_path = "savegame_test_dos.json";
-        let mut file = File::create(file_path).unwrap();
+        let mut file = File::create(file_path).expect("Failed to create dos test file");
         // Write 2 MB of garbage data
         let data = vec![b'a'; 2 * 1024 * 1024];
-        file.write_all(&data).unwrap();
+        file.write_all(&data)
+            .expect("Failed to write to dos test file");
 
-        let mut game = Game::new(20, 20, false, '#', String::from("dark"), crate::game::Difficulty::Normal);
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            '#',
+            String::from("dark"),
+            crate::game::Difficulty::Normal,
+        );
         // Should not panic or crash out of memory, just return false
         let loaded = game.load_game_from_file(file_path);
         assert!(!loaded);

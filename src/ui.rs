@@ -27,7 +27,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
-    let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2);
+    let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2);
     let y_pos = game.height / 2;
 
     stdout.queue(SetForegroundColor(Color::White))?;
@@ -42,7 +42,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Green))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 5,
     ))?;
     write!(stdout, "{title}")?;
@@ -52,14 +52,14 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2) - 2,
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2) - 2,
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "> {item} <")?;
         } else {
             stdout.queue(SetForegroundColor(Color::White))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2),
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "{item}")?;
@@ -108,7 +108,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         3,
     ))?;
     write!(stdout, "{title}")?;
@@ -116,7 +116,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     stdout.queue(SetForegroundColor(Color::White))?;
     for (i, line) in controls.iter().enumerate() {
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             6 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -128,7 +128,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         // legend array constructed above creates temporaries.
         // Let's print directly.
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             14 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -137,7 +137,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let back = "Press 'q' to go back";
     stdout.queue(SetForegroundColor(Color::Red))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
         game.height - 2,
     ))?;
     write!(stdout, "{back}")?;
@@ -149,7 +149,7 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "NEW HIGH SCORE!";
     stdout.queue(SetForegroundColor(Color::Yellow))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 2,
     ))?;
     write!(stdout, "{title}")?;
@@ -157,7 +157,7 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let prompt = "Enter your name:";
     stdout.queue(SetForegroundColor(Color::White))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(prompt.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(prompt.len()).unwrap_or(0) / 2),
         game.height / 2,
     ))?;
     write!(stdout, "{prompt}")?;
@@ -165,7 +165,7 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let name_str = format!("> {} <", game.player_name);
     stdout.queue(SetForegroundColor(Color::Cyan))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(name_str.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(name_str.len()).unwrap_or(0) / 2),
         game.height / 2 + 2,
     ))?;
     write!(stdout, "{name_str}")?;
@@ -177,7 +177,7 @@ fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "ARE YOU SURE YOU WANT TO QUIT?";
     stdout.queue(SetForegroundColor(Color::Red))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 1,
     ))?;
     write!(stdout, "{title}")?;
@@ -185,7 +185,7 @@ fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let options = "[Y]es / [N]o";
     stdout.queue(SetForegroundColor(Color::White))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(options.len()).unwrap() / 2),
+        (game.width / 2).saturating_sub(u16::try_from(options.len()).unwrap_or(0) / 2),
         game.height / 2 + 1,
     ))?;
     write!(stdout, "{options}")?;
@@ -193,7 +193,10 @@ fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-#[expect(clippy::too_many_lines, reason = "Game drawing requires extensive setup")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Game drawing requires extensive setup"
+)]
 fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
         "dark" => (
@@ -287,21 +290,22 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.score, game.high_score, game.lives, level
     )?;
 
-    if let Some(power_up) = &game.power_up
-        && let Some(activation_time) = power_up.activation_time
-    {
-        let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
-        if elapsed < 5 {
-            let remaining = 5 - elapsed;
-            let power_up_msg = format!(" | Slowdown: {remaining}s");
-            write!(stdout, "{power_up_msg}")?;
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
+    if let Some(power_up) = &game.power_up {
+        if let Some(activation_time) = power_up.activation_time {
+            let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+            if elapsed < 5 {
+                let remaining = 5 - elapsed;
+                let power_up_msg = format!(" | Slowdown: {remaining}s");
+                write!(stdout, "{power_up_msg}")?;
+            }
         }
     }
 
     // Draw Game Over
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
-        let msg_len = u16::try_from(msg.len()).unwrap();
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
@@ -310,14 +314,14 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "{msg}")?;
 
         let cause_msg = &game.death_message;
-        let cause_len = u16::try_from(cause_msg.len()).unwrap();
+        let cause_len = u16::try_from(cause_msg.len()).unwrap_or(0);
         let x_cause = (game.width / 2).saturating_sub(cause_len / 2);
         stdout.queue(SetForegroundColor(Color::White))?;
         stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
-        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
@@ -326,7 +330,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     if game.state == GameState::Paused {
         let msg = "PAUSED";
-        let msg_len = u16::try_from(msg.len()).unwrap();
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
@@ -335,7 +339,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
-        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
         write!(stdout, "{sub_msg}")?;
@@ -352,84 +356,149 @@ mod tests {
 
     fn get_expected_ansi_tail(x: u16, y: u16, msg: &str) -> String {
         let mut expected_buf = Vec::new();
-        expected_buf.queue(SetForegroundColor(Color::White)).unwrap();
-        expected_buf.queue(cursor::MoveTo(x, y)).unwrap();
-        write!(expected_buf, "{msg}").unwrap();
-        String::from_utf8(expected_buf).unwrap()
+        expected_buf
+            .queue(SetForegroundColor(Color::White))
+            .expect("Valid operation in tests");
+        expected_buf
+            .queue(cursor::MoveTo(x, y))
+            .expect("Valid operation in tests");
+        write!(expected_buf, "{msg}").expect("Valid operation in tests");
+        String::from_utf8(expected_buf).expect("Valid operation in tests")
     }
 
     #[test]
     fn test_draw_menu() {
-        let mut game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'O',
+            "dark".to_string(),
+            crate::game::Difficulty::Normal,
+        );
         game.menu_selection = 0; // "Start Game" selected
 
         let mut buf = Vec::new();
-        draw_menu(&game, &mut buf).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_menu(&game, &mut buf).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
 
         // Check title
         assert!(output.contains("SNAKE GAME"), "Menu should contain title");
 
         // Check selection indicator
-        assert!(output.contains("> Start Game <"), "Menu should indicate selection");
-        assert!(output.contains("Load Game"), "Menu should contain other items");
-        assert!(!output.contains("> Load Game <"), "Unselected items should not have brackets");
+        assert!(
+            output.contains("> Start Game <"),
+            "Menu should indicate selection"
+        );
+        assert!(
+            output.contains("Load Game"),
+            "Menu should contain other items"
+        );
+        assert!(
+            !output.contains("> Load Game <"),
+            "Unselected items should not have brackets"
+        );
     }
 
     #[test]
     fn test_draw_help() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
+        let game = Game::new(
+            20,
+            20,
+            false,
+            'O',
+            "dark".to_string(),
+            crate::game::Difficulty::Normal,
+        );
 
         let mut buf = Vec::new();
-        draw_help(&game, &mut buf).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_help(&game, &mut buf).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
 
-        assert!(output.contains("HELP & CONTROLS"), "Help should contain title");
-        assert!(output.contains("Arrow Keys: Move Snake"), "Help should contain controls");
-        assert!(output.contains("O : Snake Body"), "Help should contain dynamic skin info");
+        assert!(
+            output.contains("HELP & CONTROLS"),
+            "Help should contain title"
+        );
+        assert!(
+            output.contains("Arrow Keys: Move Snake"),
+            "Help should contain controls"
+        );
+        assert!(
+            output.contains("O : Snake Body"),
+            "Help should contain dynamic skin info"
+        );
     }
 
     #[test]
     fn test_draw_countdown() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
+        let game = Game::new(
+            20,
+            20,
+            false,
+            'O',
+            "dark".to_string(),
+            crate::game::Difficulty::Normal,
+        );
 
         // Test single digit (count = 3)
         let mut buf = Vec::new();
-        draw_countdown(&game, &mut buf, 3).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_countdown(&game, &mut buf, 3).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
         // center is width/2 (10), msg.len() is 1, so 1/2 is 0. 10 - 0 = 10.
         let expected = get_expected_ansi_tail(10, 10, "3");
-        assert!(output.ends_with(&expected), "Expected output to end with drawing '3' at (10, 10)");
+        assert!(
+            output.ends_with(&expected),
+            "Expected output to end with drawing '3' at (10, 10)"
+        );
 
         // Test double digit (count = 10) to test centering subtraction
         let mut buf = Vec::new();
-        draw_countdown(&game, &mut buf, 10).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_countdown(&game, &mut buf, 10).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
         // msg.len() is 2, so 2/2 is 1. 10 - 1 = 9.
         let expected = get_expected_ansi_tail(9, 10, "10");
-        assert!(output.ends_with(&expected), "Expected output to end with drawing '10' at (9, 10)");
+        assert!(
+            output.ends_with(&expected),
+            "Expected output to end with drawing '10' at (9, 10)"
+        );
 
         // Test count = 0
         let mut buf = Vec::new();
-        draw_countdown(&game, &mut buf, 0).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_countdown(&game, &mut buf, 0).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
         let expected = get_expected_ansi_tail(10, 10, "0");
-        assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
+        assert!(
+            output.ends_with(&expected),
+            "Expected output to end with drawing '0' at (10, 10)"
+        );
 
         // Test large width board
-        let large_game = Game::new(100, 100, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
+        let large_game = Game::new(
+            100,
+            100,
+            false,
+            'O',
+            "dark".to_string(),
+            crate::game::Difficulty::Normal,
+        );
         let mut buf = Vec::new();
-        draw_countdown(&large_game, &mut buf, 5).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_countdown(&large_game, &mut buf, 5).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
         let expected = get_expected_ansi_tail(50, 50, "5");
-        assert!(output.ends_with(&expected), "Expected output to center correctly on large board");
+        assert!(
+            output.ends_with(&expected),
+            "Expected output to center correctly on large board"
+        );
 
         // Test large digit (count = 12345)
         let mut buf = Vec::new();
-        draw_countdown(&large_game, &mut buf, 12345).unwrap();
-        let output = String::from_utf8(buf).unwrap();
+        draw_countdown(&large_game, &mut buf, 12345).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
         // msg.len() is 5, so 5/2 is 2. 50 - 2 = 48.
         let expected = get_expected_ansi_tail(48, 50, "12345");
-        assert!(output.ends_with(&expected), "Expected output to center large digits correctly");
+        assert!(
+            output.ends_with(&expected),
+            "Expected output to center large digits correctly"
+        );
     }
 }
