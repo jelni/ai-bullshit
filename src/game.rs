@@ -287,12 +287,11 @@ impl Game {
         }
 
         // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut() {
-            if final_head == p.location {
+        if let Some(p) = self.power_up.as_mut()
+            && final_head == p.location {
                 p.activation_time = Some(SystemTime::now());
                 beep();
             }
-        }
 
         let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
              self.score += 5;

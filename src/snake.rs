@@ -48,3 +48,21 @@ impl Snake {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_snake_new() {
+        let start = Point { x: 5, y: 5 };
+        let snake = Snake::new(start);
+
+        assert_eq!(snake.body.len(), 3);
+        assert_eq!(snake.body[0], start);
+        assert_eq!(snake.body[1], Point { x: start.x, y: start.y + 1 });
+        assert_eq!(snake.body[2], Point { x: start.x, y: start.y + 2 });
+        assert_eq!(snake.direction, Direction::Up);
+        assert_eq!(snake.next_direction, None);
+    }
+}
