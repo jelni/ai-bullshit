@@ -46,11 +46,14 @@ fn main() -> io::Result<()> {
 
     // Check terminal size
     if let Ok((term_width, term_height)) = terminal::size() {
-         // Use match or combinators to avoid collapsible_if lint in strict mode
-         if term_width < args.width || term_height < args.height {
-             eprintln!("Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.", args.width, args.height);
-             std::process::exit(1);
-         }
+        // Use match or combinators to avoid collapsible_if lint in strict mode
+        if term_width < args.width || term_height < args.height {
+            eprintln!(
+                "Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.",
+                args.width, args.height
+            );
+            std::process::exit(1);
+        }
     }
 
     // Panic Hook
@@ -89,13 +92,13 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
 
     loop {
         if game.state == GameState::Playing && game.just_died {
-             // We just died (lost a life), show countdown before resuming
-             game.just_died = false; // Reset flag so we don't loop here
-             for i in (1..=3).rev() {
-                 ui::draw_countdown(&game, stdout, i)?;
-                 std::thread::sleep(Duration::from_secs(1));
-             }
-             last_tick = Instant::now();
+            // We just died (lost a life), show countdown before resuming
+            game.just_died = false; // Reset flag so we don't loop here
+            for i in (1..=3).rev() {
+                ui::draw_countdown(&game, stdout, i)?;
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            last_tick = Instant::now();
         }
         // Calculate dynamic tick rate based on score
         // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
@@ -108,28 +111,29 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
         };
 
         if let Some(power_up) = &mut game.power_up
-            && let Some(activation_time) = power_up.activation_time {
-                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                    current_tick_rate += Duration::from_millis(100); // Slow down
-                } else {
-                    game.power_up = None; // Power-up expired
-                }
+            && let Some(activation_time) = power_up.activation_time
+        {
+            if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+                current_tick_rate += Duration::from_millis(100); // Slow down
+            } else {
+                game.power_up = None; // Power-up expired
             }
+        }
 
         let timeout = current_tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
         if event::poll(timeout)? {
-             // Use match to avoid collapsible_if lint without unstable features
-             match event::read()? {
-                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                     if !handle_key_event(key.code, &mut game, stdout) {
-                         break;
-                     }
-                 }
-                 _ => {}
-             }
+            // Use match to avoid collapsible_if lint without unstable features
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    if !handle_key_event(key.code, &mut game, stdout) {
+                        break;
+                    }
+                }
+                _ => {}
+            }
         }
 
         if last_tick.elapsed() >= current_tick_rate {
@@ -145,82 +149,117 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
 }
 
 fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+    if code == KeyCode::Char('b') {
+        handle_boss_key(game, stdout);
+        return true;
+    }
+
+    match game.state {
+        GameState::Menu => handle_menu_input(code, game),
+        GameState::Playing => handle_playing_input(code, game),
+        GameState::Paused => handle_paused_input(code, game),
+        GameState::GameOver => handle_game_over_input(code, game),
+        GameState::Help => handle_help_input(code, game),
+    }
+}
+
+fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
+    // Boss Key: Fake terminal mode
+    let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+    let _ = terminal::disable_raw_mode();
+
+    println!("user@workstation:~/projects/reports$ ");
+    println!("user@workstation:~/projects/reports$ ./compile_report.sh");
+    println!("Compiling report... [=================>         ] 65%");
+
+    let mut input = String::new();
+    let _ = std::io::stdin().read_line(&mut input);
+
+    let _ = terminal::enable_raw_mode();
+    let _ = execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide);
+    let _ = ui::draw(game, stdout);
+}
+
+fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => {
-            if game.state == GameState::Playing || game.state == GameState::Paused {
-                game.state = GameState::Menu;
-            } else {
-                return false;
+        KeyCode::Char('q') => return false,
+        KeyCode::Char(' ') | KeyCode::Enter => match game.menu_selection {
+            0 => game.reset(),
+            1 => {
+                let _ = game.load_game();
             }
-        }
-        KeyCode::Char(' ') | KeyCode::Enter => {
-            if game.state == GameState::Menu {
-                match game.menu_selection {
-                    0 => game.reset(),
-                    1 => { let _ = game.load_game(); },
-                    2 => game.state = GameState::Help,
-                    3 => return false,
-                    _ => {}
-                }
-            }
-        }
-        KeyCode::Char('r') => {
-            if game.state == GameState::GameOver {
-                game.reset();
-            }
-        }
-        KeyCode::Char('p') => {
-            if game.state == GameState::Playing {
-                game.state = GameState::Paused;
-            } else if game.state == GameState::Paused {
-                game.state = GameState::Playing;
-            }
-        }
-        KeyCode::Char('s') => {
-            if game.state == GameState::Paused {
-                game.save_game();
-                game.save_stats();
-                game.state = GameState::Menu;
-            }
-        }
-        KeyCode::Char('b') => {
-            // Boss Key: Fake terminal mode
-            let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
-            let _ = terminal::disable_raw_mode();
-
-            println!("user@workstation:~/projects/reports$ ");
-            println!("user@workstation:~/projects/reports$ ./compile_report.sh");
-            println!("Compiling report... [=================>         ] 65%");
-
-            let mut input = String::new();
-            let _ = std::io::stdin().read_line(&mut input);
-
-            let _ = terminal::enable_raw_mode();
-            let _ = execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide);
-            let _ = ui::draw(game, stdout);
-        }
+            2 => game.state = GameState::Help,
+            3 => return false,
+            _ => {}
+        },
         KeyCode::Up => {
-            if game.state == GameState::Menu {
-                if game.menu_selection > 0 {
-                    game.menu_selection -= 1;
-                } else {
-                    game.menu_selection = 3;
-                }
+            if game.menu_selection > 0 {
+                game.menu_selection -= 1;
             } else {
-                game.handle_input(Direction::Up);
+                game.menu_selection = 3;
             }
-        },
+        }
         KeyCode::Down => {
-            if game.state == GameState::Menu {
-                if game.menu_selection < 3 {
-                    game.menu_selection += 1;
-                } else {
-                    game.menu_selection = 0;
-                }
+            if game.menu_selection < 3 {
+                game.menu_selection += 1;
             } else {
-                game.handle_input(Direction::Down);
+                game.menu_selection = 0;
             }
-        },
+        }
+        _ => {}
+    }
+    true
+}
+
+fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') => game.state = GameState::Menu,
+        KeyCode::Char('p') => game.state = GameState::Paused,
+        KeyCode::Up => game.handle_input(Direction::Up),
+        KeyCode::Down => game.handle_input(Direction::Down),
+        KeyCode::Left => game.handle_input(Direction::Left),
+        KeyCode::Right => game.handle_input(Direction::Right),
+        _ => {}
+    }
+    true
+}
+
+fn handle_paused_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') => game.state = GameState::Menu,
+        KeyCode::Char('p') => game.state = GameState::Playing,
+        KeyCode::Char('s') => {
+            game.save_game();
+            game.save_stats();
+            game.state = GameState::Menu;
+        }
+        KeyCode::Up => game.handle_input(Direction::Up),
+        KeyCode::Down => game.handle_input(Direction::Down),
+        KeyCode::Left => game.handle_input(Direction::Left),
+        KeyCode::Right => game.handle_input(Direction::Right),
+        _ => {}
+    }
+    true
+}
+
+fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') => return false,
+        KeyCode::Char('r') => game.reset(),
+        KeyCode::Up => game.handle_input(Direction::Up),
+        KeyCode::Down => game.handle_input(Direction::Down),
+        KeyCode::Left => game.handle_input(Direction::Left),
+        KeyCode::Right => game.handle_input(Direction::Right),
+        _ => {}
+    }
+    true
+}
+
+fn handle_help_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') => return false,
+        KeyCode::Up => game.handle_input(Direction::Up),
+        KeyCode::Down => game.handle_input(Direction::Down),
         KeyCode::Left => game.handle_input(Direction::Left),
         KeyCode::Right => game.handle_input(Direction::Right),
         _ => {}
