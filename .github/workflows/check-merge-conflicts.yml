@@ -6,6 +6,7 @@ permissions:
 
 jobs:
   check-conflicts:
+    if: github.event.pull_request.user.login == 'google-labs-jules[bot]'
     runs-on: "ubuntu-latest"
     steps:
       - uses: "actions/checkout@v4"
@@ -15,18 +16,6 @@ jobs:
 
       - name: "Check for merge conflicts"
         run: |
-          # Get PR author
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            AUTHOR="${{ github.event.pull_request.user.login }}"
-          else
-            AUTHOR=$(gh pr view "${{ github.ref_name }}" --json author -q .author.login)
-          fi
-
-          if [ "$AUTHOR" != "google-labs-jules[bot]" ]; then
-            echo "PR author is $AUTHOR, not google-labs-jules[bot]. Skipping."
-            exit 0
-          fi
-
           git config --global user.email "bot@example.com"
           git config --global user.name "Bot"
 
