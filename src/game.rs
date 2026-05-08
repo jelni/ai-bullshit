@@ -232,11 +232,9 @@ impl Game {
     }
 
     pub fn load_game_from_file(&mut self, path: &str) -> bool {
-        let mut content = String::new();
         File::open(path)
-            .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
-            .and_then(|_| serde_json::from_str::<SaveState>(&content).ok())
+            .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
             .is_some_and(|state| {
                 self.snake = state.snake;
                 self.food = state.food;
@@ -263,6 +261,12 @@ impl Game {
         count: usize,
     ) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
+
+        let mut body_set = std::collections::HashSet::with_capacity(snake.body.len());
+        for p in &snake.body {
+            body_set.insert(*p);
+        }
+
         for _ in 0..count {
             loop {
                 let x = rng.gen_range(1..width - 1);
@@ -270,7 +274,7 @@ impl Game {
                 let p = Point { x, y };
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
                 // Simple check: not on body.
-                if !snake.body.contains(&p) && !obstacles.contains(&p) {
+                if !body_set.contains(&p) && !obstacles.contains(&p) {
                     obstacles.insert(p);
                     break;
                 }
@@ -570,10 +574,29 @@ impl Game {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn test_load_game_dos_protection() {
+        let file_path = "savegame_test_dos.json";
+        let mut file = File::create(file_path).unwrap();
+        // Write 2 MB of garbage data
+        let data = vec![b'a'; 2 * 1024 * 1024];
+        file.write_all(&data).unwrap();
+
+        let mut game = Game::new(get_test_config());
+        // Should not panic or crash out of memory, just return false
+        let loaded = game.load_game_from_file(file_path);
+        assert!(!loaded);
+
+        // Cleanup
+        let _ = std::fs::remove_file(file_path);
+    }
     use crate::config::GameConfig;
 
     fn get_test_config() -> GameConfig {

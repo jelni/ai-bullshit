@@ -16,3 +16,6 @@ libc = "0.2.186"
 pedantic = "warn"
 nursery = "warn"
 allow_attributes = "warn"
+
+[dev-dependencies]
+fastrand = "2.4.1"
