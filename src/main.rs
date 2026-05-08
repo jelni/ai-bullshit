@@ -33,6 +33,9 @@ struct Args {
 
     #[arg(long, default_value_t = String::from("classic"))]
     theme: String,
+
+    #[arg(long, value_enum, default_value_t = game::Difficulty::Normal)]
+    difficulty: game::Difficulty,
 }
 
 fn main() -> io::Result<()> {
@@ -83,9 +86,14 @@ fn main() -> io::Result<()> {
 }
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme);
+    let diff = args.difficulty;
+    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
     let mut last_tick = Instant::now();
-    let base_tick_rate = Duration::from_millis(150);
+    let base_tick_rate = match diff {
+        game::Difficulty::Easy => Duration::from_millis(200),
+        game::Difficulty::Normal => Duration::from_millis(150),
+        game::Difficulty::Hard => Duration::from_millis(100),
+    };
 
     // Initial draw
     ui::draw(&game, stdout)?;
@@ -114,7 +122,15 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             && let Some(activation_time) = power_up.activation_time
         {
             if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                current_tick_rate += Duration::from_millis(100); // Slow down
+                match power_up.p_type {
+                    game::PowerUpType::SlowDown => {
+                        current_tick_rate += Duration::from_millis(100); // Slow down
+                    }
+                    game::PowerUpType::SpeedBoost => {
+                        current_tick_rate = current_tick_rate.saturating_sub(Duration::from_millis(50)).max(Duration::from_millis(30)); // Speed boost
+                    }
+                    game::PowerUpType::Invincibility => {} // Tick rate unaffected
+                }
             } else {
                 game.power_up = None; // Power-up expired
             }
@@ -160,6 +176,8 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::Paused => handle_paused_input(code, game),
         GameState::GameOver => handle_game_over_input(code, game),
         GameState::Help => handle_help_input(code, game),
+        GameState::EnterName => handle_enter_name_input(code, game),
+        GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
     }
 }
 
@@ -182,14 +200,20 @@ fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
 
 fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => return false,
+        KeyCode::Char('q') => {
+            game.previous_state = Some(GameState::Menu);
+            game.state = GameState::ConfirmQuit;
+        }
         KeyCode::Char(' ') | KeyCode::Enter => match game.menu_selection {
             0 => game.reset(),
             1 => {
                 let _ = game.load_game();
             }
             2 => game.state = GameState::Help,
-            3 => return false,
+            3 => {
+                game.previous_state = Some(GameState::Menu);
+                game.state = GameState::ConfirmQuit;
+            }
             _ => {}
         },
         KeyCode::Up => {
@@ -213,7 +237,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
 
 fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => game.state = GameState::Menu,
+        KeyCode::Char('q') => {
+            game.previous_state = Some(GameState::Playing);
+            game.state = GameState::ConfirmQuit;
+        }
         KeyCode::Char('p') => game.state = GameState::Paused,
         KeyCode::Up => game.handle_input(Direction::Up),
         KeyCode::Down => game.handle_input(Direction::Down),
@@ -226,7 +253,10 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
 
 fn handle_paused_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => game.state = GameState::Menu,
+        KeyCode::Char('q') => {
+            game.previous_state = Some(GameState::Paused);
+            game.state = GameState::ConfirmQuit;
+        }
         KeyCode::Char('p') => game.state = GameState::Playing,
         KeyCode::Char('s') => {
             game.save_game();
@@ -244,7 +274,10 @@ fn handle_paused_input(code: KeyCode, game: &mut Game) -> bool {
 
 fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => return false,
+        KeyCode::Char('q') => {
+            game.previous_state = Some(GameState::GameOver);
+            game.state = GameState::ConfirmQuit;
+        }
         KeyCode::Char('r') => game.reset(),
         KeyCode::Up => game.handle_input(Direction::Up),
         KeyCode::Down => game.handle_input(Direction::Down),
@@ -257,11 +290,50 @@ fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
 
 fn handle_help_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => return false,
+        KeyCode::Char('q') => {
+            game.previous_state = Some(GameState::Help);
+            game.state = GameState::ConfirmQuit;
+        }
         KeyCode::Up => game.handle_input(Direction::Up),
         KeyCode::Down => game.handle_input(Direction::Down),
         KeyCode::Left => game.handle_input(Direction::Left),
         KeyCode::Right => game.handle_input(Direction::Right),
+        _ => {}
+    }
+    true
+}
+
+fn handle_enter_name_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Enter => {
+            if !game.player_name.is_empty() {
+                let name = game.player_name.clone();
+                let score = game.score;
+                game.save_high_score(name, score);
+                game.state = GameState::GameOver;
+            }
+        }
+        KeyCode::Backspace => {
+            game.player_name.pop();
+        }
+        KeyCode::Char(c) => {
+            if game.player_name.len() < 10 && c.is_alphanumeric() {
+                game.player_name.push(c);
+            }
+        }
+        _ => {}
+    }
+    true
+}
+
+const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('y' | 'Y') => return false,
+        KeyCode::Char('n' | 'N') => {
+            if let Some(state) = game.previous_state {
+                game.state = state;
+            }
+        }
         _ => {}
     }
     true
