@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Direction {
@@ -18,6 +18,8 @@ pub struct Point {
 #[derive(Serialize, Deserialize)]
 pub struct Snake {
     pub body: VecDeque<Point>,
+    #[serde(skip)]
+    pub body_map: HashMap<Point, usize>,
     pub direction: Direction,
     pub next_direction: Option<Direction>,
 }
@@ -36,8 +38,15 @@ impl Snake {
             x: start.x,
             y: start.y + 2,
         });
+
+        let mut body_map = HashMap::with_capacity(3);
+        for p in &body {
+            *body_map.entry(*p).or_insert(0) += 1;
+        }
+
         Self {
             body,
+            body_map,
             direction: Direction::Up,
             next_direction: None,
         }
@@ -49,8 +58,24 @@ impl Snake {
 
     pub fn move_to(&mut self, new_head: Point, grow: bool) {
         self.body.push_front(new_head);
+        *self.body_map.entry(new_head).or_insert(0) += 1;
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
         if !grow {
-            self.body.pop_back();
+            if let Some(tail) = self.body.pop_back() {
+                if let Some(count) = self.body_map.get_mut(&tail) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.body_map.remove(&tail);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn rebuild_map(&mut self) {
+        self.body_map.clear();
+        for p in &self.body {
+            *self.body_map.entry(*p).or_insert(0) += 1;
         }
     }
 }
