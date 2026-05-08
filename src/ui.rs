@@ -300,6 +300,37 @@ mod tests {
     }
 
     #[test]
+    fn test_draw_menu() {
+        let mut game = Game::new(20, 20, false, 'O', "dark".to_string());
+        game.menu_selection = 0; // "Start Game" selected
+
+        let mut buf = Vec::new();
+        draw_menu(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        // Check title
+        assert!(output.contains("SNAKE GAME"), "Menu should contain title");
+
+        // Check selection indicator
+        assert!(output.contains("> Start Game <"), "Menu should indicate selection");
+        assert!(output.contains("Load Game"), "Menu should contain other items");
+        assert!(!output.contains("> Load Game <"), "Unselected items should not have brackets");
+    }
+
+    #[test]
+    fn test_draw_help() {
+        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+
+        let mut buf = Vec::new();
+        draw_help(&game, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        assert!(output.contains("HELP & CONTROLS"), "Help should contain title");
+        assert!(output.contains("Arrow Keys: Move Snake"), "Help should contain controls");
+        assert!(output.contains("O : Snake Body"), "Help should contain dynamic skin info");
+    }
+
+    #[test]
     fn test_draw_countdown() {
         let game = Game::new(20, 20, false, 'O', "dark".to_string());
 
@@ -325,5 +356,21 @@ mod tests {
         let output = String::from_utf8(buf).unwrap();
         let expected = get_expected_ansi_tail(10, 10, "0");
         assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
+
+        // Test large width board
+        let large_game = Game::new(100, 100, false, 'O', "dark".to_string());
+        let mut buf = Vec::new();
+        draw_countdown(&large_game, &mut buf, 5).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        let expected = get_expected_ansi_tail(50, 50, "5");
+        assert!(output.ends_with(&expected), "Expected output to center correctly on large board");
+
+        // Test large digit (count = 12345)
+        let mut buf = Vec::new();
+        draw_countdown(&large_game, &mut buf, 12345).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        // msg.len() is 5, so 5/2 is 2. 50 - 2 = 48.
+        let expected = get_expected_ansi_tail(48, 50, "12345");
+        assert!(output.ends_with(&expected), "Expected output to center large digits correctly");
     }
 }
