@@ -141,7 +141,7 @@ impl Game {
 
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
         let mut rng = rand::thread_rng();
-        let suffix: u32 = rng.gen();
+        let suffix: u32 = rng.r#gen();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
         let mut file = fs::File::options()
@@ -164,7 +164,8 @@ impl Game {
         self.high_scores.push(score);
         self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
         self.high_scores.truncate(5);
-        let content = self.high_scores
+        let content = self
+            .high_scores
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
@@ -345,10 +346,11 @@ impl Game {
 
         // Check bonus food collision
         if let Some(p) = self.power_up.as_mut()
-            && final_head == p.location {
-                p.activation_time = Some(SystemTime::now());
-                beep();
-            }
+            && final_head == p.location
+        {
+            p.activation_time = Some(SystemTime::now());
+            beep();
+        }
 
         let mut grow = if self
             .bonus_food
