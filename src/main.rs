@@ -1,8 +1,10 @@
+mod config;
 mod game;
 mod snake;
 mod ui;
 
 use clap::Parser;
+use config::GameConfig;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -33,6 +35,9 @@ struct Args {
 
     #[arg(long, default_value_t = String::from("classic"))]
     theme: String,
+
+    #[arg(long, value_enum, default_value_t = config::Difficulty::Normal)]
+    difficulty: config::Difficulty,
 }
 
 fn main() -> io::Result<()> {
@@ -83,9 +88,21 @@ fn main() -> io::Result<()> {
 }
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme);
+    let config = GameConfig {
+        width: args.width,
+        height: args.height,
+        wrap_mode: args.wrap,
+        skin: args.skin,
+        theme: args.theme,
+        difficulty: args.difficulty,
+    };
+    let base_tick_rate = match config.difficulty {
+        config::Difficulty::Easy => Duration::from_millis(200),
+        config::Difficulty::Normal => Duration::from_millis(150),
+        config::Difficulty::Hard => Duration::from_millis(100),
+    };
+    let mut game = Game::new(config);
     let mut last_tick = Instant::now();
-    let base_tick_rate = Duration::from_millis(150);
 
     // Initial draw
     ui::draw(&game, stdout)?;
@@ -114,7 +131,9 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             && let Some(activation_time) = power_up.activation_time
         {
             if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                current_tick_rate += Duration::from_millis(100); // Slow down
+                if power_up.p_type == game::PowerUpType::SlowDown {
+                    current_tick_rate += Duration::from_millis(100); // Slow down
+                }
             } else {
                 game.power_up = None; // Power-up expired
             }
@@ -148,7 +167,33 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Input handling naturally requires many lines")]
 fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+    if game.state == GameState::EnterName {
+        match code {
+            KeyCode::Char(c) if c.is_ascii_alphanumeric() || c == ' ' => {
+                if game.input_buffer.len() < 15 {
+                    game.input_buffer.push(c);
+                }
+            }
+            KeyCode::Backspace => {
+                game.input_buffer.pop();
+            }
+            KeyCode::Enter => {
+                game.high_score = game.score;
+                let name = if game.input_buffer.is_empty() {
+                    "Player".to_string()
+                } else {
+                    game.input_buffer.clone()
+                };
+                game.save_high_score(name, game.high_score);
+                game.state = GameState::GameOver;
+            }
+            _ => {}
+        }
+        return true;
+    }
+
     match code {
         KeyCode::Char('q') => {
             if game.state == GameState::Playing || game.state == GameState::Paused {

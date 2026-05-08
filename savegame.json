@@ -1,0 +1,1 @@
+{"snake":{"body":[{"x":20,"y":10},{"x":20,"y":11},{"x":20,"y":12}],"direction":"Up","next_direction":null},"food":{"x":34,"y":3},"obstacles":[{"x":3,"y":7},{"x":13,"y":9},{"x":15,"y":13}],"score":0}

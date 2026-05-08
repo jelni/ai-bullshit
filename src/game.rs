@@ -3,6 +3,7 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
 
+use crate::config::GameConfig;
 use crate::snake::{Direction, Point, Snake};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -11,6 +12,7 @@ use std::time::SystemTime;
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum PowerUpType {
     SlowDown,
+    Invincibility,
 }
 
 #[serde_as]
@@ -34,6 +36,7 @@ pub enum GameState {
     Paused,
     GameOver,
     Help,
+    EnterName,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,10 +55,14 @@ pub struct Statistics {
     pub total_time_s: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ScoreEntry {
+    pub name: String,
+    pub score: u32,
+}
+
 pub struct Game {
-    pub width: u16,
-    pub height: u16,
-    pub wrap_mode: bool,
+    pub config: GameConfig,
     pub snake: Snake,
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
@@ -63,37 +70,39 @@ pub struct Game {
     pub obstacles: Vec<Point>,
     pub score: u32,
     pub high_score: u32,
-    pub high_scores: Vec<u32>,
+    pub high_scores: Vec<ScoreEntry>,
     pub state: GameState,
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
-    pub skin: char,
-    pub theme: String,
     pub lives: u32,
     pub menu_selection: usize,
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
+    pub input_buffer: String,
 }
 
 impl Game {
-    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String) -> Self {
+    pub fn new(config: GameConfig) -> Self {
         let mut rng = rand::thread_rng();
-        let start_x = width / 2;
-        let start_y = height / 2;
+        let start_x = config.width / 2;
+        let start_y = config.height / 2;
         let snake = Snake::new(Point {
             x: start_x,
             y: start_y,
         });
-        let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
-        let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
+        let obstacle_count = match config.difficulty {
+            crate::config::Difficulty::Easy => 0,
+            crate::config::Difficulty::Normal => 3,
+            crate::config::Difficulty::Hard => 10,
+        };
+        let obstacles = Self::generate_obstacles(config.width, config.height, &snake, &mut rng, obstacle_count);
+        let food = Self::generate_food(config.width, config.height, &snake, &obstacles, &mut rng);
         let high_scores = Self::load_high_scores_static();
-        let high_score = *high_scores.first().unwrap_or(&0);
+        let high_score = high_scores.first().map_or(0, |e| e.score);
         let stats = Self::load_stats();
         Self {
-            width,
-            height,
-            wrap_mode,
+            config,
             snake,
             food,
             bonus_food: None,
@@ -105,29 +114,22 @@ impl Game {
             state: GameState::Menu,
             rng,
             just_died: false,
-            skin,
-            theme,
             lives: 3,
             menu_selection: 0,
             stats,
             start_time: Instant::now(),
             death_message: String::new(),
+            input_buffer: String::new(),
         }
     }
 
-    pub fn load_high_scores_static() -> Vec<u32> {
+    pub fn load_high_scores_static() -> Vec<ScoreEntry> {
         let mut content = String::new();
-        File::open("highscore.txt")
+        File::open("highscores.json")
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
-            .map_or_else(
-                |_| Vec::new(),
-                |_| {
-                    content
-                        .lines()
-                        .filter_map(|line| line.trim().parse::<u32>().ok())
-                        .collect()
-                },
-            )
+            .ok()
+            .and_then(|_| serde_json::from_str(&content).ok())
+            .unwrap_or_default()
     }
 
     fn load_stats() -> Statistics {
@@ -160,16 +162,15 @@ impl Game {
         }
     }
 
-    fn save_high_score(&mut self, score: u32) {
-        self.high_scores.push(score);
-        self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
+    pub fn save_high_score(&mut self, name: String, score: u32) {
+        let entry = ScoreEntry { name, score };
+        self.high_scores.push(entry);
+        self.high_scores.sort_unstable_by(|a, b| b.score.cmp(&a.score));
         self.high_scores.truncate(5);
-        let content = self.high_scores
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n");
-        let _ = Self::atomic_write("highscore.txt", content);
+
+        if let Ok(json) = serde_json::to_string(&self.high_scores) {
+            let _ = Self::atomic_write("highscores.json", json);
+        }
     }
 
     pub fn save_game(&self) {
@@ -218,8 +219,11 @@ impl Game {
                 let y = rng.gen_range(1..height - 1);
                 let p = Point { x, y };
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
-                // Simple check: not on body.
-                if !snake.body.contains(&p) && !obstacles.contains(&p) {
+                let dx = x.abs_diff(snake.head().x);
+                let dy = y.abs_diff(snake.head().y);
+                let is_safe_distance = dx > 3 || dy > 3;
+
+                if !snake.body.contains(&p) && !obstacles.contains(&p) && is_safe_distance {
                     obstacles.push(p);
                     break;
                 }
@@ -247,17 +251,22 @@ impl Game {
     }
 
     pub fn reset(&mut self) {
-        let start_x = self.width / 2;
-        let start_y = self.height / 2;
+        let start_x = self.config.width / 2;
+        let start_y = self.config.height / 2;
         self.snake = Snake::new(Point {
             x: start_x,
             y: start_y,
         });
+        let obstacle_count = match self.config.difficulty {
+            crate::config::Difficulty::Easy => 0,
+            crate::config::Difficulty::Normal => 3,
+            crate::config::Difficulty::Hard => 10,
+        };
         self.obstacles =
-            Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 3);
+            Self::generate_obstacles(self.config.width, self.config.height, &self.snake, &mut self.rng, obstacle_count);
         self.food = Self::generate_food(
-            self.width,
-            self.height,
+            self.config.width,
+            self.config.height,
             &self.snake,
             &self.obstacles,
             &mut self.rng,
@@ -270,16 +279,18 @@ impl Game {
     }
 
     fn respawn(&mut self) {
-        let start_x = self.width / 2;
-        let start_y = self.height / 2;
+        let start_x = self.config.width / 2;
+        let start_y = self.config.height / 2;
         self.snake = Snake::new(Point {
             x: start_x,
             y: start_y,
         });
-        // Ensure snake doesn't spawn on obstacle
-        // For simplicity in this game, we assume center is safe or we clear obstacles there.
-        self.obstacles
-            .retain(|p| !(p.x == start_x && (p.y >= start_y && p.y <= start_y + 2)));
+        // Ensure snake doesn't spawn on obstacle or too close to head
+        self.obstacles.retain(|p| {
+            let dx = p.x.abs_diff(start_x);
+            let dy = p.y.abs_diff(start_y);
+            dx > 3 || dy > 3
+        });
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -321,13 +332,13 @@ impl Game {
 
         // Check collision with walls and obstacles
         let mut hit_wall = false;
-        let final_head = if self.wrap_mode {
+        let final_head = if self.config.wrap_mode {
             self.calculate_wrapped_head(next_head)
         } else {
             if next_head.x == 0
-                || next_head.x >= self.width - 1
+                || next_head.x >= self.config.width - 1
                 || next_head.y == 0
-                || next_head.y >= self.height - 1
+                || next_head.y >= self.config.height - 1
             {
                 hit_wall = true;
             }
@@ -338,17 +349,25 @@ impl Game {
             hit_wall = true;
         }
 
-        if hit_wall {
-            self.handle_death("Hit Wall/Obstacle");
-            return;
-        }
-
         // Check bonus food collision
         if let Some(p) = self.power_up.as_mut()
             && final_head == p.location {
                 p.activation_time = Some(SystemTime::now());
                 beep();
             }
+
+        let is_invincible = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Invincibility && p.activation_time.is_some()
+        });
+
+        if hit_wall {
+            if is_invincible {
+                // Ignore wall collision
+            } else {
+                self.handle_death("Hit Wall/Obstacle");
+                return;
+            }
+        }
 
         let mut grow = if self
             .bonus_food
@@ -366,6 +385,8 @@ impl Game {
         if self.snake.body.contains(&final_head) {
             if !grow && final_head == *self.snake.body.back().unwrap() {
                 // We are moving into the tail, but the tail will move. Safe.
+            } else if is_invincible {
+                // Ignore self collision
             } else {
                 self.handle_death("Hit Self");
                 return;
@@ -382,8 +403,8 @@ impl Game {
             // Add a new obstacle every 5 points
             if self.score.is_multiple_of(5) {
                 let new_obstacles = Self::generate_obstacles(
-                    self.width,
-                    self.height,
+                    self.config.width,
+                    self.config.height,
                     &self.snake,
                     &mut self.rng,
                     1,
@@ -391,8 +412,8 @@ impl Game {
                 self.obstacles.extend(new_obstacles);
             }
             self.food = Self::generate_food(
-                self.width,
-                self.height,
+                self.config.width,
+                self.config.height,
                 &self.snake,
                 &self.obstacles,
                 &mut self.rng,
@@ -411,15 +432,21 @@ impl Game {
             }
 
             let location = Self::generate_food(
-                self.width,
-                self.height,
+                self.config.width,
+                self.config.height,
                 &self.snake,
                 &obstructions,
                 &mut self.rng,
             );
 
+            let p_type = if self.rng.gen_bool(0.5) {
+                PowerUpType::SlowDown
+            } else {
+                PowerUpType::Invincibility
+            };
+
             self.power_up = Some(PowerUp {
-                p_type: PowerUpType::SlowDown,
+                p_type,
                 location,
                 activation_time: None,
             });
@@ -435,8 +462,8 @@ impl Game {
             let mut obstructions = self.obstacles.clone();
             obstructions.push(self.food);
             let bonus = Self::generate_food(
-                self.width,
-                self.height,
+                self.config.width,
+                self.config.height,
                 &self.snake,
                 &obstructions,
                 &mut self.rng,
@@ -470,14 +497,14 @@ impl Game {
         let mut x = next_head.x;
         let mut y = next_head.y;
         if x == 0 {
-            x = self.width - 2;
-        } else if x >= self.width - 1 {
+            x = self.config.width - 2;
+        } else if x >= self.config.width - 1 {
             x = 1;
         }
 
         if y == 0 {
-            y = self.height - 2;
-        } else if y >= self.height - 1 {
+            y = self.config.height - 2;
+        } else if y >= self.config.height - 1 {
             y = 1;
         }
         Point { x, y }
@@ -494,11 +521,13 @@ impl Game {
         self.save_stats();
 
         if self.lives == 0 {
-            self.state = GameState::GameOver;
             self.death_message = cause.to_string();
+            // Since we don't have top 5 yet, just check if high score
             if self.score > self.high_score {
-                self.high_score = self.score;
-                self.save_high_score(self.high_score);
+                self.state = GameState::EnterName;
+                self.input_buffer.clear();
+            } else {
+                self.state = GameState::GameOver;
             }
         } else {
             self.respawn();

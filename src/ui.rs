@@ -15,7 +15,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     match game.state {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
-        GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
+        GameState::Playing | GameState::GameOver | GameState::Paused | GameState::EnterName => draw_game(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -25,8 +25,8 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
-    let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2);
-    let y_pos = game.height / 2;
+    let x_pos = (game.config.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap() / 2);
+    let y_pos = game.config.height / 2;
 
     stdout.queue(SetForegroundColor(Color::White))?;
     stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
@@ -40,8 +40,8 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Green))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
-        game.height / 2 - 5,
+        (game.config.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        game.config.height / 2 - 5,
     ))?;
     write!(stdout, "{title}")?;
 
@@ -50,15 +50,15 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2) - 2,
-                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+                (game.config.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2) - 2,
+                game.config.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "> {item} <")?;
         } else {
             stdout.queue(SetForegroundColor(Color::White))?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2),
-                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+                (game.config.width / 2).saturating_sub(u16::try_from(item.len()).unwrap() / 2),
+                game.config.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
             write!(stdout, "{item}")?;
         }
@@ -69,16 +69,16 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if !scores.is_empty() {
         stdout.queue(SetForegroundColor(Color::Yellow))?;
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(10),
-            game.height / 2 + 6,
+            (game.config.width / 2).saturating_sub(10),
+            game.config.height / 2 + 6,
         ))?;
         write!(stdout, "Top Scores:")?;
         for (i, s) in scores.iter().enumerate().take(5) {
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(10),
-                game.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
+                (game.config.width / 2).saturating_sub(10),
+                game.config.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
             ))?;
-            write!(stdout, "{}. {}", i + 1, s)?;
+            write!(stdout, "{}. {}: {}", i + 1, s.name, s.score)?;
         }
     }
     Ok(())
@@ -94,7 +94,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Q: Quit / Back to Menu",
         "Space/Enter: Select/Start",
     ];
-    let skin_line = format!("{} : Snake Body", game.skin);
+    let skin_line = format!("{} : Snake Body", game.config.skin);
     let legend = [
         "Symbols:",
         skin_line.as_str(),
@@ -105,7 +105,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        (game.config.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
         3,
     ))?;
     write!(stdout, "{title}")?;
@@ -113,7 +113,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     stdout.queue(SetForegroundColor(Color::White))?;
     for (i, line) in controls.iter().enumerate() {
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.config.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
             6 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -125,7 +125,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         // legend array constructed above creates temporaries.
         // Let's print directly.
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            (game.config.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
             14 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
@@ -134,8 +134,8 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let back = "Press 'q' to go back";
     stdout.queue(SetForegroundColor(Color::Red))?;
     stdout.queue(cursor::MoveTo(
-        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap() / 2),
-        game.height - 2,
+        (game.config.width / 2).saturating_sub(u16::try_from(back.len()).unwrap() / 2),
+        game.config.height - 2,
     ))?;
     write!(stdout, "{back}")?;
 
@@ -144,7 +144,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
 #[expect(clippy::too_many_lines)]
 fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
+    let (border_color, food_color, snake_color, obs_color) = match game.config.theme.as_str() {
         "dark" => (
             Color::DarkGrey,
             Color::DarkRed,
@@ -163,14 +163,20 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         stdout.queue(SetForegroundColor(border_color))?;
     }
 
-    for y in 0..game.height {
-        for x in 0..game.width {
-            if x == 0 || x == game.width - 1 || y == 0 || y == game.height - 1 {
+    for y in 0..game.config.height {
+        for x in 0..game.config.width {
+            if x == 0 || x == game.config.width - 1 || y == 0 || y == game.config.height - 1 {
                 stdout.queue(cursor::MoveTo(x, y))?;
                 write!(stdout, "#")?;
             }
         }
     }
+
+    // Draw Status Bar
+    let status = format!(" Score: {} | Lives: {} ", game.score, game.lives);
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(2, 0))?;
+    write!(stdout, "{status}")?;
 
     // Draw food
     stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
@@ -195,12 +201,30 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         && power_up.activation_time.is_none()
     {
         stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        stdout.queue(SetForegroundColor(Color::Cyan))?;
-        write!(stdout, "P")?;
+        match power_up.p_type {
+            crate::game::PowerUpType::SlowDown => {
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "S")?;
+            }
+            crate::game::PowerUpType::Invincibility => {
+                stdout.queue(SetForegroundColor(Color::Magenta))?;
+                write!(stdout, "I")?;
+            }
+        }
     }
 
+    // Check if invincible
+    let is_invincible = game.power_up.as_ref().is_some_and(|p| {
+        p.p_type == crate::game::PowerUpType::Invincibility && p.activation_time.is_some()
+    });
+    let actual_snake_color = if is_invincible {
+        Color::Magenta
+    } else {
+        snake_color
+    };
+
     // Draw snake
-    stdout.queue(SetForegroundColor(snake_color))?;
+    stdout.queue(SetForegroundColor(actual_snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
         stdout.queue(cursor::MoveTo(part.x, part.y))?;
         if i == 0 {
@@ -214,14 +238,15 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "{head_char}")?;
         } else {
             // Body
-            write!(stdout, "{}", game.skin)?;
+            let body_char = if is_invincible { '*' } else { game.config.skin };
+            write!(stdout, "{body_char}")?;
         }
     }
 
     // Draw score
     let level = game.score / 20 + 1;
     stdout.queue(SetForegroundColor(Color::Reset))?;
-    stdout.queue(cursor::MoveTo(0, game.height))?;
+    stdout.queue(cursor::MoveTo(0, game.config.height))?;
     write!(
         stdout,
         "Score: {} | High: {} | Lives: {} | Level: {}",
@@ -243,8 +268,8 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
         let msg_len = u16::try_from(msg.len()).unwrap();
-        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
-        let y_pos = game.height / 2;
+        let x_pos = (game.config.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = game.config.height / 2;
 
         stdout.queue(SetForegroundColor(Color::Red))?;
         stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
@@ -252,33 +277,88 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
         let cause_msg = &game.death_message;
         let cause_len = u16::try_from(cause_msg.len()).unwrap();
-        let x_cause = (game.width / 2).saturating_sub(cause_len / 2);
+        let x_cause = (game.config.width / 2).saturating_sub(cause_len / 2);
         stdout.queue(SetForegroundColor(Color::White))?;
         stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
-        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
+        let x_sub = (game.config.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
+
+        if !game.high_scores.is_empty() {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo((game.config.width / 2).saturating_sub(5), y_pos + 4))?;
+            write!(stdout, "Top Scores:")?;
+
+            stdout.queue(SetForegroundColor(Color::White))?;
+            for (i, s) in game.high_scores.iter().enumerate().take(5) {
+                let s_msg = format!("{}. {}: {}", i + 1, s.name, s.score);
+                let s_len = u16::try_from(s_msg.len()).unwrap_or(0);
+                stdout.queue(cursor::MoveTo((game.config.width / 2).saturating_sub(s_len / 2), y_pos + 5 + u16::try_from(i).unwrap_or(0)))?;
+                write!(stdout, "{s_msg}")?;
+            }
+        }
         stdout.queue(SetForegroundColor(Color::Reset))?;
     }
 
-    if game.state == GameState::Paused {
-        let msg = "PAUSED";
+    if game.state == GameState::EnterName {
+        let msg = "NEW HIGH SCORE!";
         let msg_len = u16::try_from(msg.len()).unwrap();
-        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
-        let y_pos = game.height / 2;
+        let x_pos = (game.config.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = game.config.height / 2 - 2;
 
         stdout.queue(SetForegroundColor(Color::Yellow))?;
         stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
+        let prompt = "Enter Name:";
+        let prompt_len = u16::try_from(prompt.len()).unwrap();
+        stdout.queue(cursor::MoveTo(
+            (game.config.width / 2).saturating_sub(prompt_len / 2),
+            y_pos + 1,
+        ))?;
+        write!(stdout, "{prompt}")?;
+
+        let name = format!("{}_", game.input_buffer);
+        let name_len = u16::try_from(name.len()).unwrap();
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(
+            (game.config.width / 2).saturating_sub(name_len / 2),
+            y_pos + 2,
+        ))?;
+        write!(stdout, "{name}")?;
+    }
+
+    if game.state == GameState::Paused {
+        let msg = "PAUSED";
+        let msg_len = u16::try_from(msg.len()).unwrap();
+        let x_pos = (game.config.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = game.config.height / 2 - 2;
+
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        write!(stdout, "{msg}")?;
+
+        let stats_msg = format!(
+            "Score: {} | Lives: {} | Time: {}s",
+            game.score,
+            game.lives,
+            game.start_time.elapsed().as_secs()
+        );
+        let stats_len = u16::try_from(stats_msg.len()).unwrap_or(0);
+        let x_stats = (game.config.width / 2).saturating_sub(stats_len / 2);
+        stdout.queue(SetForegroundColor(Color::Cyan))?;
+        stdout.queue(cursor::MoveTo(x_stats, y_pos + 2))?;
+        write!(stdout, "{stats_msg}")?;
+
         let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap();
-        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
+        let x_sub = (game.config.width / 2).saturating_sub(sub_msg_len / 2);
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(x_sub, y_pos + 4))?;
         write!(stdout, "{sub_msg}")?;
 
         stdout.queue(SetForegroundColor(Color::Reset))?;
@@ -301,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_draw_countdown() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+        let game = Game::new(crate::config::GameConfig { width: 20, height: 20, wrap_mode: false, skin: 'O', theme: "dark".to_string(), difficulty: crate::config::Difficulty::Normal });
 
         // Test single digit (count = 3)
         let mut buf = Vec::new();
