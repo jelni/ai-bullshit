@@ -1,7 +1,9 @@
+mod config;
 mod game;
 mod snake;
 mod ui;
 
+use config::GameConfig;
 use clap::Parser;
 use crossterm::{
     cursor,
@@ -16,30 +18,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(long, default_value_t = 40)]
-    width: u16,
-
-    #[arg(long, default_value_t = 20)]
-    height: u16,
-
-    #[arg(long, default_value_t = false)]
-    wrap: bool,
-
-    #[arg(long, default_value_t = '█')]
-    skin: char,
-
-    #[arg(long, default_value_t = String::from("classic"))]
-    theme: String,
-}
-
 fn main() -> io::Result<()> {
-    let args = Args::parse();
+    let config = GameConfig::parse();
 
-    // Validate args
-    if args.width < 10 || args.height < 10 {
+    // Validate config
+    if config.width < 10 || config.height < 10 {
         eprintln!("Error: Width and height must be at least 10.");
         std::process::exit(1);
     }
@@ -47,8 +30,8 @@ fn main() -> io::Result<()> {
     // Check terminal size
     if let Ok((term_width, term_height)) = terminal::size() {
          // Use match or combinators to avoid collapsible_if lint in strict mode
-         if term_width < args.width || term_height < args.height {
-             eprintln!("Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.", args.width, args.height);
+         if term_width < config.width || term_height < config.height {
+             eprintln!("Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.", config.width, config.height);
              std::process::exit(1);
          }
     }
@@ -66,7 +49,7 @@ fn main() -> io::Result<()> {
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     // We wrap the game loop in a result to ensure we can cleanup on error
-    let res = run_game(&mut stdout, args);
+    let res = run_game(&mut stdout, config);
 
     // Cleanup
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -79,8 +62,8 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme);
+fn run_game(stdout: &mut Stdout, config: GameConfig) -> io::Result<()> {
+    let mut game = Game::new(config);
     let mut last_tick = Instant::now();
     let base_tick_rate = Duration::from_millis(150);
 
@@ -109,8 +92,16 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
 
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time {
-                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                    current_tick_rate += Duration::from_millis(100); // Slow down
+                if activation_time.elapsed() < Duration::from_secs(5) {
+                    match power_up.p_type {
+                        game::PowerUpType::SlowDown => {
+                            current_tick_rate += Duration::from_millis(100);
+                        }
+                        game::PowerUpType::SpeedBoost => {
+                            current_tick_rate = current_tick_rate.saturating_sub(Duration::from_millis(40)).max(Duration::from_millis(30));
+                        }
+                        game::PowerUpType::Invincibility => {}
+                    }
                 } else {
                     game.power_up = None; // Power-up expired
                 }
@@ -144,7 +135,32 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
     Ok(())
 }
 
+#[expect(clippy::too_many_lines)]
 fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+    if game.state == GameState::EnterName {
+        match code {
+            KeyCode::Enter => {
+                let name = if game.entered_name.trim().is_empty() {
+                    "Anonymous".to_string()
+                } else {
+                    game.entered_name.trim().to_string()
+                };
+                game::Game::save_high_score(name, game.score);
+                game.state = GameState::GameOver;
+            }
+            KeyCode::Backspace => {
+                game.entered_name.pop();
+            }
+            KeyCode::Char(c) => {
+                if game.entered_name.len() < 15 && c.is_ascii_alphanumeric() {
+                    game.entered_name.push(c);
+                }
+            }
+            _ => {}
+        }
+        return true;
+    }
+
     match code {
         KeyCode::Char('q') => {
             if game.state == GameState::Playing || game.state == GameState::Paused {
@@ -162,6 +178,17 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
                     3 => return false,
                     _ => {}
                 }
+            } else if game.state == GameState::Paused {
+                match game.pause_selection {
+                    0 => game.state = GameState::Playing,
+                    1 => {
+                        game.save_game();
+                        game.save_stats();
+                        game.state = GameState::Menu;
+                    }
+                    2 => return false,
+                    _ => {}
+                }
             }
         }
         KeyCode::Char('r') => {
@@ -171,16 +198,10 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         }
         KeyCode::Char('p') => {
             if game.state == GameState::Playing {
+                game.pause_selection = 0;
                 game.state = GameState::Paused;
             } else if game.state == GameState::Paused {
                 game.state = GameState::Playing;
-            }
-        }
-        KeyCode::Char('s') => {
-            if game.state == GameState::Paused {
-                game.save_game();
-                game.save_stats();
-                game.state = GameState::Menu;
             }
         }
         KeyCode::Char('b') => {
@@ -206,6 +227,12 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
                 } else {
                     game.menu_selection = 3;
                 }
+            } else if game.state == GameState::Paused {
+                if game.pause_selection > 0 {
+                    game.pause_selection -= 1;
+                } else {
+                    game.pause_selection = 2;
+                }
             } else {
                 game.handle_input(Direction::Up);
             }
@@ -216,6 +243,12 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
                     game.menu_selection += 1;
                 } else {
                     game.menu_selection = 0;
+                }
+            } else if game.state == GameState::Paused {
+                if game.pause_selection < 2 {
+                    game.pause_selection += 1;
+                } else {
+                    game.pause_selection = 0;
                 }
             } else {
                 game.handle_input(Direction::Down);
