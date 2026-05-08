@@ -16,6 +16,8 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
         GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
+        GameState::EnterName => draw_enter_name(game, stdout)?,
+        GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -73,12 +75,13 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             game.height / 2 + 6,
         ))?;
         write!(stdout, "Top Scores:")?;
-        for (i, s) in scores.iter().enumerate().take(5) {
+        for (i, (name, score)) in scores.iter().enumerate().take(5) {
+            let hs_str = format!("{}. {} - {}", i + 1, name, score);
             stdout.queue(cursor::MoveTo(
                 (game.width / 2).saturating_sub(10),
                 game.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
             ))?;
-            write!(stdout, "{}. {}", i + 1, s)?;
+            write!(stdout, "{hs_str}")?;
         }
     }
     Ok(())
@@ -142,7 +145,55 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-#[expect(clippy::too_many_lines)]
+fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "NEW HIGH SCORE!";
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        game.height / 2 - 2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let prompt = "Enter your name:";
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(prompt.len()).unwrap() / 2),
+        game.height / 2,
+    ))?;
+    write!(stdout, "{prompt}")?;
+
+    let name_str = format!("> {} <", game.player_name);
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(name_str.len()).unwrap() / 2),
+        game.height / 2 + 2,
+    ))?;
+    write!(stdout, "{name_str}")?;
+
+    Ok(())
+}
+
+fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "ARE YOU SURE YOU WANT TO QUIT?";
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        game.height / 2 - 1,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let options = "[Y]es / [N]o";
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(options.len()).unwrap() / 2),
+        game.height / 2 + 1,
+    ))?;
+    write!(stdout, "{options}")?;
+
+    Ok(())
+}
+
+#[expect(clippy::too_many_lines, reason = "Game drawing requires extensive setup")]
 fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
         "dark" => (
@@ -309,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_draw_menu() {
-        let mut game = Game::new(20, 20, false, 'O', "dark".to_string());
+        let mut game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
         game.menu_selection = 0; // "Start Game" selected
 
         let mut buf = Vec::new();
@@ -327,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_draw_help() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+        let game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
 
         let mut buf = Vec::new();
         draw_help(&game, &mut buf).unwrap();
@@ -340,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_draw_countdown() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+        let game = Game::new(20, 20, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
 
         // Test single digit (count = 3)
         let mut buf = Vec::new();
@@ -366,7 +417,7 @@ mod tests {
         assert!(output.ends_with(&expected), "Expected output to end with drawing '0' at (10, 10)");
 
         // Test large width board
-        let large_game = Game::new(100, 100, false, 'O', "dark".to_string());
+        let large_game = Game::new(100, 100, false, 'O', "dark".to_string(), crate::game::Difficulty::Normal);
         let mut buf = Vec::new();
         draw_countdown(&large_game, &mut buf, 5).unwrap();
         let output = String::from_utf8(buf).unwrap();

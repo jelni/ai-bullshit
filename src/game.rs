@@ -9,10 +9,22 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::time::SystemTime;
 
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Default)]
+pub enum Difficulty {
+    Easy,
+    #[default]
+    Normal,
+    Hard,
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum PowerUpType {
     SlowDown,
+    SpeedBoost,
+    Invincibility,
 }
+
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
@@ -28,13 +40,15 @@ pub fn beep() {
     let _ = io::stdout().flush();
 }
 
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 pub enum GameState {
     Menu,
     Playing,
     Paused,
     GameOver,
     Help,
+    EnterName,
+    ConfirmQuit,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -64,7 +78,7 @@ pub struct Game {
     pub obstacles: HashSet<Point>,
     pub score: u32,
     pub high_score: u32,
-    pub high_scores: Vec<u32>,
+    pub high_scores: Vec<(String, u32)>,
     pub state: GameState,
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
@@ -75,10 +89,13 @@ pub struct Game {
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
+    pub difficulty: Difficulty,
+    pub player_name: String,
+    pub previous_state: Option<GameState>,
 }
 
 impl Game {
-    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String) -> Self {
+    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String, difficulty: Difficulty) -> Self {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
         let start_y = height / 2;
@@ -86,10 +103,15 @@ impl Game {
             x: start_x,
             y: start_y,
         });
-        let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
+        let obs_count = match difficulty {
+            Difficulty::Easy => 1,
+            Difficulty::Normal => 3,
+            Difficulty::Hard => 5,
+        };
+        let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, obs_count);
         let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
         let high_scores = Self::load_high_scores_static();
-        let high_score = *high_scores.first().unwrap_or(&0);
+        let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
         Self {
             width,
@@ -113,10 +135,13 @@ impl Game {
             stats,
             start_time: Instant::now(),
             death_message: String::new(),
+            difficulty,
+            player_name: String::new(),
+            previous_state: None,
         }
     }
 
-    pub fn load_high_scores_static() -> Vec<u32> {
+    pub fn load_high_scores_static() -> Vec<(String, u32)> {
         let mut content = String::new();
         File::open("highscore.txt")
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
@@ -125,7 +150,17 @@ impl Game {
                 |_| {
                     content
                         .lines()
-                        .filter_map(|line| line.trim().parse::<u32>().ok())
+                        .filter_map(|line| {
+                            let parts: Vec<&str> = line.split_whitespace().collect();
+                            if parts.len() >= 2 {
+                                let score_str = parts.last().unwrap();
+                                let name = parts[..parts.len() - 1].join(" ");
+                                if let Ok(score) = score_str.parse::<u32>() {
+                                    return Some((name, score));
+                                }
+                            }
+                            None
+                        })
                         .collect()
                 },
             )
@@ -167,14 +202,14 @@ impl Game {
         }
     }
 
-    fn save_high_score(&mut self, score: u32) {
-        self.high_scores.push(score);
-        self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
+    pub fn save_high_score(&mut self, name: String, score: u32) {
+        self.high_scores.push((name, score));
+        self.high_scores.sort_unstable_by(|a, b| b.1.cmp(&a.1));
         self.high_scores.truncate(5);
         let content = self
             .high_scores
             .iter()
-            .map(std::string::ToString::to_string)
+            .map(|(n, s)| format!("{n} {s}"))
             .collect::<Vec<_>>()
             .join("\n");
         let _ = Self::atomic_write("highscore.txt", content);
@@ -273,8 +308,12 @@ impl Game {
             x: start_x,
             y: start_y,
         });
-        self.obstacles =
-            Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, 3);
+        let obs_count = match self.difficulty {
+            Difficulty::Easy => 1,
+            Difficulty::Normal => 3,
+            Difficulty::Hard => 5,
+        };
+        self.obstacles = Self::generate_obstacles(self.width, self.height, &self.snake, &mut self.rng, obs_count);
         self.food = Self::generate_food(
             self.width,
             self.height,
@@ -358,7 +397,12 @@ impl Game {
             hit_wall = true;
         }
 
-        if hit_wall {
+        let is_invincible = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Invincibility
+                && p.activation_time.is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
+        if hit_wall && !is_invincible {
             self.handle_death("Hit Wall/Obstacle");
             return;
         }
@@ -384,7 +428,7 @@ impl Game {
         };
 
         // Refined self collision check
-        if self.snake.body.contains(&final_head) {
+        if self.snake.body.contains(&final_head) && !is_invincible {
             if !grow && final_head == *self.snake.body.back().unwrap() {
                 // We are moving into the tail, but the tail will move. Safe.
             } else {
@@ -439,8 +483,14 @@ impl Game {
                 &mut self.rng,
             );
 
+            let p_type = match self.rng.gen_range(0..3) {
+                0 => PowerUpType::SlowDown,
+                1 => PowerUpType::SpeedBoost,
+                _ => PowerUpType::Invincibility,
+            };
+
             self.power_up = Some(PowerUp {
-                p_type: PowerUpType::SlowDown,
+                p_type,
                 location,
                 activation_time: None,
             });
@@ -518,11 +568,16 @@ impl Game {
         self.save_stats();
 
         if self.lives == 0 {
-            self.state = GameState::GameOver;
             self.death_message = cause.to_string();
+            let is_high_score = self.high_scores.len() < 5 || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
+            if is_high_score && self.score > 0 {
+                self.state = GameState::EnterName;
+                self.player_name.clear();
+            } else {
+                self.state = GameState::GameOver;
+            }
             if self.score > self.high_score {
                 self.high_score = self.score;
-                self.save_high_score(self.high_score);
             }
         } else {
             self.respawn();
@@ -544,7 +599,7 @@ mod tests {
         let data = vec![b'a'; 2 * 1024 * 1024];
         file.write_all(&data).unwrap();
 
-        let mut game = Game::new(20, 20, false, '#', String::from("dark"));
+        let mut game = Game::new(20, 20, false, '#', String::from("dark"), crate::game::Difficulty::Normal);
         // Should not panic or crash out of memory, just return false
         let loaded = game.load_game_from_file(file_path);
         assert!(!loaded);
