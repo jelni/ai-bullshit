@@ -8,6 +8,20 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::time::SystemTime;
 
+fn secure_write<P: AsRef<std::path::Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+
+    let mut file = options.open(path)?;
+    file.write_all(contents.as_ref())
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum PowerUpType {
     SlowDown,
@@ -130,7 +144,7 @@ impl Game {
 
     pub fn save_stats(&self) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = fs::write("stats.json", json);
+            let _ = secure_write("stats.json", json);
         }
     }
 
@@ -144,7 +158,7 @@ impl Game {
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
-        let _ = fs::write("highscore.txt", content);
+        let _ = secure_write("highscore.txt", content);
     }
 
     pub fn save_game(&self) {
@@ -159,7 +173,7 @@ impl Game {
             score: self.score,
         };
         if let Ok(json) = serde_json::to_string(&state) {
-            let _ = fs::write("savegame.json", json);
+            let _ = secure_write("savegame.json", json);
         }
     }
 
