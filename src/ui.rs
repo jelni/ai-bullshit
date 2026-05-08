@@ -15,7 +15,8 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     match game.state {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
-        GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
+        GameState::Stats => draw_stats(game, stdout)?,
+        GameState::Playing | GameState::GameOver | GameState::Paused | GameState::EnterName => draw_game(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -45,7 +46,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let menu_items = ["Start Game", "Load Game", "Help", "Quit"];
+    let menu_items = ["Start Game", "Load Game", "Help", "Stats", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -78,7 +79,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 (game.width / 2).saturating_sub(10),
                 game.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
             ))?;
-            write!(stdout, "{}. {}", i + 1, s)?;
+            write!(stdout, "{}. {} - {}", i + 1, s.name, s.score)?;
         }
     }
     Ok(())
@@ -142,6 +143,43 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
+fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "GAME STATISTICS";
+
+    stdout.queue(SetForegroundColor(Color::Magenta))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap() / 2),
+        3,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stats = [
+        format!("Games Played: {}", game.stats.games_played),
+        format!("Total Score: {}", game.stats.total_score),
+        format!("Total Food Eaten: {}", game.stats.total_food_eaten),
+        format!("Total Time (s): {}", game.stats.total_time_s),
+    ];
+
+    stdout.queue(SetForegroundColor(Color::White))?;
+    for (i, line) in stats.iter().enumerate() {
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap() / 2),
+            6 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let back = "Press 'q' to go back";
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap() / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{back}")?;
+
+    Ok(())
+}
+
 #[expect(clippy::too_many_lines)]
 fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
@@ -163,13 +201,20 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         stdout.queue(SetForegroundColor(border_color))?;
     }
 
-    for y in 0..game.height {
-        for x in 0..game.width {
-            if x == 0 || x == game.width - 1 || y == 0 || y == game.height - 1 {
-                stdout.queue(cursor::MoveTo(x, y))?;
-                write!(stdout, "#")?;
-            }
-        }
+    // Top and Bottom borders
+    for x in 0..game.width {
+        stdout.queue(cursor::MoveTo(x, 0))?;
+        write!(stdout, "#")?;
+        stdout.queue(cursor::MoveTo(x, game.height - 1))?;
+        write!(stdout, "#")?;
+    }
+
+    // Left and Right borders (skip corners since they're drawn above)
+    for y in 1..game.height - 1 {
+        stdout.queue(cursor::MoveTo(0, y))?;
+        write!(stdout, "#")?;
+        stdout.queue(cursor::MoveTo(game.width - 1, y))?;
+        write!(stdout, "#")?;
     }
 
     // Draw food
@@ -191,16 +236,28 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "★")?;
     }
 
-    if let Some(power_up) = &game.power_up
-        && power_up.activation_time.is_none()
-    {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        stdout.queue(SetForegroundColor(Color::Cyan))?;
-        write!(stdout, "P")?;
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
+    if let Some(power_up) = &game.power_up {
+        if power_up.activation_time.is_none() {
+            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+            let color = match power_up.p_type {
+                crate::game::PowerUpType::SlowDown => Color::Cyan,
+                crate::game::PowerUpType::Invincibility => Color::Yellow,
+            };
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "P")?;
+        }
     }
 
     // Draw snake
-    stdout.queue(SetForegroundColor(snake_color))?;
+    let mut current_snake_color = snake_color;
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
+    if let Some(power_up) = &game.power_up {
+        if power_up.activation_time.is_some() && power_up.p_type == crate::game::PowerUpType::Invincibility {
+            current_snake_color = Color::Yellow;
+        }
+    }
+    stdout.queue(SetForegroundColor(current_snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
         stdout.queue(cursor::MoveTo(part.x, part.y))?;
         if i == 0 {
@@ -228,15 +285,42 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.score, game.high_score, game.lives, level
     )?;
 
-    if let Some(power_up) = &game.power_up
-        && let Some(activation_time) = power_up.activation_time
-    {
-        let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
-        if elapsed < 5 {
-            let remaining = 5 - elapsed;
-            let power_up_msg = format!(" | Slowdown: {remaining}s");
-            write!(stdout, "{power_up_msg}")?;
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
+    if let Some(power_up) = &game.power_up {
+        if let Some(activation_time) = power_up.activation_time {
+            let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+            if elapsed < 5 {
+                let remaining = 5 - elapsed;
+                let power_up_msg = match power_up.p_type {
+                    crate::game::PowerUpType::SlowDown => format!(" | Slowdown: {remaining}s"),
+                    crate::game::PowerUpType::Invincibility => format!(" | Invincible: {remaining}s"),
+                };
+                write!(stdout, "{power_up_msg}")?;
+            }
         }
+    }
+
+    // Draw Enter Name
+    if game.state == GameState::EnterName {
+        let msg = "NEW HIGH SCORE!";
+        let msg_len = u16::try_from(msg.len()).unwrap();
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = game.height / 2;
+
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos - 1))?;
+        write!(stdout, "{msg}")?;
+
+        let name_msg = format!("Enter Name: {}", game.player_name_input);
+        let name_len = u16::try_from(name_msg.len()).unwrap();
+        let x_name = (game.width / 2).saturating_sub(name_len / 2);
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(x_name, y_pos + 1))?;
+        write!(stdout, "{name_msg}")?;
+
+        let cursor_x = x_name + name_len;
+        stdout.queue(cursor::MoveTo(cursor_x, y_pos + 1))?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
     }
 
     // Draw Game Over
@@ -301,7 +385,9 @@ mod tests {
 
     #[test]
     fn test_draw_countdown() {
-        let game = Game::new(20, 20, false, 'O', "dark".to_string());
+        use crate::config::GameConfig;
+        let config = GameConfig { width: 20, height: 20, wrap_mode: false, skin: 'O', theme: "dark".to_string() };
+        let game = Game::new(config);
 
         // Test single digit (count = 3)
         let mut buf = Vec::new();

@@ -1,8 +1,10 @@
+mod config;
 mod game;
 mod snake;
 mod ui;
 
 use clap::Parser;
+use config::GameConfig;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -83,7 +85,14 @@ fn main() -> io::Result<()> {
 }
 
 fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme);
+    let config = GameConfig {
+        width: args.width,
+        height: args.height,
+        wrap_mode: args.wrap,
+        skin: args.skin,
+        theme: args.theme,
+    };
+    let mut game = Game::new(config);
     let mut last_tick = Instant::now();
     let base_tick_rate = Duration::from_millis(150);
 
@@ -110,13 +119,16 @@ fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
             base_tick_rate
         };
 
-        if let Some(power_up) = &mut game.power_up
-            && let Some(activation_time) = power_up.activation_time
-        {
-            if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
-                current_tick_rate += Duration::from_millis(100); // Slow down
-            } else {
-                game.power_up = None; // Power-up expired
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(power_up) = &mut game.power_up {
+            if let Some(activation_time) = power_up.activation_time {
+                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+                    if power_up.p_type == game::PowerUpType::SlowDown {
+                        current_tick_rate += Duration::from_millis(100); // Slow down
+                    }
+                } else {
+                    game.power_up = None; // Power-up expired
+                }
             }
         }
 
@@ -160,7 +172,46 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::Paused => handle_paused_input(code, game),
         GameState::GameOver => handle_game_over_input(code, game),
         GameState::Help => handle_help_input(code, game),
+        GameState::EnterName => handle_enter_name_input(code, game),
+        GameState::Stats => handle_stats_input(code, game),
     }
+}
+
+#[expect(clippy::missing_const_for_fn, reason = "uniformity with other input handlers")]
+fn handle_stats_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') | KeyCode::Esc => game.state = GameState::Menu,
+        _ => {}
+    }
+    true
+}
+
+fn handle_enter_name_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Enter => {
+            if !game.player_name_input.is_empty() {
+                let name = game.player_name_input.clone();
+                game.save_high_score(name, game.score);
+                if game.score > game.high_score {
+                    game.high_score = game.score;
+                }
+                game.state = GameState::GameOver;
+            }
+        }
+        KeyCode::Backspace => {
+            game.player_name_input.pop();
+        }
+        KeyCode::Char(c) => {
+            #[expect(clippy::collapsible_if, reason = "stable rust")]
+            if c.is_ascii_alphanumeric() || c == ' ' {
+                if game.player_name_input.len() < 10 {
+                    game.player_name_input.push(c);
+                }
+            }
+        }
+        _ => {}
+    }
+    true
 }
 
 fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
@@ -189,18 +240,19 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 let _ = game.load_game();
             }
             2 => game.state = GameState::Help,
-            3 => return false,
+            3 => game.state = GameState::Stats,
+            4 => return false,
             _ => {}
         },
         KeyCode::Up => {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 3;
+                game.menu_selection = 4;
             }
         }
         KeyCode::Down => {
-            if game.menu_selection < 3 {
+            if game.menu_selection < 4 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

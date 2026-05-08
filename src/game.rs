@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
@@ -8,13 +9,16 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::time::SystemTime;
 
+use crate::config::GameConfig;
+
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum PowerUpType {
     SlowDown,
+    Invincibility,
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
@@ -34,17 +38,29 @@ pub enum GameState {
     Paused,
     GameOver,
     Help,
+    EnterName,
+    Stats,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HighScore {
+    pub name: String,
+    pub score: u32,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     pub snake: Snake,
     pub food: Point,
-    pub obstacles: Vec<Point>,
+    pub obstacles: HashSet<Point>,
     pub score: u32,
+    pub power_up: Option<PowerUp>,
+    pub bonus_food: Option<(Point, u64)>, // elapsed time in seconds
+    pub lives: u32,
+    pub stats: Statistics,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Statistics {
     pub games_played: u32,
     pub total_score: u32,
@@ -60,11 +76,12 @@ pub struct Game {
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
     pub power_up: Option<PowerUp>,
-    pub obstacles: Vec<Point>,
+    pub obstacles: HashSet<Point>,
     pub score: u32,
     pub high_score: u32,
-    pub high_scores: Vec<u32>,
+    pub high_scores: Vec<HighScore>,
     pub state: GameState,
+    pub player_name_input: String,
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
     pub skin: char,
@@ -77,23 +94,23 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(width: u16, height: u16, wrap_mode: bool, skin: char, theme: String) -> Self {
+    pub fn new(config: GameConfig) -> Self {
         let mut rng = rand::thread_rng();
-        let start_x = width / 2;
-        let start_y = height / 2;
+        let start_x = config.width / 2;
+        let start_y = config.height / 2;
         let snake = Snake::new(Point {
             x: start_x,
             y: start_y,
         });
-        let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, 3);
-        let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
-        let high_scores = Self::load_high_scores_static();
-        let high_score = *high_scores.first().unwrap_or(&0);
-        let stats = Self::load_stats();
+        let obstacles = Self::generate_obstacles(config.width, config.height, &snake, &mut rng, 3);
+        let food = Self::generate_food(config.width, config.height, &snake, &obstacles, &mut rng);
+        let high_scores = Self::load_high_scores_from_file("highscores.json");
+        let high_score = high_scores.first().map_or(0, |hs| hs.score);
+        let stats = Self::load_stats_from_file("stats.json");
         Self {
-            width,
-            height,
-            wrap_mode,
+            width: config.width,
+            height: config.height,
+            wrap_mode: config.wrap_mode,
             snake,
             food,
             bonus_food: None,
@@ -105,34 +122,29 @@ impl Game {
             state: GameState::Menu,
             rng,
             just_died: false,
-            skin,
-            theme,
+            skin: config.skin,
+            theme: config.theme,
             lives: 3,
             menu_selection: 0,
             stats,
             start_time: Instant::now(),
             death_message: String::new(),
+            player_name_input: String::new(),
         }
     }
 
-    pub fn load_high_scores_static() -> Vec<u32> {
+    pub fn load_high_scores_from_file(path: &str) -> Vec<HighScore> {
         let mut content = String::new();
-        File::open("highscore.txt")
+        File::open(path)
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
-            .map_or_else(
-                |_| Vec::new(),
-                |_| {
-                    content
-                        .lines()
-                        .filter_map(|line| line.trim().parse::<u32>().ok())
-                        .collect()
-                },
-            )
+            .ok()
+            .and_then(|_| serde_json::from_str::<Vec<HighScore>>(&content).ok())
+            .unwrap_or_default()
     }
 
-    fn load_stats() -> Statistics {
+    pub fn load_stats_from_file(path: &str) -> Statistics {
         let mut content = String::new();
-        File::open("stats.json")
+        File::open(path)
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
             .and_then(|_| serde_json::from_str(&content).ok())
@@ -144,36 +156,53 @@ impl Game {
         let suffix: u32 = rng.r#gen();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
-        let mut file = fs::File::options()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)?;
+        #[cfg(unix)]
+        let mut options = fs::File::options();
+        #[cfg(not(unix))]
+        let mut options = fs::File::options();
+        options.write(true).create_new(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
+
+        let mut file = options.open(&tmp_path)?;
 
         file.write_all(content.as_ref())?;
         file.sync_all()?;
         fs::rename(tmp_path, path)
     }
 
-    pub fn save_stats(&self) {
+    pub fn save_stats_to_file(&self, path: &str) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = Self::atomic_write("stats.json", json);
+            let _ = Self::atomic_write(path, json);
         }
     }
 
-    fn save_high_score(&mut self, score: u32) {
-        self.high_scores.push(score);
-        self.high_scores.sort_unstable_by(|a, b| b.cmp(a));
-        self.high_scores.truncate(5);
-        let content = self
-            .high_scores
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n");
-        let _ = Self::atomic_write("highscore.txt", content);
+    pub fn save_stats(&self) {
+        self.save_stats_to_file("stats.json");
     }
 
-    pub fn save_game(&self) {
+    pub fn save_high_score_to_file(&mut self, name: String, score: u32, path: &str) {
+        self.high_scores.push(HighScore { name, score });
+        self.high_scores.sort_unstable_by(|a, b| b.score.cmp(&a.score));
+        self.high_scores.truncate(5);
+        if let Ok(json) = serde_json::to_string(&self.high_scores) {
+            let _ = Self::atomic_write(path, json);
+        }
+    }
+
+    pub fn save_high_score(&mut self, name: String, score: u32) {
+        self.save_high_score_to_file(name, score, "highscores.json");
+    }
+
+    pub fn save_game_to_file(&self, path: &str) {
+        let bonus_food = self.bonus_food.map(|(p, i)| {
+            (p, i.elapsed().as_secs())
+        });
+
         let state = SaveState {
             snake: Snake {
                 body: self.snake.body.clone(),
@@ -183,15 +212,28 @@ impl Game {
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
+            power_up: self.power_up.clone(),
+            bonus_food,
+            lives: self.lives,
+            stats: Statistics {
+                games_played: self.stats.games_played,
+                total_score: self.stats.total_score,
+                total_food_eaten: self.stats.total_food_eaten,
+                total_time_s: self.stats.total_time_s,
+            },
         };
         if let Ok(json) = serde_json::to_string(&state) {
-            let _ = Self::atomic_write("savegame.json", json);
+            let _ = Self::atomic_write(path, json);
         }
     }
 
-    pub fn load_game(&mut self) -> bool {
+    pub fn save_game(&self) {
+        self.save_game_to_file("savegame.json");
+    }
+
+    pub fn load_game_from_file(&mut self, path: &str) -> bool {
         let mut content = String::new();
-        File::open("savegame.json")
+        File::open(path)
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
             .and_then(|_| serde_json::from_str::<SaveState>(&content).ok())
@@ -200,9 +242,17 @@ impl Game {
                 self.food = state.food;
                 self.obstacles = state.obstacles;
                 self.score = state.score;
+                self.power_up = state.power_up;
+                self.bonus_food = state.bonus_food.map(|(p, s)| (p, Instant::now().checked_sub(Duration::from_secs(s)).unwrap_or_else(Instant::now)));
+                self.lives = state.lives;
+                self.stats = state.stats;
                 self.state = GameState::Paused;
                 true
             })
+    }
+
+    pub fn load_game(&mut self) -> bool {
+        self.load_game_from_file("savegame.json")
     }
 
     fn generate_obstacles(
@@ -211,8 +261,8 @@ impl Game {
         snake: &Snake,
         rng: &mut rand::rngs::ThreadRng,
         count: usize,
-    ) -> Vec<Point> {
-        let mut obstacles = Vec::new();
+    ) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
         for _ in 0..count {
             loop {
                 let x = rng.gen_range(1..width - 1);
@@ -221,7 +271,7 @@ impl Game {
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
                 // Simple check: not on body.
                 if !snake.body.contains(&p) && !obstacles.contains(&p) {
-                    obstacles.push(p);
+                    obstacles.insert(p);
                     break;
                 }
             }
@@ -233,7 +283,7 @@ impl Game {
         width: u16,
         height: u16,
         snake: &Snake,
-        obstacles: &[Point],
+        obstacles: &HashSet<Point>,
         rng: &mut rand::rngs::ThreadRng,
     ) -> Point {
         loop {
@@ -339,17 +389,22 @@ impl Game {
             hit_wall = true;
         }
 
-        if hit_wall {
+        let is_invincible = self.power_up.as_ref().is_some_and(|p| {
+            p.activation_time.is_some() && p.p_type == PowerUpType::Invincibility
+        });
+
+        if hit_wall && !is_invincible {
             self.handle_death("Hit Wall/Obstacle");
             return;
         }
 
         // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut()
-            && final_head == p.location
-        {
-            p.activation_time = Some(SystemTime::now());
-            beep();
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(p) = self.power_up.as_mut() {
+            if final_head == p.location {
+                p.activation_time = Some(SystemTime::now());
+                beep();
+            }
         }
 
         let mut grow = if self
@@ -365,7 +420,7 @@ impl Game {
         };
 
         // Refined self collision check
-        if self.snake.body.contains(&final_head) {
+        if self.snake.body.contains(&final_head) && !is_invincible {
             if !grow && final_head == *self.snake.body.back().unwrap() {
                 // We are moving into the tail, but the tail will move. Safe.
             } else {
@@ -380,6 +435,8 @@ impl Game {
 
         if grow && final_head == self.food {
             self.score += 1;
+            self.stats.total_food_eaten += 1;
+            self.stats.total_score += 1;
             beep();
             // Add a new obstacle every 5 points
             if self.score.is_multiple_of(5) {
@@ -407,9 +464,9 @@ impl Game {
     fn manage_power_ups(&mut self) {
         if self.power_up.is_none() && self.rng.gen_bool(0.02) {
             let mut obstructions = self.obstacles.clone();
-            obstructions.push(self.food);
+            obstructions.insert(self.food);
             if let Some((bonus_food_pos, _)) = self.bonus_food {
-                obstructions.push(bonus_food_pos);
+                obstructions.insert(bonus_food_pos);
             }
 
             let location = Self::generate_food(
@@ -420,8 +477,13 @@ impl Game {
                 &mut self.rng,
             );
 
+            let p_type = if self.rng.gen_bool(0.5) {
+                PowerUpType::SlowDown
+            } else {
+                PowerUpType::Invincibility
+            };
             self.power_up = Some(PowerUp {
-                p_type: PowerUpType::SlowDown,
+                p_type,
                 location,
                 activation_time: None,
             });
@@ -435,7 +497,7 @@ impl Game {
             }
         } else if self.rng.gen_bool(0.01) {
             let mut obstructions = self.obstacles.clone();
-            obstructions.push(self.food);
+            obstructions.insert(self.food);
             let bonus = Self::generate_food(
                 self.width,
                 self.height,
@@ -496,14 +558,66 @@ impl Game {
         self.save_stats();
 
         if self.lives == 0 {
-            self.state = GameState::GameOver;
             self.death_message = cause.to_string();
-            if self.score > self.high_score {
-                self.high_score = self.score;
-                self.save_high_score(self.high_score);
+            if self.score > 0 && (self.high_scores.len() < 5 || self.score > self.high_scores.last().map_or(0, |hs| hs.score)) {
+                self.state = GameState::EnterName;
+                self.player_name_input.clear();
+            } else {
+                self.state = GameState::GameOver;
             }
         } else {
             self.respawn();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::GameConfig;
+
+    fn get_test_config() -> GameConfig {
+        GameConfig {
+            width: 20,
+            height: 20,
+            wrap_mode: false,
+            skin: 'O',
+            theme: "dark".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_load_stats_from_file() {
+        let mut game = Game::new(get_test_config());
+        game.stats.games_played = 5;
+        game.stats.total_score = 100;
+
+        let path = std::env::temp_dir().join("test_stats.json");
+        let path_str = path.to_str().unwrap();
+
+        game.save_stats_to_file(path_str);
+
+        let loaded_stats = Game::load_stats_from_file(path_str);
+        assert_eq!(loaded_stats.games_played, 5);
+        assert_eq!(loaded_stats.total_score, 100);
+    }
+
+    #[test]
+    fn test_load_game_from_file() {
+        let mut game = Game::new(get_test_config());
+        game.score = 42;
+        game.lives = 2;
+
+        let path = std::env::temp_dir().join("test_savegame.json");
+        let path_str = path.to_str().unwrap();
+
+        game.save_game_to_file(path_str);
+
+        let mut loaded_game = Game::new(get_test_config());
+        let success = loaded_game.load_game_from_file(path_str);
+
+        assert!(success);
+        assert_eq!(loaded_game.score, 42);
+        assert_eq!(loaded_game.lives, 2);
     }
 }

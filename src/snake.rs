@@ -9,7 +9,7 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct Point {
     pub x: u16,
     pub y: u16,
