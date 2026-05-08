@@ -1,0 +1,52 @@
+on: ["pull_request", "workflow_dispatch"]
+
+permissions:
+  contents: "read"
+  pull-requests: "read"
+
+jobs:
+  check-conflicts:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+        with:
+          fetch-depth: 0
+          ref: "${{ github.event.pull_request.head.ref || github.ref }}"
+
+      - name: "Check for merge conflicts"
+        run: |
+          # Get PR author
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            AUTHOR="${{ github.event.pull_request.user.login }}"
+          else
+            AUTHOR=$(gh pr view "${{ github.ref_name }}" --json author -q .author.login)
+          fi
+
+          if [ "$AUTHOR" != "google-labs-jules[bot]" ]; then
+            echo "PR author is $AUTHOR, not google-labs-jules[bot]. Skipping."
+            exit 0
+          fi
+
+          git config --global user.email "bot@example.com"
+          git config --global user.name "Bot"
+
+          # Fetch origin main
+          git fetch origin main
+
+          # Try to merge main into current branch
+          if ! git merge origin/main --no-commit --no-ff >/dev/null 2>&1; then
+            files=$(git diff --name-only --diff-filter=U)
+            error_message="Merge conflicts detected! Please rebase the branch onto the latest changes on the main branch.%0A"
+            for f in $files; do
+              error_message="${error_message}%0AConflicted file: $f%0A"
+              encoded_file=$(cat "$f" | sed 's/%/%25/g' | sed 's/\r//g' | awk '{printf "%s%%0A", $0}')
+              error_message="${error_message}${encoded_file}"
+            done
+            echo "::error::${error_message}"
+            exit_code=1
+          else
+            exit_code=0
+          fi
+          sh -c "exit $exit_code"
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
