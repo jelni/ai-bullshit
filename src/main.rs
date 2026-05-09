@@ -53,7 +53,8 @@ fn main() -> io::Result<()> {
         if term_width < args.width || term_height <= args.height {
             eprintln!(
                 "Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.",
-                args.width, args.height + 1
+                args.width,
+                args.height + 1
             );
             std::process::exit(1);
         }
@@ -151,7 +152,12 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                                 .saturating_sub(Duration::from_millis(50))
                                 .max(Duration::from_millis(30)); // Speed boost
                         }
-                        game::PowerUpType::Invincibility | game::PowerUpType::ExtraLife | game::PowerUpType::PassThroughWalls | game::PowerUpType::Shrink | game::PowerUpType::ClearObstacles | game::PowerUpType::ScoreMultiplier => {} // Tick rate unaffected
+                        game::PowerUpType::Invincibility
+                        | game::PowerUpType::ExtraLife
+                        | game::PowerUpType::PassThroughWalls
+                        | game::PowerUpType::Shrink
+                        | game::PowerUpType::ClearObstacles
+                        | game::PowerUpType::ScoreMultiplier => {} // Tick rate unaffected
                     }
                 } else {
                     game.power_up = None; // Power-up expired
@@ -415,23 +421,29 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
             3 => {
                 let skins = ['█', 'O', '@', '#', '*'];
                 let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
-                let prev_idx = if current_idx > 0 { current_idx - 1 } else { skins.len() - 1 };
+                let prev_idx = if current_idx > 0 {
+                    current_idx - 1
+                } else {
+                    skins.len() - 1
+                };
                 game.skin = skins[prev_idx];
             }
             _ => {}
         },
-        KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ' | 'd' | 'D') => match game.settings_selection {
-            0 => game.difficulty = game.difficulty.next(),
-            1 => game.theme = game.theme.next(),
-            2 => game.wrap_mode = !game.wrap_mode,
-            3 => {
-                let skins = ['█', 'O', '@', '#', '*'];
-                let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
-                let next_idx = (current_idx + 1) % skins.len();
-                game.skin = skins[next_idx];
+        KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ' | 'd' | 'D') => {
+            match game.settings_selection {
+                0 => game.difficulty = game.difficulty.next(),
+                1 => game.theme = game.theme.next(),
+                2 => game.wrap_mode = !game.wrap_mode,
+                3 => {
+                    let skins = ['█', 'O', '@', '#', '*'];
+                    let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
+                    let next_idx = (current_idx + 1) % skins.len();
+                    game.skin = skins[next_idx];
+                }
+                _ => {}
             }
-            _ => {}
-        },
+        }
         _ => {}
     }
     true
