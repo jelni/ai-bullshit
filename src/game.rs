@@ -17,7 +17,9 @@ struct AStarState {
 
 impl Ord for AStarState {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.f_score.cmp(&self.f_score)
+        other
+            .f_score
+            .cmp(&self.f_score)
             .then_with(|| self.position.x.cmp(&other.position.x))
             .then_with(|| self.position.y.cmp(&other.position.y))
     }
@@ -74,8 +76,8 @@ impl Difficulty {
     PartialEq,
     Eq,
     Default,
+    Copy,
 )]
-#[derive(Copy)]
 pub enum Theme {
     #[default]
     Classic,
@@ -147,10 +149,16 @@ pub enum GameState {
     ConfirmQuit,
 }
 
-pub const fn default_lives() -> u32 { 3 }
+pub const fn default_lives() -> u32 {
+    3
+}
 
-pub const fn default_wrap_mode() -> bool { false }
-pub const fn default_skin() -> char { '█' }
+pub const fn default_wrap_mode() -> bool {
+    false
+}
+pub const fn default_skin() -> char {
+    '█'
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -398,7 +406,8 @@ impl Game {
             .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
             .is_some_and(|mut state| {
                 // Validate bounds
-                let valid_point = |p: &Point| p.x > 0 && p.x < self.width - 1 && p.y > 0 && p.y < self.height - 1;
+                let valid_point =
+                    |p: &Point| p.x > 0 && p.x < self.width - 1 && p.y > 0 && p.y < self.height - 1;
 
                 if !state.snake.body.iter().all(valid_point) {
                     return false;
@@ -416,7 +425,9 @@ impl Game {
                 self.obstacles = state.obstacles;
                 self.score = state.score;
                 self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
+                    Instant::now()
+                        .checked_sub(Duration::from_secs(elapsed))
+                        .map(|t| (p, t))
                 });
                 self.lives = state.lives;
                 self.power_up = state.power_up;
@@ -429,7 +440,6 @@ impl Game {
                 true
             })
     }
-
 
     fn get_random_empty_point(
         width: u16,
@@ -480,14 +490,13 @@ impl Game {
 
         for _ in 0..count {
             let current_avoid = |p: &Point| avoid(p) || obstacles.contains(p);
-            if let Some(p) = Self::get_random_empty_point(width, height, snake, current_avoid, rng) {
+            if let Some(p) = Self::get_random_empty_point(width, height, snake, current_avoid, rng)
+            {
                 obstacles.insert(p);
             }
         }
         obstacles
     }
-
-
 
     pub fn shift_timers(&mut self, delta: Duration) {
         // Shift start time so time logic doesn't race when paused
@@ -562,8 +571,9 @@ impl Game {
         });
         // Ensure snake doesn't spawn on obstacle
         // We also clear start_y - 1 to prevent instant death upon spawn.
-        self.obstacles
-            .retain(|p| !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)));
+        self.obstacles.retain(|p| {
+            !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
+        });
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -574,7 +584,12 @@ impl Game {
             return;
         }
 
-        let current_dir = self.snake.direction_queue.back().copied().unwrap_or(self.snake.direction);
+        let current_dir = self
+            .snake
+            .direction_queue
+            .back()
+            .copied()
+            .unwrap_or(self.snake.direction);
         let is_opposite = matches!(
             (current_dir, dir),
             (Direction::Up, Direction::Down)
@@ -588,7 +603,10 @@ impl Game {
         }
     }
 
-    #[expect(clippy::too_many_lines, reason = "Game update contains many logic checks")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Game update contains many logic checks"
+    )]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
@@ -670,7 +688,12 @@ impl Game {
         // Remove power up instantly if it was an instant effect that was just activated
         #[expect(clippy::collapsible_if, reason = "stable rust")]
         if let Some(p) = self.power_up.as_ref() {
-            if (p.p_type == PowerUpType::ExtraLife || p.p_type == PowerUpType::Shrink || p.p_type == PowerUpType::ClearObstacles) && p.activation_time.is_none() && final_head == p.location {
+            if (p.p_type == PowerUpType::ExtraLife
+                || p.p_type == PowerUpType::Shrink
+                || p.p_type == PowerUpType::ClearObstacles)
+                && p.activation_time.is_none()
+                && final_head == p.location
+            {
                 self.power_up = None;
             }
         }
@@ -873,7 +896,8 @@ impl Game {
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
-                && pu.activation_time
+                && pu
+                    .activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
@@ -889,7 +913,8 @@ impl Game {
     pub fn is_safe_final_p(&self, final_p: Point) -> bool {
         let is_invincible = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
-                && pu.activation_time
+                && pu
+                    .activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
@@ -907,7 +932,6 @@ impl Game {
 
     #[expect(clippy::collapsible_if, reason = "stable rust")]
     pub fn calculate_autopilot_move(&self) -> Option<Direction> {
-
         let start = self.snake.head();
 
         let mut targets = vec![self.food];
@@ -927,10 +951,19 @@ impl Game {
         g_score.insert(start, 0);
 
         let heuristic = |p: Point| -> u16 {
-            targets.iter().map(|t| p.x.abs_diff(t.x) + p.y.abs_diff(t.y)).min().unwrap_or(0)
+            targets
+                .iter()
+                .map(|t| p.x.abs_diff(t.x) + p.y.abs_diff(t.y))
+                .min()
+                .unwrap_or(0)
         };
 
-        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p) {
@@ -946,7 +979,10 @@ impl Game {
             }
         }
 
-        while let Some(AStarState { position: current, .. }) = open_set.pop() {
+        while let Some(AStarState {
+            position: current, ..
+        }) = open_set.pop()
+        {
             if targets.contains(&current) {
                 return first_step.get(&current).copied();
             }
@@ -1044,7 +1080,7 @@ mod tests {
             20,
             20,
             true, // wrap mode true
-            '@', // custom skin
+            '@',  // custom skin
             crate::game::Theme::Neon,
             crate::game::Difficulty::Hard,
         );
@@ -1070,7 +1106,7 @@ mod tests {
         assert!(success);
         assert_eq!(game2.difficulty, crate::game::Difficulty::Hard);
         assert_eq!(game2.theme, crate::game::Theme::Neon);
-        assert_eq!(game2.wrap_mode, true);
+        assert!(game2.wrap_mode);
         assert_eq!(game2.skin, '@');
 
         let _ = std::fs::remove_file(file_path);
@@ -1131,7 +1167,10 @@ mod tests {
             activation_time: None,
         });
         game.reset();
-        assert!(game.power_up.is_none(), "Power-up should be cleared on reset");
+        assert!(
+            game.power_up.is_none(),
+            "Power-up should be cleared on reset"
+        );
     }
 
     #[test]
