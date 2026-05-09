@@ -1,5 +1,5 @@
 use rand::Rng;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
@@ -887,6 +887,26 @@ impl Game {
 
     #[expect(clippy::collapsible_if, reason = "stable rust")]
     pub fn calculate_autopilot_move(&self) -> Option<Direction> {
+        #[derive(Copy, Clone, Eq, PartialEq)]
+        struct AStarState {
+            f_score: u16,
+            position: Point,
+        }
+
+        impl Ord for AStarState {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                other.f_score.cmp(&self.f_score)
+                    .then_with(|| self.position.x.cmp(&other.position.x))
+                    .then_with(|| self.position.y.cmp(&other.position.y))
+            }
+        }
+
+        impl PartialOrd for AStarState {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
         let start = self.snake.head();
 
         let mut targets = vec![self.food];
@@ -899,36 +919,52 @@ impl Game {
             }
         }
 
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
+        let mut open_set = std::collections::BinaryHeap::new();
+        let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
 
-        visited.insert(start);
+        g_score.insert(start, 0);
+
+        let heuristic = |p: Point| -> u16 {
+            targets.iter().map(|t| p.x.abs_diff(t.x) + p.y.abs_diff(t.y)).min().unwrap_or(0)
+        };
 
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p) {
-                if self.is_safe_final_p(final_p) && !visited.contains(&final_p) {
-                    visited.insert(final_p);
-                    queue.push_back(final_p);
+                if self.is_safe_final_p(final_p) {
+                    let cost = 1;
+                    g_score.insert(final_p, cost);
                     first_step.insert(final_p, d);
+                    open_set.push(AStarState {
+                        f_score: cost + heuristic(final_p),
+                        position: final_p,
+                    });
                 }
             }
         }
 
-        while let Some(current) = queue.pop_front() {
+        while let Some(AStarState { position: current, .. }) = open_set.pop() {
             if targets.contains(&current) {
                 return first_step.get(&current).copied();
             }
 
+            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
+
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 if let Some(final_p) = self.get_final_p(next_p) {
-                    if self.is_safe_final_p(final_p) && !visited.contains(&final_p) {
-                        visited.insert(final_p);
-                        queue.push_back(final_p);
-                        first_step.insert(final_p, *first_step.get(&current).unwrap());
+                    if self.is_safe_final_p(final_p) {
+                        let tentative_g = current_g.saturating_add(1);
+                        if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
+                            g_score.insert(final_p, tentative_g);
+                            first_step.insert(final_p, *first_step.get(&current).unwrap());
+                            open_set.push(AStarState {
+                                f_score: tentative_g.saturating_add(heuristic(final_p)),
+                                position: final_p,
+                            });
+                        }
                     }
                 }
             }
