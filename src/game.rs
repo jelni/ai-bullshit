@@ -118,6 +118,8 @@ pub enum GameState {
     ConfirmQuit,
 }
 
+pub const fn default_lives() -> u32 { 3 }
+
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     pub snake: Snake,
@@ -128,6 +130,8 @@ pub struct SaveState {
     pub bonus_food: Option<(Point, u64)>, // elapsed seconds
     #[serde(default)]
     pub power_up: Option<PowerUp>,
+    #[serde(default = "default_lives")]
+    pub lives: u32,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -328,6 +332,7 @@ impl Game {
             score: self.score,
             bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
             power_up: self.power_up.clone(),
+            lives: self.lives,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -351,6 +356,7 @@ impl Game {
                 self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
                     Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
                 });
+                self.lives = state.lives;
                 self.power_up = state.power_up;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
