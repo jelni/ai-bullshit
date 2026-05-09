@@ -448,6 +448,31 @@ impl Game {
         }
     }
 
+    pub fn shift_timers(&mut self, delta: Duration) {
+        // Shift start time so time logic doesn't race when paused
+        if let Some(new_time) = self.start_time.checked_add(delta) {
+            self.start_time = new_time;
+        }
+
+        // Shift bonus food spawn time
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some((pos, spawn_time)) = self.bonus_food {
+            if let Some(new_time) = spawn_time.checked_add(delta) {
+                self.bonus_food = Some((pos, new_time));
+            }
+        }
+
+        // Shift power up activation time
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(power_up) = &mut self.power_up {
+            if let Some(activation_time) = power_up.activation_time {
+                if let Some(new_time) = activation_time.checked_add(delta) {
+                    power_up.activation_time = Some(new_time);
+                }
+            }
+        }
+    }
+
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
