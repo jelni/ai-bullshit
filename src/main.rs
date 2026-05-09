@@ -186,6 +186,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::Paused => handle_paused_input(code, game),
         GameState::GameOver => handle_game_over_input(code, game),
         GameState::Help => handle_help_input(code, game),
+        GameState::Stats => handle_stats_input(code, game),
         GameState::EnterName => handle_enter_name_input(code, game),
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
     }
@@ -219,8 +220,9 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             1 => {
                 let _ = game.load_game();
             }
-            2 => game.state = GameState::Help,
-            3 => {
+            2 => game.state = GameState::Stats,
+            3 => game.state = GameState::Help,
+            4 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             }
@@ -230,11 +232,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 3;
+                game.menu_selection = 4;
             }
         }
         KeyCode::Down => {
-            if game.menu_selection < 3 {
+            if game.menu_selection < 4 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -298,16 +300,16 @@ fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
     true
 }
 
-fn handle_help_input(code: KeyCode, game: &mut Game) -> bool {
+const fn handle_stats_input(_code: KeyCode, game: &mut Game) -> bool {
+    game.state = GameState::Menu;
+    true
+}
+
+const fn handle_help_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
-        KeyCode::Char('q') => {
-            game.previous_state = Some(GameState::Help);
-            game.state = GameState::ConfirmQuit;
+        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
         }
-        KeyCode::Up => game.handle_input(Direction::Up),
-        KeyCode::Down => game.handle_input(Direction::Down),
-        KeyCode::Left => game.handle_input(Direction::Left),
-        KeyCode::Right => game.handle_input(Direction::Right),
         _ => {}
     }
     true
