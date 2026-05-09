@@ -31,8 +31,8 @@ struct Args {
     #[arg(long, default_value_t = '█')]
     skin: char,
 
-    #[arg(long, default_value_t = String::from("classic"))]
-    theme: String,
+    #[arg(long, value_enum, default_value_t = game::Theme::Classic)]
+    theme: game::Theme,
 
     #[arg(long, value_enum, default_value_t = game::Difficulty::Normal)]
     difficulty: game::Difficulty,
@@ -50,10 +50,10 @@ fn main() -> io::Result<()> {
     // Check terminal size
     if let Ok((term_width, term_height)) = terminal::size() {
         // Use match or combinators to avoid collapsible_if lint in strict mode
-        if term_width < args.width || term_height < args.height {
+        if term_width < args.width || term_height <= args.height {
             eprintln!(
                 "Error: Terminal size ({term_width}x{term_height}) is smaller than game board ({0}x{1}). Resize terminal or use smaller board.",
-                args.width, args.height
+                args.width, args.height + 1
             );
             std::process::exit(1);
         }

@@ -198,16 +198,16 @@ fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     reason = "Game drawing requires extensive setup"
 )]
 fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    let (border_color, food_color, snake_color, obs_color) = match game.theme.as_str() {
-        "dark" => (
+    let (border_color, food_color, snake_color, obs_color) = match game.theme {
+        crate::game::Theme::Dark => (
             Color::DarkGrey,
             Color::DarkRed,
             Color::Green,
             Color::DarkMagenta,
         ),
-        "retro" => (Color::Green, Color::Green, Color::Green, Color::Green),
-        "neon" => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red),
-        _ => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta),
+        crate::game::Theme::Retro => (Color::Green, Color::Green, Color::Green, Color::Green),
+        crate::game::Theme::Neon => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red),
+        crate::game::Theme::Classic => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta),
     };
 
     // Draw borders
@@ -379,7 +379,7 @@ mod tests {
             20,
             false,
             'O',
-            "dark".to_string(),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
         game.menu_selection = 0; // "Start Game" selected
@@ -413,7 +413,7 @@ mod tests {
             20,
             false,
             'O',
-            "dark".to_string(),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
 
@@ -442,7 +442,7 @@ mod tests {
             20,
             false,
             'O',
-            "dark".to_string(),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
 
@@ -484,7 +484,7 @@ mod tests {
             100,
             false,
             'O',
-            "dark".to_string(),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
         let mut buf = Vec::new();
