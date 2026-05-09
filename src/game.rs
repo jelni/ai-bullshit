@@ -236,6 +236,7 @@ impl Game {
         let state = SaveState {
             snake: Snake {
                 body: self.snake.body.clone(),
+                body_map: self.snake.body_map.clone(),
                 direction: self.snake.direction,
                 next_direction: self.snake.next_direction,
             },
@@ -256,7 +257,8 @@ impl Game {
         File::open(path)
             .ok()
             .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
-            .is_some_and(|state| {
+            .is_some_and(|mut state| {
+                state.snake.rebuild_map();
                 self.snake = state.snake;
                 self.food = state.food;
                 self.obstacles = state.obstacles;
@@ -275,11 +277,6 @@ impl Game {
     ) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
 
-        let mut body_set = std::collections::HashSet::with_capacity(snake.body.len());
-        for p in &snake.body {
-            body_set.insert(*p);
-        }
-
         for _ in 0..count {
             loop {
                 let x = rng.gen_range(1..width - 1);
@@ -287,7 +284,7 @@ impl Game {
                 let p = Point { x, y };
                 // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
                 // Simple check: not on body.
-                if !body_set.contains(&p) && !obstacles.contains(&p) {
+                if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
                     obstacles.insert(p);
                     break;
                 }
@@ -303,16 +300,12 @@ impl Game {
         obstacles: &HashSet<Point>,
         rng: &mut rand::rngs::ThreadRng,
     ) -> Point {
-        let mut body_set = HashSet::with_capacity(snake.body.len());
-        for p in &snake.body {
-            body_set.insert(*p);
-        }
         loop {
             // Food must be within walls (1..WIDTH-1, 1..HEIGHT-1)
             let x = rng.gen_range(1..width - 1);
             let y = rng.gen_range(1..height - 1);
             let p = Point { x, y };
-            if !body_set.contains(&p) && !obstacles.contains(&p) {
+            if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
                 return p;
             }
         }
@@ -452,7 +445,7 @@ impl Game {
         };
 
         // Refined self collision check
-        if self.snake.body.contains(&final_head) && !is_invincible {
+        if self.snake.body_map.contains_key(&final_head) && !is_invincible {
             let is_tail = self
                 .snake
                 .body
