@@ -16,7 +16,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
         GameState::Stats => draw_stats(game, stdout)?,
-        GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
+        GameState::Playing | GameState::GameOver | GameState::GameWon | GameState::Paused => draw_game(game, stdout)?,
         GameState::EnterName => draw_enter_name(game, stdout)?,
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
         GameState::Settings => draw_settings(game, stdout)?,
@@ -306,19 +306,24 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     // Top border
     stdout.queue(cursor::MoveTo(0, 0))?;
-    let horizontal_border = "#".repeat(usize::from(game.width));
-    write!(stdout, "{horizontal_border}")?;
+    let mut top_border = String::from("╔");
+    top_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
+    top_border.push('╗');
+    write!(stdout, "{top_border}")?;
 
     // Bottom border
     stdout.queue(cursor::MoveTo(0, game.height - 1))?;
-    write!(stdout, "{horizontal_border}")?;
+    let mut bottom_border = String::from("╚");
+    bottom_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
+    bottom_border.push('╝');
+    write!(stdout, "{bottom_border}")?;
 
     // Side borders
     for y in 1..game.height - 1 {
         stdout.queue(cursor::MoveTo(0, y))?;
-        write!(stdout, "#")?;
+        write!(stdout, "║")?;
         stdout.queue(cursor::MoveTo(game.width - 1, y))?;
-        write!(stdout, "#")?;
+        write!(stdout, "║")?;
     }
 
     // Draw food
@@ -344,8 +349,13 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if let Some(power_up) = &game.power_up {
         if power_up.activation_time.is_none() {
             stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-            stdout.queue(SetForegroundColor(Color::Cyan))?;
-            write!(stdout, "P")?;
+            if power_up.p_type == crate::game::PowerUpType::ExtraLife {
+                stdout.queue(SetForegroundColor(Color::Magenta))?;
+                write!(stdout, "♥")?;
+            } else {
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "P")?;
+            }
         }
     }
 
@@ -388,6 +398,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                     crate::game::PowerUpType::SlowDown => "Slowdown",
                     crate::game::PowerUpType::SpeedBoost => "Speed Boost",
                     crate::game::PowerUpType::Invincibility => "Invincible",
+                    crate::game::PowerUpType::ExtraLife => "Extra Life",
                 };
                 let power_up_msg = format!(" | {power_up_name}: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;
@@ -412,6 +423,24 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         stdout.queue(SetForegroundColor(Color::White))?;
         stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
+
+        let sub_msg = "Press 'q' to quit, 'r' to restart";
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
+        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
+        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
+        write!(stdout, "{sub_msg}")?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
+    }
+
+    if game.state == GameState::GameWon {
+        let msg = "YOU WIN!";
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = game.height / 2;
+
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);

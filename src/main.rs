@@ -138,7 +138,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                                 .saturating_sub(Duration::from_millis(50))
                                 .max(Duration::from_millis(30)); // Speed boost
                         }
-                        game::PowerUpType::Invincibility => {} // Tick rate unaffected
+                        game::PowerUpType::Invincibility | game::PowerUpType::ExtraLife => {} // Tick rate unaffected
                     }
                 } else {
                     game.power_up = None; // Power-up expired
@@ -184,7 +184,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::Menu => handle_menu_input(code, game),
         GameState::Playing => handle_playing_input(code, game),
         GameState::Paused => handle_paused_input(code, game),
-        GameState::GameOver => handle_game_over_input(code, game),
+        GameState::GameOver | GameState::GameWon => handle_game_over_input(code, game),
         GameState::Help => handle_help_input(code, game),
         GameState::Stats => handle_stats_input(code, game),
         GameState::EnterName => handle_enter_name_input(code, game),
@@ -324,7 +324,7 @@ fn handle_enter_name_input(code: KeyCode, game: &mut Game) -> bool {
                 let name = game.player_name.clone();
                 let score = game.score;
                 game.save_high_score(name, score);
-                game.state = GameState::GameOver;
+                game.state = game.previous_state.unwrap_or(GameState::GameOver);
             }
         }
         KeyCode::Backspace => {
