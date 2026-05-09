@@ -1,5 +1,5 @@
 use rand::Rng;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
@@ -177,6 +177,7 @@ pub struct Game {
     pub difficulty: Difficulty,
     pub player_name: String,
     pub previous_state: Option<GameState>,
+    pub auto_pilot: bool,
 }
 
 impl Game {
@@ -234,6 +235,7 @@ impl Game {
             difficulty,
             player_name: String::new(),
             previous_state: None,
+            auto_pilot: false,
         }
     }
 
@@ -540,6 +542,13 @@ impl Game {
             return;
         }
 
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if self.auto_pilot && self.snake.direction_queue.is_empty() {
+            if let Some(dir) = self.calculate_autopilot_move() {
+                self.snake.direction_queue.push_back(dir);
+            }
+        }
+
         if let Some(dir) = self.snake.direction_queue.pop_front() {
             self.snake.direction = dir;
         }
@@ -784,8 +793,8 @@ impl Game {
         }
     }
 
-    const fn calculate_next_head(&self, head: Point) -> Point {
-        match self.snake.direction {
+    pub const fn calculate_next_head_dir(head: Point, dir: Direction) -> Point {
+        match dir {
             Direction::Up => Point {
                 x: head.x,
                 y: head.y.wrapping_sub(1),
@@ -803,6 +812,93 @@ impl Game {
                 y: head.y,
             },
         }
+    }
+
+    const fn calculate_next_head(&self, head: Point) -> Point {
+        Self::calculate_next_head_dir(head, self.snake.direction)
+    }
+
+    pub fn is_safe(&self, p: Point) -> bool {
+        let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
+            pu.p_type == PowerUpType::PassThroughWalls
+                && pu.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
+        let is_invincible = self.power_up.as_ref().is_some_and(|pu| {
+            pu.p_type == PowerUpType::Invincibility
+                && pu.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
+        let final_p = if self.wrap_mode || can_pass_through_walls {
+            self.calculate_wrapped_head(p)
+        } else if p.x == 0 || p.x >= self.width - 1 || p.y == 0 || p.y >= self.height - 1 {
+            return false; // Hit wall
+        } else {
+            p
+        };
+
+        if !is_invincible {
+            if self.obstacles.contains(&final_p) {
+                return false;
+            }
+            if self.snake.body_map.contains_key(&final_p) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn calculate_autopilot_move(&self) -> Option<Direction> {
+        let start = self.snake.head();
+        let target = self.food;
+
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut first_step = std::collections::HashMap::new();
+
+        visited.insert(start);
+
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        for &d in &dirs {
+            let next_p = Self::calculate_next_head_dir(start, d);
+            let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
+
+            if self.is_safe(p) && !visited.contains(&p) {
+                visited.insert(p);
+                queue.push_back(p);
+                first_step.insert(p, d);
+            }
+        }
+
+        while let Some(current) = queue.pop_front() {
+            if current == target {
+                return first_step.get(&current).copied();
+            }
+
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(current, d);
+                let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
+
+                if self.is_safe(p) && !visited.contains(&p) {
+                    visited.insert(p);
+                    queue.push_back(p);
+                    first_step.insert(p, *first_step.get(&current).unwrap());
+                }
+            }
+        }
+
+        // Fallback: Just return any safe direction if no path to food is found
+        for &d in &dirs {
+            let next_p = Self::calculate_next_head_dir(start, d);
+            let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
+            if self.is_safe(p) {
+                return Some(d);
+            }
+        }
+        None
     }
 
     const fn calculate_wrapped_head(&self, next_head: Point) -> Point {

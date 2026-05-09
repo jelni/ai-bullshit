@@ -287,6 +287,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::ConfirmQuit;
         }
         KeyCode::Char('p' | 'P') => game.state = GameState::Paused,
+        KeyCode::Char('t' | 'T') => game.auto_pilot = !game.auto_pilot,
         KeyCode::Up | KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
         KeyCode::Down | KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down),
         KeyCode::Left | KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
