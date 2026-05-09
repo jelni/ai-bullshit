@@ -91,6 +91,7 @@ pub enum PowerUpType {
     Invincibility,
     ExtraLife,
     PassThroughWalls,
+    Shrink,
 }
 
 #[serde_as]
@@ -580,6 +581,8 @@ impl Game {
             if final_head == p.location {
                 if p.p_type == PowerUpType::ExtraLife {
                     self.lives += 1;
+                } else if p.p_type == PowerUpType::Shrink {
+                    self.snake.shrink_tail();
                 } else {
                     p.activation_time = Some(SystemTime::now());
                 }
@@ -587,10 +590,10 @@ impl Game {
             }
         }
 
-        // Remove power up instantly if it was an ExtraLife that was just activated
+        // Remove power up instantly if it was an ExtraLife or Shrink that was just activated
         #[expect(clippy::collapsible_if, reason = "stable rust")]
         if let Some(p) = self.power_up.as_ref() {
-            if p.p_type == PowerUpType::ExtraLife && p.activation_time.is_none() && final_head == p.location {
+            if (p.p_type == PowerUpType::ExtraLife || p.p_type == PowerUpType::Shrink) && p.activation_time.is_none() && final_head == p.location {
                 self.power_up = None;
             }
         }
@@ -693,11 +696,12 @@ impl Game {
                 &obstructions,
                 &mut self.rng,
             ) {
-                let p_type = match self.rng.gen_range(0..5) {
+                let p_type = match self.rng.gen_range(0..6) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
                     3 => PowerUpType::PassThroughWalls,
+                    4 => PowerUpType::Shrink,
                     _ => PowerUpType::ExtraLife,
                 };
 

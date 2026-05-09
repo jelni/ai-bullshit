@@ -138,7 +138,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                                 .saturating_sub(Duration::from_millis(50))
                                 .max(Duration::from_millis(30)); // Speed boost
                         }
-                        game::PowerUpType::Invincibility | game::PowerUpType::ExtraLife | game::PowerUpType::PassThroughWalls => {} // Tick rate unaffected
+                        game::PowerUpType::Invincibility | game::PowerUpType::ExtraLife | game::PowerUpType::PassThroughWalls | game::PowerUpType::Shrink => {} // Tick rate unaffected
                     }
                 } else {
                     game.power_up = None; // Power-up expired
