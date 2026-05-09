@@ -129,6 +129,9 @@ pub enum GameState {
 
 pub const fn default_lives() -> u32 { 3 }
 
+pub const fn default_wrap_mode() -> bool { false }
+pub const fn default_skin() -> char { '█' }
+
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     pub snake: Snake,
@@ -141,6 +144,14 @@ pub struct SaveState {
     pub power_up: Option<PowerUp>,
     #[serde(default = "default_lives")]
     pub lives: u32,
+    #[serde(default)]
+    pub difficulty: Difficulty,
+    #[serde(default)]
+    pub theme: Theme,
+    #[serde(default = "default_wrap_mode")]
+    pub wrap_mode: bool,
+    #[serde(default = "default_skin")]
+    pub skin: char,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -345,6 +356,10 @@ impl Game {
             bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
             power_up: self.power_up.clone(),
             lives: self.lives,
+            difficulty: self.difficulty,
+            theme: self.theme,
+            wrap_mode: self.wrap_mode,
+            skin: self.skin,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -360,6 +375,19 @@ impl Game {
             .ok()
             .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
             .is_some_and(|mut state| {
+                // Validate bounds
+                let valid_point = |p: &Point| p.x > 0 && p.x < self.width - 1 && p.y > 0 && p.y < self.height - 1;
+
+                if !state.snake.body.iter().all(valid_point) {
+                    return false;
+                }
+                if !valid_point(&state.food) {
+                    return false;
+                }
+                if !state.obstacles.iter().all(valid_point) {
+                    return false;
+                }
+
                 state.snake.rebuild_map();
                 self.snake = state.snake;
                 self.food = state.food;
@@ -370,6 +398,10 @@ impl Game {
                 });
                 self.lives = state.lives;
                 self.power_up = state.power_up;
+                self.difficulty = state.difficulty;
+                self.theme = state.theme;
+                self.wrap_mode = state.wrap_mode;
+                self.skin = state.skin;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 true
@@ -856,6 +888,47 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn test_save_and_load_settings() {
+        let file_path = "savegame_test_settings.json";
+        let _ = std::fs::remove_file(file_path);
+
+        let mut game1 = Game::new(
+            20,
+            20,
+            true, // wrap mode true
+            '@', // custom skin
+            crate::game::Theme::Neon,
+            crate::game::Difficulty::Hard,
+        );
+
+        // Put game in a valid state
+        game1.snake.body.clear();
+        game1.snake.body.push_back(Point { x: 10, y: 10 });
+        game1.food = Point { x: 5, y: 5 };
+        game1.obstacles.clear();
+
+        game1.save_game_to_file(file_path);
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            '█',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Easy,
+        );
+        let success = game2.load_game_from_file(file_path);
+
+        assert!(success);
+        assert_eq!(game2.difficulty, crate::game::Difficulty::Hard);
+        assert_eq!(game2.theme, crate::game::Theme::Neon);
+        assert_eq!(game2.wrap_mode, true);
+        assert_eq!(game2.skin, '@');
+
+        let _ = std::fs::remove_file(file_path);
+    }
 
     #[test]
     fn test_save_and_load_high_scores() {

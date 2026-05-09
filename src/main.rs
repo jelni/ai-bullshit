@@ -96,11 +96,6 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
         diff,
     );
     let mut last_tick = Instant::now();
-    let base_tick_rate = match diff {
-        game::Difficulty::Easy => Duration::from_millis(200),
-        game::Difficulty::Normal => Duration::from_millis(150),
-        game::Difficulty::Hard => Duration::from_millis(100),
-    };
 
     // Initial draw
     ui::draw(&game, stdout)?;
@@ -108,6 +103,12 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let mut last_frame = Instant::now();
 
     loop {
+        let base_tick_rate = match game.difficulty {
+            game::Difficulty::Easy => Duration::from_millis(200),
+            game::Difficulty::Normal => Duration::from_millis(150),
+            game::Difficulty::Hard => Duration::from_millis(100),
+        };
+
         let delta = last_frame.elapsed();
         last_frame = Instant::now();
 
