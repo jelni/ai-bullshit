@@ -396,10 +396,11 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let level = game.score / 20 + 1;
     stdout.queue(SetForegroundColor(Color::Reset))?;
     stdout.queue(cursor::MoveTo(0, game.height))?;
+    let bot_str = if game.auto_pilot { " | [BOT MODE]" } else { "" };
     write!(
         stdout,
-        "Score: {} | High: {} | Lives: {} | Level: {}",
-        game.score, game.high_score, game.lives, level
+        "Score: {} | High: {} | Lives: {} | Level: {}{}",
+        game.score, game.high_score, game.lives, level, bot_str
     )?;
 
     #[expect(clippy::collapsible_if, reason = "stable rust")]
