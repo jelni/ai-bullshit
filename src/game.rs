@@ -62,6 +62,7 @@ pub enum Theme {
     Dark,
     Retro,
     Neon,
+    Ocean,
 }
 
 impl Theme {
@@ -70,16 +71,18 @@ impl Theme {
             Self::Classic => Self::Dark,
             Self::Dark => Self::Retro,
             Self::Retro => Self::Neon,
-            Self::Neon => Self::Classic,
+            Self::Neon => Self::Ocean,
+            Self::Ocean => Self::Classic,
         }
     }
 
     pub const fn prev(self) -> Self {
         match self {
-            Self::Classic => Self::Neon,
+            Self::Classic => Self::Ocean,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
+            Self::Ocean => Self::Neon,
         }
     }
 }
@@ -92,6 +95,8 @@ pub enum PowerUpType {
     ExtraLife,
     PassThroughWalls,
     Shrink,
+    ClearObstacles,
+    ScoreMultiplier,
 }
 
 #[serde_as]
@@ -593,6 +598,8 @@ impl Game {
                     self.lives += 1;
                 } else if p.p_type == PowerUpType::Shrink {
                     self.snake.shrink_tail();
+                } else if p.p_type == PowerUpType::ClearObstacles {
+                    self.obstacles.clear();
                 } else {
                     p.activation_time = Some(SystemTime::now());
                 }
@@ -600,20 +607,29 @@ impl Game {
             }
         }
 
-        // Remove power up instantly if it was an ExtraLife or Shrink that was just activated
+        // Remove power up instantly if it was an instant effect that was just activated
         #[expect(clippy::collapsible_if, reason = "stable rust")]
         if let Some(p) = self.power_up.as_ref() {
-            if (p.p_type == PowerUpType::ExtraLife || p.p_type == PowerUpType::Shrink) && p.activation_time.is_none() && final_head == p.location {
+            if (p.p_type == PowerUpType::ExtraLife || p.p_type == PowerUpType::Shrink || p.p_type == PowerUpType::ClearObstacles) && p.activation_time.is_none() && final_head == p.location {
                 self.power_up = None;
             }
         }
+
+        let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::ScoreMultiplier
+                && p.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
+        let old_score = self.score;
 
         let mut grow = if self
             .bonus_food
             .is_some_and(|(bonus_p, _)| final_head == bonus_p)
         {
-            self.score += 5;
-            self.stats.total_score += 5;
+            let added_score = if is_multiplier { 10 } else { 5 };
+            self.score += added_score;
+            self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
             self.bonus_food = None;
             beep();
@@ -639,26 +655,12 @@ impl Game {
 
         if final_head == self.food {
             grow = true;
-            self.score += 1;
-            self.stats.total_score += 1;
+            let added_score = if is_multiplier { 2 } else { 1 };
+            self.score += added_score;
+            self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
             beep();
-            // Add a new obstacle every 5 points
-            if self.score.is_multiple_of(5) {
-                let mut avoid = self.obstacles.clone();
-                avoid.insert(final_head);
-                if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
-                if let Some(p) = &self.power_up { avoid.insert(p.location); }
-                let new_obstacles = Self::generate_obstacles(
-                    self.width,
-                    self.height,
-                    &self.snake,
-                    &avoid,
-                    &mut self.rng,
-                    1,
-                );
-                self.obstacles.extend(new_obstacles);
-            }
+
             let mut avoid = self.obstacles.clone();
             avoid.insert(final_head);
             if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
@@ -676,6 +678,25 @@ impl Game {
                 self.handle_win();
                 return;
             }
+        }
+
+        // Add a new obstacle for every 5 points gained
+        let new_obs_count = (self.score / 5).saturating_sub(old_score / 5);
+        if new_obs_count > 0 {
+            let mut avoid = self.obstacles.clone();
+            avoid.insert(final_head);
+            avoid.insert(self.food);
+            if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
+            if let Some(p) = &self.power_up { avoid.insert(p.location); }
+            let new_obstacles = Self::generate_obstacles(
+                self.width,
+                self.height,
+                &self.snake,
+                &avoid,
+                &mut self.rng,
+                new_obs_count as usize,
+            );
+            self.obstacles.extend(new_obstacles);
         }
 
         self.snake.move_to(final_head, grow);
@@ -715,12 +736,14 @@ impl Game {
                 &obstructions,
                 &mut self.rng,
             ) {
-                let p_type = match self.rng.gen_range(0..6) {
+                let p_type = match self.rng.gen_range(0..8) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
                     3 => PowerUpType::PassThroughWalls,
                     4 => PowerUpType::Shrink,
+                    5 => PowerUpType::ClearObstacles,
+                    6 => PowerUpType::ScoreMultiplier,
                     _ => PowerUpType::ExtraLife,
                 };
 
