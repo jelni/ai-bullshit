@@ -294,6 +294,7 @@ impl Game {
                 });
                 self.power_up = state.power_up;
                 self.state = GameState::Paused;
+                self.start_time = Instant::now();
                 true
             })
     }
@@ -409,6 +410,7 @@ impl Game {
         self.lives = 3;
         self.state = GameState::Playing;
         self.just_died = false;
+        self.start_time = Instant::now();
     }
 
     fn respawn(&mut self) {
@@ -505,6 +507,8 @@ impl Game {
             .is_some_and(|(bonus_p, _)| final_head == bonus_p)
         {
             self.score += 5;
+            self.stats.total_score += 5;
+            self.stats.total_food_eaten += 1;
             self.bonus_food = None;
             beep();
             true
@@ -529,10 +533,9 @@ impl Game {
 
         if final_head == self.food {
             grow = true;
-        }
-
-        if grow && final_head == self.food {
             self.score += 1;
+            self.stats.total_score += 1;
+            self.stats.total_food_eaten += 1;
             beep();
             // Add a new obstacle every 5 points
             if self.score.is_multiple_of(5) {
@@ -652,12 +655,12 @@ impl Game {
         self.just_died = true;
         beep();
 
-        // Update stats
-        self.stats.games_played += 1;
-        self.stats.total_time_s += self.start_time.elapsed().as_secs();
-        self.save_stats();
-
         if self.lives == 0 {
+            // Update stats on Game Over
+            self.stats.games_played += 1;
+            self.stats.total_time_s += self.start_time.elapsed().as_secs();
+            self.save_stats();
+
             self.death_message = cause.to_string();
             let is_high_score = self.high_scores.len() < 5
                 || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
