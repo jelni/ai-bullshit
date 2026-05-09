@@ -296,7 +296,12 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
             if elapsed < 5 {
                 let remaining = 5 - elapsed;
-                let power_up_msg = format!(" | Slowdown: {remaining}s");
+                let power_up_name = match power_up.p_type {
+                    crate::game::PowerUpType::SlowDown => "Slowdown",
+                    crate::game::PowerUpType::SpeedBoost => "Speed Boost",
+                    crate::game::PowerUpType::Invincibility => "Invincible",
+                };
+                let power_up_msg = format!(" | {power_up_name}: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;
             }
         }

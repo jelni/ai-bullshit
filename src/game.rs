@@ -298,6 +298,7 @@ impl Game {
         let mut obstacles = HashSet::new();
 
         for _ in 0..count {
+            let mut i = 0;
             loop {
                 let x = rng.gen_range(1..width - 1);
                 let y = rng.gen_range(1..height - 1);
@@ -306,6 +307,23 @@ impl Game {
                 // Simple check: not on body.
                 if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
                     obstacles.insert(p);
+                    break;
+                }
+                i += 1;
+                if i >= 100 {
+                    let mut empty = Vec::new();
+                    for y_ in 1..height - 1 {
+                        for x_ in 1..width - 1 {
+                            let p_ = Point { x: x_, y: y_ };
+                            if !snake.body_map.contains_key(&p_) && !obstacles.contains(&p_) {
+                                empty.push(p_);
+                            }
+                        }
+                    }
+                    if !empty.is_empty() {
+                        let idx = rng.gen_range(0..empty.len());
+                        obstacles.insert(empty[idx]);
+                    }
                     break;
                 }
             }
@@ -320,6 +338,7 @@ impl Game {
         obstacles: &HashSet<Point>,
         rng: &mut rand::rngs::ThreadRng,
     ) -> Point {
+        let mut i = 0;
         loop {
             // Food must be within walls (1..WIDTH-1, 1..HEIGHT-1)
             let x = rng.gen_range(1..width - 1);
@@ -327,6 +346,24 @@ impl Game {
             let p = Point { x, y };
             if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
                 return p;
+            }
+            i += 1;
+            if i >= 100 {
+                let mut empty = Vec::new();
+                for y_ in 1..height - 1 {
+                    for x_ in 1..width - 1 {
+                        let p_ = Point { x: x_, y: y_ };
+                        if !snake.body_map.contains_key(&p_) && !obstacles.contains(&p_) {
+                            empty.push(p_);
+                        }
+                    }
+                }
+                if !empty.is_empty() {
+                    let idx = rng.gen_range(0..empty.len());
+                    return empty[idx];
+                }
+                // Fallback if the board is completely full
+                return Point { x: 1, y: 1 };
             }
         }
     }
