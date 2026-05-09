@@ -73,6 +73,7 @@ pub enum GameState {
     Paused,
     GameOver,
     Help,
+    Stats,
     EnterName,
     ConfirmQuit,
 }

@@ -15,6 +15,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     match game.state {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
+        GameState::Stats => draw_stats(game, stdout)?,
         GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
         GameState::EnterName => draw_enter_name(game, stdout)?,
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
@@ -47,7 +48,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let menu_items = ["Start Game", "Load Game", "Help", "Quit"];
+    let menu_items = ["Start Game", "Load Game", "Statistics", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -84,6 +85,43 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "{hs_str}")?;
         }
     }
+    Ok(())
+}
+
+fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "STATISTICS";
+
+    let stats = [
+        format!("Games Played: {}", game.stats.games_played),
+        format!("Total Score: {}", game.stats.total_score),
+        format!("Total Food Eaten: {}", game.stats.total_food_eaten),
+        format!("Total Time (s): {}", game.stats.total_time_s),
+    ];
+
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 5,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    stdout.queue(SetForegroundColor(Color::White))?;
+    for (i, line) in stats.iter().enumerate() {
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let back = "Press any key to go back";
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{back}")?;
+
     Ok(())
 }
 
@@ -399,6 +437,10 @@ mod tests {
         assert!(
             output.contains("Load Game"),
             "Menu should contain other items"
+        );
+        assert!(
+            output.contains("Statistics"),
+            "Menu should contain Statistics item"
         );
         assert!(
             !output.contains("> Load Game <"),
