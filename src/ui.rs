@@ -295,6 +295,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Theme::Retro => (Color::Green, Color::Green, Color::Green, Color::Green),
         crate::game::Theme::Neon => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red),
         crate::game::Theme::Classic => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta),
+        crate::game::Theme::Ocean => (Color::DarkBlue, Color::Yellow, Color::Cyan, Color::White),
     };
 
     // Draw borders
@@ -358,6 +359,12 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             } else if power_up.p_type == crate::game::PowerUpType::Shrink {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "S")?;
+            } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
+                stdout.queue(SetForegroundColor(Color::Red))?;
+                write!(stdout, "B")?;
+            } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
+                stdout.queue(SetForegroundColor(Color::Green))?;
+                write!(stdout, "$")?;
             } else {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
@@ -407,6 +414,8 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                     crate::game::PowerUpType::ExtraLife => "Extra Life",
                     crate::game::PowerUpType::PassThroughWalls => "Ghost",
                     crate::game::PowerUpType::Shrink => "Shrink",
+                    crate::game::PowerUpType::ClearObstacles => "Bomb",
+                    crate::game::PowerUpType::ScoreMultiplier => "2x Score",
                 };
                 let power_up_msg = format!(" | {power_up_name}: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;
