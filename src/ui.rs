@@ -129,10 +129,10 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "HELP & CONTROLS";
     let controls = [
-        "Arrow Keys: Move Snake",
+        "Arrow Keys / WASD: Move Snake",
         "P: Pause / Resume",
         "S: Save Game (in Pause)",
-        "L: Load Game (in Menu)",
+        "Space/Enter: Load Game (in Menu)",
         "Q: Quit / Back to Menu",
         "Space/Enter: Select/Start",
     ];
@@ -554,7 +554,7 @@ mod tests {
             "Help should contain title"
         );
         assert!(
-            output.contains("Arrow Keys: Move Snake"),
+            output.contains("Arrow Keys / WASD: Move Snake"),
             "Help should contain controls"
         );
         assert!(
