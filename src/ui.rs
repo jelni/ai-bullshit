@@ -143,6 +143,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "● : Food (+1 Score)",
         "★ : Bonus Food (+5 Score)",
         "X : Obstacle (Avoid!)",
+        "P : Power-Up",
     ];
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
@@ -388,6 +389,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                     crate::game::PowerUpType::SlowDown => "Slowdown",
                     crate::game::PowerUpType::SpeedBoost => "Speed Boost",
                     crate::game::PowerUpType::Invincibility => "Invincible",
+                    crate::game::PowerUpType::PassThroughWalls => "Ghost Walls",
                 };
                 let power_up_msg = format!(" | {power_up_name}: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;

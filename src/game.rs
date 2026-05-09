@@ -89,6 +89,7 @@ pub enum PowerUpType {
     SlowDown,
     SpeedBoost,
     Invincibility,
+    PassThroughWalls,
 }
 
 #[serde_as]
@@ -528,9 +529,15 @@ impl Game {
         let head = self.snake.head();
         let next_head = self.calculate_next_head(head);
 
+        let can_pass_walls = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::PassThroughWalls
+                && p.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
         // Check collision with walls and obstacles
         let mut hit_wall = false;
-        let final_head = if self.wrap_mode {
+        let final_head = if self.wrap_mode || can_pass_walls {
             self.calculate_wrapped_head(next_head)
         } else {
             if next_head.x == 0
@@ -644,9 +651,10 @@ impl Game {
                 &mut self.rng,
             );
 
-            let p_type = match self.rng.gen_range(0..3) {
+            let p_type = match self.rng.gen_range(0..4) {
                 0 => PowerUpType::SlowDown,
                 1 => PowerUpType::SpeedBoost,
+                2 => PowerUpType::PassThroughWalls,
                 _ => PowerUpType::Invincibility,
             };
 
