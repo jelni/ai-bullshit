@@ -258,7 +258,7 @@ impl Game {
                 body: self.snake.body.clone(),
                 body_map: self.snake.body_map.clone(),
                 direction: self.snake.direction,
-                next_direction: self.snake.next_direction,
+                direction_queue: self.snake.direction_queue.clone(),
             },
             food: self.food,
             obstacles: self.obstacles.clone(),
@@ -416,13 +416,13 @@ impl Game {
 
     pub fn handle_input(&mut self, dir: Direction) {
         // Prevent 180 degree turns and queue input if we already have one
-        // If we have a next_direction, it means we already queued a move for the *next* frame.
-        // We only buffer 1 move ahead to prevent "laggy" feel if user mashes keys.
-        if self.snake.next_direction.is_some() {
+        // We buffer up to 2 moves ahead to prevent "laggy" feel if user mashes keys.
+
+        if self.snake.direction_queue.len() >= 2 {
             return;
         }
 
-        let current_dir = self.snake.direction;
+        let current_dir = self.snake.direction_queue.back().copied().unwrap_or(self.snake.direction);
         let is_opposite = matches!(
             (current_dir, dir),
             (Direction::Up, Direction::Down)
@@ -432,7 +432,7 @@ impl Game {
         );
 
         if !is_opposite && dir != current_dir {
-            self.snake.next_direction = Some(dir);
+            self.snake.direction_queue.push_back(dir);
         }
     }
 
@@ -441,7 +441,7 @@ impl Game {
             return;
         }
 
-        if let Some(dir) = self.snake.next_direction.take() {
+        if let Some(dir) = self.snake.direction_queue.pop_front() {
             self.snake.direction = dir;
         }
 
