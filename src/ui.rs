@@ -352,6 +352,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             if power_up.p_type == crate::game::PowerUpType::ExtraLife {
                 stdout.queue(SetForegroundColor(Color::Magenta))?;
                 write!(stdout, "♥")?;
+            } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
+                stdout.queue(SetForegroundColor(Color::Yellow))?;
+                write!(stdout, "W")?;
             } else {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
@@ -399,6 +402,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                     crate::game::PowerUpType::SpeedBoost => "Speed Boost",
                     crate::game::PowerUpType::Invincibility => "Invincible",
                     crate::game::PowerUpType::ExtraLife => "Extra Life",
+                    crate::game::PowerUpType::PassThroughWalls => "Ghost",
                 };
                 let power_up_msg = format!(" | {power_up_name}: {remaining}s");
                 write!(stdout, "{power_up_msg}")?;
