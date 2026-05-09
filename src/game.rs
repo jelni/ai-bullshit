@@ -157,8 +157,12 @@ impl Game {
     }
 
     pub fn load_high_scores_static() -> Vec<(String, u32)> {
+        Self::load_high_scores_from_file("highscore.txt")
+    }
+
+    pub fn load_high_scores_from_file(path: &str) -> Vec<(String, u32)> {
         let mut content = String::new();
-        File::open("highscore.txt")
+        File::open(path)
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .map_or_else(
                 |_| Vec::new(),
@@ -184,8 +188,12 @@ impl Game {
     }
 
     fn load_stats() -> Statistics {
+        Self::load_stats_from_file("stats.json")
+    }
+
+    fn load_stats_from_file(path: &str) -> Statistics {
         let mut content = String::new();
-        File::open("stats.json")
+        File::open(path)
             .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
             .and_then(|_| serde_json::from_str(&content).ok())
@@ -214,12 +222,20 @@ impl Game {
     }
 
     pub fn save_stats(&self) {
+        self.save_stats_to_file("stats.json");
+    }
+
+    pub fn save_stats_to_file(&self, path: &str) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = Self::atomic_write("stats.json", json);
+            let _ = Self::atomic_write(path, json);
         }
     }
 
     pub fn save_high_score(&mut self, name: String, score: u32) {
+        self.save_high_score_to_file("highscore.txt", name, score);
+    }
+
+    pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32) {
         self.high_scores.push((name, score));
         self.high_scores.sort_unstable_by(|a, b| b.1.cmp(&a.1));
         self.high_scores.truncate(5);
@@ -229,10 +245,14 @@ impl Game {
             .map(|(n, s)| format!("{n} {s}"))
             .collect::<Vec<_>>()
             .join("\n");
-        let _ = Self::atomic_write("highscore.txt", content);
+        let _ = Self::atomic_write(path, content);
     }
 
     pub fn save_game(&self) {
+        self.save_game_to_file("savegame.json");
+    }
+
+    pub fn save_game_to_file(&self, path: &str) {
         let state = SaveState {
             snake: Snake {
                 body: self.snake.body.clone(),
@@ -245,7 +265,7 @@ impl Game {
             score: self.score,
         };
         if let Ok(json) = serde_json::to_string(&state) {
-            let _ = Self::atomic_write("savegame.json", json);
+            let _ = Self::atomic_write(path, json);
         }
     }
 
@@ -613,6 +633,45 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn test_save_and_load_high_scores() {
+        let file_path = "highscore_test.txt";
+
+        // Clean up from prior runs if necessary
+        let _ = std::fs::remove_file(file_path);
+
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            '#',
+            String::from("dark"),
+            crate::game::Difficulty::Normal,
+        );
+        game.high_scores.clear(); // Ensure clean state
+
+        // Save initial score
+        game.save_high_score_to_file(file_path, "Alice".to_string(), 100);
+
+        // Save a higher score
+        game.save_high_score_to_file(file_path, "Bob".to_string(), 200);
+
+        // Save a lower score
+        game.save_high_score_to_file(file_path, "Charlie".to_string(), 50);
+
+        // Load scores back from the test file
+        let loaded_scores = Game::load_high_scores_from_file(file_path);
+
+        // Check if length is correct and scores are sorted
+        assert_eq!(loaded_scores.len(), 3);
+        assert_eq!(loaded_scores[0], ("Bob".to_string(), 200));
+        assert_eq!(loaded_scores[1], ("Alice".to_string(), 100));
+        assert_eq!(loaded_scores[2], ("Charlie".to_string(), 50));
+
+        // Cleanup
+        let _ = std::fs::remove_file(file_path);
+    }
 
     #[test]
     fn test_load_game_dos_protection() {
