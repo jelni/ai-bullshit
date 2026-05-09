@@ -21,7 +21,8 @@ pub struct Snake {
     #[serde(skip)]
     pub body_map: HashMap<Point, usize>,
     pub direction: Direction,
-    pub next_direction: Option<Direction>,
+    #[serde(default)]
+    pub direction_queue: std::collections::VecDeque<Direction>,
 }
 
 impl Snake {
@@ -48,7 +49,7 @@ impl Snake {
             body,
             body_map,
             direction: Direction::Up,
-            next_direction: None,
+            direction_queue: std::collections::VecDeque::new(),
         }
     }
 
@@ -106,7 +107,7 @@ mod tests {
             }
         );
         assert_eq!(snake.direction, Direction::Up);
-        assert_eq!(snake.next_direction, None);
+        assert!(snake.direction_queue.is_empty());
     }
 
     #[test]
@@ -119,7 +120,7 @@ mod tests {
         assert_eq!(snake.body[1], Point { x: 0, y: 1 });
         assert_eq!(snake.body[2], Point { x: 0, y: 2 });
         assert_eq!(snake.direction, Direction::Up);
-        assert_eq!(snake.next_direction, None);
+        assert!(snake.direction_queue.is_empty());
     }
 
     #[test]
@@ -147,6 +148,6 @@ mod tests {
             }
         );
         assert_eq!(snake.direction, Direction::Up);
-        assert_eq!(snake.next_direction, None);
+        assert!(snake.direction_queue.is_empty());
     }
 }
