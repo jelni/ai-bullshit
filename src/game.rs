@@ -89,6 +89,7 @@ pub enum PowerUpType {
     SlowDown,
     SpeedBoost,
     Invincibility,
+    ExtraLife,
 }
 
 #[serde_as]
@@ -111,6 +112,7 @@ pub enum GameState {
     Playing,
     Paused,
     GameOver,
+    GameWon,
     Help,
     Settings,
     Stats,
@@ -192,7 +194,8 @@ impl Game {
             Difficulty::Hard => 5,
         };
         let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, obs_count);
-        let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng);
+        let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng)
+            .expect("Board cannot be full on start");
         let high_scores = Self::load_high_scores_static();
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
@@ -413,7 +416,7 @@ impl Game {
         snake: &Snake,
         obstacles: &HashSet<Point>,
         rng: &mut rand::rngs::ThreadRng,
-    ) -> Point {
+    ) -> Option<Point> {
         let mut i = 0;
         loop {
             // Food must be within walls (1..WIDTH-1, 1..HEIGHT-1)
@@ -421,7 +424,7 @@ impl Game {
             let y = rng.gen_range(1..height - 1);
             let p = Point { x, y };
             if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
-                return p;
+                return Some(p);
             }
             i += 1;
             if i >= 100 {
@@ -436,10 +439,10 @@ impl Game {
                 }
                 if !empty.is_empty() {
                     let idx = rng.gen_range(0..empty.len());
-                    return empty[idx];
+                    return Some(empty[idx]);
                 }
                 // Fallback if the board is completely full
-                return Point { x: 1, y: 1 };
+                return None;
             }
         }
     }
@@ -469,7 +472,8 @@ impl Game {
             &self.snake,
             &self.obstacles,
             &mut self.rng,
-        );
+        )
+        .expect("Board cannot be full on reset");
         self.bonus_food = None;
         self.score = 0;
         self.lives = 3;
@@ -513,6 +517,7 @@ impl Game {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "Game update contains many logic checks")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
@@ -565,8 +570,20 @@ impl Game {
         #[expect(clippy::collapsible_if, reason = "stable rust")]
         if let Some(p) = self.power_up.as_mut() {
             if final_head == p.location {
-                p.activation_time = Some(SystemTime::now());
+                if p.p_type == PowerUpType::ExtraLife {
+                    self.lives += 1;
+                } else {
+                    p.activation_time = Some(SystemTime::now());
+                }
                 beep();
+            }
+        }
+
+        // Remove power up instantly if it was an ExtraLife that was just activated
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(p) = self.power_up.as_ref() {
+            if p.p_type == PowerUpType::ExtraLife && p.activation_time.is_none() && final_head == p.location {
+                self.power_up = None;
             }
         }
 
@@ -616,16 +633,41 @@ impl Game {
                 );
                 self.obstacles.extend(new_obstacles);
             }
-            self.food = Self::generate_food(
+            if let Some(new_food) = Self::generate_food(
                 self.width,
                 self.height,
                 &self.snake,
                 &self.obstacles,
                 &mut self.rng,
-            );
+            ) {
+                self.food = new_food;
+            } else {
+                self.snake.move_to(final_head, grow);
+                self.handle_win();
+                return;
+            }
         }
 
         self.snake.move_to(final_head, grow);
+    }
+
+    fn handle_win(&mut self) {
+        self.stats.games_played += 1;
+        self.stats.total_time_s += self.start_time.elapsed().as_secs();
+        self.save_stats();
+
+        let is_high_score = self.high_scores.len() < 5
+            || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
+        if is_high_score && self.score > 0 {
+            self.previous_state = Some(GameState::GameWon);
+            self.state = GameState::EnterName;
+            self.player_name.clear();
+        } else {
+            self.state = GameState::GameWon;
+        }
+        if self.score > self.high_score {
+            self.high_score = self.score;
+        }
     }
 
     fn manage_power_ups(&mut self) {
@@ -636,25 +678,26 @@ impl Game {
                 obstructions.insert(bonus_food_pos);
             }
 
-            let location = Self::generate_food(
+            if let Some(location) = Self::generate_food(
                 self.width,
                 self.height,
                 &self.snake,
                 &obstructions,
                 &mut self.rng,
-            );
+            ) {
+                let p_type = match self.rng.gen_range(0..4) {
+                    0 => PowerUpType::SlowDown,
+                    1 => PowerUpType::SpeedBoost,
+                    2 => PowerUpType::Invincibility,
+                    _ => PowerUpType::ExtraLife,
+                };
 
-            let p_type = match self.rng.gen_range(0..3) {
-                0 => PowerUpType::SlowDown,
-                1 => PowerUpType::SpeedBoost,
-                _ => PowerUpType::Invincibility,
-            };
-
-            self.power_up = Some(PowerUp {
-                p_type,
-                location,
-                activation_time: None,
-            });
+                self.power_up = Some(PowerUp {
+                    p_type,
+                    location,
+                    activation_time: None,
+                });
+            }
         }
     }
 
@@ -669,14 +712,15 @@ impl Game {
             if let Some(ref pu) = self.power_up {
                 obstructions.insert(pu.location);
             }
-            let bonus = Self::generate_food(
+            if let Some(bonus) = Self::generate_food(
                 self.width,
                 self.height,
                 &self.snake,
                 &obstructions,
                 &mut self.rng,
-            );
-            self.bonus_food = Some((bonus, Instant::now()));
+            ) {
+                self.bonus_food = Some((bonus, Instant::now()));
+            }
         }
     }
 
