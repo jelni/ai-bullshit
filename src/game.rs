@@ -850,26 +850,28 @@ impl Game {
         Self::calculate_next_head_dir(head, self.snake.direction)
     }
 
-    pub fn is_safe(&self, p: Point) -> bool {
+    pub fn get_final_p(&self, p: Point) -> Option<Point> {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
                 && pu.activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
+        if self.wrap_mode || can_pass_through_walls {
+            Some(self.calculate_wrapped_head(p))
+        } else if p.x == 0 || p.x >= self.width - 1 || p.y == 0 || p.y >= self.height - 1 {
+            None // Hit wall
+        } else {
+            Some(p)
+        }
+    }
+
+    pub fn is_safe_final_p(&self, final_p: Point) -> bool {
         let is_invincible = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
                 && pu.activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
-
-        let final_p = if self.wrap_mode || can_pass_through_walls {
-            self.calculate_wrapped_head(p)
-        } else if p.x == 0 || p.x >= self.width - 1 || p.y == 0 || p.y >= self.height - 1 {
-            return false; // Hit wall
-        } else {
-            p
-        };
 
         if !is_invincible {
             if self.obstacles.contains(&final_p) {
@@ -883,9 +885,19 @@ impl Game {
         true
     }
 
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
     pub fn calculate_autopilot_move(&self) -> Option<Direction> {
         let start = self.snake.head();
-        let target = self.food;
+
+        let mut targets = vec![self.food];
+        if let Some((bf_p, _)) = self.bonus_food {
+            targets.push(bf_p);
+        }
+        if let Some(pu) = &self.power_up {
+            if pu.activation_time.is_none() {
+                targets.push(pu.location);
+            }
+        }
 
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
@@ -896,38 +908,39 @@ impl Game {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
-            let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
-
-            if self.is_safe(p) && !visited.contains(&p) {
-                visited.insert(p);
-                queue.push_back(p);
-                first_step.insert(p, d);
+            if let Some(final_p) = self.get_final_p(next_p) {
+                if self.is_safe_final_p(final_p) && !visited.contains(&final_p) {
+                    visited.insert(final_p);
+                    queue.push_back(final_p);
+                    first_step.insert(final_p, d);
+                }
             }
         }
 
         while let Some(current) = queue.pop_front() {
-            if current == target {
+            if targets.contains(&current) {
                 return first_step.get(&current).copied();
             }
 
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
-
-                if self.is_safe(p) && !visited.contains(&p) {
-                    visited.insert(p);
-                    queue.push_back(p);
-                    first_step.insert(p, *first_step.get(&current).unwrap());
+                if let Some(final_p) = self.get_final_p(next_p) {
+                    if self.is_safe_final_p(final_p) && !visited.contains(&final_p) {
+                        visited.insert(final_p);
+                        queue.push_back(final_p);
+                        first_step.insert(final_p, *first_step.get(&current).unwrap());
+                    }
                 }
             }
         }
 
-        // Fallback: Just return any safe direction if no path to food is found
+        // Fallback: Just return any safe direction if no path to target is found
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
-            let p = if self.wrap_mode { self.calculate_wrapped_head(next_p) } else { next_p };
-            if self.is_safe(p) {
-                return Some(d);
+            if let Some(final_p) = self.get_final_p(next_p) {
+                if self.is_safe_final_p(final_p) {
+                    return Some(d);
+                }
             }
         }
         None
