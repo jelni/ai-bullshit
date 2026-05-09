@@ -19,6 +19,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Playing | GameState::GameOver | GameState::Paused => draw_game(game, stdout)?,
         GameState::EnterName => draw_enter_name(game, stdout)?,
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
+        GameState::Settings => draw_settings(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -48,7 +49,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let menu_items = ["Start Game", "Load Game", "Statistics", "Help", "Quit"];
+    let menu_items = ["Start Game", "Load Game", "Settings", "Statistics", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -207,6 +208,54 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height / 2 + 2,
     ))?;
     write!(stdout, "{name_str}")?;
+
+    Ok(())
+}
+
+
+fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "SETTINGS";
+    let title_len = u16::try_from(title.len()).unwrap_or(0);
+
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(title_len / 2),
+        game.height / 4,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let settings_items = [
+        format!("Difficulty: {:?}", game.difficulty),
+        format!("Theme: {:?}", game.theme),
+        format!("Wrap Mode: {}", if game.wrap_mode { "On" } else { "Off" }),
+    ];
+
+    for (i, item) in settings_items.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2) - 2,
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {item} <")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{item}")?;
+        }
+    }
+
+    let help_msg = "Use UP/DOWN to select, LEFT/RIGHT to change, Q to go back";
+    let help_len = u16::try_from(help_msg.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(help_len / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help_msg}")?;
 
     Ok(())
 }
@@ -547,6 +596,44 @@ mod tests {
         assert!(
             output.ends_with(&expected),
             "Expected output to center large digits correctly"
+        );
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+    use crate::game::Game;
+
+    #[test]
+    fn test_draw_settings() {
+        let mut game = Game::new(
+            40,
+            20,
+            false,
+            '#',
+            crate::game::Theme::Dark,
+            crate::game::Difficulty::Normal,
+        );
+        game.state = GameState::Settings;
+        game.settings_selection = 1; // Theme selected
+
+        let mut buf = Vec::new();
+        draw_settings(&game, &mut buf).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
+
+        assert!(output.contains("SETTINGS"), "Settings should contain title");
+        assert!(
+            output.contains("Difficulty: Normal"),
+            "Settings should show Difficulty"
+        );
+        assert!(
+            output.contains("> Theme: Dark <"),
+            "Settings should indicate selected item"
+        );
+        assert!(
+            output.contains("Wrap Mode: Off"),
+            "Settings should show Wrap Mode"
         );
     }
 }
