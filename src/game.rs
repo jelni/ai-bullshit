@@ -476,6 +476,7 @@ impl Game {
         )
         .expect("Board cannot be full on reset");
         self.bonus_food = None;
+        self.power_up = None;
         self.score = 0;
         self.lives = 3;
         self.state = GameState::Playing;
@@ -842,6 +843,25 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_file(file_path);
+    }
+
+    #[test]
+    fn test_reset_clears_power_up() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.power_up = Some(PowerUp {
+            p_type: PowerUpType::SpeedBoost,
+            location: crate::snake::Point { x: 5, y: 5 },
+            activation_time: None,
+        });
+        game.reset();
+        assert!(game.power_up.is_none(), "Power-up should be cleared on reset");
     }
 
     #[test]
