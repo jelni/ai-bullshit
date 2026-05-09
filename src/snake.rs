@@ -79,6 +79,22 @@ impl Snake {
             *self.body_map.entry(*p).or_insert(0) += 1;
         }
     }
+
+    pub fn shrink_tail(&mut self) {
+        // Keep minimum length 3.
+        let target_len = std::cmp::max(3, self.body.len() / 2);
+        while self.body.len() > target_len {
+            #[expect(clippy::collapsible_if, reason = "stable rust")]
+            if let Some(tail) = self.body.pop_back() {
+                if let Some(count) = self.body_map.get_mut(&tail) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.body_map.remove(&tail);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -149,5 +165,35 @@ mod tests {
         );
         assert_eq!(snake.direction, Direction::Up);
         assert!(snake.direction_queue.is_empty());
+    }
+
+    #[test]
+    fn test_shrink_tail() {
+        let start = Point { x: 5, y: 5 };
+        let mut snake = Snake::new(start);
+
+        // Grow to length 8
+        for i in 0..5 {
+            snake.move_to(Point { x: 5, y: 4 - i }, true);
+        }
+        assert_eq!(snake.body.len(), 8);
+
+        // Shrink should make it length 4
+        snake.shrink_tail();
+        assert_eq!(snake.body.len(), 4);
+
+        // Ensure body_map matches
+        let mut expected_map = HashMap::new();
+        for p in &snake.body {
+            *expected_map.entry(*p).or_insert(0) += 1;
+        }
+        assert_eq!(snake.body_map, expected_map);
+
+        // Shrink should not go below length 3
+        snake.shrink_tail();
+        assert_eq!(snake.body.len(), 3);
+
+        snake.shrink_tail();
+        assert_eq!(snake.body.len(), 3);
     }
 }
