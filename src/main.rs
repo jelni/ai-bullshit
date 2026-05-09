@@ -105,14 +105,26 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     // Initial draw
     ui::draw(&game, stdout)?;
 
+    let mut last_frame = Instant::now();
+
     loop {
+        let delta = last_frame.elapsed();
+        last_frame = Instant::now();
+
+        if game.state != GameState::Playing {
+            game.shift_timers(delta);
+        }
+
         if game.state == GameState::Playing && game.just_died {
             // We just died (lost a life), show countdown before resuming
             game.just_died = false; // Reset flag so we don't loop here
+            let start = Instant::now();
             for i in (1..=3).rev() {
                 ui::draw_countdown(&game, stdout, i)?;
                 std::thread::sleep(Duration::from_secs(1));
             }
+            game.shift_timers(start.elapsed());
+            last_frame = Instant::now();
             last_tick = Instant::now();
         }
         // Calculate dynamic tick rate based on score
@@ -154,8 +166,16 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             // Use match to avoid collapsible_if lint without unstable features
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if !handle_key_event(key.code, &mut game, stdout) {
-                        break;
+                    match handle_key_event(key.code, &mut game, stdout) {
+                        KeyAction::Quit => break,
+                        KeyAction::BossKey => {
+                            let boss_key_start = Instant::now();
+                            handle_boss_key(&game, stdout);
+                            game.shift_timers(boss_key_start.elapsed());
+                            last_frame = Instant::now();
+                            last_tick = Instant::now();
+                        }
+                        KeyAction::Continue => {}
                     }
                 }
                 _ => {}
@@ -174,13 +194,18 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     Ok(())
 }
 
-fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool {
+enum KeyAction {
+    Continue,
+    Quit,
+    BossKey,
+}
+
+fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> KeyAction {
     if code == KeyCode::Char('b') {
-        handle_boss_key(game, stdout);
-        return true;
+        return KeyAction::BossKey;
     }
 
-    match game.state {
+    let should_continue = match game.state {
         GameState::Menu => handle_menu_input(code, game),
         GameState::Playing => handle_playing_input(code, game),
         GameState::Paused => handle_paused_input(code, game),
@@ -190,6 +215,12 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::EnterName => handle_enter_name_input(code, game),
         GameState::Settings => handle_settings_input(code, game),
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
+    };
+
+    if should_continue {
+        KeyAction::Continue
+    } else {
+        KeyAction::Quit
     }
 }
 
