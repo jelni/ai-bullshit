@@ -27,6 +27,24 @@ pub enum Difficulty {
     Hard,
 }
 
+#[derive(
+    clap::ValueEnum,
+    Clone,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    Default,
+)]
+pub enum Theme {
+    #[default]
+    Classic,
+    Dark,
+    Retro,
+    Neon,
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum PowerUpType {
     SlowDown,
@@ -95,7 +113,7 @@ pub struct Game {
     pub rng: rand::rngs::ThreadRng,
     pub just_died: bool,
     pub skin: char,
-    pub theme: String,
+    pub theme: Theme,
     pub lives: u32,
     pub menu_selection: usize,
     pub stats: Statistics,
@@ -112,7 +130,7 @@ impl Game {
         height: u16,
         wrap_mode: bool,
         skin: char,
-        theme: String,
+        theme: Theme,
         difficulty: Difficulty,
     ) -> Self {
         let mut rng = rand::thread_rng();
@@ -698,7 +716,7 @@ mod tests {
             20,
             false,
             '#',
-            String::from("dark"),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
         game.high_scores.clear(); // Ensure clean state
@@ -739,7 +757,7 @@ mod tests {
             20,
             false,
             '#',
-            String::from("dark"),
+            crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
         // Should not panic or crash out of memory, just return false
