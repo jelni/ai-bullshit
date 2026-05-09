@@ -35,7 +35,7 @@ pub enum PowerUpType {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
@@ -65,6 +65,10 @@ pub struct SaveState {
     pub food: Point,
     pub obstacles: HashSet<Point>,
     pub score: u32,
+    #[serde(default)]
+    pub bonus_food: Option<(Point, u64)>, // elapsed seconds
+    #[serde(default)]
+    pub power_up: Option<PowerUp>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -263,6 +267,8 @@ impl Game {
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
+            bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
+            power_up: self.power_up.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -283,6 +289,10 @@ impl Game {
                 self.food = state.food;
                 self.obstacles = state.obstacles;
                 self.score = state.score;
+                self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
+                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
+                });
+                self.power_up = state.power_up;
                 self.state = GameState::Paused;
                 true
             })
@@ -482,11 +492,12 @@ impl Game {
         }
 
         // Check bonus food collision
-        if let Some(p) = self.power_up.as_mut()
-            && final_head == p.location
-        {
-            p.activation_time = Some(SystemTime::now());
-            beep();
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if let Some(p) = self.power_up.as_mut() {
+            if final_head == p.location {
+                p.activation_time = Some(SystemTime::now());
+                beep();
+            }
         }
 
         let mut grow = if self

@@ -253,12 +253,13 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "★")?;
     }
 
-    if let Some(power_up) = &game.power_up
-        && power_up.activation_time.is_none()
-    {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        stdout.queue(SetForegroundColor(Color::Cyan))?;
-        write!(stdout, "P")?;
+    #[expect(clippy::collapsible_if, reason = "stable rust")]
+    if let Some(power_up) = &game.power_up {
+        if power_up.activation_time.is_none() {
+            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            write!(stdout, "P")?;
+        }
     }
 
     // Draw snake
