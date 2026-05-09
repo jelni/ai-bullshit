@@ -196,11 +196,9 @@ impl Game {
     }
 
     fn load_stats_from_file(path: &str) -> Statistics {
-        let mut content = String::new();
         File::open(path)
-            .and_then(|f| f.take(1024 * 1024).read_to_string(&mut content))
             .ok()
-            .and_then(|_| serde_json::from_str(&content).ok())
+            .and_then(|f| serde_json::from_reader(f.take(1024 * 1024)).ok())
             .unwrap_or_default()
     }
 
@@ -476,9 +474,7 @@ impl Game {
             next_head
         };
 
-        if self.obstacles.contains(&final_head) {
-            hit_wall = true;
-        }
+        let hit_obstacle = self.obstacles.contains(&final_head);
 
         let is_invincible = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
@@ -486,8 +482,13 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        if hit_wall && !is_invincible {
-            self.handle_death("Hit Wall/Obstacle");
+        if hit_wall {
+            self.handle_death("Hit Wall");
+            return;
+        }
+
+        if hit_obstacle && !is_invincible {
+            self.handle_death("Hit Obstacle");
             return;
         }
 
