@@ -16,7 +16,9 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
         GameState::Stats => draw_stats(game, stdout)?,
-        GameState::Playing | GameState::GameOver | GameState::GameWon | GameState::Paused => draw_game(game, stdout)?,
+        GameState::Playing | GameState::GameOver | GameState::GameWon | GameState::Paused => {
+            draw_game(game, stdout)?;
+        }
         GameState::EnterName => draw_enter_name(game, stdout)?,
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
         GameState::Settings => draw_settings(game, stdout)?,
@@ -49,7 +51,14 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let menu_items = ["Start Game", "Load Game", "Settings", "Statistics", "Help", "Quit"];
+    let menu_items = [
+        "Start Game",
+        "Load Game",
+        "Settings",
+        "Statistics",
+        "Help",
+        "Quit",
+    ];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -211,7 +220,6 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     Ok(())
 }
-
 
 fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "SETTINGS";
