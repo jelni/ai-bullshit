@@ -228,6 +228,7 @@ fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         format!("Difficulty: {:?}", game.difficulty),
         format!("Theme: {:?}", game.theme),
         format!("Wrap Mode: {}", if game.wrap_mode { "On" } else { "Off" }),
+        format!("Skin: {}", game.skin),
     ];
 
     for (i, item) in settings_items.iter().enumerate() {

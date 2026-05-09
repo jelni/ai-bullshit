@@ -684,7 +684,15 @@ impl Game {
         let new_obs_count = (self.score / 5).saturating_sub(old_score / 5);
         if new_obs_count > 0 {
             let mut avoid = self.obstacles.clone();
-            avoid.insert(final_head);
+
+            // Expand avoid area to 5x5 around the snake head
+            for dx in -2..=2 {
+                for dy in -2..=2 {
+                    let ax = u16::try_from((i32::from(final_head.x) + dx).max(0)).unwrap_or(0);
+                    let ay = u16::try_from((i32::from(final_head.y) + dy).max(0)).unwrap_or(0);
+                    avoid.insert(Point { x: ax, y: ay });
+                }
+            }
             avoid.insert(self.food);
             if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
             if let Some(p) = &self.power_up { avoid.insert(p.location); }

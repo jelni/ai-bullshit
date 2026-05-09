@@ -387,7 +387,7 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game) -> bool {
     true
 }
 
-const fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
+fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
         KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
             game.state = GameState::Menu;
@@ -396,11 +396,11 @@ const fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
             if game.settings_selection > 0 {
                 game.settings_selection -= 1;
             } else {
-                game.settings_selection = 2; // Difficulty, Theme, Wrap
+                game.settings_selection = 3; // Difficulty, Theme, Wrap, Skin
             }
         }
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.settings_selection < 2 {
+            if game.settings_selection < 3 {
                 game.settings_selection += 1;
             } else {
                 game.settings_selection = 0;
@@ -410,12 +410,24 @@ const fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
             0 => game.difficulty = game.difficulty.prev(),
             1 => game.theme = game.theme.prev(),
             2 => game.wrap_mode = !game.wrap_mode,
+            3 => {
+                let skins = ['█', 'O', '@', '#', '*'];
+                let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
+                let prev_idx = if current_idx > 0 { current_idx - 1 } else { skins.len() - 1 };
+                game.skin = skins[prev_idx];
+            }
             _ => {}
         },
         KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ' | 'd' | 'D') => match game.settings_selection {
             0 => game.difficulty = game.difficulty.next(),
             1 => game.theme = game.theme.next(),
             2 => game.wrap_mode = !game.wrap_mode,
+            3 => {
+                let skins = ['█', 'O', '@', '#', '*'];
+                let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
+                let next_idx = (current_idx + 1) % skins.len();
+                game.skin = skins[next_idx];
+            }
             _ => {}
         },
         _ => {}
