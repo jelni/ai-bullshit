@@ -195,8 +195,10 @@ impl Game {
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
         };
-        let obstacles = Self::generate_obstacles(width, height, &snake, &mut rng, obs_count);
-        let food = Self::generate_food(width, height, &snake, &obstacles, &mut rng)
+        let mut avoid = HashSet::new();
+        avoid.insert(Point { x: start_x, y: start_y - 1 });
+        let obstacles = Self::generate_obstacles(width, height, &snake, &avoid, &mut rng, obs_count);
+        let food = Self::get_random_empty_point(width, height, &snake, &obstacles, &mut rng)
             .expect("Board cannot be full on start");
         let high_scores = Self::load_high_scores_static();
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
@@ -369,63 +371,21 @@ impl Game {
             })
     }
 
-    fn generate_obstacles(
+
+    fn get_random_empty_point(
         width: u16,
         height: u16,
         snake: &Snake,
-        rng: &mut rand::rngs::ThreadRng,
-        count: usize,
-    ) -> HashSet<Point> {
-        let mut obstacles = HashSet::new();
-
-        for _ in 0..count {
-            let mut i = 0;
-            loop {
-                let x = rng.gen_range(1..width - 1);
-                let y = rng.gen_range(1..height - 1);
-                let p = Point { x, y };
-                // Ensure obstacle is not on snake and not too close to head to avoid instant death on start
-                // Simple check: not on body.
-                if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
-                    obstacles.insert(p);
-                    break;
-                }
-                i += 1;
-                if i >= 100 {
-                    let mut empty = Vec::new();
-                    for y_ in 1..height - 1 {
-                        for x_ in 1..width - 1 {
-                            let p_ = Point { x: x_, y: y_ };
-                            if !snake.body_map.contains_key(&p_) && !obstacles.contains(&p_) {
-                                empty.push(p_);
-                            }
-                        }
-                    }
-                    if !empty.is_empty() {
-                        let idx = rng.gen_range(0..empty.len());
-                        obstacles.insert(empty[idx]);
-                    }
-                    break;
-                }
-            }
-        }
-        obstacles
-    }
-
-    fn generate_food(
-        width: u16,
-        height: u16,
-        snake: &Snake,
-        obstacles: &HashSet<Point>,
+        avoid: &HashSet<Point>,
         rng: &mut rand::rngs::ThreadRng,
     ) -> Option<Point> {
         let mut i = 0;
         loop {
-            // Food must be within walls (1..WIDTH-1, 1..HEIGHT-1)
+            // Point must be within walls (1..WIDTH-1, 1..HEIGHT-1)
             let x = rng.gen_range(1..width - 1);
             let y = rng.gen_range(1..height - 1);
             let p = Point { x, y };
-            if !snake.body_map.contains_key(&p) && !obstacles.contains(&p) {
+            if !snake.body_map.contains_key(&p) && !avoid.contains(&p) {
                 return Some(p);
             }
             i += 1;
@@ -434,7 +394,7 @@ impl Game {
                 for y_ in 1..height - 1 {
                     for x_ in 1..width - 1 {
                         let p_ = Point { x: x_, y: y_ };
-                        if !snake.body_map.contains_key(&p_) && !obstacles.contains(&p_) {
+                        if !snake.body_map.contains_key(&p_) && !avoid.contains(&p_) {
                             empty.push(p_);
                         }
                     }
@@ -448,6 +408,28 @@ impl Game {
             }
         }
     }
+
+    fn generate_obstacles(
+        width: u16,
+        height: u16,
+        snake: &Snake,
+        avoid: &HashSet<Point>,
+        rng: &mut rand::rngs::ThreadRng,
+        count: usize,
+    ) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+        let mut current_avoid = avoid.clone();
+
+        for _ in 0..count {
+            if let Some(p) = Self::get_random_empty_point(width, height, snake, &current_avoid, rng) {
+                obstacles.insert(p);
+                current_avoid.insert(p);
+            }
+        }
+        obstacles
+    }
+
+
 
     pub fn shift_timers(&mut self, delta: Duration) {
         // Shift start time so time logic doesn't race when paused
@@ -486,14 +468,17 @@ impl Game {
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
         };
+        let mut avoid = HashSet::new();
+        avoid.insert(Point { x: start_x, y: start_y - 1 });
         self.obstacles = Self::generate_obstacles(
             self.width,
             self.height,
             &self.snake,
+            &avoid,
             &mut self.rng,
             obs_count,
         );
-        self.food = Self::generate_food(
+        self.food = Self::get_random_empty_point(
             self.width,
             self.height,
             &self.snake,
@@ -518,9 +503,9 @@ impl Game {
             y: start_y,
         });
         // Ensure snake doesn't spawn on obstacle
-        // For simplicity in this game, we assume center is safe or we clear obstacles there.
+        // We also clear start_y - 1 to prevent instant death upon spawn.
         self.obstacles
-            .retain(|p| !(p.x == start_x && (p.y >= start_y && p.y <= start_y + 2)));
+            .retain(|p| !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)));
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -660,20 +645,29 @@ impl Game {
             beep();
             // Add a new obstacle every 5 points
             if self.score.is_multiple_of(5) {
+                let mut avoid = self.obstacles.clone();
+                avoid.insert(final_head);
+                if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
+                if let Some(p) = &self.power_up { avoid.insert(p.location); }
                 let new_obstacles = Self::generate_obstacles(
                     self.width,
                     self.height,
                     &self.snake,
+                    &avoid,
                     &mut self.rng,
                     1,
                 );
                 self.obstacles.extend(new_obstacles);
             }
-            if let Some(new_food) = Self::generate_food(
+            let mut avoid = self.obstacles.clone();
+            avoid.insert(final_head);
+            if let Some((p, _)) = self.bonus_food { avoid.insert(p); }
+            if let Some(p) = &self.power_up { avoid.insert(p.location); }
+            if let Some(new_food) = Self::get_random_empty_point(
                 self.width,
                 self.height,
                 &self.snake,
-                &self.obstacles,
+                &avoid,
                 &mut self.rng,
             ) {
                 self.food = new_food;
@@ -714,7 +708,7 @@ impl Game {
                 obstructions.insert(bonus_food_pos);
             }
 
-            if let Some(location) = Self::generate_food(
+            if let Some(location) = Self::get_random_empty_point(
                 self.width,
                 self.height,
                 &self.snake,
@@ -750,7 +744,7 @@ impl Game {
             if let Some(ref pu) = self.power_up {
                 obstructions.insert(pu.location);
             }
-            if let Some(bonus) = Self::generate_food(
+            if let Some(bonus) = Self::get_random_empty_point(
                 self.width,
                 self.height,
                 &self.snake,
