@@ -27,6 +27,24 @@ pub enum Difficulty {
     Hard,
 }
 
+impl Difficulty {
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Easy => Self::Normal,
+            Self::Normal => Self::Hard,
+            Self::Hard => Self::Easy,
+        }
+    }
+
+    pub const fn prev(self) -> Self {
+        match self {
+            Self::Easy => Self::Hard,
+            Self::Normal => Self::Easy,
+            Self::Hard => Self::Normal,
+        }
+    }
+}
+
 #[derive(
     clap::ValueEnum,
     Clone,
@@ -37,12 +55,33 @@ pub enum Difficulty {
     Eq,
     Default,
 )]
+#[derive(Copy)]
 pub enum Theme {
     #[default]
     Classic,
     Dark,
     Retro,
     Neon,
+}
+
+impl Theme {
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Classic => Self::Dark,
+            Self::Dark => Self::Retro,
+            Self::Retro => Self::Neon,
+            Self::Neon => Self::Classic,
+        }
+    }
+
+    pub const fn prev(self) -> Self {
+        match self {
+            Self::Classic => Self::Neon,
+            Self::Dark => Self::Classic,
+            Self::Retro => Self::Dark,
+            Self::Neon => Self::Retro,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -73,6 +112,7 @@ pub enum GameState {
     Paused,
     GameOver,
     Help,
+    Settings,
     Stats,
     EnterName,
     ConfirmQuit,
@@ -117,6 +157,7 @@ pub struct Game {
     pub theme: Theme,
     pub lives: u32,
     pub menu_selection: usize,
+    pub settings_selection: usize,
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
@@ -170,6 +211,7 @@ impl Game {
             theme,
             lives: 3,
             menu_selection: 0,
+            settings_selection: 0,
             stats,
             start_time: Instant::now(),
             death_message: String::new(),

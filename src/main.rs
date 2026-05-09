@@ -72,7 +72,7 @@ fn main() -> io::Result<()> {
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     // We wrap the game loop in a result to ensure we can cleanup on error
-    let res = run_game(&mut stdout, args);
+    let res = run_game(&mut stdout, &args);
 
     // Cleanup
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -85,7 +85,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn run_game(stdout: &mut Stdout, args: Args) -> io::Result<()> {
+fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
     let mut game = Game::new(
         args.width,
@@ -188,6 +188,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, stdout: &mut Stdout) -> bool
         GameState::Help => handle_help_input(code, game),
         GameState::Stats => handle_stats_input(code, game),
         GameState::EnterName => handle_enter_name_input(code, game),
+        GameState::Settings => handle_settings_input(code, game),
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
     }
 }
@@ -220,9 +221,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             1 => {
                 let _ = game.load_game();
             }
-            2 => game.state = GameState::Stats,
-            3 => game.state = GameState::Help,
-            4 => {
+            2 => game.state = GameState::Settings,
+            3 => game.state = GameState::Stats,
+            4 => game.state = GameState::Help,
+            5 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             }
@@ -232,11 +234,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 4;
+                game.menu_selection = 5;
             }
         }
         KeyCode::Down => {
-            if game.menu_selection < 4 {
+            if game.menu_selection < 5 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -346,6 +348,42 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = state;
             }
         }
+        _ => {}
+    }
+    true
+}
+
+const fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        }
+        KeyCode::Up => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 2; // Difficulty, Theme, Wrap
+            }
+        }
+        KeyCode::Down => {
+            if game.settings_selection < 2 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        }
+        KeyCode::Left => match game.settings_selection {
+            0 => game.difficulty = game.difficulty.prev(),
+            1 => game.theme = game.theme.prev(),
+            2 => game.wrap_mode = !game.wrap_mode,
+            _ => {}
+        },
+        KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => game.difficulty = game.difficulty.next(),
+            1 => game.theme = game.theme.next(),
+            2 => game.wrap_mode = !game.wrap_mode,
+            _ => {}
+        },
         _ => {}
     }
     true
