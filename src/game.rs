@@ -87,6 +87,7 @@ pub enum Theme {
     Retro,
     Neon,
     Ocean,
+    Matrix,
 }
 
 impl Theme {
@@ -96,17 +97,19 @@ impl Theme {
             Self::Dark => Self::Retro,
             Self::Retro => Self::Neon,
             Self::Neon => Self::Ocean,
-            Self::Ocean => Self::Classic,
+            Self::Ocean => Self::Matrix,
+            Self::Matrix => Self::Classic,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Classic => Self::Ocean,
+            Self::Classic => Self::Matrix,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
+            Self::Matrix => Self::Ocean,
         }
     }
 }
@@ -939,6 +942,7 @@ impl Game {
         true
     }
 
+    #[expect(clippy::too_many_lines, reason = "Autopilot logic requires extensive checks and fallback")]
     pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
         let start = self.snake.head();
 
@@ -1025,16 +1029,50 @@ impl Game {
             }
         }
 
-        // Fallback: Just return any safe direction if no path to target is found
+        // Fallback: Flood fill to find the direction with the most open space
+        let mut best_dir = None;
+        let mut max_open_space = 0;
+
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d,);
             if let Some(final_p,) = self.get_final_p(next_p,)
                 && self.is_safe_final_p(final_p,)
             {
-                return Some(d,);
+                let mut visited = std::collections::HashSet::new();
+                let mut queue = std::collections::VecDeque::new();
+
+                visited.insert(final_p,);
+                queue.push_back(final_p,);
+
+                let mut open_space = 0;
+                let max_search_depth = 100; // Limit search to avoid performance issues
+
+                while let Some(curr,) = queue.pop_front() {
+                    open_space += 1;
+                    if open_space >= max_search_depth {
+                        break;
+                    }
+
+                    for &next_d in &dirs {
+                        let step_p = Self::calculate_next_head_dir(curr, next_d,);
+                        if let Some(valid_p,) = self.get_final_p(step_p,)
+                            && self.is_safe_final_p(valid_p,)
+                            && !visited.contains(&valid_p,)
+                        {
+                            visited.insert(valid_p,);
+                            queue.push_back(valid_p,);
+                        }
+                    }
+                }
+
+                if open_space > max_open_space {
+                    max_open_space = open_space;
+                    best_dir = Some(d,);
+                }
             }
         }
-        None
+
+        best_dir
     }
 
     const fn calculate_wrapped_head(&self, next_head: Point,) -> Point {
