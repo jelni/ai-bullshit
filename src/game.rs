@@ -158,6 +158,7 @@ pub enum GameState {
     GameWon,
     Help,
     Settings,
+    NftShop,
     Stats,
     EnterName,
     ConfirmQuit,
@@ -204,6 +205,10 @@ pub struct Statistics {
     pub total_score: u32,
     pub total_food_eaten: u32,
     pub total_time_s: u64,
+    #[serde(default)]
+    pub coins: u32,
+    #[serde(default)]
+    pub unlocked_skins: Vec<char>,
 }
 
 pub struct Game {
@@ -226,6 +231,7 @@ pub struct Game {
     pub lives: u32,
     pub menu_selection: usize,
     pub settings_selection: usize,
+    pub nft_selection: usize,
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
@@ -287,6 +293,7 @@ impl Game {
             lives: 3,
             menu_selection: 0,
             settings_selection: 0,
+            nft_selection: 0,
             stats,
             start_time: Instant::now(),
             death_message: String::new(),
@@ -333,10 +340,15 @@ impl Game {
     }
 
     fn load_stats_from_file(path: &str,) -> Statistics {
-        File::open(path,)
+        let mut stats: Statistics = File::open(path,)
             .ok()
             .and_then(|f| serde_json::from_reader(f.take(1024 * 1024,),).ok(),)
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        if stats.unlocked_skins.is_empty() {
+            stats.unlocked_skins = vec!['█', 'O', '@', '#', '*'];
+        }
+        stats
     }
 
     fn atomic_write(path: &str, content: impl AsRef<[u8],>,) -> io::Result<(),> {
@@ -770,6 +782,7 @@ impl Game {
             self.score += added_score;
             self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
+            self.stats.coins += added_score;
             self.bonus_food = None;
             beep();
             true
@@ -787,6 +800,7 @@ impl Game {
         self.score += added_score;
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
+        self.stats.coins += added_score;
         beep();
 
         let avoid = |p: &Point| {

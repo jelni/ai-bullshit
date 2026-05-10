@@ -25,6 +25,7 @@ pub fn draw<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         GameState::EnterName => draw_enter_name(game, stdout,)?,
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout,)?,
         GameState::Settings => draw_settings(game, stdout,)?,
+        GameState::NftShop => draw_nft_shop(game, stdout,)?,
     }
 
     stdout.flush()?;
@@ -54,7 +55,7 @@ fn draw_menu<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
     ),)?;
     write!(stdout, "{title}")?;
 
-    let menu_items = ["Start Game", "Load Game", "Settings", "Statistics", "Help", "Quit",];
+    let menu_items = ["Start Game", "Load Game", "Settings", "NFT Shop", "Statistics", "Help", "Quit",];
     for (i, item,) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow,),)?;
@@ -212,6 +213,73 @@ fn draw_enter_name<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         game.height / 2 + 2,
     ),)?;
     write!(stdout, "{name_str}")?;
+
+    Ok((),)
+}
+
+fn draw_nft_shop<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
+    let title = "NFT SHOP";
+    let title_len = u16::try_from(title.len(),).unwrap_or(0,);
+
+    stdout.queue(SetForegroundColor(Color::Cyan,),)?;
+    stdout
+        .queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2,), game.height / 4,),)?;
+    write!(stdout, "{title}")?;
+
+    let balance_msg = format!("Coins: {}", game.stats.coins);
+    let balance_len = u16::try_from(balance_msg.len(),).unwrap_or(0,);
+    stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+    stdout
+        .queue(cursor::MoveTo((game.width / 2).saturating_sub(balance_len / 2,), game.height / 4 + 2,),)?;
+    write!(stdout, "{balance_msg}")?;
+
+    let available_skins = [
+        ('💎', 100),
+        ('👾', 250),
+        ('🐍', 500),
+        ('🚀', 1000),
+        ('🦍', 2000),
+    ];
+
+    for (i, &(skin, price)) in available_skins.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_skins.contains(&skin);
+        let item_msg = if is_unlocked {
+            format!("Skin '{skin}': Owned")
+        } else {
+            format!("Skin '{skin}': {price}c")
+        };
+
+        if i == game.nft_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2)
+                    .saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,)
+                    .saturating_sub(2,),
+                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
+            ),)?;
+            write!(stdout, "> {item_msg} <")?;
+        } else {
+            if is_unlocked {
+                stdout.queue(SetForegroundColor(Color::Green,),)?;
+            } else if game.stats.coins >= price {
+                stdout.queue(SetForegroundColor(Color::White,),)?;
+            } else {
+                stdout.queue(SetForegroundColor(Color::DarkGrey,),)?;
+            }
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,),
+                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
+            ),)?;
+            write!(stdout, "{item_msg}")?;
+        }
+    }
+
+    let help_msg = "Use UP/DOWN to select, ENTER to buy, Q to go back";
+    let help_len = u16::try_from(help_msg.len(),).unwrap_or(0,);
+    stdout.queue(SetForegroundColor(Color::DarkGrey,),)?;
+    stdout
+        .queue(cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2,), game.height - 2,),)?;
+    write!(stdout, "{help_msg}")?;
 
     Ok((),)
 }
