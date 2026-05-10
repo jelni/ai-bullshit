@@ -347,6 +347,15 @@ fn draw_entities<W: Write>(
     snake_color: Color,
     obs_color: Color,
 ) -> io::Result<()> {
+    // Draw autopilot path
+    if game.auto_pilot {
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for path_point in &game.autopilot_path {
+            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+            write!(stdout, "·")?;
+        }
+    }
+
     // Draw food
     stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
     stdout.queue(SetForegroundColor(food_color))?;
