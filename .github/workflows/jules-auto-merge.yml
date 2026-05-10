@@ -10,30 +10,16 @@ jobs:
     if: github.event.pull_request.user.login == 'google-labs-jules[bot]'
     steps:
       - run: |
-          for i in {1..20}; do
-            # Wait for any potential conflict-checking jobs to complete or fail
-            CHECKS=$(gh pr checks "$PR_URL" --json state,name || echo '[]')
-
-            # If check-conflicts failed, it means we have unresolved conflicts pushed as markers
-            if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"FAILURE"'; then
-               echo "check-conflicts failed (likely due to unresolved merge conflicts), not merging."
-               sh -c "exit 1"
+          for i in {1..12}; do
+            if gh pr merge --auto --delete-branch --squash "$PR_URL"; then
+              exit 0
             fi
-
-            # If it's SUCCESS, we can try to merge
-            if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"SUCCESS"'; then
-              if gh pr merge --auto --delete-branch --squash "$PR_URL" >/dev/null 2>&1; then
-                sh -c "exit 0"
-              fi
-              if gh pr merge --delete-branch --squash "$PR_URL" >/dev/null 2>&1; then
-                sh -c "exit 0"
-              fi
+            if gh pr merge --delete-branch --squash "$PR_URL"; then
+              exit 0
             fi
-
-            echo "Waiting for checks to pass..."
             sleep 10
           done
-          sh -c "exit 1"
+          exit 1
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           PR_URL: "${{ github.event.pull_request.html_url }}"
