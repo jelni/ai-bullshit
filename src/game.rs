@@ -953,7 +953,25 @@ impl Game {
         g_score.insert(start, 0,);
 
         let heuristic = |p: Point| -> u16 {
-            targets.iter().map(|t| p.x.abs_diff(t.x,) + p.y.abs_diff(t.y,),).min().unwrap_or(0,)
+            let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
+                pu.p_type == PowerUpType::PassThroughWalls
+                    && pu.activation_time.is_some_and(|time| {
+                        time.elapsed().unwrap_or_default() < Duration::from_secs(5,)
+                    },)
+            },);
+            targets
+                .iter()
+                .map(|t| {
+                    let mut dx = p.x.abs_diff(t.x,);
+                    let mut dy = p.y.abs_diff(t.y,);
+                    if self.wrap_mode || can_pass_through_walls {
+                        dx = std::cmp::min(dx, self.width.saturating_sub(2,).saturating_sub(dx,),);
+                        dy = std::cmp::min(dy, self.height.saturating_sub(2,).saturating_sub(dy,),);
+                    }
+                    dx + dy
+                },)
+                .min()
+                .unwrap_or(0,)
         };
 
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right,];
