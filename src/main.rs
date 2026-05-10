@@ -367,10 +367,8 @@ fn handle_enter_name_input(code: KeyCode, game: &mut Game,) -> bool {
         KeyCode::Backspace => {
             game.player_name.pop();
         },
-        KeyCode::Char(c,) => {
-            if game.player_name.len() < 10 && c.is_alphanumeric() {
-                game.player_name.push(c,);
-            }
+        KeyCode::Char(c,) if game.player_name.len() < 10 && c.is_alphanumeric() => {
+            game.player_name.push(c,);
         },
         _ => {},
     }
