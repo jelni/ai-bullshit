@@ -92,6 +92,7 @@ pub enum Theme {
     Ocean,
     Matrix,
     Premium,
+    Cyberpunk,
 }
 
 impl Theme {
@@ -103,19 +104,21 @@ impl Theme {
             Self::Neon => Self::Ocean,
             Self::Ocean => Self::Matrix,
             Self::Matrix => Self::Premium,
-            Self::Premium => Self::Classic,
+            Self::Premium => Self::Cyberpunk,
+            Self::Cyberpunk => Self::Classic,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Classic => Self::Premium,
+            Self::Classic => Self::Cyberpunk,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
             Self::Matrix => Self::Ocean,
             Self::Premium => Self::Matrix,
+            Self::Cyberpunk => Self::Premium,
         }
     }
 }
