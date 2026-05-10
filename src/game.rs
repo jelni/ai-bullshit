@@ -233,6 +233,7 @@ pub struct Game {
     pub player_name: String,
     pub previous_state: Option<GameState,>,
     pub auto_pilot: bool,
+    pub autopilot_path: Vec<Point>,
 }
 
 impl Game {
@@ -293,6 +294,7 @@ impl Game {
             player_name: String::new(),
             previous_state: None,
             auto_pilot: false,
+            autopilot_path: Vec::new(),
         }
     }
 
@@ -972,7 +974,7 @@ impl Game {
     }
 
 
-    pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
+    pub fn calculate_autopilot_move(&mut self,) -> Option<Direction,> {
         let start = self.snake.head();
 
         let mut targets = vec![self.food];
@@ -985,17 +987,20 @@ impl Game {
             targets.push(pu.location,);
         }
 
-        if let Some(dir) = self.astar_search(start, &targets) {
+        if let Some((dir, path)) = self.astar_search(start, &targets) {
+            self.autopilot_path = path;
             return Some(dir);
         }
 
+        self.autopilot_path.clear();
         self.flood_fill_fallback(start)
     }
 
-    fn astar_search(&self, start: Point, targets: &[Point]) -> Option<Direction> {
+    fn astar_search(&self, start: Point, targets: &[Point]) -> Option<(Direction, Vec<Point>)> {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
+        let mut came_from = std::collections::HashMap::new();
 
         g_score.insert(start, 0);
 
@@ -1030,6 +1035,7 @@ impl Game {
                 let cost = 1;
                 g_score.insert(final_p, cost);
                 first_step.insert(final_p, d);
+                came_from.insert(final_p, start);
                 open_set.push(AStarState {
                     f_score: cost + heuristic(final_p),
                     position: final_p,
@@ -1043,7 +1049,17 @@ impl Game {
         }) = open_set.pop()
         {
             if targets.contains(&current) {
-                return first_step.get(&current).copied();
+                let mut path = vec![current];
+                let mut curr = current;
+                while let Some(&prev) = came_from.get(&curr) {
+                    if prev == start {
+                        break;
+                    }
+                    path.push(prev);
+                    curr = prev;
+                }
+                path.reverse();
+                return first_step.get(&current).copied().map(|d| (d, path));
             }
 
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
@@ -1055,6 +1071,7 @@ impl Game {
                 {
                     let tentative_g = current_g.saturating_add(1);
                     if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
+                        came_from.insert(final_p, current);
                         g_score.insert(final_p, tentative_g);
                         first_step.insert(final_p, *first_step.get(&current).unwrap());
                         open_set.push(AStarState {
