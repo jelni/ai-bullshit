@@ -233,43 +233,54 @@ fn draw_nft_shop<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         .queue(cursor::MoveTo((game.width / 2).saturating_sub(balance_len / 2,), game.height / 4 + 2,),)?;
     write!(stdout, "{balance_msg}")?;
 
-    let available_skins = [
-        ('💎', 100),
-        ('👾', 250),
-        ('🐍', 500),
-        ('🚀', 1000),
-        ('🦍', 2000),
-    ];
+    let available_items = Game::available_shop_items();
 
-    for (i, &(skin, price)) in available_skins.iter().enumerate() {
-        let is_unlocked = game.stats.unlocked_skins.contains(&skin);
-        let item_msg = if is_unlocked {
-            format!("Skin '{skin}': Owned")
-        } else {
-            format!("Skin '{skin}': {price}c")
+    for (i, &(item, price)) in available_items.iter().enumerate() {
+        let is_unlocked = match item {
+            crate::game::ShopItem::Skin(skin) => game.stats.unlocked_skins.contains(&skin),
+            crate::game::ShopItem::Theme(theme) => game.stats.unlocked_themes.contains(&theme),
+        };
+        let item_msg = match item {
+            crate::game::ShopItem::Skin(skin) => {
+                if is_unlocked {
+                    format!("Skin '{skin}': Owned")
+                } else {
+                    format!("Skin '{skin}': {price}c")
+                }
+            }
+            crate::game::ShopItem::Theme(theme) => {
+                if is_unlocked {
+                    format!("Theme '{theme:?}': Owned")
+                } else {
+                    format!("Theme '{theme:?}': {price}c")
+                }
+            }
         };
 
+        let row_offset = u16::try_from(i).unwrap_or(0);
+        let y_pos = game.height / 4 + 4 + row_offset;
+
         if i == game.nft_selection {
-            stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+            stdout.queue(SetForegroundColor(Color::Yellow,))?;
             stdout.queue(cursor::MoveTo(
                 (game.width / 2)
                     .saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,)
                     .saturating_sub(2,),
-                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
-            ),)?;
+                y_pos,
+            ))?;
             write!(stdout, "> {item_msg} <")?;
         } else {
             if is_unlocked {
-                stdout.queue(SetForegroundColor(Color::Green,),)?;
+                stdout.queue(SetForegroundColor(Color::Green,))?;
             } else if game.stats.coins >= price {
-                stdout.queue(SetForegroundColor(Color::White,),)?;
+                stdout.queue(SetForegroundColor(Color::White,))?;
             } else {
-                stdout.queue(SetForegroundColor(Color::DarkGrey,),)?;
+                stdout.queue(SetForegroundColor(Color::DarkGrey,))?;
             }
             stdout.queue(cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,),
-                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
-            ),)?;
+                y_pos,
+            ))?;
             write!(stdout, "{item_msg}")?;
         }
     }

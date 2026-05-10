@@ -391,13 +391,7 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game,) -> bool {
 }
 
 fn handle_nft_shop_input(code: KeyCode, game: &mut Game,) -> bool {
-    let available_skins = [
-        ('💎', 100),
-        ('👾', 250),
-        ('🐍', 500),
-        ('🚀', 1000),
-        ('🦍', 2000),
-    ];
+    let available_items = Game::available_shop_items();
 
     match code {
         KeyCode::Char('q' | 'Q',) | KeyCode::Esc | KeyCode::Backspace => {
@@ -407,23 +401,35 @@ fn handle_nft_shop_input(code: KeyCode, game: &mut Game,) -> bool {
             if game.nft_selection > 0 {
                 game.nft_selection -= 1;
             } else {
-                game.nft_selection = available_skins.len() - 1;
+                game.nft_selection = available_items.len() - 1;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S',) => {
-            if game.nft_selection < available_skins.len() - 1 {
+            if game.nft_selection < available_items.len() - 1 {
                 game.nft_selection += 1;
             } else {
                 game.nft_selection = 0;
             }
         },
         KeyCode::Enter | KeyCode::Char(' ',) => {
-            let (skin, price) = available_skins[game.nft_selection];
-            if !game.stats.unlocked_skins.contains(&skin) && game.stats.coins >= price {
-                game.stats.coins -= price;
-                game.stats.unlocked_skins.push(skin);
-                game.save_stats();
-                crate::game::beep();
+            let (item, price) = available_items[game.nft_selection];
+            match item {
+                game::ShopItem::Skin(skin) => {
+                    if !game.stats.unlocked_skins.contains(&skin) && game.stats.coins >= price {
+                        game.stats.coins -= price;
+                        game.stats.unlocked_skins.push(skin);
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                }
+                game::ShopItem::Theme(theme) => {
+                    if !game.stats.unlocked_themes.contains(&theme) && game.stats.coins >= price {
+                        game.stats.coins -= price;
+                        game.stats.unlocked_themes.push(theme);
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                }
             }
         },
         _ => {},
@@ -452,30 +458,52 @@ fn handle_settings_input(code: KeyCode, game: &mut Game,) -> bool {
         },
         KeyCode::Left | KeyCode::Char('a' | 'A',) => match game.settings_selection {
             0 => game.difficulty = game.difficulty.prev(),
-            1 => game.theme = game.theme.prev(),
+            1 => {
+                let themes = &game.stats.unlocked_themes;
+                if !themes.is_empty() {
+                    let current_idx = themes.iter().position(|&t| t == game.theme,).unwrap_or(0,);
+                    let prev_idx = if current_idx > 0 {
+                        current_idx - 1
+                    } else {
+                        themes.len() - 1
+                    };
+                    game.theme = themes[prev_idx];
+                }
+            },
             2 => game.wrap_mode = !game.wrap_mode,
             3 => {
                 let skins = &game.stats.unlocked_skins;
-                let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
-                let prev_idx = if current_idx > 0 {
-                    current_idx - 1
-                } else {
-                    skins.len() - 1
-                };
-                game.skin = skins[prev_idx];
+                if !skins.is_empty() {
+                    let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
+                    let prev_idx = if current_idx > 0 {
+                        current_idx - 1
+                    } else {
+                        skins.len() - 1
+                    };
+                    game.skin = skins[prev_idx];
+                }
             },
             _ => {},
         },
         KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ' | 'd' | 'D',) => {
             match game.settings_selection {
                 0 => game.difficulty = game.difficulty.next(),
-                1 => game.theme = game.theme.next(),
+                1 => {
+                    let themes = &game.stats.unlocked_themes;
+                    if !themes.is_empty() {
+                        let current_idx = themes.iter().position(|&t| t == game.theme,).unwrap_or(0,);
+                        let next_idx = (current_idx + 1) % themes.len();
+                        game.theme = themes[next_idx];
+                    }
+                },
                 2 => game.wrap_mode = !game.wrap_mode,
                 3 => {
                     let skins = &game.stats.unlocked_skins;
-                    let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
-                    let next_idx = (current_idx + 1) % skins.len();
-                    game.skin = skins[next_idx];
+                    if !skins.is_empty() {
+                        let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
+                        let next_idx = (current_idx + 1) % skins.len();
+                        game.skin = skins[next_idx];
+                    }
                 },
                 _ => {},
             }

@@ -95,33 +95,26 @@ pub enum Theme {
     Cyberpunk,
 }
 
-impl Theme {
-    pub const fn next(self,) -> Self {
-        match self {
-            Self::Classic => Self::Dark,
-            Self::Dark => Self::Retro,
-            Self::Retro => Self::Neon,
-            Self::Neon => Self::Ocean,
-            Self::Ocean => Self::Matrix,
-            Self::Matrix => Self::Premium,
-            Self::Premium => Self::Cyberpunk,
-            Self::Cyberpunk => Self::Classic,
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShopItem {
+    Skin(char),
+    Theme(Theme),
+}
 
-    pub const fn prev(self,) -> Self {
-        match self {
-            Self::Classic => Self::Cyberpunk,
-            Self::Dark => Self::Classic,
-            Self::Retro => Self::Dark,
-            Self::Neon => Self::Retro,
-            Self::Ocean => Self::Neon,
-            Self::Matrix => Self::Ocean,
-            Self::Premium => Self::Matrix,
-            Self::Cyberpunk => Self::Premium,
-        }
+impl Game {
+    pub const fn available_shop_items() -> [(ShopItem, u32); 7] {
+        [
+            (ShopItem::Skin('💎'), 100),
+            (ShopItem::Skin('👾'), 250),
+            (ShopItem::Skin('🐍'), 500),
+            (ShopItem::Skin('🚀'), 1000),
+            (ShopItem::Skin('🦍'), 2000),
+            (ShopItem::Theme(Theme::Premium), 5000),
+            (ShopItem::Theme(Theme::Cyberpunk), 10000),
+        ]
     }
 }
+
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize,)]
 pub enum PowerUpType {
@@ -211,6 +204,8 @@ pub struct Statistics {
     pub coins: u32,
     #[serde(default)]
     pub unlocked_skins: Vec<char>,
+    #[serde(default)]
+    pub unlocked_themes: Vec<Theme>,
 }
 
 pub struct Game {
@@ -351,6 +346,16 @@ impl Game {
 
         if stats.unlocked_skins.is_empty() {
             stats.unlocked_skins = vec!['█', 'O', '@', '#', '*'];
+        }
+        if stats.unlocked_themes.is_empty() {
+            stats.unlocked_themes = vec![
+                Theme::Classic,
+                Theme::Dark,
+                Theme::Retro,
+                Theme::Neon,
+                Theme::Ocean,
+                Theme::Matrix,
+            ];
         }
         stats
     }
