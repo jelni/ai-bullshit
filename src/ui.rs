@@ -355,25 +355,18 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         && power_up.activation_time.is_none()
     {
         stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y,),)?;
-        if power_up.p_type == crate::game::PowerUpType::ExtraLife {
-            stdout.queue(SetForegroundColor(Color::Magenta,),)?;
-            write!(stdout, "♥")?;
-        } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
-            stdout.queue(SetForegroundColor(Color::Yellow,),)?;
-            write!(stdout, "W")?;
-        } else if power_up.p_type == crate::game::PowerUpType::Shrink {
-            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
-            write!(stdout, "S")?;
-        } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
-            stdout.queue(SetForegroundColor(Color::Red,),)?;
-            write!(stdout, "B")?;
-        } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
-            stdout.queue(SetForegroundColor(Color::Green,),)?;
-            write!(stdout, "$")?;
-        } else {
-            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
-            write!(stdout, "P")?;
-        }
+        let (color, icon) = match power_up.p_type {
+            crate::game::PowerUpType::SpeedBoost => (Color::Yellow, "F"),
+            crate::game::PowerUpType::SlowDown => (Color::Cyan, "S"),
+            crate::game::PowerUpType::Invincibility => (Color::Yellow, "I"),
+            crate::game::PowerUpType::ExtraLife => (Color::Magenta, "♥"),
+            crate::game::PowerUpType::PassThroughWalls => (Color::White, "W"),
+            crate::game::PowerUpType::Shrink => (Color::Cyan, "s"),
+            crate::game::PowerUpType::ClearObstacles => (Color::Red, "B"),
+            crate::game::PowerUpType::ScoreMultiplier => (Color::Green, "$"),
+        };
+        stdout.queue(SetForegroundColor(color,),)?;
+        write!(stdout, "{icon}")?;
     }
 
     // Draw snake
