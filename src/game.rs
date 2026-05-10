@@ -360,7 +360,7 @@ impl Game {
 
     pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32,) {
         self.high_scores.push((name, score,),);
-        self.high_scores.sort_unstable_by(|a, b| b.1.cmp(&a.1,),);
+        self.high_scores.sort_unstable_by_key(|b| std::cmp::Reverse(b.1,),);
         self.high_scores.truncate(5,);
         let content = self
             .high_scores
