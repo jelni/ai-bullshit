@@ -518,6 +518,7 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
         game.menu_selection = 0; // "Start Game" selected
 
@@ -544,6 +545,7 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
 
         let mut buf = Vec::new();
@@ -564,6 +566,7 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
 
         // Test single digit (count = 3)
@@ -597,6 +600,7 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
         let mut buf = Vec::new();
         draw_countdown(&large_game, &mut buf, 5).expect("Valid operation in tests");
@@ -628,6 +632,7 @@ mod settings_tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
         game.state = GameState::Settings;
         game.settings_selection = 1; // Theme selected

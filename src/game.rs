@@ -234,6 +234,7 @@ impl Game {
         skin: char,
         theme: Theme,
         difficulty: Difficulty,
+        auto_pilot: bool,
     ) -> Self {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
@@ -281,7 +282,7 @@ impl Game {
             difficulty,
             player_name: String::new(),
             previous_state: None,
-            auto_pilot: false,
+            auto_pilot,
         }
     }
 
@@ -1139,6 +1140,7 @@ mod tests {
             '@',  // custom skin
             crate::game::Theme::Neon,
             crate::game::Difficulty::Hard,
+            false,
         );
 
         // Put game in a valid state
@@ -1162,6 +1164,7 @@ mod tests {
             '█',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Easy,
+            false,
         );
         let success = game2.load_game_from_file(file_path);
 
@@ -1188,6 +1191,7 @@ mod tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
         game.high_scores.clear(); // Ensure clean state
 
@@ -1215,13 +1219,13 @@ mod tests {
 
     #[test]
     fn test_save_and_load_auto_pilot() {
-        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
+        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal, false);
         game.auto_pilot = true;
 
         let file_path = "savegame_test_autopilot.json";
         game.save_game_to_file(file_path);
 
-        let mut new_game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
+        let mut new_game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal, false);
         assert!(!new_game.auto_pilot);
 
         let loaded = new_game.load_game_from_file(file_path);
@@ -1241,6 +1245,7 @@ mod tests {
             'x',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
+            false,
         );
         game.power_up = Some(PowerUp {
             p_type: PowerUpType::SpeedBoost,
@@ -1269,6 +1274,7 @@ mod tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
+            false,
         );
         // Should not panic or crash out of memory, just return false
         let loaded = game.load_game_from_file(file_path);

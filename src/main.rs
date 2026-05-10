@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(long, value_enum, default_value_t = game::Difficulty::Normal)]
     difficulty: game::Difficulty,
+
+    #[arg(long, default_value_t = false)]
+    auto_pilot: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -90,7 +93,7 @@ fn main() -> io::Result<()> {
 
 fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
+    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff, args.auto_pilot);
     let mut last_tick = Instant::now();
 
     // Initial draw
