@@ -88,6 +88,7 @@ pub enum Theme {
     Neon,
     Ocean,
     Matrix,
+    Premium,
 }
 
 impl Theme {
@@ -98,18 +99,20 @@ impl Theme {
             Self::Retro => Self::Neon,
             Self::Neon => Self::Ocean,
             Self::Ocean => Self::Matrix,
-            Self::Matrix => Self::Classic,
+            Self::Matrix => Self::Premium,
+            Self::Premium => Self::Classic,
         }
     }
 
     pub const fn prev(self) -> Self {
         match self {
-            Self::Classic => Self::Matrix,
+            Self::Classic => Self::Premium,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
             Self::Matrix => Self::Ocean,
+            Self::Premium => Self::Matrix,
         }
     }
 }
@@ -251,7 +254,10 @@ impl Game {
         let obstacles = Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count);
         let avoid_food = |p: &Point| obstacles.contains(p);
         let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng)
-            .unwrap_or(Point { x: 1, y: 1 });
+            .unwrap_or(Point {
+                x: 1,
+                y: 1,
+            });
         let high_scores = Self::load_high_scores_static();
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
@@ -565,7 +571,10 @@ impl Game {
             avoid_food,
             &mut self.rng,
         )
-        .unwrap_or(Point { x: 1, y: 1 });
+        .unwrap_or(Point {
+            x: 1,
+            y: 1,
+        });
         self.bonus_food = None;
         self.power_up = None;
         self.score = 0;

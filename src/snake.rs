@@ -55,7 +55,10 @@ impl Snake {
     }
 
     pub fn head(&self) -> Point {
-        *self.body.front().unwrap_or(&Point { x: 0, y: 0 })
+        *self.body.front().unwrap_or(&Point {
+            x: 0,
+            y: 0,
+        })
     }
 
     pub fn move_to(&mut self, new_head: Point, grow: bool) {

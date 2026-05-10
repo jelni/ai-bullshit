@@ -411,7 +411,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
             1 => game.theme = game.theme.prev(),
             2 => game.wrap_mode = !game.wrap_mode,
             3 => {
-                let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍'];
+                let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍', '🚀', '👑', '💰', '🦄'];
                 let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
                 let prev_idx = if current_idx > 0 {
                     current_idx - 1
@@ -428,7 +428,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 1 => game.theme = game.theme.next(),
                 2 => game.wrap_mode = !game.wrap_mode,
                 3 => {
-                    let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍'];
+                    let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍', '🚀', '👑', '💰', '🦄'];
                     let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
                     let next_idx = (current_idx + 1) % skins.len();
                     game.skin = skins[next_idx];
