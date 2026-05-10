@@ -988,7 +988,7 @@ impl Game {
         }
     }
 
-    pub fn is_safe_final_p(&self, final_p: Point,) -> bool {
+    pub fn is_safe_final_p(&self, final_p: Point, steps: u16) -> bool {
         let is_invincible = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
                 && pu
@@ -1000,8 +1000,12 @@ impl Game {
             if self.obstacles.contains(&final_p,) {
                 return false;
             }
-            if self.snake.body_map.contains_key(&final_p,) {
-                return false;
+            if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
+                let steps_to_clear =
+                    u16::try_from(self.snake.body.len().saturating_sub(pos),).unwrap_or(u16::MAX,);
+                if steps < steps_to_clear {
+                    return false;
+                }
             }
         }
 
@@ -1065,7 +1069,7 @@ impl Game {
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p)
+                && self.is_safe_final_p(final_p, 1)
             {
                 let cost = 1;
                 g_score.insert(final_p, cost);
@@ -1101,19 +1105,18 @@ impl Game {
 
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
+                let tentative_g = current_g.saturating_add(1);
                 if let Some(final_p) = self.get_final_p(next_p)
-                    && self.is_safe_final_p(final_p)
+                    && self.is_safe_final_p(final_p, tentative_g)
+                    && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
                 {
-                    let tentative_g = current_g.saturating_add(1);
-                    if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
-                        came_from.insert(final_p, current);
-                        g_score.insert(final_p, tentative_g);
-                        first_step.insert(final_p, *first_step.get(&current).unwrap());
-                        open_set.push(AStarState {
-                            f_score: tentative_g.saturating_add(heuristic(final_p)),
-                            position: final_p,
-                        });
-                    }
+                    came_from.insert(final_p, current);
+                    g_score.insert(final_p, tentative_g);
+                    first_step.insert(final_p, *first_step.get(&current).unwrap());
+                    open_set.push(AStarState {
+                        f_score: tentative_g.saturating_add(heuristic(final_p)),
+                        position: final_p,
+                    });
                 }
             }
         }
@@ -1129,18 +1132,18 @@ impl Game {
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p)
+                && self.is_safe_final_p(final_p, 1)
             {
                 let mut visited = std::collections::HashSet::new();
-                let mut queue = std::collections::VecDeque::new();
+                let mut queue: std::collections::VecDeque<(Point, u16)> = std::collections::VecDeque::new();
 
                 visited.insert(final_p);
-                queue.push_back(final_p);
+                queue.push_back((final_p, 1));
 
                 let mut open_space = 0;
                 let max_search_depth = 100; // Limit search to avoid performance issues
 
-                while let Some(curr) = queue.pop_front() {
+                while let Some((curr, steps)) = queue.pop_front() {
                     open_space += 1;
                     if open_space >= max_search_depth {
                         break;
@@ -1148,12 +1151,13 @@ impl Game {
 
                     for &next_d in &dirs {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
+                        let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
-                            && self.is_safe_final_p(valid_p)
+                            && self.is_safe_final_p(valid_p, next_steps)
                             && !visited.contains(&valid_p)
                         {
                             visited.insert(valid_p);
-                            queue.push_back(valid_p);
+                            queue.push_back((valid_p, next_steps));
                         }
                     }
                 }
