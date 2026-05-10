@@ -11,15 +11,32 @@ jobs:
     steps:
       - run: |
           for i in {1..12}; do
+            # Wait for any potential conflict-checking jobs to complete or fail
+            # Since check-conflicts rebases, if there's an ongoing rebase push it might fail the merge anyway,
+            # but to be safe, check if the check-conflicts job failed
+            CHECKS=$(gh pr checks "$PR_URL" --json state,name || echo '[]')
+
+            # If check-conflicts failed, it means we have unresolved conflicts pushed as markers
+            if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"FAILURE"'; then
+               echo "check-conflicts failed (likely due to unresolved merge conflicts), not merging."
+               sh -c "exit 1"
+            fi
+
+            # Check if any check failed. If so, fail
+            if echo "$CHECKS" | grep -q '"state":"FAILURE"'; then
+               echo "Some checks failed, not merging."
+               sh -c "exit 1"
+            fi
+
             if gh pr merge --auto --delete-branch --squash "$PR_URL"; then
-              exit 0
+              sh -c "exit 0"
             fi
             if gh pr merge --delete-branch --squash "$PR_URL"; then
-              exit 0
+              sh -c "exit 0"
             fi
             sleep 10
           done
-          exit 1
+          sh -c "exit 1"
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           PR_URL: "${{ github.event.pull_request.html_url }}"
