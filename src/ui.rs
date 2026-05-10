@@ -233,21 +233,30 @@ fn draw_nft_shop<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         .queue(cursor::MoveTo((game.width / 2).saturating_sub(balance_len / 2,), game.height / 4 + 2,),)?;
     write!(stdout, "{balance_msg}")?;
 
-    let available_skins = [
-        ('💎', 100),
-        ('👾', 250),
-        ('🐍', 500),
-        ('🚀', 1000),
-        ('🦍', 2000),
-    ];
-
-    for (i, &(skin, price)) in available_skins.iter().enumerate() {
-        let is_unlocked = game.stats.unlocked_skins.contains(&skin);
-        let item_msg = if is_unlocked {
-            format!("Skin '{skin}': Owned")
-        } else {
-            format!("Skin '{skin}': {price}c")
+    for (i, &(item, price)) in crate::game::AVAILABLE_ITEMS.iter().enumerate() {
+        let (is_unlocked, item_msg) = match item {
+            crate::game::ShopItem::Skin(skin) => {
+                let unlocked = game.stats.unlocked_skins.contains(&skin);
+                let msg = if unlocked {
+                    format!("Skin '{skin}': Owned")
+                } else {
+                    format!("Skin '{skin}': {price}c")
+                };
+                (unlocked, msg)
+            },
+            crate::game::ShopItem::Theme(theme) => {
+                let unlocked = game.stats.unlocked_themes.contains(&theme);
+                let theme_name = format!("{theme:?}");
+                let msg = if unlocked {
+                    format!("Theme '{theme_name}': Owned")
+                } else {
+                    format!("Theme '{theme_name}': {price}c")
+                };
+                (unlocked, msg)
+            },
         };
+
+        let y_pos = game.height / 2 - 3 + u16::try_from(i,).unwrap_or(0,);
 
         if i == game.nft_selection {
             stdout.queue(SetForegroundColor(Color::Yellow,),)?;
@@ -255,7 +264,7 @@ fn draw_nft_shop<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
                 (game.width / 2)
                     .saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,)
                     .saturating_sub(2,),
-                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
+                y_pos,
             ),)?;
             write!(stdout, "> {item_msg} <")?;
         } else {
@@ -268,7 +277,7 @@ fn draw_nft_shop<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
             }
             stdout.queue(cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(item_msg.len(),).unwrap_or(0,) / 2,),
-                game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
+                y_pos,
             ),)?;
             write!(stdout, "{item_msg}")?;
         }
