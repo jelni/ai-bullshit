@@ -289,7 +289,7 @@ fn draw_confirm_quit<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),>
     Ok((),)
 }
 
-#[expect(clippy::too_many_lines, reason = "Game drawing requires extensive setup")]
+
 fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
     let (border_color, food_color, snake_color, obs_color,) = match game.theme {
         crate::game::Theme::Dark => {
@@ -303,83 +303,97 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         crate::game::Theme::Premium => (Color::Yellow, Color::Green, Color::Cyan, Color::Red,),
     };
 
-    // Draw borders
+    draw_borders(game, stdout, border_color)?;
+    draw_entities(game, stdout, food_color, snake_color, obs_color)?;
+    draw_status(game, stdout)?;
+    draw_overlays(game, stdout)?;
+
+    Ok(())
+}
+
+fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
     if game.just_died {
-        stdout.queue(SetForegroundColor(Color::Red,),)?;
+        stdout.queue(SetForegroundColor(Color::Red))?;
     } else {
-        stdout.queue(SetForegroundColor(border_color,),)?;
+        stdout.queue(SetForegroundColor(border_color))?;
     }
 
-    // Top border
-    stdout.queue(cursor::MoveTo(0, 0,),)?;
-    let mut top_border = String::from("╔",);
-    top_border.push_str(&"═".repeat(usize::from(game.width,).saturating_sub(2,),),);
-    top_border.push('╗',);
+    stdout.queue(cursor::MoveTo(0, 0))?;
+    let mut top_border = String::from("╔");
+    top_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
+    top_border.push('╗');
     write!(stdout, "{top_border}")?;
 
-    // Bottom border
-    stdout.queue(cursor::MoveTo(0, game.height - 1,),)?;
-    let mut bottom_border = String::from("╚",);
-    bottom_border.push_str(&"═".repeat(usize::from(game.width,).saturating_sub(2,),),);
-    bottom_border.push('╝',);
+    stdout.queue(cursor::MoveTo(0, game.height - 1))?;
+    let mut bottom_border = String::from("╚");
+    bottom_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
+    bottom_border.push('╝');
     write!(stdout, "{bottom_border}")?;
 
-    // Side borders
     for y in 1..game.height - 1 {
-        stdout.queue(cursor::MoveTo(0, y,),)?;
+        stdout.queue(cursor::MoveTo(0, y))?;
         write!(stdout, "║")?;
-        stdout.queue(cursor::MoveTo(game.width - 1, y,),)?;
+        stdout.queue(cursor::MoveTo(game.width - 1, y))?;
         write!(stdout, "║")?;
     }
+    Ok(())
+}
 
+fn draw_entities<W: Write>(
+    game: &Game,
+    stdout: &mut W,
+    food_color: Color,
+    snake_color: Color,
+    obs_color: Color,
+) -> io::Result<()> {
     // Draw food
-    stdout.queue(cursor::MoveTo(game.food.x, game.food.y,),)?;
-    stdout.queue(SetForegroundColor(food_color,),)?;
+    stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
+    stdout.queue(SetForegroundColor(food_color))?;
     write!(stdout, "●")?;
 
     // Draw obstacles
-    stdout.queue(SetForegroundColor(obs_color,),)?;
+    stdout.queue(SetForegroundColor(obs_color))?;
     for obs in &game.obstacles {
-        stdout.queue(cursor::MoveTo(obs.x, obs.y,),)?;
+        stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
         write!(stdout, "X")?;
     }
 
     // Draw bonus food
-    if let Some((bonus_p, _,),) = game.bonus_food {
-        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y,),)?;
-        stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+    if let Some((bonus_p, _)) = game.bonus_food {
+        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
         write!(stdout, "★")?;
     }
 
-    if let Some(power_up,) = &game.power_up
+    if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
     {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y,),)?;
+        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
         if power_up.p_type == crate::game::PowerUpType::ExtraLife {
-            stdout.queue(SetForegroundColor(Color::Magenta,),)?;
+            stdout.queue(SetForegroundColor(Color::Magenta))?;
             write!(stdout, "♥")?;
         } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
-            stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
             write!(stdout, "W")?;
         } else if power_up.p_type == crate::game::PowerUpType::Shrink {
-            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
             write!(stdout, "S")?;
         } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
-            stdout.queue(SetForegroundColor(Color::Red,),)?;
+            stdout.queue(SetForegroundColor(Color::Red))?;
             write!(stdout, "B")?;
         } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
-            stdout.queue(SetForegroundColor(Color::Green,),)?;
+            stdout.queue(SetForegroundColor(Color::Green))?;
             write!(stdout, "$")?;
         } else {
-            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
             write!(stdout, "P")?;
         }
     }
 
     // Draw snake
-    stdout.queue(SetForegroundColor(snake_color,),)?;
-    for (i, part,) in game.snake.body.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(part.x, part.y,),)?;
+    stdout.queue(SetForegroundColor(snake_color))?;
+    for (i, part) in game.snake.body.iter().enumerate() {
+        stdout.queue(cursor::MoveTo(part.x, part.y))?;
         if i == 0 {
             // Head
             let head_char = match game.snake.direction {
@@ -395,10 +409,13 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         }
     }
 
-    // Draw score
+    Ok(())
+}
+
+fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let level = game.score / 20 + 1;
-    stdout.queue(SetForegroundColor(Color::Reset,),)?;
-    stdout.queue(cursor::MoveTo(0, game.height,),)?;
+    stdout.queue(SetForegroundColor(Color::Reset))?;
+    stdout.queue(cursor::MoveTo(0, game.height))?;
     let bot_str = if game.auto_pilot {
         " | [BOT MODE]"
     } else {
@@ -410,8 +427,8 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         game.score, game.high_score, game.lives, level, bot_str
     )?;
 
-    if let Some(power_up,) = &game.power_up
-        && let Some(activation_time,) = power_up.activation_time
+    if let Some(power_up) = &game.power_up
+        && let Some(activation_time) = power_up.activation_time
     {
         let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
         if elapsed < 5 {
@@ -430,71 +447,74 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
             write!(stdout, "{power_up_msg}")?;
         }
     }
+    Ok(())
+}
 
-    // Draw Game Over
+fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
-        let msg_len = u16::try_from(msg.len(),).unwrap_or(0,);
-        let x_pos = (game.width / 2).saturating_sub(msg_len / 2,);
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Red,),)?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos,),)?;
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let cause_msg = &game.death_message;
-        let cause_len = u16::try_from(cause_msg.len(),).unwrap_or(0,);
-        let x_cause = (game.width / 2).saturating_sub(cause_len / 2,);
-        stdout.queue(SetForegroundColor(Color::White,),)?;
-        stdout.queue(cursor::MoveTo(x_cause, y_pos + 1,),)?;
+        let cause_len = u16::try_from(cause_msg.len()).unwrap_or(0);
+        let x_cause = (game.width / 2).saturating_sub(cause_len / 2);
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
-        let sub_msg_len = u16::try_from(sub_msg.len(),).unwrap_or(0,);
-        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2,);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2,),)?;
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
+        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
+        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
-        stdout.queue(SetForegroundColor(Color::Reset,),)?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
     }
 
     if game.state == GameState::GameWon {
         let msg = "YOU WIN!";
-        let msg_len = u16::try_from(msg.len(),).unwrap_or(0,);
-        let x_pos = (game.width / 2).saturating_sub(msg_len / 2,);
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Green,),)?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos,),)?;
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
-        let sub_msg_len = u16::try_from(sub_msg.len(),).unwrap_or(0,);
-        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2,);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2,),)?;
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
+        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
+        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
-        stdout.queue(SetForegroundColor(Color::Reset,),)?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
     }
 
     if game.state == GameState::Paused {
         let msg = "PAUSED";
-        let msg_len = u16::try_from(msg.len(),).unwrap_or(0,);
-        let x_pos = (game.width / 2).saturating_sub(msg_len / 2,);
+        let msg_len = u16::try_from(msg.len()).unwrap_or(0);
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Yellow,),)?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos,),)?;
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
-        let sub_msg_len = u16::try_from(sub_msg.len(),).unwrap_or(0,);
-        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2,);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 1,),)?;
+        let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
+        let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
+        stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
         write!(stdout, "{sub_msg}")?;
 
-        stdout.queue(SetForegroundColor(Color::Reset,),)?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
     }
-    Ok((),)
+    Ok(())
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -628,7 +628,7 @@ impl Game {
         }
     }
 
-    #[expect(clippy::too_many_lines, reason = "Game update contains many logic checks")]
+
     pub fn update(&mut self,) {
         if self.state != GameState::Playing {
             return;
@@ -690,32 +690,7 @@ impl Game {
             return;
         }
 
-        // Check bonus food collision
-        if let Some(p,) = self.power_up.as_mut()
-            && final_head == p.location
-        {
-            if p.p_type == PowerUpType::ExtraLife {
-                self.lives += 1;
-            } else if p.p_type == PowerUpType::Shrink {
-                self.snake.shrink_tail();
-            } else if p.p_type == PowerUpType::ClearObstacles {
-                self.obstacles.clear();
-            } else {
-                p.activation_time = Some(SystemTime::now(),);
-            }
-            beep();
-        }
-
-        // Remove power up instantly if it was an instant effect that was just activated
-        if let Some(p,) = self.power_up.as_ref()
-            && (p.p_type == PowerUpType::ExtraLife
-                || p.p_type == PowerUpType::Shrink
-                || p.p_type == PowerUpType::ClearObstacles)
-            && p.activation_time.is_none()
-            && final_head == p.location
-        {
-            self.power_up = None;
-        }
+        self.process_power_up_collision(final_head);
 
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::ScoreMultiplier
@@ -725,21 +700,7 @@ impl Game {
 
         let old_score = self.score;
 
-        let mut grow = if self.bonus_food.is_some_and(|(bonus_p, _,)| final_head == bonus_p,) {
-            let added_score = if is_multiplier {
-                10
-            } else {
-                5
-            };
-            self.score += added_score;
-            self.stats.total_score += added_score;
-            self.stats.total_food_eaten += 1;
-            self.bonus_food = None;
-            beep();
-            true
-        } else {
-            false
-        };
+        let mut grow = self.check_bonus_food_collision(final_head, is_multiplier);
 
         // Refined self collision check
         if self.snake.body_map.contains_key(&final_head,) && !is_invincible {
@@ -754,48 +715,106 @@ impl Game {
 
         if final_head == self.food {
             grow = true;
-            let added_score = if is_multiplier {
-                2
-            } else {
-                1
-            };
-            self.score += added_score;
-            self.stats.total_score += added_score;
-            self.stats.total_food_eaten += 1;
-            beep();
-
-            let avoid = |p: &Point| {
-                self.obstacles.contains(p,)
-                    || *p == final_head
-                    || self.bonus_food.is_some_and(|(bp, _,)| *p == bp,)
-                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location,)
-            };
-            if let Some(new_food,) = Self::get_random_empty_point(
-                self.width,
-                self.height,
-                &self.snake,
-                avoid,
-                &mut self.rng,
-            ) {
-                self.food = new_food;
-            } else {
+            if !self.process_food_collision(final_head, is_multiplier) {
                 self.snake.move_to(final_head, grow,);
                 self.handle_win();
                 return;
             }
         }
 
-        // Add a new obstacle for every 5 points gained
-        let new_obs_count = (self.score / 5).saturating_sub(old_score / 5,);
+        self.add_obstacles_if_needed(old_score, final_head);
+
+        self.snake.move_to(final_head, grow,);
+    }
+
+    fn process_power_up_collision(&mut self, final_head: Point) {
+        if let Some(p) = self.power_up.as_mut()
+            && final_head == p.location
+        {
+            if p.p_type == PowerUpType::ExtraLife {
+                self.lives += 1;
+            } else if p.p_type == PowerUpType::Shrink {
+                self.snake.shrink_tail();
+            } else if p.p_type == PowerUpType::ClearObstacles {
+                self.obstacles.clear();
+            } else {
+                p.activation_time = Some(SystemTime::now());
+            }
+            beep();
+        }
+
+        // Remove power up instantly if it was an instant effect that was just activated
+        if let Some(p) = self.power_up.as_ref()
+            && (p.p_type == PowerUpType::ExtraLife
+                || p.p_type == PowerUpType::Shrink
+                || p.p_type == PowerUpType::ClearObstacles)
+            && p.activation_time.is_none()
+            && final_head == p.location
+        {
+            self.power_up = None;
+        }
+    }
+
+    fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+            let added_score = if is_multiplier {
+                10
+            } else {
+                5
+            };
+            self.score += added_score;
+            self.stats.total_score += added_score;
+            self.stats.total_food_eaten += 1;
+            self.bonus_food = None;
+            beep();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        let added_score = if is_multiplier {
+            2
+        } else {
+            1
+        };
+        self.score += added_score;
+        self.stats.total_score += added_score;
+        self.stats.total_food_eaten += 1;
+        beep();
+
+        let avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || *p == final_head
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+        };
+        if let Some(new_food) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+        ) {
+            self.food = new_food;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn add_obstacles_if_needed(&mut self, old_score: u32, final_head: Point) {
+        let new_obs_count = (self.score / 5).saturating_sub(old_score / 5);
         if new_obs_count > 0 {
             let avoid = |p: &Point| {
-                let dx = i32::from(p.x,).abs_diff(i32::from(final_head.x,),);
-                let dy = i32::from(p.y,).abs_diff(i32::from(final_head.y,),);
-                self.obstacles.contains(p,)
+                let dx = i32::from(p.x).abs_diff(i32::from(final_head.x));
+                let dy = i32::from(p.y).abs_diff(i32::from(final_head.y));
+                self.obstacles.contains(p)
                     || (dx <= 2 && dy <= 2)
                     || *p == self.food
-                    || self.bonus_food.is_some_and(|(bp, _,)| *p == bp,)
-                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location,)
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
             };
             let new_obstacles = Self::generate_obstacles(
                 self.width,
@@ -805,11 +824,10 @@ impl Game {
                 &mut self.rng,
                 new_obs_count as usize,
             );
-            self.obstacles.extend(new_obstacles,);
+            self.obstacles.extend(new_obstacles);
         }
-
-        self.snake.move_to(final_head, grow,);
     }
+
 
     fn handle_win(&mut self,) {
         self.stats.games_played += 1;
@@ -950,7 +968,7 @@ impl Game {
         true
     }
 
-    #[expect(clippy::too_many_lines, reason = "Autopilot logic requires extensive checks and fallback")]
+
     pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
         let start = self.snake.head();
 
@@ -964,118 +982,130 @@ impl Game {
             targets.push(pu.location,);
         }
 
+        if let Some(dir) = self.astar_search(start, &targets) {
+            return Some(dir);
+        }
+
+        self.flood_fill_fallback(start)
+    }
+
+    fn astar_search(&self, start: Point, targets: &[Point]) -> Option<Direction> {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
 
-        g_score.insert(start, 0,);
+        g_score.insert(start, 0);
 
         let heuristic = |p: Point| -> u16 {
             let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::PassThroughWalls
                     && pu.activation_time.is_some_and(|time| {
-                        time.elapsed().unwrap_or_default() < Duration::from_secs(5,)
-                    },)
-            },);
+                        time.elapsed().unwrap_or_default() < Duration::from_secs(5)
+                    })
+            });
             targets
                 .iter()
                 .map(|t| {
-                    let mut dx = p.x.abs_diff(t.x,);
-                    let mut dy = p.y.abs_diff(t.y,);
+                    let mut dx = p.x.abs_diff(t.x);
+                    let mut dy = p.y.abs_diff(t.y);
                     if self.wrap_mode || can_pass_through_walls {
-                        dx = std::cmp::min(dx, self.width.saturating_sub(2,).saturating_sub(dx,),);
-                        dy = std::cmp::min(dy, self.height.saturating_sub(2,).saturating_sub(dy,),);
+                        dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                        dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
                     dx + dy
-                },)
+                })
                 .min()
-                .unwrap_or(0,)
+                .unwrap_or(0)
         };
 
-        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right,];
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
-            let next_p = Self::calculate_next_head_dir(start, d,);
-            if let Some(final_p,) = self.get_final_p(next_p,)
-                && self.is_safe_final_p(final_p,)
+            let next_p = Self::calculate_next_head_dir(start, d);
+            if let Some(final_p) = self.get_final_p(next_p)
+                && self.is_safe_final_p(final_p)
             {
                 let cost = 1;
-                g_score.insert(final_p, cost,);
-                first_step.insert(final_p, d,);
+                g_score.insert(final_p, cost);
+                first_step.insert(final_p, d);
                 open_set.push(AStarState {
-                    f_score: cost + heuristic(final_p,),
+                    f_score: cost + heuristic(final_p),
                     position: final_p,
-                },);
+                });
             }
         }
 
         while let Some(AStarState {
             position: current,
             ..
-        },) = open_set.pop()
+        }) = open_set.pop()
         {
-            if targets.contains(&current,) {
-                return first_step.get(&current,).copied();
+            if targets.contains(&current) {
+                return first_step.get(&current).copied();
             }
 
-            let current_g = *g_score.get(&current,).unwrap_or(&u16::MAX,);
+            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
 
             for &d in &dirs {
-                let next_p = Self::calculate_next_head_dir(current, d,);
-                if let Some(final_p,) = self.get_final_p(next_p,)
-                    && self.is_safe_final_p(final_p,)
+                let next_p = Self::calculate_next_head_dir(current, d);
+                if let Some(final_p) = self.get_final_p(next_p)
+                    && self.is_safe_final_p(final_p)
                 {
-                    let tentative_g = current_g.saturating_add(1,);
-                    if tentative_g < *g_score.get(&final_p,).unwrap_or(&u16::MAX,) {
-                        g_score.insert(final_p, tentative_g,);
-                        first_step.insert(final_p, *first_step.get(&current,).unwrap(),);
+                    let tentative_g = current_g.saturating_add(1);
+                    if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
+                        g_score.insert(final_p, tentative_g);
+                        first_step.insert(final_p, *first_step.get(&current).unwrap());
                         open_set.push(AStarState {
-                            f_score: tentative_g.saturating_add(heuristic(final_p,),),
+                            f_score: tentative_g.saturating_add(heuristic(final_p)),
                             position: final_p,
-                        },);
+                        });
                     }
                 }
             }
         }
 
-        // Fallback: Flood fill to find the direction with the most open space
+        None
+    }
+
+    fn flood_fill_fallback(&self, start: Point) -> Option<Direction> {
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut best_dir = None;
         let mut max_open_space = 0;
 
         for &d in &dirs {
-            let next_p = Self::calculate_next_head_dir(start, d,);
-            if let Some(final_p,) = self.get_final_p(next_p,)
-                && self.is_safe_final_p(final_p,)
+            let next_p = Self::calculate_next_head_dir(start, d);
+            if let Some(final_p) = self.get_final_p(next_p)
+                && self.is_safe_final_p(final_p)
             {
                 let mut visited = std::collections::HashSet::new();
                 let mut queue = std::collections::VecDeque::new();
 
-                visited.insert(final_p,);
-                queue.push_back(final_p,);
+                visited.insert(final_p);
+                queue.push_back(final_p);
 
                 let mut open_space = 0;
                 let max_search_depth = 100; // Limit search to avoid performance issues
 
-                while let Some(curr,) = queue.pop_front() {
+                while let Some(curr) = queue.pop_front() {
                     open_space += 1;
                     if open_space >= max_search_depth {
                         break;
                     }
 
                     for &next_d in &dirs {
-                        let step_p = Self::calculate_next_head_dir(curr, next_d,);
-                        if let Some(valid_p,) = self.get_final_p(step_p,)
-                            && self.is_safe_final_p(valid_p,)
-                            && !visited.contains(&valid_p,)
+                        let step_p = Self::calculate_next_head_dir(curr, next_d);
+                        if let Some(valid_p) = self.get_final_p(step_p)
+                            && self.is_safe_final_p(valid_p)
+                            && !visited.contains(&valid_p)
                         {
-                            visited.insert(valid_p,);
-                            queue.push_back(valid_p,);
+                            visited.insert(valid_p);
+                            queue.push_back(valid_p);
                         }
                     }
                 }
 
                 if open_space > max_open_space {
                     max_open_space = open_space;
-                    best_dir = Some(d,);
+                    best_dir = Some(d);
                 }
             }
         }
