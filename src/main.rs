@@ -217,6 +217,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout,) -> Ke
         GameState::EnterName => handle_enter_name_input(code, game,),
         GameState::Settings => handle_settings_input(code, game,),
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game,),
+        GameState::NftShop => handle_nft_shop_input(code, game,),
     };
 
     if should_continue {
@@ -255,9 +256,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game,) -> bool {
                 let _ = game.load_game();
             },
             2 => game.state = GameState::Settings,
-            3 => game.state = GameState::Stats,
-            4 => game.state = GameState::Help,
-            5 => {
+            3 => game.state = GameState::NftShop,
+            4 => game.state = GameState::Stats,
+            5 => game.state = GameState::Help,
+            6 => {
                 game.previous_state = Some(GameState::Menu,);
                 game.state = GameState::ConfirmQuit;
             },
@@ -267,11 +269,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game,) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 5;
+                game.menu_selection = 6;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S',) => {
-            if game.menu_selection < 5 {
+            if game.menu_selection < 6 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -388,6 +390,47 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game,) -> bool {
     true
 }
 
+fn handle_nft_shop_input(code: KeyCode, game: &mut Game,) -> bool {
+    let available_skins = [
+        ('💎', 100),
+        ('👾', 250),
+        ('🐍', 500),
+        ('🚀', 1000),
+        ('🦍', 2000),
+    ];
+
+    match code {
+        KeyCode::Char('q' | 'Q',) | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W',) => {
+            if game.nft_selection > 0 {
+                game.nft_selection -= 1;
+            } else {
+                game.nft_selection = available_skins.len() - 1;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S',) => {
+            if game.nft_selection < available_skins.len() - 1 {
+                game.nft_selection += 1;
+            } else {
+                game.nft_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ',) => {
+            let (skin, price) = available_skins[game.nft_selection];
+            if !game.stats.unlocked_skins.contains(&skin) && game.stats.coins >= price {
+                game.stats.coins -= price;
+                game.stats.unlocked_skins.push(skin);
+                game.save_stats();
+                crate::game::beep();
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
 fn handle_settings_input(code: KeyCode, game: &mut Game,) -> bool {
     match code {
         KeyCode::Char('q' | 'Q',) | KeyCode::Esc | KeyCode::Backspace => {
@@ -412,7 +455,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game,) -> bool {
             1 => game.theme = game.theme.prev(),
             2 => game.wrap_mode = !game.wrap_mode,
             3 => {
-                let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍',];
+                let skins = &game.stats.unlocked_skins;
                 let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
                 let prev_idx = if current_idx > 0 {
                     current_idx - 1
@@ -429,7 +472,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game,) -> bool {
                 1 => game.theme = game.theme.next(),
                 2 => game.wrap_mode = !game.wrap_mode,
                 3 => {
-                    let skins = ['█', 'O', '@', '#', '*', '💎', '👾', '🐍',];
+                    let skins = &game.stats.unlocked_skins;
                     let current_idx = skins.iter().position(|&c| c == game.skin,).unwrap_or(0,);
                     let next_idx = (current_idx + 1) % skins.len();
                     game.skin = skins[next_idx];
