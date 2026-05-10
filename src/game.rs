@@ -87,6 +87,7 @@ pub enum Theme {
     Retro,
     Neon,
     Ocean,
+    Premium,
 }
 
 impl Theme {
@@ -96,17 +97,19 @@ impl Theme {
             Self::Dark => Self::Retro,
             Self::Retro => Self::Neon,
             Self::Neon => Self::Ocean,
-            Self::Ocean => Self::Classic,
+            Self::Ocean => Self::Premium,
+            Self::Premium => Self::Classic,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Classic => Self::Ocean,
+            Self::Classic => Self::Premium,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
+            Self::Premium => Self::Ocean,
         }
     }
 }
@@ -1026,15 +1029,53 @@ impl Game {
         }
 
         // Fallback: Just return any safe direction if no path to target is found
+        // Better fallback: pick the direction that maximizes available space
+        let mut best_dir = None;
+        let mut max_space = 0;
+
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d,);
             if let Some(final_p,) = self.get_final_p(next_p,)
                 && self.is_safe_final_p(final_p,)
             {
-                return Some(d,);
+                let space = self.flood_fill(final_p,);
+                if space > max_space {
+                    max_space = space;
+                    best_dir = Some(d,);
+                }
             }
         }
-        None
+
+        best_dir
+    }
+
+    fn flood_fill(&self, start: Point,) -> usize {
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+
+        visited.insert(start,);
+        queue.push_back(start,);
+
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right,];
+
+        while let Some(current,) = queue.pop_front() {
+            // We can cap the flood fill to save compute if it gets too large,
+            // e.g. if we have found at least 100 empty spaces, it's probably safe enough.
+            if visited.len() >= 100 {
+                break;
+            }
+
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(current, d,);
+                if let Some(final_p,) = self.get_final_p(next_p,)
+                    && self.is_safe_final_p(final_p,)
+                    && visited.insert(final_p,) {
+                        queue.push_back(final_p,);
+                    }
+            }
+        }
+
+        visited.len()
     }
 
     const fn calculate_wrapped_head(&self, next_head: Point,) -> Point {
