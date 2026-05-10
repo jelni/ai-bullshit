@@ -59,7 +59,9 @@ fn draw_menu<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow,),)?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len(),).unwrap_or(0,) / 2,).saturating_sub(2,),
+                (game.width / 2)
+                    .saturating_sub(u16::try_from(item.len(),).unwrap_or(0,) / 2,)
+                    .saturating_sub(2,),
                 game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,),
             ),)?;
             write!(stdout, "> {item} <")?;
@@ -241,7 +243,9 @@ fn draw_settings<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         if i == game.settings_selection {
             stdout.queue(SetForegroundColor(Color::Yellow,),)?;
             stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item.len(),).unwrap_or(0,) / 2,).saturating_sub(2,),
+                (game.width / 2)
+                    .saturating_sub(u16::try_from(item.len(),).unwrap_or(0,) / 2,)
+                    .saturating_sub(2,),
                 game.height / 2 - 2 + u16::try_from(i,).unwrap_or(0,) * 2,
             ),)?;
             write!(stdout, "> {item} <")?;

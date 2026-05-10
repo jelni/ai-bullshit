@@ -424,12 +424,14 @@ impl Game {
                 if !state.obstacles.iter().all(valid_point,) {
                     return false;
                 }
-                if let Some((bp, _)) = &state.bonus_food {
+                #[expect(clippy::collapsible_if, reason = "stable rust")]
+                if let Some((bp, _,),) = &state.bonus_food {
                     if !valid_point(bp,) {
                         return false;
                     }
                 }
-                if let Some(pu) = &state.power_up {
+                #[expect(clippy::collapsible_if, reason = "stable rust")]
+                if let Some(pu,) = &state.power_up {
                     if !valid_point(&pu.location,) {
                         return false;
                     }
