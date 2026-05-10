@@ -62,16 +62,14 @@ impl Snake {
         self.body.push_front(new_head,);
         *self.body_map.entry(new_head,).or_insert(0,) += 1;
 
-        if !grow {
-            if let Some(tail,) = self.body.pop_back() {
-                if let Some(count,) = self.body_map.get_mut(&tail,) {
+        if !grow
+            && let Some(tail,) = self.body.pop_back()
+                && let Some(count,) = self.body_map.get_mut(&tail,) {
                     *count -= 1;
                     if *count == 0 {
                         self.body_map.remove(&tail,);
                     }
                 }
-            }
-        }
     }
 
     pub fn rebuild_map(&mut self,) {
@@ -86,14 +84,13 @@ impl Snake {
         let target_len = std::cmp::max(3, self.body.len() / 2,);
         while self.body.len() > target_len {
 
-            if let Some(tail,) = self.body.pop_back() {
-                if let Some(count,) = self.body_map.get_mut(&tail,) {
+            if let Some(tail,) = self.body.pop_back()
+                && let Some(count,) = self.body_map.get_mut(&tail,) {
                     *count -= 1;
                     if *count == 0 {
                         self.body_map.remove(&tail,);
                     }
                 }
-            }
         }
     }
 }
