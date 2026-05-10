@@ -49,6 +49,7 @@ pub enum Difficulty {
     #[default]
     Normal,
     Hard,
+    Insane,
 }
 
 impl Difficulty {
@@ -56,15 +57,17 @@ impl Difficulty {
         match self {
             Self::Easy => Self::Normal,
             Self::Normal => Self::Hard,
-            Self::Hard => Self::Easy,
+            Self::Hard => Self::Insane,
+            Self::Insane => Self::Easy,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Easy => Self::Hard,
+            Self::Easy => Self::Insane,
             Self::Normal => Self::Easy,
             Self::Hard => Self::Normal,
+            Self::Insane => Self::Hard,
         }
     }
 }
@@ -88,6 +91,7 @@ pub enum Theme {
     Neon,
     Ocean,
     Matrix,
+    Premium,
 }
 
 impl Theme {
@@ -98,18 +102,20 @@ impl Theme {
             Self::Retro => Self::Neon,
             Self::Neon => Self::Ocean,
             Self::Ocean => Self::Matrix,
-            Self::Matrix => Self::Classic,
+            Self::Matrix => Self::Premium,
+            Self::Premium => Self::Classic,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Classic => Self::Matrix,
+            Self::Classic => Self::Premium,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
             Self::Matrix => Self::Ocean,
+            Self::Premium => Self::Matrix,
         }
     }
 }
@@ -246,6 +252,7 @@ impl Game {
             Difficulty::Easy => 1,
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
+            Difficulty::Insane => 10,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
         let obstacles =
@@ -555,6 +562,7 @@ impl Game {
             Difficulty::Easy => 1,
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
+            Difficulty::Insane => 10,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
         self.obstacles = Self::generate_obstacles(
