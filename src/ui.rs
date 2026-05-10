@@ -349,29 +349,28 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         write!(stdout, "★")?;
     }
 
-    #[expect(clippy::collapsible_if, reason = "stable rust")]
-    if let Some(power_up,) = &game.power_up {
-        if power_up.activation_time.is_none() {
-            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y,),)?;
-            if power_up.p_type == crate::game::PowerUpType::ExtraLife {
-                stdout.queue(SetForegroundColor(Color::Magenta,),)?;
-                write!(stdout, "♥")?;
-            } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
-                stdout.queue(SetForegroundColor(Color::Yellow,),)?;
-                write!(stdout, "W")?;
-            } else if power_up.p_type == crate::game::PowerUpType::Shrink {
-                stdout.queue(SetForegroundColor(Color::Cyan,),)?;
-                write!(stdout, "S")?;
-            } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
-                stdout.queue(SetForegroundColor(Color::Red,),)?;
-                write!(stdout, "B")?;
-            } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
-                stdout.queue(SetForegroundColor(Color::Green,),)?;
-                write!(stdout, "$")?;
-            } else {
-                stdout.queue(SetForegroundColor(Color::Cyan,),)?;
-                write!(stdout, "P")?;
-            }
+    if let Some(power_up,) = &game.power_up
+        && power_up.activation_time.is_none()
+    {
+        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y,),)?;
+        if power_up.p_type == crate::game::PowerUpType::ExtraLife {
+            stdout.queue(SetForegroundColor(Color::Magenta,),)?;
+            write!(stdout, "♥")?;
+        } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
+            stdout.queue(SetForegroundColor(Color::Yellow,),)?;
+            write!(stdout, "W")?;
+        } else if power_up.p_type == crate::game::PowerUpType::Shrink {
+            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
+            write!(stdout, "S")?;
+        } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
+            stdout.queue(SetForegroundColor(Color::Red,),)?;
+            write!(stdout, "B")?;
+        } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
+            stdout.queue(SetForegroundColor(Color::Green,),)?;
+            write!(stdout, "$")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::Cyan,),)?;
+            write!(stdout, "P")?;
         }
     }
 
@@ -409,25 +408,24 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         game.score, game.high_score, game.lives, level, bot_str
     )?;
 
-    #[expect(clippy::collapsible_if, reason = "stable rust")]
-    if let Some(power_up,) = &game.power_up {
-        if let Some(activation_time,) = power_up.activation_time {
-            let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
-            if elapsed < 5 {
-                let remaining = 5 - elapsed;
-                let power_up_name = match power_up.p_type {
-                    crate::game::PowerUpType::SlowDown => "Slowdown",
-                    crate::game::PowerUpType::SpeedBoost => "Speed Boost",
-                    crate::game::PowerUpType::Invincibility => "Invincible",
-                    crate::game::PowerUpType::ExtraLife => "Extra Life",
-                    crate::game::PowerUpType::PassThroughWalls => "Ghost",
-                    crate::game::PowerUpType::Shrink => "Shrink",
-                    crate::game::PowerUpType::ClearObstacles => "Bomb",
-                    crate::game::PowerUpType::ScoreMultiplier => "2x Score",
-                };
-                let power_up_msg = format!(" | {power_up_name}: {remaining}s");
-                write!(stdout, "{power_up_msg}")?;
-            }
+    if let Some(power_up,) = &game.power_up
+        && let Some(activation_time,) = power_up.activation_time
+    {
+        let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+        if elapsed < 5 {
+            let remaining = 5 - elapsed;
+            let power_up_name = match power_up.p_type {
+                crate::game::PowerUpType::SlowDown => "Slowdown",
+                crate::game::PowerUpType::SpeedBoost => "Speed Boost",
+                crate::game::PowerUpType::Invincibility => "Invincible",
+                crate::game::PowerUpType::ExtraLife => "Extra Life",
+                crate::game::PowerUpType::PassThroughWalls => "Ghost",
+                crate::game::PowerUpType::Shrink => "Shrink",
+                crate::game::PowerUpType::ClearObstacles => "Bomb",
+                crate::game::PowerUpType::ScoreMultiplier => "2x Score",
+            };
+            let power_up_msg = format!(" | {power_up_name}: {remaining}s");
+            write!(stdout, "{power_up_msg}")?;
         }
     }
 

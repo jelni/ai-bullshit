@@ -298,13 +298,12 @@ impl Game {
                         .lines()
                         .filter_map(|line| {
                             let parts: Vec<&str,> = line.split_whitespace().collect();
-                            #[expect(clippy::collapsible_if, reason = "stable rust")]
-                            if parts.len() >= 2 {
-                                if let Some(score_str,) = parts.last() {
-                                    let name = parts[..parts.len() - 1].join(" ",);
-                                    if let Ok(score,) = score_str.parse::<u32>() {
-                                        return Some((name, score,),);
-                                    }
+                            if parts.len() >= 2
+                                && let Some(score_str,) = parts.last()
+                            {
+                                let name = parts[..parts.len() - 1].join(" ",);
+                                if let Ok(score,) = score_str.parse::<u32>() {
+                                    return Some((name, score,),);
                                 }
                             }
                             None
@@ -424,17 +423,15 @@ impl Game {
                 if !state.obstacles.iter().all(valid_point,) {
                     return false;
                 }
-                #[expect(clippy::collapsible_if, reason = "stable rust")]
-                if let Some((bp, _,),) = &state.bonus_food {
-                    if !valid_point(bp,) {
-                        return false;
-                    }
+                if let Some((bp, _,),) = &state.bonus_food
+                    && !valid_point(bp,)
+                {
+                    return false;
                 }
-                #[expect(clippy::collapsible_if, reason = "stable rust")]
-                if let Some(pu,) = &state.power_up {
-                    if !valid_point(&pu.location,) {
-                        return false;
-                    }
+                if let Some(pu,) = &state.power_up
+                    && !valid_point(&pu.location,)
+                {
+                    return false;
                 }
 
                 state.snake.rebuild_map();
@@ -529,21 +526,18 @@ impl Game {
         }
 
         // Shift bonus food spawn time
-        #[expect(clippy::collapsible_if, reason = "stable rust")]
-        if let Some((pos, spawn_time,),) = self.bonus_food {
-            if let Some(new_time,) = spawn_time.checked_add(delta,) {
-                self.bonus_food = Some((pos, new_time,),);
-            }
+        if let Some((pos, spawn_time,),) = self.bonus_food
+            && let Some(new_time,) = spawn_time.checked_add(delta,)
+        {
+            self.bonus_food = Some((pos, new_time,),);
         }
 
         // Shift power up activation time
-        #[expect(clippy::collapsible_if, reason = "stable rust")]
-        if let Some(power_up,) = &mut self.power_up {
-            if let Some(activation_time,) = power_up.activation_time {
-                if let Some(new_time,) = activation_time.checked_add(delta,) {
-                    power_up.activation_time = Some(new_time,);
-                }
-            }
+        if let Some(power_up,) = &mut self.power_up
+            && let Some(activation_time,) = power_up.activation_time
+            && let Some(new_time,) = activation_time.checked_add(delta,)
+        {
+            power_up.activation_time = Some(new_time,);
         }
     }
 
@@ -629,11 +623,11 @@ impl Game {
             return;
         }
 
-        #[expect(clippy::collapsible_if, reason = "stable rust")]
-        if self.auto_pilot && self.snake.direction_queue.is_empty() {
-            if let Some(dir,) = self.calculate_autopilot_move() {
-                self.snake.direction_queue.push_back(dir,);
-            }
+        if self.auto_pilot
+            && self.snake.direction_queue.is_empty()
+            && let Some(dir,) = self.calculate_autopilot_move()
+        {
+            self.snake.direction_queue.push_back(dir,);
         }
 
         if let Some(dir,) = self.snake.direction_queue.pop_front() {
@@ -686,33 +680,30 @@ impl Game {
         }
 
         // Check bonus food collision
-        #[expect(clippy::collapsible_if, reason = "stable rust")]
-        if let Some(p,) = self.power_up.as_mut() {
-            if final_head == p.location {
-                if p.p_type == PowerUpType::ExtraLife {
-                    self.lives += 1;
-                } else if p.p_type == PowerUpType::Shrink {
-                    self.snake.shrink_tail();
-                } else if p.p_type == PowerUpType::ClearObstacles {
-                    self.obstacles.clear();
-                } else {
-                    p.activation_time = Some(SystemTime::now(),);
-                }
-                beep();
+        if let Some(p,) = self.power_up.as_mut()
+            && final_head == p.location
+        {
+            if p.p_type == PowerUpType::ExtraLife {
+                self.lives += 1;
+            } else if p.p_type == PowerUpType::Shrink {
+                self.snake.shrink_tail();
+            } else if p.p_type == PowerUpType::ClearObstacles {
+                self.obstacles.clear();
+            } else {
+                p.activation_time = Some(SystemTime::now(),);
             }
+            beep();
         }
 
         // Remove power up instantly if it was an instant effect that was just activated
-        #[expect(clippy::collapsible_if, reason = "stable rust")]
-        if let Some(p,) = self.power_up.as_ref() {
-            if (p.p_type == PowerUpType::ExtraLife
+        if let Some(p,) = self.power_up.as_ref()
+            && (p.p_type == PowerUpType::ExtraLife
                 || p.p_type == PowerUpType::Shrink
                 || p.p_type == PowerUpType::ClearObstacles)
-                && p.activation_time.is_none()
-                && final_head == p.location
-            {
-                self.power_up = None;
-            }
+            && p.activation_time.is_none()
+            && final_head == p.location
+        {
+            self.power_up = None;
         }
 
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
@@ -948,7 +939,6 @@ impl Game {
         true
     }
 
-    #[expect(clippy::collapsible_if, reason = "stable rust")]
     pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
         let start = self.snake.head();
 
@@ -956,10 +946,10 @@ impl Game {
         if let Some((bf_p, _,),) = self.bonus_food {
             targets.push(bf_p,);
         }
-        if let Some(pu,) = &self.power_up {
-            if pu.activation_time.is_none() {
-                targets.push(pu.location,);
-            }
+        if let Some(pu,) = &self.power_up
+            && pu.activation_time.is_none()
+        {
+            targets.push(pu.location,);
         }
 
         let mut open_set = std::collections::BinaryHeap::new();
@@ -993,16 +983,16 @@ impl Game {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right,];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d,);
-            if let Some(final_p,) = self.get_final_p(next_p,) {
-                if self.is_safe_final_p(final_p,) {
-                    let cost = 1;
-                    g_score.insert(final_p, cost,);
-                    first_step.insert(final_p, d,);
-                    open_set.push(AStarState {
-                        f_score: cost + heuristic(final_p,),
-                        position: final_p,
-                    },);
-                }
+            if let Some(final_p,) = self.get_final_p(next_p,)
+                && self.is_safe_final_p(final_p,)
+            {
+                let cost = 1;
+                g_score.insert(final_p, cost,);
+                first_step.insert(final_p, d,);
+                open_set.push(AStarState {
+                    f_score: cost + heuristic(final_p,),
+                    position: final_p,
+                },);
             }
         }
 
@@ -1019,17 +1009,17 @@ impl Game {
 
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d,);
-                if let Some(final_p,) = self.get_final_p(next_p,) {
-                    if self.is_safe_final_p(final_p,) {
-                        let tentative_g = current_g.saturating_add(1,);
-                        if tentative_g < *g_score.get(&final_p,).unwrap_or(&u16::MAX,) {
-                            g_score.insert(final_p, tentative_g,);
-                            first_step.insert(final_p, *first_step.get(&current,).unwrap(),);
-                            open_set.push(AStarState {
-                                f_score: tentative_g.saturating_add(heuristic(final_p,),),
-                                position: final_p,
-                            },);
-                        }
+                if let Some(final_p,) = self.get_final_p(next_p,)
+                    && self.is_safe_final_p(final_p,)
+                {
+                    let tentative_g = current_g.saturating_add(1,);
+                    if tentative_g < *g_score.get(&final_p,).unwrap_or(&u16::MAX,) {
+                        g_score.insert(final_p, tentative_g,);
+                        first_step.insert(final_p, *first_step.get(&current,).unwrap(),);
+                        open_set.push(AStarState {
+                            f_score: tentative_g.saturating_add(heuristic(final_p,),),
+                            position: final_p,
+                        },);
                     }
                 }
             }
@@ -1038,10 +1028,10 @@ impl Game {
         // Fallback: Just return any safe direction if no path to target is found
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d,);
-            if let Some(final_p,) = self.get_final_p(next_p,) {
-                if self.is_safe_final_p(final_p,) {
-                    return Some(d,);
-                }
+            if let Some(final_p,) = self.get_final_p(next_p,)
+                && self.is_safe_final_p(final_p,)
+            {
+                return Some(d,);
             }
         }
         None
