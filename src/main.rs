@@ -125,11 +125,11 @@ fn run_game(stdout: &mut Stdout, args: &Args,) -> io::Result<(),> {
             last_frame = Instant::now();
             last_tick = Instant::now();
         }
-        // Calculate dynamic tick rate based on score
-        // Base rate 150ms. Subtract 5ms per 1 score, capped at minimum 50ms
-        let mut current_tick_rate = if game.score > 0 {
+        // Calculate dynamic tick rate based on food eaten
+        // Base rate 150ms. Subtract 5ms per 1 food, capped at minimum 50ms
+        let mut current_tick_rate = if game.food_eaten_session > 0 {
             base_tick_rate
-                .saturating_sub(Duration::from_millis(u64::from(game.score,) * 5,),)
+                .saturating_sub(Duration::from_millis(u64::from(game.food_eaten_session,) * 5,),)
                 .max(Duration::from_millis(50,),)
         } else {
             base_tick_rate

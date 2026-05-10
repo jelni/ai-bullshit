@@ -197,6 +197,8 @@ pub struct SaveState {
     pub skin: char,
     #[serde(default)]
     pub auto_pilot: bool,
+    #[serde(default)]
+    pub food_eaten_session: u32,
 }
 
 #[derive(Serialize, Deserialize, Default,)]
@@ -240,6 +242,7 @@ pub struct Game {
     pub previous_state: Option<GameState,>,
     pub auto_pilot: bool,
     pub autopilot_path: Vec<Point>,
+    pub food_eaten_session: u32,
 }
 
 impl Game {
@@ -302,6 +305,7 @@ impl Game {
             previous_state: None,
             auto_pilot: false,
             autopilot_path: Vec::new(),
+            food_eaten_session: 0,
         }
     }
 
@@ -422,6 +426,7 @@ impl Game {
             wrap_mode: self.wrap_mode,
             skin: self.skin,
             auto_pilot: self.auto_pilot,
+            food_eaten_session: self.food_eaten_session,
         };
         if let Ok(json,) = serde_json::to_string(&state,) {
             let _ = Self::atomic_write(path, json,);
@@ -476,6 +481,7 @@ impl Game {
                 self.wrap_mode = state.wrap_mode;
                 self.skin = state.skin;
                 self.auto_pilot = state.auto_pilot;
+                self.food_eaten_session = state.food_eaten_session;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 true
@@ -606,6 +612,7 @@ impl Game {
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = Instant::now();
+        self.food_eaten_session = 0;
     }
 
     fn respawn(&mut self,) {
@@ -715,7 +722,7 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5,),)
         },);
 
-        let old_score = self.score;
+        let old_food_eaten_session = self.food_eaten_session;
 
         let mut grow = self.check_bonus_food_collision(final_head, is_multiplier);
 
@@ -739,7 +746,7 @@ impl Game {
             }
         }
 
-        self.add_obstacles_if_needed(old_score, final_head);
+        self.add_obstacles_if_needed(old_food_eaten_session, final_head);
 
         self.snake.move_to(final_head, grow,);
     }
@@ -774,12 +781,19 @@ impl Game {
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+            let diff_multiplier = match self.difficulty {
+                Difficulty::Easy => 1,
+                Difficulty::Normal => 2,
+                Difficulty::Hard => 3,
+                Difficulty::Insane => 5,
+            };
             let added_score = if is_multiplier {
-                10
+                10 * diff_multiplier
             } else {
-                5
+                5 * diff_multiplier
             };
             self.score += added_score;
+            self.food_eaten_session += 1;
             self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
             self.stats.coins += added_score;
@@ -792,12 +806,19 @@ impl Game {
     }
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        let diff_multiplier = match self.difficulty {
+            Difficulty::Easy => 1,
+            Difficulty::Normal => 2,
+            Difficulty::Hard => 3,
+            Difficulty::Insane => 5,
+        };
         let added_score = if is_multiplier {
-            2
+            2 * diff_multiplier
         } else {
-            1
+            diff_multiplier
         };
         self.score += added_score;
+        self.food_eaten_session += 1;
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
         self.stats.coins += added_score;
@@ -823,8 +844,8 @@ impl Game {
         }
     }
 
-    fn add_obstacles_if_needed(&mut self, old_score: u32, final_head: Point) {
-        let new_obs_count = (self.score / 5).saturating_sub(old_score / 5);
+    fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
+        let new_obs_count = (self.food_eaten_session / 5).saturating_sub(old_food_eaten_session / 5);
         if new_obs_count > 0 {
             let avoid = |p: &Point| {
                 let dx = i32::from(p.x).abs_diff(i32::from(final_head.x));
