@@ -1,7 +1,7 @@
 on: ["pull_request", "workflow_dispatch"]
 
 permissions:
-  contents: "write"
+  contents: "read"
   pull-requests: "read"
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
           fetch-depth: 0
           ref: "${{ github.event.pull_request.head.ref || github.ref }}"
 
-      - name: "Check and Rebase"
+      - name: "Check for merge conflicts"
         run: |
           git config --global user.email "bot@example.com"
           git config --global user.name "Bot"
@@ -22,29 +22,11 @@ jobs:
           # Fetch origin main
           git fetch origin main
 
-          # Try to rebase main into current branch
-          if ! git rebase origin/main; then
-            echo "Rebase failed, handling conflicts..."
-            conflicted_files=""
-            while git status | grep -q "You are currently rebasing branch"; do
-              files=$(git diff --name-only --diff-filter=U)
-              for f in $files; do
-                if ! echo "$conflicted_files" | grep -q "$f"; then
-                  conflicted_files="$conflicted_files $f"
-                fi
-              done
-              # Add all files, including conflicts, to continue rebase
-              git add .
-              GIT_EDITOR=true git commit --no-edit || true
-              GIT_EDITOR=true git rebase --continue || break
-            done
-
-            # Rebase finished, upload back to branch
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-            git push origin HEAD:"${{ github.event.pull_request.head.ref }}" --force-with-lease
-
-            error_message="Merge conflicts detected and left in the code! Please resolve them.%0A"
-            for f in $conflicted_files; do
+          # Try to merge main into current branch
+          if ! git merge origin/main --no-commit --no-ff >/dev/null 2>&1; then
+            files=$(git diff --name-only --diff-filter=U)
+            error_message="Merge conflicts detected! Please rebase the branch onto the latest changes on the main branch.%0A"
+            for f in $files; do
               error_message="${error_message}%0AConflicted file: $f%0A"
               encoded_file=$(cat "$f" | sed 's/%/%25/g' | sed 's/\r//g' | awk '{printf "%s%%0A", $0}')
               error_message="${error_message}${encoded_file}"
@@ -52,9 +34,6 @@ jobs:
             echo "::error::${error_message}"
             exit_code=1
           else
-            # Rebase was successful, upload back to branch
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-            git push origin HEAD:"${{ github.event.pull_request.head.ref }}" --force-with-lease
             exit_code=0
           fi
           sh -c "exit $exit_code"
