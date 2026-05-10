@@ -11,6 +11,28 @@ use serde_with::serde_as;
 
 use crate::snake::{Direction, Point, Snake};
 
+#[derive(Copy, Clone, Eq, PartialEq,)]
+struct AStarState {
+    f_score: u16,
+    position: crate::snake::Point,
+}
+
+impl Ord for AStarState {
+    fn cmp(&self, other: &Self,) -> std::cmp::Ordering {
+        other
+            .f_score
+            .cmp(&self.f_score,)
+            .then_with(|| self.position.x.cmp(&other.position.x,),)
+            .then_with(|| self.position.y.cmp(&other.position.y,),)
+    }
+}
+
+impl PartialOrd for AStarState {
+    fn partial_cmp(&self, other: &Self,) -> Option<std::cmp::Ordering,> {
+        Some(self.cmp(other,),)
+    }
+}
+
 #[derive(
     clap::ValueEnum,
     Clone,
@@ -912,28 +934,6 @@ impl Game {
 
     #[expect(clippy::collapsible_if, reason = "stable rust")]
     pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
-        #[derive(Copy, Clone, Eq, PartialEq,)]
-        struct AStarState {
-            f_score: u16,
-            position: Point,
-        }
-
-        impl Ord for AStarState {
-            fn cmp(&self, other: &Self,) -> std::cmp::Ordering {
-                other
-                    .f_score
-                    .cmp(&self.f_score,)
-                    .then_with(|| self.position.x.cmp(&other.position.x,),)
-                    .then_with(|| self.position.y.cmp(&other.position.y,),)
-            }
-        }
-
-        impl PartialOrd for AStarState {
-            fn partial_cmp(&self, other: &Self,) -> Option<std::cmp::Ordering,> {
-                Some(self.cmp(other,),)
-            }
-        }
-
         let start = self.snake.head();
 
         let mut targets = vec![self.food];
