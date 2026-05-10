@@ -152,7 +152,8 @@ fn run_game(stdout: &mut Stdout, args: &Args,) -> io::Result<(),> {
                     | game::PowerUpType::PassThroughWalls
                     | game::PowerUpType::Shrink
                     | game::PowerUpType::ClearObstacles
-                    | game::PowerUpType::ScoreMultiplier => {}, // Tick rate unaffected
+                    | game::PowerUpType::ScoreMultiplier
+                    | game::PowerUpType::NftDrop => {}, // Tick rate unaffected
                 }
             } else {
                 game.power_up = None; // Power-up expired

@@ -87,6 +87,8 @@ pub enum Theme {
     Retro,
     Neon,
     Ocean,
+    Cyberpunk,
+    Matrix,
 }
 
 impl Theme {
@@ -96,17 +98,21 @@ impl Theme {
             Self::Dark => Self::Retro,
             Self::Retro => Self::Neon,
             Self::Neon => Self::Ocean,
-            Self::Ocean => Self::Classic,
+            Self::Ocean => Self::Cyberpunk,
+            Self::Cyberpunk => Self::Matrix,
+            Self::Matrix => Self::Classic,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Classic => Self::Ocean,
+            Self::Classic => Self::Matrix,
             Self::Dark => Self::Classic,
             Self::Retro => Self::Dark,
             Self::Neon => Self::Retro,
             Self::Ocean => Self::Neon,
+            Self::Cyberpunk => Self::Ocean,
+            Self::Matrix => Self::Cyberpunk,
         }
     }
 }
@@ -121,6 +127,7 @@ pub enum PowerUpType {
     Shrink,
     ClearObstacles,
     ScoreMultiplier,
+    NftDrop,
 }
 
 #[serde_as]
@@ -221,6 +228,7 @@ pub struct Game {
     pub player_name: String,
     pub previous_state: Option<GameState,>,
     pub auto_pilot: bool,
+    pub bot_path: std::collections::VecDeque<Point>,
 }
 
 impl Game {
@@ -280,6 +288,7 @@ impl Game {
             player_name: String::new(),
             previous_state: None,
             auto_pilot: false,
+            bot_path: std::collections::VecDeque::new(),
         }
     }
 
@@ -450,6 +459,7 @@ impl Game {
                 self.skin = state.skin;
                 self.auto_pilot = state.auto_pilot;
                 self.state = GameState::Paused;
+                self.bot_path.clear();
                 self.start_time = Instant::now();
                 true
             },)
@@ -625,9 +635,12 @@ impl Game {
 
         if self.auto_pilot
             && self.snake.direction_queue.is_empty()
-            && let Some(dir,) = self.calculate_autopilot_move()
+            && let Some((dir, path)) = self.calculate_autopilot_path()
         {
             self.snake.direction_queue.push_back(dir,);
+            self.bot_path = path;
+        } else if !self.auto_pilot {
+            self.bot_path.clear();
         }
 
         if let Some(dir,) = self.snake.direction_queue.pop_front() {
@@ -689,6 +702,9 @@ impl Game {
                 self.snake.shrink_tail();
             } else if p.p_type == PowerUpType::ClearObstacles {
                 self.obstacles.clear();
+            } else if p.p_type == PowerUpType::NftDrop {
+                self.score += 50;
+                self.skin = '$';
             } else {
                 p.activation_time = Some(SystemTime::now(),);
             }
@@ -699,7 +715,8 @@ impl Game {
         if let Some(p,) = self.power_up.as_ref()
             && (p.p_type == PowerUpType::ExtraLife
                 || p.p_type == PowerUpType::Shrink
-                || p.p_type == PowerUpType::ClearObstacles)
+                || p.p_type == PowerUpType::ClearObstacles
+                || p.p_type == PowerUpType::NftDrop)
             && p.activation_time.is_none()
             && final_head == p.location
         {
@@ -834,7 +851,7 @@ impl Game {
                 avoid,
                 &mut self.rng,
             ) {
-                let p_type = match self.rng.gen_range(0..8,) {
+                let p_type = match self.rng.gen_range(0..9,) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -842,6 +859,7 @@ impl Game {
                     4 => PowerUpType::Shrink,
                     5 => PowerUpType::ClearObstacles,
                     6 => PowerUpType::ScoreMultiplier,
+                    7 => PowerUpType::NftDrop,
                     _ => PowerUpType::ExtraLife,
                 };
 
@@ -939,7 +957,7 @@ impl Game {
         true
     }
 
-    pub fn calculate_autopilot_move(&self,) -> Option<Direction,> {
+    pub fn calculate_autopilot_path(&self,) -> Option<(Direction, std::collections::VecDeque<Point>)> {
         let start = self.snake.head();
 
         let mut targets = vec![self.food];
@@ -954,7 +972,7 @@ impl Game {
 
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
-        let mut first_step = std::collections::HashMap::new();
+        let mut came_from = std::collections::HashMap::new();
 
         g_score.insert(start, 0,);
 
@@ -981,20 +999,10 @@ impl Game {
         };
 
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right,];
-        for &d in &dirs {
-            let next_p = Self::calculate_next_head_dir(start, d,);
-            if let Some(final_p,) = self.get_final_p(next_p,)
-                && self.is_safe_final_p(final_p,)
-            {
-                let cost = 1;
-                g_score.insert(final_p, cost,);
-                first_step.insert(final_p, d,);
-                open_set.push(AStarState {
-                    f_score: cost + heuristic(final_p,),
-                    position: final_p,
-                },);
-            }
-        }
+        open_set.push(AStarState {
+            f_score: heuristic(start,),
+            position: start,
+        },);
 
         while let Some(AStarState {
             position: current,
@@ -1002,7 +1010,17 @@ impl Game {
         },) = open_set.pop()
         {
             if targets.contains(&current,) {
-                return first_step.get(&current,).copied();
+                // Reconstruct path
+                let mut path = std::collections::VecDeque::new();
+                let mut curr = current;
+                while let Some(&(prev, dir)) = came_from.get(&curr) {
+                    path.push_front(curr);
+                    curr = prev;
+                    if curr == start {
+                        return Some((dir, path));
+                    }
+                }
+                // Fallback if current == start (shouldn't happen if targets != start)
             }
 
             let current_g = *g_score.get(&current,).unwrap_or(&u16::MAX,);
@@ -1014,8 +1032,8 @@ impl Game {
                 {
                     let tentative_g = current_g.saturating_add(1,);
                     if tentative_g < *g_score.get(&final_p,).unwrap_or(&u16::MAX,) {
+                        came_from.insert(final_p, (current, d));
                         g_score.insert(final_p, tentative_g,);
-                        first_step.insert(final_p, *first_step.get(&current,).unwrap(),);
                         open_set.push(AStarState {
                             f_score: tentative_g.saturating_add(heuristic(final_p,),),
                             position: final_p,
@@ -1031,12 +1049,13 @@ impl Game {
             if let Some(final_p,) = self.get_final_p(next_p,)
                 && self.is_safe_final_p(final_p,)
             {
-                return Some(d,);
+                let mut path = std::collections::VecDeque::new();
+                path.push_back(final_p);
+                return Some((d, path));
             }
         }
         None
     }
-
     const fn calculate_wrapped_head(&self, next_head: Point,) -> Point {
         let mut x = next_head.x;
         let mut y = next_head.y;

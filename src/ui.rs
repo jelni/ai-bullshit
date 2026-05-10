@@ -299,6 +299,8 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         crate::game::Theme::Neon => (Color::Cyan, Color::Magenta, Color::Yellow, Color::Red,),
         crate::game::Theme::Classic => (Color::Blue, Color::Red, Color::DarkGreen, Color::Magenta,),
         crate::game::Theme::Ocean => (Color::DarkBlue, Color::Yellow, Color::Cyan, Color::White,),
+        crate::game::Theme::Cyberpunk => (Color::Magenta, Color::Cyan, Color::Yellow, Color::Red,),
+        crate::game::Theme::Matrix => (Color::DarkGreen, Color::Green, Color::Green, Color::DarkGreen,),
     };
 
     // Draw borders
@@ -366,11 +368,24 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
             stdout.queue(SetForegroundColor(Color::Red,),)?;
             write!(stdout, "B")?;
         } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
-            stdout.queue(SetForegroundColor(Color::Green,),)?;
+            stdout.queue(SetForegroundColor(Color::Green,))?;
             write!(stdout, "$")?;
+        } else if power_up.p_type == crate::game::PowerUpType::NftDrop {
+            stdout.queue(SetForegroundColor(Color::Yellow,))?;
+            write!(stdout, "N")?;
         } else {
             stdout.queue(SetForegroundColor(Color::Cyan,),)?;
             write!(stdout, "P")?;
+        }
+    }
+
+
+    // Draw bot path
+    if game.auto_pilot {
+        stdout.queue(SetForegroundColor(Color::DarkGrey,))?;
+        for p in &game.bot_path {
+            stdout.queue(cursor::MoveTo(p.x, p.y,))?;
+            write!(stdout, "·")?;
         }
     }
 
@@ -423,6 +438,7 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
                 crate::game::PowerUpType::Shrink => "Shrink",
                 crate::game::PowerUpType::ClearObstacles => "Bomb",
                 crate::game::PowerUpType::ScoreMultiplier => "2x Score",
+                crate::game::PowerUpType::NftDrop => "NFT Drop",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;
