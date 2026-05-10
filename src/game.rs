@@ -182,6 +182,8 @@ pub struct SaveState {
     pub wrap_mode: bool,
     #[serde(default = "default_skin")]
     pub skin: char,
+    #[serde(default)]
+    pub auto_pilot: bool,
 }
 
 #[derive(Serialize, Deserialize, Default,)]
@@ -393,6 +395,7 @@ impl Game {
             theme: self.theme,
             wrap_mode: self.wrap_mode,
             skin: self.skin,
+            auto_pilot: self.auto_pilot,
         };
         if let Ok(json,) = serde_json::to_string(&state,) {
             let _ = Self::atomic_write(path, json,);
@@ -436,6 +439,7 @@ impl Game {
                 self.theme = state.theme;
                 self.wrap_mode = state.wrap_mode;
                 self.skin = state.skin;
+                self.auto_pilot = state.auto_pilot;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 true
@@ -1167,6 +1171,25 @@ mod tests {
         assert_eq!(loaded_scores[0], ("Bob".to_string(), 200));
         assert_eq!(loaded_scores[1], ("Alice".to_string(), 100));
         assert_eq!(loaded_scores[2], ("Charlie".to_string(), 50));
+
+        // Cleanup
+        let _ = std::fs::remove_file(file_path,);
+    }
+
+    #[test]
+    fn test_save_and_load_auto_pilot() {
+        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal,);
+        game.auto_pilot = true;
+
+        let file_path = "savegame_test_autopilot.json";
+        game.save_game_to_file(file_path,);
+
+        let mut new_game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal,);
+        assert!(!new_game.auto_pilot);
+
+        let loaded = new_game.load_game_from_file(file_path,);
+        assert!(loaded);
+        assert!(new_game.auto_pilot);
 
         // Cleanup
         let _ = std::fs::remove_file(file_path,);
