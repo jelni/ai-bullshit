@@ -226,7 +226,7 @@ enum KeyAction {
 }
 
 fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> KeyAction {
-    if code == KeyCode::Char('b') || code == KeyCode::Char('B') {
+    if game.state != GameState::EnterName && (code == KeyCode::Char('b') || code == KeyCode::Char('B')) {
         return KeyAction::BossKey;
     }
 
