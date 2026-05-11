@@ -1424,4 +1424,21 @@ mod tests {
             "Bot flags should be cleared on reset"
         );
     }
+
+    #[test]
+    fn test_calculate_autopilot_move_to_food() {
+        let mut game = Game::new(
+            20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal,
+        );
+
+        // Setup snake at (10, 10) facing Up
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+
+        // Place food directly above the snake
+        game.food = crate::snake::Point { x: 10, y: 8 };
+
+        // Calculate autopilot move
+        let next_move = game.calculate_autopilot_move();
+        assert_eq!(next_move, Some(crate::snake::Direction::Up));
+    }
 }
