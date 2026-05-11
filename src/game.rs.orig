@@ -1410,18 +1410,4 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(file_path,);
     }
-
-    #[test]
-    fn test_reset_clears_bot_flags() {
-        let mut game = Game::new(
-            20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal,
-        );
-        game.auto_pilot = true;
-        game.used_bot_this_game = true;
-        game.reset();
-        assert!(
-            !game.used_bot_this_game && !game.auto_pilot,
-            "Bot flags should be cleared on reset"
-        );
-    }
 }
