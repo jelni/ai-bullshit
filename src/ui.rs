@@ -477,24 +477,31 @@ fn draw_entities<W: Write>(
         && power_up.activation_time.is_none()
     {
         stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        if power_up.p_type == crate::game::PowerUpType::ExtraLife {
-            stdout.queue(SetForegroundColor(Color::Magenta))?;
-            write!(stdout, "♥")?;
-        } else if power_up.p_type == crate::game::PowerUpType::PassThroughWalls {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            write!(stdout, "W")?;
-        } else if power_up.p_type == crate::game::PowerUpType::Shrink {
-            stdout.queue(SetForegroundColor(Color::Cyan))?;
-            write!(stdout, "S")?;
-        } else if power_up.p_type == crate::game::PowerUpType::ClearObstacles {
-            stdout.queue(SetForegroundColor(Color::Red))?;
-            write!(stdout, "B")?;
-        } else if power_up.p_type == crate::game::PowerUpType::ScoreMultiplier {
-            stdout.queue(SetForegroundColor(Color::Green))?;
-            write!(stdout, "$")?;
-        } else {
-            stdout.queue(SetForegroundColor(Color::Cyan))?;
-            write!(stdout, "P")?;
+        match power_up.p_type {
+            crate::game::PowerUpType::ExtraLife => {
+                stdout.queue(SetForegroundColor(Color::Magenta))?;
+                write!(stdout, "♥")?;
+            },
+            crate::game::PowerUpType::PassThroughWalls => {
+                stdout.queue(SetForegroundColor(Color::Yellow))?;
+                write!(stdout, "W")?;
+            },
+            crate::game::PowerUpType::Shrink => {
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "S")?;
+            },
+            crate::game::PowerUpType::ClearObstacles => {
+                stdout.queue(SetForegroundColor(Color::Red))?;
+                write!(stdout, "B")?;
+            },
+            crate::game::PowerUpType::ScoreMultiplier => {
+                stdout.queue(SetForegroundColor(Color::Green))?;
+                write!(stdout, "$")?;
+            },
+            _ => {
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "P")?;
+            },
         }
     }
 
