@@ -149,6 +149,12 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "● : Food (+1 Score)",
         "★ : Bonus Food (+5 Score)",
         "X : Obstacle (Avoid!)",
+        "♥ : Extra Life",
+        "W : Ghost (Pass Walls)",
+        "S : Shrink",
+        "B : Bomb (Clear Obstacles)",
+        "$ : 2x Score",
+        "P : Power-Up",
     ];
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
