@@ -241,6 +241,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Settings => handle_settings_input(code, game),
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
         GameState::NftShop => handle_nft_shop_input(code, game),
+        GameState::Achievements => handle_achievements_input(code, game),
     };
 
     if should_continue {
@@ -281,8 +282,9 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             2 => game.state = GameState::Settings,
             3 => game.state = GameState::NftShop,
             4 => game.state = GameState::Stats,
-            5 => game.state = GameState::Help,
-            6 => {
+            5 => game.state = GameState::Achievements,
+            6 => game.state = GameState::Help,
+            7 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -292,11 +294,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 6;
+                game.menu_selection = 7;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 6 {
+            if game.menu_selection < 7 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -370,6 +372,11 @@ fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
 }
 
 const fn handle_stats_input(_code: KeyCode, game: &mut Game) -> bool {
+    game.state = GameState::Menu;
+    true
+}
+
+const fn handle_achievements_input(_code: KeyCode, game: &mut Game) -> bool {
     game.state = GameState::Menu;
     true
 }

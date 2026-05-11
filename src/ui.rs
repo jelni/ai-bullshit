@@ -26,6 +26,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::ConfirmQuit => draw_confirm_quit(game, stdout)?,
         GameState::Settings => draw_settings(game, stdout)?,
         GameState::NftShop => draw_nft_shop(game, stdout)?,
+        GameState::Achievements => draw_achievements(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -56,7 +57,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Start Game", "Load Game", "Settings", "NFT Shop", "Statistics", "Help", "Quit"];
+        ["Start Game", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -92,6 +93,46 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "{hs_str}")?;
         }
     }
+    Ok(())
+}
+
+fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "ACHIEVEMENTS";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 4,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let all_achievements = [
+        (crate::game::Achievement::FirstBlood, "First Blood (Play a game)"),
+        (crate::game::Achievement::HighScorer, "High Scorer (Score 100+)"),
+        (crate::game::Achievement::Rich, "Rich (Accumulate 1000+ coins)"),
+        (crate::game::Achievement::BotUser, "Bot User (Use the bot)"),
+    ];
+
+    for (i, (ach, desc)) in all_achievements.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_achievements.contains(ach);
+        let prefix = if is_unlocked { "[X]" } else { "[ ]" };
+        let color = if is_unlocked { Color::Green } else { Color::DarkGrey };
+        let line = format!("{prefix} {desc}");
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let back = "Press any key to go back";
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{back}")?;
+
     Ok(())
 }
 

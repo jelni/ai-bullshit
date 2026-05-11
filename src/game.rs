@@ -137,8 +137,17 @@ pub enum GameState {
     Settings,
     NftShop,
     Stats,
+    Achievements,
     EnterName,
     ConfirmQuit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum Achievement {
+    FirstBlood,
+    HighScorer,
+    Rich,
+    BotUser,
 }
 
 pub const fn default_lives() -> u32 {
@@ -214,6 +223,8 @@ pub struct Statistics {
     pub unlocked_skins: Vec<char>,
     #[serde(default = "default_unlocked_themes")]
     pub unlocked_themes: Vec<Theme>,
+    #[serde(default)]
+    pub unlocked_achievements: Vec<Achievement>,
 }
 
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
@@ -898,10 +909,32 @@ impl Game {
         }
     }
 
+    pub fn check_achievements(&mut self) {
+        let mut new_achievements = Vec::new();
+        if !self.stats.unlocked_achievements.contains(&Achievement::FirstBlood) && self.stats.games_played > 0 {
+            new_achievements.push(Achievement::FirstBlood);
+        }
+        if !self.stats.unlocked_achievements.contains(&Achievement::HighScorer) && self.score >= 100 {
+            new_achievements.push(Achievement::HighScorer);
+        }
+        if !self.stats.unlocked_achievements.contains(&Achievement::Rich) && self.stats.coins >= 1000 {
+            new_achievements.push(Achievement::Rich);
+        }
+        if !self.stats.unlocked_achievements.contains(&Achievement::BotUser) && self.used_bot_this_game {
+            new_achievements.push(Achievement::BotUser);
+        }
+
+        if !new_achievements.is_empty() {
+            self.stats.unlocked_achievements.extend(new_achievements);
+            self.save_stats();
+        }
+    }
+
     fn handle_win(&mut self) {
         self.stats.games_played += 1;
         self.stats.total_time_s += self.start_time.elapsed().as_secs();
         self.save_stats();
+        self.check_achievements();
 
         let is_high_score = self.high_scores.len() < 5
             || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
@@ -1241,6 +1274,7 @@ impl Game {
             self.stats.games_played += 1;
             self.stats.total_time_s += self.start_time.elapsed().as_secs();
             self.save_stats();
+            self.check_achievements();
 
             self.death_message = cause.to_string();
             let is_high_score = self.high_scores.len() < 5
