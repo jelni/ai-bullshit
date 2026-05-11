@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(long, value_enum, default_value_t = game::Difficulty::Normal)]
     difficulty: game::Difficulty,
+
+    #[arg(long, default_value_t = false)]
+    bot: bool,
 }
 
 fn main() -> io::Result<(),> {
@@ -91,6 +94,13 @@ fn main() -> io::Result<(),> {
 fn run_game(stdout: &mut Stdout, args: &Args,) -> io::Result<(),> {
     let diff = args.difficulty;
     let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff,);
+
+    if args.bot {
+        game.auto_pilot = true;
+        game.used_bot_this_game = true;
+        game.state = GameState::Playing;
+    }
+
     let mut last_tick = Instant::now();
 
     // Initial draw
@@ -291,7 +301,12 @@ fn handle_playing_input(code: KeyCode, game: &mut Game,) -> bool {
             game.state = GameState::ConfirmQuit;
         },
         KeyCode::Char('p' | 'P',) => game.state = GameState::Paused,
-        KeyCode::Char('t' | 'T',) => game.auto_pilot = !game.auto_pilot,
+        KeyCode::Char('t' | 'T',) => {
+            game.auto_pilot = !game.auto_pilot;
+            if game.auto_pilot {
+                game.used_bot_this_game = true;
+            }
+        },
         KeyCode::Up | KeyCode::Char('w' | 'W',) => game.handle_input(Direction::Up,),
         KeyCode::Down | KeyCode::Char('s' | 'S',) => game.handle_input(Direction::Down,),
         KeyCode::Left | KeyCode::Char('a' | 'A',) => game.handle_input(Direction::Left,),

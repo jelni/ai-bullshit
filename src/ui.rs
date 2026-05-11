@@ -379,6 +379,22 @@ fn draw_game<W: Write,>(game: &Game, stdout: &mut W,) -> io::Result<(),> {
         crate::game::Theme::Matrix => (Color::DarkGreen, Color::Green, Color::Green, Color::DarkGreen,),
         crate::game::Theme::Premium => (Color::Yellow, Color::Green, Color::Cyan, Color::Red,),
         crate::game::Theme::Cyberpunk => (Color::Magenta, Color::Cyan, Color::Yellow, Color::Red,),
+        crate::game::Theme::Rainbow => {
+            let elapsed = usize::try_from(game.start_time.elapsed().as_secs(),).unwrap_or(0,);
+            let colors = [
+                Color::Red,
+                Color::Yellow,
+                Color::Green,
+                Color::Cyan,
+                Color::Blue,
+                Color::Magenta,
+            ];
+            let border_c = colors[elapsed % colors.len()];
+            let food_c = colors[(elapsed + 1) % colors.len()];
+            let snake_c = colors[(elapsed + 2) % colors.len()];
+            let obs_c = colors[(elapsed + 3) % colors.len()];
+            (border_c, food_c, snake_c, obs_c)
+        },
     };
 
     draw_borders(game, stdout, border_color)?;
