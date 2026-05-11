@@ -386,6 +386,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             (Color::DarkGreen, Color::Green, Color::Green, Color::DarkGreen)
         },
         crate::game::Theme::Premium => (Color::Yellow, Color::Green, Color::Cyan, Color::Red),
+        crate::game::Theme::Hacker => {
+            (Color::Green, Color::DarkGreen, Color::Green, Color::DarkGrey)
+        },
         crate::game::Theme::Cyberpunk => (Color::Magenta, Color::Cyan, Color::Yellow, Color::Red),
         crate::game::Theme::Rainbow => {
             let elapsed = usize::try_from(game.start_time.elapsed().as_secs()).unwrap_or(0);
