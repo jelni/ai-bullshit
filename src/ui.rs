@@ -57,7 +57,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Start Game", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
+        ["Single Player", "Local Multiplayer", "Player vs Bot", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -566,6 +566,27 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw player2
+    if let Some(p2) = &game.player2 {
+        stdout.queue(SetForegroundColor(Color::Blue))?;
+        for (i, part) in p2.body.iter().enumerate() {
+            stdout.queue(cursor::MoveTo(part.x, part.y))?;
+            if i == 0 {
+                // Head
+                let head_char = match p2.direction {
+                    Direction::Up => '^',
+                    Direction::Down => 'v',
+                    Direction::Left => '<',
+                    Direction::Right => '>',
+                };
+                write!(stdout, "{head_char}")?;
+            } else {
+                // Body
+                write!(stdout, "{}", game.skin)?;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -695,7 +716,7 @@ mod tests {
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
         );
-        game.menu_selection = 0; // "Start Game" selected
+        game.menu_selection = 0; // "Single Player" selected
 
         let mut buf = Vec::new();
         draw_menu(&game, &mut buf).expect("Valid operation in tests");
@@ -705,7 +726,7 @@ mod tests {
         assert!(output.contains("SNAKE GAME"), "Menu should contain title");
 
         // Check selection indicator
-        assert!(output.contains("> Start Game <"), "Menu should indicate selection");
+        assert!(output.contains("> Single Player <"), "Menu should indicate selection");
         assert!(output.contains("Load Game"), "Menu should contain other items");
         assert!(output.contains("Statistics"), "Menu should contain Statistics item");
         assert!(!output.contains("> Load Game <"), "Unselected items should not have brackets");
