@@ -275,16 +275,27 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::ConfirmQuit;
         },
         KeyCode::Char(' ') | KeyCode::Enter => match game.menu_selection {
-            0 => game.reset(),
+            0 => {
+                game.mode = game::GameMode::SinglePlayer;
+                game.reset();
+            },
             1 => {
+                game.mode = game::GameMode::LocalMultiplayer;
+                game.reset();
+            },
+            2 => {
+                game.mode = game::GameMode::PlayerVsBot;
+                game.reset();
+            },
+            3 => {
                 let _ = game.load_game();
             },
-            2 => game.state = GameState::Settings,
-            3 => game.state = GameState::NftShop,
-            4 => game.state = GameState::Stats,
-            5 => game.state = GameState::Achievements,
-            6 => game.state = GameState::Help,
-            7 => {
+            4 => game.state = GameState::Settings,
+            5 => game.state = GameState::NftShop,
+            6 => game.state = GameState::Stats,
+            7 => game.state = GameState::Achievements,
+            8 => game.state = GameState::Help,
+            9 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -294,11 +305,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 7;
+                game.menu_selection = 9;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 7 {
+            if game.menu_selection < 9 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -322,10 +333,38 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 game.used_bot_this_game = true;
             }
         },
-        KeyCode::Up | KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
-        KeyCode::Down | KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down),
-        KeyCode::Left | KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
-        KeyCode::Right | KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right),
+        KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up, 1),
+        KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down, 1),
+        KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left, 1),
+        KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right, 1),
+        KeyCode::Up => {
+            if game.mode == game::GameMode::SinglePlayer {
+                game.handle_input(Direction::Up, 1);
+            } else {
+                game.handle_input(Direction::Up, 2);
+            }
+        },
+        KeyCode::Down => {
+            if game.mode == game::GameMode::SinglePlayer {
+                game.handle_input(Direction::Down, 1);
+            } else {
+                game.handle_input(Direction::Down, 2);
+            }
+        },
+        KeyCode::Left => {
+            if game.mode == game::GameMode::SinglePlayer {
+                game.handle_input(Direction::Left, 1);
+            } else {
+                game.handle_input(Direction::Left, 2);
+            }
+        },
+        KeyCode::Right => {
+            if game.mode == game::GameMode::SinglePlayer {
+                game.handle_input(Direction::Right, 1);
+            } else {
+                game.handle_input(Direction::Right, 2);
+            }
+        },
         _ => {},
     }
     true
@@ -346,10 +385,6 @@ fn handle_paused_input(code: KeyCode, game: &mut Game) -> bool {
             game.save_stats();
             game.state = GameState::Menu;
         },
-        KeyCode::Up | KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
-        KeyCode::Down => game.handle_input(Direction::Down),
-        KeyCode::Left | KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
-        KeyCode::Right | KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right),
         _ => {},
     }
     true
@@ -362,10 +397,6 @@ fn handle_game_over_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::ConfirmQuit;
         },
         KeyCode::Char('r' | 'R') => game.reset(),
-        KeyCode::Up | KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
-        KeyCode::Down | KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down),
-        KeyCode::Left | KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
-        KeyCode::Right | KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right),
         _ => {},
     }
     true

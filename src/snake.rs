@@ -16,7 +16,7 @@ pub struct Point {
     pub y: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Snake {
     pub body: VecDeque<Point>,
     #[serde(skip)]
