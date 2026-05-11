@@ -22,8 +22,8 @@ impl Ord for AStarState {
         other
             .f_score
             .cmp(&self.f_score)
-            .then_with(|| self.position.x.cmp(&other.position.x))
-            .then_with(|| self.position.y.cmp(&other.position.y))
+            .then_with(|| other.position.x.cmp(&self.position.x))
+            .then_with(|| other.position.y.cmp(&self.position.y))
     }
 }
 
