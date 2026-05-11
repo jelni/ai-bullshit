@@ -114,6 +114,7 @@ fn run_game(stdout: &mut Stdout, args: &Args,) -> io::Result<(),> {
             game::Difficulty::Normal => Duration::from_millis(150,),
             game::Difficulty::Hard => Duration::from_millis(100,),
             game::Difficulty::Insane => Duration::from_millis(60,),
+            game::Difficulty::GodMode => Duration::from_millis(30,),
         };
 
         let delta = last_frame.elapsed();

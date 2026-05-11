@@ -50,6 +50,7 @@ pub enum Difficulty {
     Normal,
     Hard,
     Insane,
+    GodMode,
 }
 
 impl Difficulty {
@@ -58,16 +59,18 @@ impl Difficulty {
             Self::Easy => Self::Normal,
             Self::Normal => Self::Hard,
             Self::Hard => Self::Insane,
-            Self::Insane => Self::Easy,
+            Self::Insane => Self::GodMode,
+            Self::GodMode => Self::Easy,
         }
     }
 
     pub const fn prev(self,) -> Self {
         match self {
-            Self::Easy => Self::Insane,
+            Self::Easy => Self::GodMode,
             Self::Normal => Self::Easy,
             Self::Hard => Self::Normal,
             Self::Insane => Self::Hard,
+            Self::GodMode => Self::Insane,
         }
     }
 }
@@ -275,6 +278,7 @@ impl Game {
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
             Difficulty::Insane => 10,
+            Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
         let obstacles =
@@ -607,6 +611,7 @@ impl Game {
             Difficulty::Normal => 3,
             Difficulty::Hard => 5,
             Difficulty::Insane => 10,
+            Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
         self.obstacles = Self::generate_obstacles(
@@ -809,6 +814,7 @@ impl Game {
                 Difficulty::Normal => 2,
                 Difficulty::Hard => 3,
                 Difficulty::Insane => 5,
+                Difficulty::GodMode => 10,
             };
             let added_score = if is_multiplier {
                 10 * diff_multiplier
@@ -834,6 +840,7 @@ impl Game {
             Difficulty::Normal => 2,
             Difficulty::Hard => 3,
             Difficulty::Insane => 5,
+            Difficulty::GodMode => 10,
         };
         let added_score = if is_multiplier {
             2 * diff_multiplier
