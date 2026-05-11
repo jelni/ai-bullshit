@@ -1140,7 +1140,7 @@ impl Game {
                 {
                     came_from.insert(final_p, current);
                     g_score.insert(final_p, tentative_g);
-                    first_step.insert(final_p, *first_step.get(&current).unwrap());
+                    first_step.insert(final_p, *first_step.get(&current).expect("current should be present in first_step mapping"));
                     open_set.push(AStarState {
                         f_score: tentative_g.saturating_add(heuristic(final_p)),
                         position: final_p,

@@ -179,7 +179,11 @@ fn run_game(stdout: &mut Stdout, args: &Args,) -> io::Result<(),> {
             match event::read()? {
                 Event::Key(key,) if key.kind == KeyEventKind::Press => {
                     match handle_key_event(key.code, &mut game, stdout,) {
-                        KeyAction::Quit => break,
+                        KeyAction::Quit => {
+                            game.save_game();
+                            game.save_stats();
+                            break;
+                        },
                         KeyAction::BossKey => {
                             let boss_key_start = Instant::now();
                             handle_boss_key(&game, stdout,);
