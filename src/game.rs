@@ -93,6 +93,7 @@ pub enum Theme {
     Matrix,
     Premium,
     Cyberpunk,
+    Rainbow,
 }
 
 
@@ -171,6 +172,8 @@ pub struct SaveState {
     #[serde(default)]
     pub auto_pilot: bool,
     #[serde(default)]
+    pub used_bot_this_game: bool,
+    #[serde(default)]
     pub food_eaten_session: u32,
 }
 
@@ -180,7 +183,7 @@ pub enum ShopItem {
     Theme(Theme),
 }
 
-pub const AVAILABLE_ITEMS: [(ShopItem, u32); 7] = [
+pub const AVAILABLE_ITEMS: [(ShopItem, u32); 8] = [
     (ShopItem::Skin('💎'), 100),
     (ShopItem::Skin('👾'), 250),
     (ShopItem::Skin('🐍'), 500),
@@ -188,6 +191,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 7] = [
     (ShopItem::Skin('🦍'), 2000),
     (ShopItem::Theme(Theme::Premium), 5000),
     (ShopItem::Theme(Theme::Cyberpunk), 10000),
+    (ShopItem::Theme(Theme::Rainbow), 25000),
 ];
 
 pub fn default_unlocked_themes() -> Vec<Theme> {
@@ -215,6 +219,7 @@ pub struct Statistics {
     pub unlocked_themes: Vec<Theme>,
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
     pub width: u16,
     pub height: u16,
@@ -243,6 +248,8 @@ pub struct Game {
     pub player_name: String,
     pub previous_state: Option<GameState,>,
     pub auto_pilot: bool,
+    #[expect(clippy::struct_field_names, reason = "Used specifically for game logic, name is fine")]
+    pub used_bot_this_game: bool,
     pub autopilot_path: Vec<Point>,
     pub food_eaten_session: u32,
 }
@@ -306,6 +313,7 @@ impl Game {
             player_name: String::new(),
             previous_state: None,
             auto_pilot: false,
+            used_bot_this_game: false,
             autopilot_path: Vec::new(),
             food_eaten_session: 0,
         }
@@ -431,6 +439,7 @@ impl Game {
             wrap_mode: self.wrap_mode,
             skin: self.skin,
             auto_pilot: self.auto_pilot,
+            used_bot_this_game: self.used_bot_this_game,
             food_eaten_session: self.food_eaten_session,
         };
         if let Ok(json,) = serde_json::to_string(&state,) {
@@ -486,6 +495,7 @@ impl Game {
                 self.wrap_mode = state.wrap_mode;
                 self.skin = state.skin;
                 self.auto_pilot = state.auto_pilot;
+                self.used_bot_this_game = state.used_bot_this_game;
                 self.food_eaten_session = state.food_eaten_session;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
@@ -882,9 +892,14 @@ impl Game {
         let is_high_score = self.high_scores.len() < 5
             || self.score > self.high_scores.last().map_or(0, |(_, s,)| *s,);
         if is_high_score && self.score > 0 {
-            self.previous_state = Some(GameState::GameWon,);
-            self.state = GameState::EnterName;
-            self.player_name.clear();
+            if self.used_bot_this_game {
+                self.save_high_score("[BOT]".to_string(), self.score);
+                self.state = GameState::GameWon;
+            } else {
+                self.previous_state = Some(GameState::GameWon,);
+                self.state = GameState::EnterName;
+                self.player_name.clear();
+            }
         } else {
             self.state = GameState::GameWon;
         }
@@ -1212,8 +1227,13 @@ impl Game {
             let is_high_score = self.high_scores.len() < 5
                 || self.score > self.high_scores.last().map_or(0, |(_, s,)| *s,);
             if is_high_score && self.score > 0 {
-                self.state = GameState::EnterName;
-                self.player_name.clear();
+                if self.used_bot_this_game {
+                    self.save_high_score("[BOT]".to_string(), self.score);
+                    self.state = GameState::GameOver;
+                } else {
+                    self.state = GameState::EnterName;
+                    self.player_name.clear();
+                }
             } else {
                 self.state = GameState::GameOver;
             }
