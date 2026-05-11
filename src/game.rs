@@ -1084,8 +1084,8 @@ impl Game {
                     let mut dx = p.x.abs_diff(t.x);
                     let mut dy = p.y.abs_diff(t.y);
                     if self.wrap_mode || can_pass_through_walls {
-                        dx = std::cmp::min(dx, self.width.saturating_sub(dx));
-                        dy = std::cmp::min(dy, self.height.saturating_sub(dy));
+                        dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                        dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
                     dx.saturating_add(dy)
                 })
