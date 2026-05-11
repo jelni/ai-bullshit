@@ -141,6 +141,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Space/Enter: Load Game (in Menu)",
         "Q: Quit / Back to Menu",
         "Space/Enter: Select/Start",
+        "T: Toggle Bot (Autopilot)",
     ];
     let skin_line = format!("{} : Snake Body", game.skin);
     let legend = [
@@ -538,8 +539,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     };
     write!(
         stdout,
-        "Score: {} | High: {} | Lives: {} | Level: {}{}",
-        game.score, game.high_score, game.lives, level, bot_str
+        "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}",
+        game.score, game.high_score, game.lives, level, game.difficulty, bot_str
     )?;
 
     if let Some(power_up) = &game.power_up

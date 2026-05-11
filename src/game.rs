@@ -282,7 +282,15 @@ impl Game {
         let avoid_food = |p: &Point| obstacles.contains(p);
         let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng)
             .expect("Board cannot be full on start");
-        let high_scores = Self::load_high_scores_static();
+
+        // Migration step
+        if std::path::Path::new("highscore.txt").exists()
+            && !std::path::Path::new("highscore_normal.txt").exists()
+        {
+            let _ = std::fs::rename("highscore.txt", "highscore_normal.txt");
+        }
+
+        let high_scores = Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty));
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
         Self {
@@ -319,8 +327,8 @@ impl Game {
         }
     }
 
-    pub fn load_high_scores_static() -> Vec<(String, u32)> {
-        Self::load_high_scores_from_file("highscore.txt")
+    pub fn get_high_score_filename(difficulty: Difficulty) -> String {
+        format!("highscore_{difficulty:?}.txt").to_lowercase()
     }
 
     pub fn load_high_scores_from_file(path: &str) -> Vec<(String, u32)> {
@@ -398,7 +406,13 @@ impl Game {
     }
 
     pub fn save_high_score(&mut self, name: String, score: u32) {
-        self.save_high_score_to_file("highscore.txt", name, score);
+        let filename = Self::get_high_score_filename(self.difficulty);
+        self.save_high_score_to_file(&filename, name, score);
+    }
+
+    pub fn update_high_scores(&mut self) {
+        self.high_scores = Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty));
+        self.high_score = self.high_scores.first().map_or(0, |(_, s)| *s);
     }
 
     pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32) {
@@ -499,6 +513,7 @@ impl Game {
                 self.food_eaten_session = state.food_eaten_session;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
+                self.update_high_scores();
                 true
             })
     }
