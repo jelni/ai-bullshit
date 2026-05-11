@@ -55,7 +55,10 @@ impl Snake {
     }
 
     pub fn head(&self) -> Point {
-        *self.body.front().expect("Snake must have a head")
+        let Some(&head) = self.body.front() else {
+            unreachable!("Snake must have a head");
+        };
+        head
     }
 
     pub fn move_to(&mut self, new_head: Point, grow: bool) {

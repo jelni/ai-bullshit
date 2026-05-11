@@ -536,10 +536,16 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
+    let combo_str = if game.combo > 1 {
+        format!(" | Combo: x{}", game.combo)
+    } else {
+        String::new()
+    };
+
     write!(
         stdout,
-        "Score: {} | High: {} | Lives: {} | Level: {}{}",
-        game.score, game.high_score, game.lives, level, bot_str
+        "Score: {} | High: {} | Lives: {} | Level: {}{}{}",
+        game.score, game.high_score, game.lives, level, bot_str, combo_str
     )?;
 
     if let Some(power_up) = &game.power_up

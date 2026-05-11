@@ -178,6 +178,8 @@ pub struct SaveState {
     pub used_bot_this_game: bool,
     #[serde(default)]
     pub food_eaten_session: u32,
+    #[serde(default)]
+    pub combo: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -252,6 +254,8 @@ pub struct Game {
     pub used_bot_this_game: bool,
     pub autopilot_path: Vec<Point>,
     pub food_eaten_session: u32,
+    pub combo: u32,
+    pub last_food_time: Option<Instant>,
 }
 
 impl Game {
@@ -280,8 +284,10 @@ impl Game {
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
         let obstacles = Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count);
         let avoid_food = |p: &Point| obstacles.contains(p);
-        let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng)
-            .expect("Board cannot be full on start");
+        let Some(food) = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng)
+        else {
+            panic!("Board cannot be full on start");
+        };
         let high_scores = Self::load_high_scores_static();
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
@@ -316,6 +322,8 @@ impl Game {
             used_bot_this_game: false,
             autopilot_path: Vec::new(),
             food_eaten_session: 0,
+            combo: 1,
+            last_food_time: None,
         }
     }
 
@@ -441,6 +449,7 @@ impl Game {
             auto_pilot: self.auto_pilot,
             used_bot_this_game: self.used_bot_this_game,
             food_eaten_session: self.food_eaten_session,
+            combo: self.combo,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -497,6 +506,7 @@ impl Game {
                 self.auto_pilot = state.auto_pilot;
                 self.used_bot_this_game = state.used_bot_this_game;
                 self.food_eaten_session = state.food_eaten_session;
+                self.combo = state.combo.max(1);
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 true
@@ -579,6 +589,12 @@ impl Game {
             self.bonus_food = Some((pos, new_time));
         }
 
+        if let Some(last_food) = self.last_food_time
+            && let Some(new_time) = last_food.checked_add(delta)
+        {
+            self.last_food_time = Some(new_time);
+        }
+
         // Shift power up activation time
         if let Some(power_up) = &mut self.power_up
             && let Some(activation_time) = power_up.activation_time
@@ -612,14 +628,16 @@ impl Game {
             obs_count,
         );
         let avoid_food = |p: &Point| self.obstacles.contains(p);
-        self.food = Self::get_random_empty_point(
+        let Some(food) = Self::get_random_empty_point(
             self.width,
             self.height,
             &self.snake,
             avoid_food,
             &mut self.rng,
-        )
-        .expect("Board cannot be full on reset");
+        ) else {
+            panic!("Board cannot be full on reset");
+        };
+        self.food = food;
         self.bonus_food = None;
         self.power_up = None;
         self.score = 0;
@@ -630,6 +648,8 @@ impl Game {
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_game = false;
+        self.combo = 1;
+        self.last_food_time = None;
     }
 
     fn respawn(&mut self) {
@@ -797,6 +817,18 @@ impl Game {
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+            let now = Instant::now();
+            if let Some(last) = self.last_food_time {
+                if last.elapsed() < Duration::from_secs(3) {
+                    self.combo += 1;
+                } else {
+                    self.combo = 1;
+                }
+            } else {
+                self.combo = 1;
+            }
+            self.last_food_time = Some(now);
+
             let diff_multiplier = match self.difficulty {
                 Difficulty::Easy => 1,
                 Difficulty::Normal => 2,
@@ -808,7 +840,7 @@ impl Game {
                 10 * diff_multiplier
             } else {
                 5 * diff_multiplier
-            };
+            } * self.combo;
             self.score += added_score;
             self.food_eaten_session += 1;
             self.stats.total_score += added_score;
@@ -823,6 +855,18 @@ impl Game {
     }
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        let now = Instant::now();
+        if let Some(last) = self.last_food_time {
+            if last.elapsed() < Duration::from_secs(3) {
+                self.combo += 1;
+            } else {
+                self.combo = 1;
+            }
+        } else {
+            self.combo = 1;
+        }
+        self.last_food_time = Some(now);
+
         let diff_multiplier = match self.difficulty {
             Difficulty::Easy => 1,
             Difficulty::Normal => 2,
@@ -834,7 +878,7 @@ impl Game {
             2 * diff_multiplier
         } else {
             diff_multiplier
-        };
+        } * self.combo;
         self.score += added_score;
         self.food_eaten_session += 1;
         self.stats.total_score += added_score;
@@ -1130,12 +1174,10 @@ impl Game {
                 {
                     came_from.insert(final_p, current);
                     g_score.insert(final_p, tentative_g);
-                    first_step.insert(
-                        final_p,
-                        *first_step
-                            .get(&current)
-                            .expect("current should be present in first_step mapping"),
-                    );
+                    let Some(&first) = first_step.get(&current) else {
+                        unreachable!("current should be present in first_step mapping");
+                    };
+                    first_step.insert(final_p, first);
                     open_set.push(AStarState {
                         f_score: tentative_g.saturating_add(heuristic(final_p)),
                         position: final_p,
