@@ -1,0 +1,11 @@
+--- src/game.rs
++++ src/game.rs
+@@ -635,6 +635,8 @@
+         self.just_died = false;
+         self.start_time = Instant::now();
+         self.food_eaten_session = 0;
++        self.auto_pilot = false;
++        self.used_bot_this_game = false;
+     }
+
+     fn respawn(&mut self,) {
