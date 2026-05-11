@@ -483,7 +483,10 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Left | KeyCode::Char('a' | 'A') => match game.settings_selection {
-            0 => game.difficulty = game.difficulty.prev(),
+            0 => {
+                game.difficulty = game.difficulty.prev();
+                game.update_high_scores();
+            },
             1 => {
                 let themes = &game.stats.unlocked_themes;
                 let current_idx = themes.iter().position(|&t| t == game.theme).unwrap_or(0);
@@ -509,7 +512,10 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ' | 'd' | 'D') => {
             match game.settings_selection {
-                0 => game.difficulty = game.difficulty.next(),
+                0 => {
+                    game.difficulty = game.difficulty.next();
+                    game.update_high_scores();
+                },
                 1 => {
                     let themes = &game.stats.unlocked_themes;
                     let current_idx = themes.iter().position(|&t| t == game.theme).unwrap_or(0);
