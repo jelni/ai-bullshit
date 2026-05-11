@@ -91,6 +91,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
 fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
     let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
@@ -108,7 +109,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
 
     let mut last_frame = Instant::now();
 
-    loop {
+    'mainloop: loop {
         let base_tick_rate = match game.difficulty {
             game::Difficulty::Easy => Duration::from_millis(200),
             game::Difficulty::Normal => Duration::from_millis(150),
@@ -171,11 +172,11 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             }
         }
 
-        let timeout = current_tick_rate
+        let mut timeout = current_tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        if event::poll(timeout)? {
+        while event::poll(timeout)? {
             // Use match to avoid collapsible_if lint without unstable features
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
@@ -183,7 +184,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                         KeyAction::Quit => {
                             game.save_game();
                             game.save_stats();
-                            break;
+                            break 'mainloop;
                         },
                         KeyAction::BossKey => {
                             let boss_key_start = Instant::now();
@@ -196,6 +197,13 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                     }
                 },
                 _ => {},
+            }
+
+            timeout = current_tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| Duration::from_secs(0));
+            if timeout.is_zero() {
+                break;
             }
         }
 
