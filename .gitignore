@@ -7,3 +7,6 @@ bench_mem
 # Scratch files
 test.diff
 test_perf.rs
+stats.json
+savegame.json
+src/game.rs.orig
