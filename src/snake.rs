@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize,)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Direction {
     Up,
     Down,
@@ -10,40 +10,40 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize,)]
+#[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Point {
     pub x: u16,
     pub y: u16,
 }
 
-#[derive(Serialize, Deserialize,)]
+#[derive(Serialize, Deserialize)]
 pub struct Snake {
-    pub body: VecDeque<Point,>,
+    pub body: VecDeque<Point>,
     #[serde(skip)]
-    pub body_map: HashMap<Point, usize,>,
+    pub body_map: HashMap<Point, usize>,
     pub direction: Direction,
     #[serde(default)]
-    pub direction_queue: std::collections::VecDeque<Direction,>,
+    pub direction_queue: std::collections::VecDeque<Direction>,
 }
 
 impl Snake {
-    pub fn new(start: Point,) -> Self {
+    pub fn new(start: Point) -> Self {
         let mut body = VecDeque::new();
         // Head
-        body.push_back(start,);
+        body.push_back(start);
         // Body segments below head (since we face UP)
         body.push_back(Point {
             x: start.x,
             y: start.y + 1,
-        },);
+        });
         body.push_back(Point {
             x: start.x,
             y: start.y + 2,
-        },);
+        });
 
-        let mut body_map = HashMap::with_capacity(3,);
+        let mut body_map = HashMap::with_capacity(3);
         for p in &body {
-            *body_map.entry(*p,).or_insert(0,) += 1;
+            *body_map.entry(*p).or_insert(0) += 1;
         }
 
         Self {
@@ -54,43 +54,44 @@ impl Snake {
         }
     }
 
-    pub fn head(&self,) -> Point {
-        *self.body.front().expect("Snake must have a head",)
+    pub fn head(&self) -> Point {
+        *self.body.front().expect("Snake must have a head")
     }
 
-    pub fn move_to(&mut self, new_head: Point, grow: bool,) {
-        self.body.push_front(new_head,);
-        *self.body_map.entry(new_head,).or_insert(0,) += 1;
+    pub fn move_to(&mut self, new_head: Point, grow: bool) {
+        self.body.push_front(new_head);
+        *self.body_map.entry(new_head).or_insert(0) += 1;
 
         if !grow
-            && let Some(tail,) = self.body.pop_back()
-                && let Some(count,) = self.body_map.get_mut(&tail,) {
-                    *count -= 1;
-                    if *count == 0 {
-                        self.body_map.remove(&tail,);
-                    }
-                }
-    }
-
-    pub fn rebuild_map(&mut self,) {
-        self.body_map.clear();
-        for p in &self.body {
-            *self.body_map.entry(*p,).or_insert(0,) += 1;
+            && let Some(tail) = self.body.pop_back()
+            && let Some(count) = self.body_map.get_mut(&tail)
+        {
+            *count -= 1;
+            if *count == 0 {
+                self.body_map.remove(&tail);
+            }
         }
     }
 
-    pub fn shrink_tail(&mut self,) {
-        // Keep minimum length 3.
-        let target_len = std::cmp::max(3, self.body.len() / 2,);
-        while self.body.len() > target_len {
+    pub fn rebuild_map(&mut self) {
+        self.body_map.clear();
+        for p in &self.body {
+            *self.body_map.entry(*p).or_insert(0) += 1;
+        }
+    }
 
-            if let Some(tail,) = self.body.pop_back()
-                && let Some(count,) = self.body_map.get_mut(&tail,) {
-                    *count -= 1;
-                    if *count == 0 {
-                        self.body_map.remove(&tail,);
-                    }
+    pub fn shrink_tail(&mut self) {
+        // Keep minimum length 3.
+        let target_len = std::cmp::max(3, self.body.len() / 2);
+        while self.body.len() > target_len {
+            if let Some(tail) = self.body.pop_back()
+                && let Some(count) = self.body_map.get_mut(&tail)
+            {
+                *count -= 1;
+                if *count == 0 {
+                    self.body_map.remove(&tail);
                 }
+            }
         }
     }
 }
@@ -105,7 +106,7 @@ mod tests {
             x: 5,
             y: 5,
         };
-        let snake = Snake::new(start,);
+        let snake = Snake::new(start);
 
         assert_eq!(snake.body.len(), 3);
         assert_eq!(snake.body[0], start);
@@ -133,7 +134,7 @@ mod tests {
             x: 0,
             y: 0,
         };
-        let snake = Snake::new(start,);
+        let snake = Snake::new(start);
 
         assert_eq!(snake.body.len(), 3);
         assert_eq!(snake.body[0], start);
@@ -161,7 +162,7 @@ mod tests {
             x: u16::MAX - 2,
             y: u16::MAX - 2,
         };
-        let snake = Snake::new(start,);
+        let snake = Snake::new(start);
 
         assert_eq!(snake.body.len(), 3);
         assert_eq!(snake.body[0], start);
@@ -189,7 +190,7 @@ mod tests {
             x: 5,
             y: 5,
         };
-        let mut snake = Snake::new(start,);
+        let mut snake = Snake::new(start);
 
         // Grow to length 8
         for i in 0..5 {
@@ -210,7 +211,7 @@ mod tests {
         // Ensure body_map matches
         let mut expected_map = HashMap::new();
         for p in &snake.body {
-            *expected_map.entry(*p,).or_insert(0,) += 1;
+            *expected_map.entry(*p).or_insert(0) += 1;
         }
         assert_eq!(snake.body_map, expected_map);
 
