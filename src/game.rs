@@ -403,17 +403,23 @@ impl Game {
         self.save_high_score_to_file("highscore.txt", name, score,);
     }
 
-    pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32,) {
-        self.high_scores.push((name, score,),);
-        self.high_scores.sort_unstable_by_key(|b| std::cmp::Reverse(b.1,),);
-        self.high_scores.truncate(5,);
+    pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32) {
+        if let Some(pos) = self.high_scores.iter().position(|(n, _)| n == &name) {
+            if self.high_scores[pos].1 < score {
+                self.high_scores[pos].1 = score;
+            }
+        } else {
+            self.high_scores.push((name, score));
+        }
+        self.high_scores.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
+        self.high_scores.truncate(5);
         let content = self
             .high_scores
             .iter()
-            .map(|(n, s,)| format!("{n} {s}"),)
-            .collect::<Vec<_,>>()
-            .join("\n",);
-        let _ = Self::atomic_write(path, content,);
+            .map(|(n, s)| format!("{n} {s}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let _ = Self::atomic_write(path, content);
     }
 
     pub fn save_game(&self,) {
@@ -1079,7 +1085,7 @@ impl Game {
                         dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                         dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
-                    dx + dy
+                    dx.saturating_add(dy)
                 })
                 .min()
                 .unwrap_or(0)
