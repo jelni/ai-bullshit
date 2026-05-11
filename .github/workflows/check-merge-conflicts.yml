@@ -51,6 +51,7 @@ jobs:
             done
             echo "::error::${error_message}"
             exit_code=1
+
           else
             # Rebase was successful, upload back to branch
             git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git

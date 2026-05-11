@@ -58,6 +58,7 @@ impl Snake {
         *self.body.front().expect("Snake must have a head")
     }
 
+<<<<<<< HEAD
     pub fn move_to(&mut self, new_head: Point, grow: bool) {
         self.body.push_front(new_head);
         *self.body_map.entry(new_head).or_insert(0) += 1;
@@ -69,6 +70,20 @@ impl Snake {
             *count -= 1;
             if *count == 0 {
                 self.body_map.remove(&tail);
+=======
+    pub fn move_to(&mut self, new_head: Point, grow: bool,) {
+        self.body.push_front(new_head,);
+        *self.body_map.entry(new_head,).or_insert(0,) += 1;
+        #[expect(clippy::collapsible_if, reason = "stable rust")]
+        if !grow {
+            if let Some(tail,) = self.body.pop_back() {
+                if let Some(count,) = self.body_map.get_mut(&tail,) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.body_map.remove(&tail,);
+                    }
+                }
+>>>>>>> e7217f0 (Fix typos in jules-auto-merge workflow script)
             }
         }
     }
@@ -84,12 +99,22 @@ impl Snake {
         // Keep minimum length 3.
         let target_len = std::cmp::max(3, self.body.len() / 2);
         while self.body.len() > target_len {
+<<<<<<< HEAD
             if let Some(tail) = self.body.pop_back()
                 && let Some(count) = self.body_map.get_mut(&tail)
             {
                 *count -= 1;
                 if *count == 0 {
                     self.body_map.remove(&tail);
+=======
+            #[expect(clippy::collapsible_if, reason = "stable rust")]
+            if let Some(tail,) = self.body.pop_back() {
+                if let Some(count,) = self.body_map.get_mut(&tail,) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.body_map.remove(&tail,);
+                    }
+>>>>>>> e7217f0 (Fix typos in jules-auto-merge workflow script)
                 }
             }
         }
