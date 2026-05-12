@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
-use crossterm::{
-    QueueableCommand, cursor,
+use tinycrossterm::{
+     cursor,
     style::{Color, SetForegroundColor},
     terminal::{Clear, ClearType},
 };
@@ -11,9 +11,9 @@ use crate::{
     snake::Direction,
 };
 
-pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+pub fn draw<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     // Clear screen
-    stdout.queue(Clear(ClearType::All))?;
+    tinycrossterm::queue!(stdout, Clear(ClearType::All))?;
 
     match game.state {
         GameState::Menu => draw_menu(game, stdout)?,
@@ -33,24 +33,24 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
+pub fn draw_countdown<W: Write>(game: &Game, mut stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");
     let x_pos = (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2);
     let y_pos = game.height / 2;
 
-    stdout.queue(SetForegroundColor(Color::White))?;
-    stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(x_pos, y_pos))?;
     write!(stdout, "{msg}")?;
     stdout.flush()?;
     Ok(())
 }
 
-fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_menu<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "SNAKE GAME";
 
-    stdout.queue(SetForegroundColor(Color::Green))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Green))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 5,
     ))?;
@@ -60,8 +60,8 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         ["Single Player", "Local Multiplayer", "Player vs Bot", "Bot vs Bot", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2)
                     .saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2)
                     .saturating_sub(2),
@@ -69,8 +69,8 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             ))?;
             write!(stdout, "> {item} <")?;
         } else {
-            stdout.queue(SetForegroundColor(Color::White))?;
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
             ))?;
@@ -81,12 +81,12 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     // Draw Leaderboard
     let scores = &game.high_scores;
     if !scores.is_empty() {
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
-        stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(10), game.height / 2 + 6))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo((game.width / 2).saturating_sub(10), game.height / 2 + 6))?;
         write!(stdout, "Top Scores:")?;
         for (i, (name, score)) in scores.iter().enumerate().take(5) {
             let hs_str = format!("{}. {} - {}", i + 1, name, score);
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2).saturating_sub(10),
                 game.height / 2 + 7 + u16::try_from(i).unwrap_or(0),
             ))?;
@@ -96,10 +96,10 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_achievements<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "ACHIEVEMENTS";
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 4,
     ))?;
@@ -117,8 +117,8 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let prefix = if is_unlocked { "[X]" } else { "[ ]" };
         let color = if is_unlocked { Color::Green } else { Color::DarkGrey };
         let line = format!("{prefix} {desc}");
-        stdout.queue(SetForegroundColor(color))?;
-        stdout.queue(cursor::MoveTo(
+        tinycrossterm::queue!(stdout, SetForegroundColor(color))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
         ))?;
@@ -126,8 +126,8 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let back = "Press any key to go back";
-    stdout.queue(SetForegroundColor(Color::Red))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
         game.height - 2,
     ))?;
@@ -136,7 +136,7 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_stats<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "STATISTICS";
 
     let stats = [
@@ -146,16 +146,16 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         format!("Total Time (s): {}", game.stats.total_time_s),
     ];
 
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 5,
     ))?;
     write!(stdout, "{title}")?;
 
-    stdout.queue(SetForegroundColor(Color::White))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
     for (i, line) in stats.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(
+        tinycrossterm::queue!(stdout, cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
         ))?;
@@ -163,8 +163,8 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let back = "Press any key to go back";
-    stdout.queue(SetForegroundColor(Color::Red))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
         game.height - 2,
     ))?;
@@ -173,7 +173,7 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_help<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "HELP & CONTROLS";
     let controls = [
         "Arrow Keys / WASD: Move Snake",
@@ -199,28 +199,28 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "P : Power-Up",
     ];
 
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         3,
     ))?;
     write!(stdout, "{title}")?;
 
-    stdout.queue(SetForegroundColor(Color::White))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
     for (i, line) in controls.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(
+        tinycrossterm::queue!(stdout, cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             6 + u16::try_from(i).unwrap_or(0),
         ))?;
         write!(stdout, "{line}")?;
     }
 
-    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
     for (i, line) in legend.iter().enumerate() {
         // String ownership issue with format!, so we reconstruct or handle differently
         // if needed. legend array constructed above creates temporaries.
         // Let's print directly.
-        stdout.queue(cursor::MoveTo(
+        tinycrossterm::queue!(stdout, cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             14 + u16::try_from(i).unwrap_or(0),
         ))?;
@@ -228,8 +228,8 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let back = "Press 'q' to go back";
-    stdout.queue(SetForegroundColor(Color::Red))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
         game.height - 2,
     ))?;
@@ -238,26 +238,26 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_enter_name<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "NEW HIGH SCORE!";
-    stdout.queue(SetForegroundColor(Color::Yellow))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 2,
     ))?;
     write!(stdout, "{title}")?;
 
     let prompt = "Enter your name:";
-    stdout.queue(SetForegroundColor(Color::White))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(prompt.len()).unwrap_or(0) / 2),
         game.height / 2,
     ))?;
     write!(stdout, "{prompt}")?;
 
     let name_str = format!("> {} <", game.player_name);
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(name_str.len()).unwrap_or(0) / 2),
         game.height / 2 + 2,
     ))?;
@@ -266,19 +266,18 @@ fn draw_enter_name<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_nft_shop<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "NFT SHOP";
     let title_len = u16::try_from(title.len()).unwrap_or(0);
 
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout
-        .queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
     write!(stdout, "{title}")?;
 
     let balance_msg = format!("Coins: {}", game.stats.coins);
     let balance_len = u16::try_from(balance_msg.len()).unwrap_or(0);
-    stdout.queue(SetForegroundColor(Color::Yellow))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(balance_len / 2),
         game.height / 4 + 2,
     ))?;
@@ -310,8 +309,8 @@ fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let y_pos = game.height / 2 - 3 + u16::try_from(i).unwrap_or(0);
 
         if i == game.nft_selection {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2)
                     .saturating_sub(u16::try_from(item_msg.len()).unwrap_or(0) / 2)
                     .saturating_sub(2),
@@ -320,13 +319,13 @@ fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "> {item_msg} <")?;
         } else {
             if is_unlocked {
-                stdout.queue(SetForegroundColor(Color::Green))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Green))?;
             } else if game.stats.coins >= price {
-                stdout.queue(SetForegroundColor(Color::White))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
             } else {
-                stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::DarkGrey))?;
             }
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(item_msg.len()).unwrap_or(0) / 2),
                 y_pos,
             ))?;
@@ -336,20 +335,19 @@ fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     let help_msg = "Use UP/DOWN to select, ENTER to buy, Q to go back";
     let help_len = u16::try_from(help_msg.len()).unwrap_or(0);
-    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::DarkGrey))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
     write!(stdout, "{help_msg}")?;
 
     Ok(())
 }
 
-fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_settings<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "SETTINGS";
     let title_len = u16::try_from(title.len()).unwrap_or(0);
 
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout
-        .queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
     write!(stdout, "{title}")?;
 
     let settings_items = [
@@ -368,8 +366,8 @@ fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     for (i, item) in settings_items.iter().enumerate() {
         if i == game.settings_selection {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2)
                     .saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2)
                     .saturating_sub(2),
@@ -377,8 +375,8 @@ fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             ))?;
             write!(stdout, "> {item} <")?;
         } else {
-            stdout.queue(SetForegroundColor(Color::White))?;
-            stdout.queue(cursor::MoveTo(
+            tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
                 game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
             ))?;
@@ -388,25 +386,25 @@ fn draw_settings<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     let help_msg = "Use UP/DOWN to select, LEFT/RIGHT to change, Q to go back";
     let help_len = u16::try_from(help_msg.len()).unwrap_or(0);
-    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::DarkGrey))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
     write!(stdout, "{help_msg}")?;
 
     Ok(())
 }
 
-fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_confirm_quit<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let title = "ARE YOU SURE YOU WANT TO QUIT?";
-    stdout.queue(SetForegroundColor(Color::Red))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
         game.height / 2 - 1,
     ))?;
     write!(stdout, "{title}")?;
 
     let options = "[Y]es / [N]o";
-    stdout.queue(SetForegroundColor(Color::White))?;
-    stdout.queue(cursor::MoveTo(
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(options.len()).unwrap_or(0) / 2),
         game.height / 2 + 1,
     ))?;
@@ -415,7 +413,7 @@ fn draw_confirm_quit<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_game<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let (border_color, food_color, snake_color, obs_color) = match game.theme {
         crate::game::Theme::Dark => {
             (Color::DarkGrey, Color::DarkRed, Color::Green, Color::DarkMagenta)
@@ -452,29 +450,29 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
+fn draw_borders<W: Write>(game: &Game, mut stdout: &mut W, border_color: Color) -> io::Result<()> {
     if game.just_died {
-        stdout.queue(SetForegroundColor(Color::Red))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
     } else {
-        stdout.queue(SetForegroundColor(border_color))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(border_color))?;
     }
 
-    stdout.queue(cursor::MoveTo(0, 0))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(0, 0))?;
     let mut top_border = String::from("╔");
     top_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
     top_border.push('╗');
     write!(stdout, "{top_border}")?;
 
-    stdout.queue(cursor::MoveTo(0, game.height - 1))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(0, game.height - 1))?;
     let mut bottom_border = String::from("╚");
     bottom_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
     bottom_border.push('╝');
     write!(stdout, "{bottom_border}")?;
 
     for y in 1..game.height - 1 {
-        stdout.queue(cursor::MoveTo(0, y))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(0, y))?;
         write!(stdout, "║")?;
-        stdout.queue(cursor::MoveTo(game.width - 1, y))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(game.width - 1, y))?;
         write!(stdout, "║")?;
     }
     Ok(())
@@ -482,75 +480,75 @@ fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> i
 
 fn draw_entities<W: Write>(
     game: &Game,
-    stdout: &mut W,
+    mut stdout: &mut W,
     food_color: Color,
     snake_color: Color,
     obs_color: Color,
 ) -> io::Result<()> {
     // Draw autopilot path
     if game.auto_pilot {
-        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.autopilot_path {
-            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(path_point.x, path_point.y))?;
             write!(stdout, "·")?;
         }
     }
 
     // Draw food
-    stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
-    stdout.queue(SetForegroundColor(food_color))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(game.food.x, game.food.y))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(food_color))?;
     write!(stdout, "●")?;
 
     // Draw obstacles
-    stdout.queue(SetForegroundColor(obs_color))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(obs_color))?;
     for obs in &game.obstacles {
-        stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(obs.x, obs.y))?;
         write!(stdout, "X")?;
     }
 
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food {
-        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
         write!(stdout, "★")?;
     }
 
     if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
     {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(power_up.location.x, power_up.location.y))?;
         match power_up.p_type {
             crate::game::PowerUpType::ExtraLife => {
-                stdout.queue(SetForegroundColor(Color::Magenta))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Magenta))?;
                 write!(stdout, "♥")?;
             },
             crate::game::PowerUpType::PassThroughWalls => {
-                stdout.queue(SetForegroundColor(Color::Yellow))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
                 write!(stdout, "W")?;
             },
             crate::game::PowerUpType::Shrink => {
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "S")?;
             },
             crate::game::PowerUpType::ClearObstacles => {
-                stdout.queue(SetForegroundColor(Color::Red))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
                 write!(stdout, "B")?;
             },
             crate::game::PowerUpType::ScoreMultiplier => {
-                stdout.queue(SetForegroundColor(Color::Green))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Green))?;
                 write!(stdout, "$")?;
             },
             _ => {
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                tinycrossterm::queue!(stdout, SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
             },
         }
     }
 
     // Draw snake
-    stdout.queue(SetForegroundColor(snake_color))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(part.x, part.y))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(part.x, part.y))?;
         if i == 0 {
             // Head
             let head_char = match game.snake.direction {
@@ -568,9 +566,9 @@ fn draw_entities<W: Write>(
 
     // Draw player2
     if let Some(p2) = &game.player2 {
-        stdout.queue(SetForegroundColor(Color::Blue))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Blue))?;
         for (i, part) in p2.body.iter().enumerate() {
-            stdout.queue(cursor::MoveTo(part.x, part.y))?;
+            tinycrossterm::queue!(stdout, cursor::MoveTo(part.x, part.y))?;
             if i == 0 {
                 // Head
                 let head_char = match p2.direction {
@@ -590,10 +588,10 @@ fn draw_entities<W: Write>(
     Ok(())
 }
 
-fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_status<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     let level = game.score / 20 + 1;
-    stdout.queue(SetForegroundColor(Color::Reset))?;
-    stdout.queue(cursor::MoveTo(0, game.height))?;
+    tinycrossterm::queue!(stdout, SetForegroundColor(Color::Reset))?;
+    tinycrossterm::queue!(stdout, cursor::MoveTo(0, game.height))?;
     let bot_str = if game.auto_pilot {
         " | [BOT MODE]"
     } else {
@@ -628,30 +626,30 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+fn draw_overlays<W: Write>(game: &Game, mut stdout: &mut W) -> io::Result<()> {
     if game.state == GameState::GameOver {
         let msg = "GAME OVER";
         let msg_len = u16::try_from(msg.len()).unwrap_or(0);
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Red))?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Red))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let cause_msg = &game.death_message;
         let cause_len = u16::try_from(cause_msg.len()).unwrap_or(0);
         let x_cause = (game.width / 2).saturating_sub(cause_len / 2);
-        stdout.queue(SetForegroundColor(Color::White))?;
-        stdout.queue(cursor::MoveTo(x_cause, y_pos + 1))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::White))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_cause, y_pos + 1))?;
         write!(stdout, "{cause_msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
-        stdout.queue(SetForegroundColor(Color::Reset))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Reset))?;
     }
 
     if game.state == GameState::GameWon {
@@ -660,16 +658,16 @@ fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Green))?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Green))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 'q' to quit, 'r' to restart";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
-        stdout.queue(SetForegroundColor(Color::Reset))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Reset))?;
     }
 
     if game.state == GameState::Paused {
@@ -678,17 +676,17 @@ fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
         let y_pos = game.height / 2;
 
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
-        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Yellow))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_pos, y_pos))?;
         write!(stdout, "{msg}")?;
 
         let sub_msg = "Press 's' to Save & Quit, 'p' to Resume";
         let sub_msg_len = u16::try_from(sub_msg.len()).unwrap_or(0);
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
-        stdout.queue(cursor::MoveTo(x_sub, y_pos + 1))?;
+        tinycrossterm::queue!(stdout, cursor::MoveTo(x_sub, y_pos + 1))?;
         write!(stdout, "{sub_msg}")?;
 
-        stdout.queue(SetForegroundColor(Color::Reset))?;
+        tinycrossterm::queue!(stdout, SetForegroundColor(Color::Reset))?;
     }
     Ok(())
 }
@@ -700,8 +698,8 @@ mod tests {
 
     fn get_expected_ansi_tail(x: u16, y: u16, msg: &str) -> String {
         let mut expected_buf = Vec::new();
-        expected_buf.queue(SetForegroundColor(Color::White)).expect("Valid operation in tests");
-        expected_buf.queue(cursor::MoveTo(x, y)).expect("Valid operation in tests");
+        tinycrossterm::queue!(expected_buf, SetForegroundColor(Color::White)).expect("Valid operation in tests");
+        tinycrossterm::queue!(expected_buf, cursor::MoveTo(x, y)).expect("Valid operation in tests");
         write!(expected_buf, "{msg}").expect("Valid operation in tests");
         String::from_utf8(expected_buf).expect("Valid operation in tests")
     }

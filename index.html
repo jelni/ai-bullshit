@@ -31,6 +31,25 @@
         .header {
             margin-bottom: 3rem;
         }
+        #game-container {
+            display: flex;
+            justify-content: center;
+            background: #000;
+            padding: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #terminal {
+            font-family: monospace;
+            white-space: pre;
+            color: #fff;
+            background: #000;
+            font-size: 16px;
+            line-height: 1.2;
+        }
+        #terminal span {
+            display: inline;
+        }
     </style>
 </head>
 <body>
@@ -43,30 +62,149 @@
 
     <hr>
 
-    <h2>🚀 Ambitious Vision</h2>
-    <p>We envision a future where this terminal Snake game evolves into the ultimate e-sports platform. We are building the foundational engine for a massively multiplayer, AI-assisted universe where billions of players compete globally in real-time. This is not just a game; it is the genesis of a new digital ecosystem.</p>
+    <h2>Play Online</h2>
+    <p>Click on the game area below to start playing!</p>
+    <div id="game-container" tabindex="0">
+        <div id="terminal"></div>
+    </div>
 
-    <h2>💡 Competitive Advantage</h2>
-    <p>Unlike other generic snake clones, our game features an <strong>Autopilot / Bot Mode</strong> powered by an advanced <strong>A* Search Pathfinding Algorithm</strong>. This ensures we have a long-term monopoly effect on automated snake navigation and provides an unparalleled strategic depth.</p>
+    <script type="module">
+        import init, { WasmGame } from './pkg/snake_game.js';
 
-    <h2>📈 Business Model</h2>
-    <p>Our sensible business model:</p>
-    <ol>
-        <li>Give the game away for free to acquire a massive, fast-growing user base.</li>
-        <li>Sell exclusive "Power-Up NFT" skins and premium terminal themes.</li>
-        <li>Profit.</li>
-    </ol>
+        const terminal = document.getElementById('terminal');
+        const container = document.getElementById('game-container');
 
-    <h2>🤖 Bot Mode & Anti-Cheat</h2>
-    <p>We have introduced a spectator mode for viewing our advanced A* bot in action. You can launch it via the command line with <code>--bot</code>.</p>
-    <p>To prevent players from toggling the bot to achieve illegitimate high scores, any game in which the bot has been activated will automatically save its high score under the <code>[BOT]</code> pseudonym.</p>
+        let game;
 
+        // Simple ANSI to HTML converter
+        function ansiToHtml(text) {
+            // This is a very basic ANSI to HTML converter tailored for this game's output
+            // tinycrossterm outputs mostly basic colors and cursor moves.
+            // Since `tinycrossterm` generates cursor movement sequences (e.g. \x1B[Y;XH)
+            // we have to simulate a 2D grid of characters to properly support cursor::MoveTo.
+
+            // Wait, building a full ANSI parser in JS is hard.
+            // Is tinycrossterm sending clear screen (\x1B[2J) and cursor moves?
+            // Yes.
+            return null; // Will implement full buffer logic below
+        }
+
+        async function run() {
+            await init();
+            game = new WasmGame();
+
+            // Setup keyboard listener
+            container.addEventListener('keydown', (e) => {
+                e.preventDefault();
+                game.handle_input(e.key);
+            });
+
+            // Render loop
+            function render() {
+                const ansi = game.tick();
+                renderAnsiToGrid(ansi);
+                requestAnimationFrame(render);
+            }
+
+            render();
+            container.focus();
+        }
+
+        const ROWS = 25;
+        const COLS = 80;
+        let grid = [];
+        let currentBg = '';
+        let currentFg = '';
+
+        function renderAnsiToGrid(ansi) {
+            // Initialize/clear grid if we see clear screen
+            if (ansi.includes('\x1B[2J')) {
+                grid = Array(ROWS).fill().map(() => Array(COLS).fill({ char: ' ', fg: '', bg: '' }));
+            }
+
+            // Simple ANSI parser state machine
+            let i = 0;
+            let cx = 0, cy = 0;
+
+            while (i < ansi.length) {
+                if (ansi.charCodeAt(i) === 27 && ansi[i+1] === '[') {
+                    // ANSI escape sequence
+                    i += 2;
+                    let param = '';
+                    while (i < ansi.length && !/[a-zA-Z]/.test(ansi[i])) {
+                        param += ansi[i];
+                        i++;
+                    }
+                    let cmd = ansi[i];
+                    i++;
+
+                    if (cmd === 'H' || cmd === 'f') { // Move cursor
+                        let parts = param.split(';');
+                        cy = parts[0] ? parseInt(parts[0]) - 1 : 0;
+                        cx = parts[1] ? parseInt(parts[1]) - 1 : 0;
+                    } else if (cmd === 'm') { // Color
+                        let codes = param.split(';');
+                        for (let code of codes) {
+                            code = parseInt(code);
+                            if (code === 0) { currentFg = ''; currentBg = ''; }
+                            else if (code >= 30 && code <= 37) { currentFg = `color-${code}`; }
+                            else if (code >= 40 && code <= 47) { currentBg = `bg-${code}`; }
+                            else if (code === 38 && codes.length >= 3 && codes[1] == 5) {
+                                currentFg = `color-xterm-${codes[2]}`;
+                                break;
+                            } else if (code === 39) { currentFg = ''; }
+                        }
+                    } else if (cmd === 'J') { // Clear
+                        if (param === '2') {
+                            grid = Array(ROWS).fill().map(() => Array(COLS).fill({ char: ' ', fg: '', bg: '' }));
+                            cx = 0; cy = 0;
+                        }
+                    }
+                } else {
+                    let char = ansi[i];
+                    if (char === '\n') {
+                        cy++;
+                        cx = 0;
+                    } else if (char === '\r') {
+                        cx = 0;
+                    } else {
+                        if (cy >= 0 && cy < ROWS && cx >= 0 && cx < COLS) {
+                            grid[cy][cx] = { char, fg: currentFg, bg: currentBg };
+                        }
+                        cx++;
+                    }
+                    i++;
+                }
+            }
+
+            // Map color classes to CSS colors
+            const colors = {
+                'color-30': 'black', 'color-31': 'red', 'color-32': 'green', 'color-33': 'yellow',
+                'color-34': 'blue', 'color-35': 'magenta', 'color-36': 'cyan', 'color-37': 'white'
+            };
+
+            // Build HTML
+            let html = '';
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    let cell = grid[y][x];
+                    let style = '';
+                    if (cell.fg && colors[cell.fg]) style += `color: ${colors[cell.fg]};`;
+                    if (cell.fg === 'color-xterm-208') style += `color: #ff8700;`; // orange
+
+
+                    let escaped = cell.char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    if (style) html += `<span style="${style}">${escaped}</span>`;
+                    else html += escaped;
+
+                }
+                html += '\n';
+            }
+            terminal.innerHTML = html;
+        }
+
+        run();
+    </script>
     <hr>
-
-    <h2>Market Focus</h2>
-    <p>We are targeting a small but exponentially growing market: terminal-based gaming enthusiasts who appreciate complex algorithms.</p>
-
-    <h2>Contact</h2>
-    <p>Please reach out to our chief evangelist if you want to join our journey.</p>
 </body>
 </html>

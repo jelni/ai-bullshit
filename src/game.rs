@@ -1,9 +1,7 @@
-use std::{
-    collections::HashSet,
-    fs::{self, File},
-    io::{self, Read, Write},
-    time::{Duration, Instant, SystemTime},
-};
+use std::collections::HashSet;
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
+use web_time::{Duration, Instant, SystemTime};
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -112,18 +110,17 @@ pub enum PowerUpType {
     ScoreMultiplier,
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
-    #[serde_as(as = "Option<serde_with::TimestampSeconds<i64>>")]
+
     pub activation_time: Option<SystemTime>,
 }
 
 pub fn beep() {
     print!("\x07");
-    let _ = io::stdout().flush();
+    // let _ = io::stdout().flush();
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -363,27 +360,22 @@ impl Game {
     }
 
     pub fn load_high_scores_from_file(path: &str) -> Vec<(String, u32)> {
-        let mut content = String::new();
-        File::open(path).and_then(|f| f.take(1024 * 1024).read_to_string(&mut content)).map_or_else(
-            |_| Vec::new(),
-            |_| {
-                content
-                    .lines()
-                    .filter_map(|line| {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2
-                            && let Some(score_str) = parts.last()
-                        {
-                            let name = parts[..parts.len() - 1].join(" ");
-                            if let Ok(score) = score_str.parse::<u32>() {
-                                return Some((name, score));
-                            }
-                        }
-                        None
-                    })
-                    .collect()
-            },
-        )
+        #[cfg(target_arch = "wasm32")]
+        return Vec::new();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            fs::read_to_string(path)
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|line| {
+                    let mut parts = line.split(',');
+                    let name = parts.next()?.to_string();
+                    let score = parts.next()?.parse().ok()?;
+                    Some((name, score))
+                })
+                .collect()
+        }
     }
 
     fn load_stats() -> Statistics {
@@ -391,18 +383,16 @@ impl Game {
     }
 
     fn load_stats_from_file(path: &str) -> Statistics {
-        let mut stats: Statistics = File::open(path)
-            .ok()
-            .and_then(|f| serde_json::from_reader(f.take(1024 * 1024)).ok())
-            .unwrap_or_default();
+        #[cfg(target_arch = "wasm32")]
+        return Statistics::default();
 
-        if stats.unlocked_skins.is_empty() {
-            stats.unlocked_skins = vec!['█', 'O', '@', '#', '*'];
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            File::open(path)
+                .ok()
+                .and_then(|f| serde_json::from_reader(f).ok())
+                .unwrap_or_default()
         }
-        if stats.unlocked_themes.is_empty() {
-            stats.unlocked_themes = default_unlocked_themes();
-        }
-        stats
     }
 
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
@@ -431,8 +421,9 @@ impl Game {
     }
 
     pub fn save_stats_to_file(&self, path: &str) {
-        if let Ok(json) = serde_json::to_string(&self.stats) {
-            let _ = Self::atomic_write(path, json);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = Self::atomic_write(path, serde_json::to_string_pretty(&self.stats).unwrap_or_default());
         }
     }
 
@@ -447,18 +438,21 @@ impl Game {
     }
 
     pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32) {
-        if let Some(pos) = self.high_scores.iter().position(|(n, _)| n == &name) {
-            if self.high_scores[pos].1 < score {
-                self.high_scores[pos].1 = score;
-            }
-        } else {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             self.high_scores.push((name, score));
+            self.high_scores.sort_by(|a, b| b.1.cmp(&a.1));
+            self.high_scores.truncate(5);
+
+            let content = self
+                .high_scores
+                .iter()
+                .map(|(n, s)| format!("{n},{s}"))
+                .collect::<Vec<_>>()
+                .join("
+");
+            let _ = Self::atomic_write(path, content);
         }
-        self.high_scores.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
-        self.high_scores.truncate(5);
-        let content =
-            self.high_scores.iter().map(|(n, s)| format!("{n} {s}")).collect::<Vec<_>>().join("\n");
-        let _ = Self::atomic_write(path, content);
     }
 
     pub fn save_game(&self) {
@@ -466,31 +460,26 @@ impl Game {
     }
 
     pub fn save_game_to_file(&self, path: &str) {
-        let state = SaveState {
-            mode: self.mode,
-            snake: Snake {
-                body: self.snake.body.clone(),
-                body_map: self.snake.body_map.clone(),
-                direction: self.snake.direction,
-                direction_queue: self.snake.direction_queue.clone(),
-            },
-            player2: self.player2.clone(),
-            food: self.food,
-            obstacles: self.obstacles.clone(),
-            score: self.score,
-            bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
-            power_up: self.power_up.clone(),
-            lives: self.lives,
-            difficulty: self.difficulty,
-            theme: self.theme,
-            wrap_mode: self.wrap_mode,
-            skin: self.skin,
-            auto_pilot: self.auto_pilot,
-            used_bot_this_game: self.used_bot_this_game,
-            food_eaten_session: self.food_eaten_session,
-        };
-        if let Ok(json) = serde_json::to_string(&state) {
-            let _ = Self::atomic_write(path, json);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let state = SaveState {
+                snake: self.snake.clone(),
+                food: self.food,
+                score: self.score,
+                lives: self.lives,
+                wrap_mode: self.wrap_mode,
+                skin: self.skin,
+                theme: self.theme,
+                difficulty: self.difficulty,
+                obstacles: self.obstacles.clone(),
+                power_up: self.power_up.clone(),
+                bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
+                auto_pilot: self.auto_pilot,
+                used_bot_this_game: self.used_bot_this_game,
+                player2: self.player2.clone(),
+                mode: self.mode,
+            };
+            let _ = Self::atomic_write(path, serde_json::to_string_pretty(&state).unwrap_or_default());
         }
     }
 
@@ -499,67 +488,52 @@ impl Game {
     }
 
     fn load_game_from_file(&mut self, path: &str) -> bool {
-        File::open(path)
-            .ok()
-            .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
-            .is_some_and(|mut state| {
-                // Validate bounds
-                let valid_point =
-                    |p: &Point| p.x > 0 && p.x < self.width - 1 && p.y > 0 && p.y < self.height - 1;
+        #[cfg(target_arch = "wasm32")]
+        return false;
 
-                if !state.snake.body.iter().all(valid_point) {
-                    return false;
-                }
-                if !valid_point(&state.food) {
-                    return false;
-                }
-                if !state.obstacles.iter().all(valid_point) {
-                    return false;
-                }
-                if let Some((bp, _)) = &state.bonus_food
-                    && !valid_point(bp)
-                {
-                    return false;
-                }
-                if let Some(pu) = &state.power_up
-                    && !valid_point(&pu.location)
-                {
-                    return false;
-                }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            File::open(path)
+                .ok()
+                .and_then(|f| serde_json::from_reader::<_, SaveState>(f.take(1024 * 1024)).ok())
+                .is_some_and(|mut state| {
+                    let valid_point =
+                        |p: &Point| p.x > 0 && p.x < self.width - 1 && p.y > 0 && p.y < self.height - 1;
 
-                if let Some(p2) = &state.player2
-                    && !p2.body.iter().all(valid_point) {
+                    if !state.snake.body.iter().all(valid_point) {
                         return false;
                     }
+                    if !valid_point(&state.food) {
+                        return false;
+                    }
+                    if !state.obstacles.iter().all(valid_point) {
+                        return false;
+                    }
+                    if let Some((bp, _)) = &state.bonus_food {
+                        if !valid_point(bp) { return false; }
+                    }
+                    if let Some(pu) = &state.power_up {
+                        if !valid_point(&pu.location) { return false; }
+                    }
 
-                state.snake.rebuild_map();
-                if let Some(p2) = &mut state.player2 {
-                    p2.rebuild_map();
-                }
-
-                self.mode = state.mode;
-                self.snake = state.snake;
-                self.player2 = state.player2;
-                self.food = state.food;
-                self.obstacles = state.obstacles;
-                self.score = state.score;
-                self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
-                });
-                self.lives = state.lives;
-                self.power_up = state.power_up;
-                self.difficulty = state.difficulty;
-                self.theme = state.theme;
-                self.wrap_mode = state.wrap_mode;
-                self.skin = state.skin;
-                self.auto_pilot = state.auto_pilot;
-                self.used_bot_this_game = state.used_bot_this_game;
-                self.food_eaten_session = state.food_eaten_session;
-                self.state = GameState::Paused;
-                self.start_time = Instant::now();
-                self.update_high_scores();
-                true
-            })
+                    self.snake = state.snake;
+                    self.food = state.food;
+                    self.score = state.score;
+                    self.lives = state.lives;
+                    self.wrap_mode = state.wrap_mode;
+                    self.skin = state.skin;
+                    self.theme = state.theme;
+                    self.difficulty = state.difficulty;
+                    self.obstacles = state.obstacles;
+                    self.power_up = state.power_up;
+                    self.bonus_food = state.bonus_food.map(|(p, t)| (p, Instant::now() - Duration::from_secs(t)));
+                    self.auto_pilot = state.auto_pilot;
+                    self.used_bot_this_game = state.used_bot_this_game;
+                    self.player2 = state.player2;
+                    self.mode = state.mode;
+                    true
+                })
+        }
     }
 
     fn get_random_empty_point(

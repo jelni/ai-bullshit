@@ -1,19 +1,19 @@
+use web_time::{Instant, Duration};
 mod game;
 mod snake;
 mod ui;
 
-use std::{
-    io::{self, Stdout},
-    time::{Duration, Instant},
-};
+use std::io::{self, Stdout};
+
 
 use clap::Parser;
-use crossterm::{
+use tinycrossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{self},
 };
+
 use game::{Game, GameState};
 use snake::Direction;
 
@@ -69,19 +69,19 @@ fn main() -> io::Result<()> {
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = terminal::disable_raw_mode();
-        let _ = execute!(io::stdout(), cursor::Show, terminal::LeaveAlternateScreen);
+        let _ = tinycrossterm::execute!(io::stdout(), cursor::Show, terminal::LeaveAlternateScreen);
         default_panic(info);
     }));
 
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
-    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+    tinycrossterm::execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     // We wrap the game loop in a result to ensure we can cleanup on error
     let res = run_game(&mut stdout, &args);
 
     // Cleanup
-    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
+    tinycrossterm::execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
     terminal::disable_raw_mode()?;
 
     if let Err(e) = res {
@@ -92,7 +92,7 @@ fn main() -> io::Result<()> {
 }
 
 #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
-fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
+fn run_game<W: std::io::Write>(mut stdout: &mut W, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
     let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
 
@@ -225,7 +225,7 @@ enum KeyAction {
     BossKey,
 }
 
-fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> KeyAction {
+fn handle_key_event<W: std::io::Write>(code: KeyCode, game: &mut Game, mut stdout: &mut W) -> KeyAction {
     if game.state != GameState::EnterName && (code == KeyCode::Char('b') || code == KeyCode::Char('B')) {
         return KeyAction::BossKey;
     }
@@ -251,9 +251,9 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
     }
 }
 
-fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
+fn handle_boss_key<W: std::io::Write>(game: &Game, mut stdout: &mut W) {
     // Boss Key: Fake terminal mode
-    let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+    let _ = tinycrossterm::execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
     let _ = terminal::disable_raw_mode();
 
     println!("user@workstation:~/projects/reports$ ");
@@ -264,7 +264,7 @@ fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
     let _ = std::io::stdin().read_line(&mut input);
 
     let _ = terminal::enable_raw_mode();
-    let _ = execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide);
+    let _ = tinycrossterm::execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide);
     let _ = ui::draw(game, stdout);
 }
 
@@ -577,4 +577,104 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
         _ => {},
     }
     true
+}
+
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub struct WasmGame {
+    game: Game,
+    last_tick: Option<Instant>,
+}
+
+#[wasm_bindgen]
+impl WasmGame {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmGame {
+        console_error_panic_hook::set_once();
+        let game = Game::new(40, 20, false, '█', game::Theme::Classic, game::Difficulty::Normal);
+        WasmGame { game, last_tick: None }
+    }
+
+    pub fn tick(&mut self) -> String {
+        let now = Instant::now();
+        if self.last_tick.is_none() {
+            self.last_tick = Some(now);
+        }
+
+        let base_tick_rate = match self.game.difficulty {
+            game::Difficulty::Easy => Duration::from_millis(200),
+            game::Difficulty::Normal => Duration::from_millis(150),
+            game::Difficulty::Hard => Duration::from_millis(100),
+            game::Difficulty::Insane => Duration::from_millis(60),
+            game::Difficulty::GodMode => Duration::from_millis(30),
+        };
+
+        let mut current_tick_rate = if self.game.food_eaten_session > 0 {
+            base_tick_rate
+                .saturating_sub(Duration::from_millis(u64::from(self.game.food_eaten_session) * 5))
+                .max(Duration::from_millis(50))
+        } else {
+            base_tick_rate
+        };
+
+        if let Some(power_up) = &mut self.game.power_up {
+            if let Some(activation_time) = power_up.activation_time {
+                if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+                    match power_up.p_type {
+                        game::PowerUpType::SlowDown => {
+                            current_tick_rate += Duration::from_millis(100);
+                        },
+                        game::PowerUpType::SpeedBoost => {
+                            current_tick_rate = current_tick_rate
+                                .saturating_sub(Duration::from_millis(50))
+                                .max(Duration::from_millis(30));
+                        },
+                        _ => {}
+                    }
+                } else {
+                    self.game.power_up = None;
+                }
+            }
+        }
+
+        if self.game.state == GameState::Playing {
+            if let Some(last) = self.last_tick {
+                if last.elapsed() >= current_tick_rate {
+                    self.game.update();
+                    self.last_tick = Some(now);
+                }
+            }
+        }
+
+        let mut buf = Vec::new();
+        let _ = ui::draw(&self.game, &mut buf);
+        String::from_utf8(buf).unwrap_or_default()
+    }
+
+    pub fn handle_input(&mut self, key_str: &str) {
+        // Map JS keys to our KeyCode and handle
+        let key_code = match key_str {
+            "w" | "W" | "ArrowUp" => KeyCode::Up,
+            "s" | "S" | "ArrowDown" => KeyCode::Down,
+            "a" | "A" | "ArrowLeft" => KeyCode::Left,
+            "d" | "D" | "ArrowRight" => KeyCode::Right,
+            "q" | "Q" => KeyCode::Char('q'),
+            "p" | "P" => KeyCode::Char('p'),
+            "t" | "T" => KeyCode::Char('t'),
+            "Enter" => KeyCode::Enter,
+            "Backspace" => KeyCode::Backspace,
+            "Escape" => KeyCode::Esc,
+            _ => {
+                if key_str.len() == 1 {
+                    KeyCode::Char(key_str.chars().next().unwrap())
+                } else {
+                    KeyCode::Null
+                }
+            }
+        };
+
+        let mut dummy = Vec::new();
+        handle_key_event(key_code, &mut self.game, &mut dummy);
+    }
 }
