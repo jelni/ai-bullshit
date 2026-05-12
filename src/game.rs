@@ -874,6 +874,15 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Maze {
             self.obstacles = self.generate_maze_obstacles();
+
+            // Logic from the other PR
+            let y1 = self.height / 3;
+            let y2 = 2 * self.height / 3;
+            for x in 5..(self.width - 5) {
+                self.obstacles.insert(Point { x, y: y1 });
+                self.obstacles.insert(Point { x, y: y2 });
+            }
+
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
