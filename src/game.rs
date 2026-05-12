@@ -98,6 +98,8 @@ pub enum Theme {
     Cyberpunk,
     Rainbow,
     Hacker,
+    Blockchain,
+    Esports,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -221,16 +223,21 @@ pub enum ShopItem {
     Theme(Theme),
 }
 
-pub const AVAILABLE_ITEMS: [(ShopItem, u32); 9] = [
+pub const AVAILABLE_ITEMS: [(ShopItem, u32); 14] = [
     (ShopItem::Skin('💎'), 100),
     (ShopItem::Skin('👾'), 250),
     (ShopItem::Skin('🐍'), 500),
     (ShopItem::Skin('🚀'), 1000),
     (ShopItem::Skin('🦍'), 2000),
+    (ShopItem::Skin('₿'), 5000),
+    (ShopItem::Skin('Ξ'), 10_000),
+    (ShopItem::Skin('Ð'), 25_000),
     (ShopItem::Theme(Theme::Premium), 5000),
-    (ShopItem::Theme(Theme::Cyberpunk), 10000),
-    (ShopItem::Theme(Theme::Rainbow), 25000),
-    (ShopItem::Theme(Theme::Hacker), 50000),
+    (ShopItem::Theme(Theme::Cyberpunk), 10_000),
+    (ShopItem::Theme(Theme::Rainbow), 25_000),
+    (ShopItem::Theme(Theme::Hacker), 50_000),
+    (ShopItem::Theme(Theme::Blockchain), 100_000),
+    (ShopItem::Theme(Theme::Esports), 250_000),
 ];
 
 pub fn default_unlocked_themes() -> Vec<Theme> {

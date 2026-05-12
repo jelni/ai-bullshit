@@ -443,6 +443,12 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             let obs_c = colors[(elapsed + 3) % colors.len()];
             (border_c, food_c, snake_c, obs_c)
         },
+        crate::game::Theme::Blockchain => {
+            (Color::DarkYellow, Color::Yellow, Color::DarkGrey, Color::DarkCyan)
+        },
+        crate::game::Theme::Esports => {
+            (Color::Red, Color::Blue, Color::Cyan, Color::Magenta)
+        },
     };
 
     draw_borders(game, stdout, border_color)?;
