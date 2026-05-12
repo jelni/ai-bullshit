@@ -322,18 +322,22 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             11 => {
+                game.mode = game::GameMode::Speedrun;
+                game.reset();
+            },
+            12 => {
                 let _ = game.load_game();
             },
-            12 => game.state = GameState::Settings,
-            13 => game.state = GameState::NftShop,
-            14 => game.state = GameState::Stats,
-            15 => game.state = GameState::Achievements,
-            16 => game.state = GameState::Help,
-            17 => {
+            13 => game.state = GameState::Settings,
+            14 => game.state = GameState::NftShop,
+            15 => game.state = GameState::Stats,
+            16 => game.state = GameState::Achievements,
+            17 => game.state = GameState::Help,
+            18 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            18 => {
+            19 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -341,7 +345,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            19 => {
+            20 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -351,11 +355,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 19;
+                game.menu_selection = 20;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 19 {
+            if game.menu_selection < 20 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -432,28 +436,28 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left, 1),
         KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right, 1),
         KeyCode::Up => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
                 game.handle_input(Direction::Up, 1);
             } else {
                 game.handle_input(Direction::Up, 2);
             }
         },
         KeyCode::Down => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
                 game.handle_input(Direction::Down, 1);
             } else {
                 game.handle_input(Direction::Down, 2);
             }
         },
         KeyCode::Left => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
                 game.handle_input(Direction::Left, 1);
             } else {
                 game.handle_input(Direction::Left, 2);
             }
         },
         KeyCode::Right => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
                 game.handle_input(Direction::Right, 1);
             } else {
                 game.handle_input(Direction::Right, 2);
