@@ -150,6 +150,7 @@ pub enum GameMode {
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 pub enum GameState {
     Menu,
+    Matchmaking,
     Playing,
     Paused,
     GameOver,
@@ -326,6 +327,7 @@ pub struct Game {
     pub last_obstacle_spawn_time: Instant,
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
+    pub matchmaking_start: Option<Instant>,
 }
 
 impl Game {
@@ -409,6 +411,7 @@ impl Game {
             last_obstacle_spawn_time: Instant::now(),
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
+            matchmaking_start: None,
         }
     }
 

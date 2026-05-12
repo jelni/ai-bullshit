@@ -125,6 +125,16 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             game.shift_timers(delta);
         }
 
+        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+        if game.state == GameState::Matchmaking {
+            if let Some(start) = game.matchmaking_start {
+                if start.elapsed() >= Duration::from_secs(4) {
+                    game.state = GameState::Playing;
+                    game.matchmaking_start = None;
+                }
+            }
+        }
+
         if game.state == GameState::Playing && game.just_died {
             // We just died (lost a life), show countdown before resuming
             game.just_died = false; // Reset flag so we don't loop here
@@ -233,6 +243,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
 
     let should_continue = match game.state {
         GameState::Menu => handle_menu_input(code, game),
+        GameState::Matchmaking => handle_matchmaking_input(code, game),
         GameState::Playing => handle_playing_input(code, game),
         GameState::Paused => handle_paused_input(code, game),
         GameState::GameOver | GameState::GameWon => handle_game_over_input(code, game),
@@ -292,6 +303,8 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             3 => {
                 game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
+                game.state = GameState::Matchmaking;
+                game.matchmaking_start = Some(Instant::now());
             },
             4 => {
                 game.mode = game::GameMode::PlayerVsBot;
@@ -412,6 +425,16 @@ fn handle_level_editor_input(code: KeyCode, game: &mut Game) -> bool {
                     game.obstacles.insert(cursor);
                 }
             }
+        },
+        _ => {},
+    }
+    true
+}
+
+const fn handle_matchmaking_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
         },
         _ => {},
     }

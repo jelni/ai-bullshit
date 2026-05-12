@@ -19,6 +19,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Menu => draw_menu(game, stdout)?,
         GameState::Help => draw_help(game, stdout)?,
         GameState::Stats => draw_stats(game, stdout)?,
+        GameState::Matchmaking => draw_matchmaking(game, stdout)?,
         GameState::Playing | GameState::GameOver | GameState::GameWon | GameState::Paused => {
             draw_game(game, stdout)?;
         },
@@ -94,6 +95,45 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "{hs_str}")?;
         }
     }
+    Ok(())
+}
+
+fn draw_matchmaking<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "ONLINE MATCHMAKING";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let elapsed = game.matchmaking_start.unwrap_or_else(std::time::Instant::now).elapsed().as_secs();
+
+    let status = if elapsed < 1 {
+        "Connecting to Global E-Sports Servers..."
+    } else if elapsed < 2 {
+        "Finding opponent..."
+    } else if elapsed < 3 {
+        "Opponent found: Faker (ELO: 2800)"
+    } else {
+        "Match starting..."
+    };
+
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(status.len()).unwrap_or(0) / 2),
+        game.height / 2,
+    ))?;
+    write!(stdout, "{status}")?;
+
+    let sub_msg = "Press 'q' to cancel";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(sub_msg.len()).unwrap_or(0) / 2),
+        game.height / 2 + 3,
+    ))?;
+    write!(stdout, "{sub_msg}")?;
+
     Ok(())
 }
 
