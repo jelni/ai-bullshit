@@ -282,6 +282,18 @@ pub struct Statistics {
     pub unlocked_achievements: Vec<Achievement>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Particle {
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub lifetime: f32,
+    pub max_lifetime: f32,
+    pub symbol: char,
+    pub color: crossterm::style::Color,
+}
+
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
     pub width: u16,
@@ -326,6 +338,7 @@ pub struct Game {
     pub last_obstacle_spawn_time: Instant,
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
+    pub particles: Vec<Particle>,
 }
 
 impl Game {
@@ -409,6 +422,7 @@ impl Game {
             last_obstacle_spawn_time: Instant::now(),
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
+            particles: Vec::new(),
         }
     }
 
@@ -874,6 +888,7 @@ impl Game {
         self.last_shrink_time = Instant::now();
         self.last_obstacle_spawn_time = Instant::now();
         self.history.clear();
+        self.particles.clear();
     }
 
     fn respawn(&mut self) {
@@ -1066,6 +1081,24 @@ impl Game {
         }
     }
 
+    pub fn spawn_particles(&mut self, x: f32, y: f32, count: usize, color: crossterm::style::Color, symbol: char) {
+        for _ in 0..count {
+            let angle = self.rng.gen_range(0.0..std::f32::consts::TAU);
+            let speed = self.rng.gen_range(0.2..1.5);
+            let lifetime = self.rng.gen_range(5.0..15.0);
+            self.particles.push(Particle {
+                x,
+                y,
+                vx: angle.cos() * speed,
+                vy: angle.sin() * speed,
+                lifetime,
+                max_lifetime: lifetime,
+                symbol,
+                color,
+            });
+        }
+    }
+
     #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
@@ -1073,6 +1106,13 @@ impl Game {
         }
 
         self.save_history_state();
+
+        for p in &mut self.particles {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.lifetime -= 1.0;
+        }
+        self.particles.retain(|p| p.lifetime > 0.0);
 
         if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
             self.handle_death("Time's up!");
@@ -1313,6 +1353,18 @@ impl Game {
     }
 
     fn process_power_up_collision(&mut self, final_head: Point) {
+        let hit_power_up = if let Some(p) = self.power_up.as_ref()
+            && final_head == p.location
+        {
+            true
+        } else {
+            false
+        };
+
+        if hit_power_up {
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 20, crossterm::style::Color::Yellow, '*');
+        }
+
         if let Some(p) = self.power_up.as_mut()
             && final_head == p.location
         {
@@ -1385,6 +1437,7 @@ impl Game {
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crossterm::style::Color::Magenta, '★');
             let diff_multiplier = match self.difficulty {
                 Difficulty::Easy => 1,
                 Difficulty::Normal => 2,
@@ -1411,6 +1464,7 @@ impl Game {
     }
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crossterm::style::Color::Green, '+');
         let diff_multiplier = match self.difficulty {
             Difficulty::Easy => 1,
             Difficulty::Normal => 2,
@@ -1874,6 +1928,9 @@ impl Game {
     }
 
     fn handle_death(&mut self, cause: &str) {
+        let head = self.snake.head();
+        self.spawn_particles(f32::from(head.x), f32::from(head.y), 30, crossterm::style::Color::Red, 'X');
+
         self.lives -= 1;
         self.just_died = true;
         beep();
