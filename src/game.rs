@@ -141,6 +141,7 @@ pub enum GameMode {
     BattleRoyale,
     TimeAttack,
     Survival,
+    Zen,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -737,7 +738,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -756,15 +757,19 @@ impl Game {
             }
         }
 
-        let obs_count = match self.difficulty {
-            Difficulty::Easy => 1,
-            Difficulty::Normal => 3,
-            Difficulty::Hard => 5,
-            Difficulty::Insane => 10,
-            Difficulty::GodMode => 20,
+        let obs_count = if self.mode == GameMode::Zen {
+            0
+        } else {
+            match self.difficulty {
+                Difficulty::Easy => 1,
+                Difficulty::Normal => 3,
+                Difficulty::Hard => 5,
+                Difficulty::Insane => 10,
+                Difficulty::GodMode => 20,
+            }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -772,7 +777,7 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
@@ -822,7 +827,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -932,7 +937,7 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 = if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
+        let final_head1 = if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
             self.calculate_wrapped_head(next_head1)
         } else {
             let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -948,7 +953,7 @@ impl Game {
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
+            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
                 self.calculate_wrapped_head(next_head2)
             } else {
                 let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -1065,7 +1070,7 @@ impl Game {
             })
         } else { false };
 
-        let is_invincible = self.power_up.as_ref().is_some_and(|p| {
+        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
                 && p.activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
@@ -1512,7 +1517,7 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
+        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
             Some(self.calculate_wrapped_head(p))
         } else {
             let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -1525,7 +1530,7 @@ impl Game {
     }
 
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, _checking_player: u8) -> bool {
-        let is_invincible = self.power_up.as_ref().is_some_and(|pu| {
+        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
                 && pu
                     .activation_time
@@ -1623,7 +1628,7 @@ impl Game {
                 .map(|t| {
                     let mut dx = p.x.abs_diff(t.x);
                     let mut dy = p.y.abs_diff(t.y);
-                    if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
+                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
                         dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                         dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
