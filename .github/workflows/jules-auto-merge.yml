@@ -3,6 +3,8 @@ on: "pull_request"
 permissions:
   contents: "write"
   pull-requests: "write"
+  checks: "read"
+  statuses: "read"
 
 jobs:
   auto-merge:
@@ -12,7 +14,8 @@ jobs:
       - run: |
           for i in {1..20}; do
             # Wait for any potential conflict-checking jobs to complete or fail
-            CHECKS=$(gh pr checks "$PR_URL" --json state,name || echo '[]')
+            # we need to set the PR_URL explicitly since sometimes gh fails to resolve it
+            CHECKS=$(gh pr checks "$PR_URL" --json state,name 2>/dev/null || echo '[]')
 
             # If check-conflicts failed, it means we have unresolved conflicts pushed as markers
             if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"FAILURE"'; then
