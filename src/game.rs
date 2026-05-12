@@ -142,6 +142,7 @@ pub enum GameMode {
     TimeAttack,
     Survival,
     Zen,
+    Maze,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -723,6 +724,74 @@ impl Game {
         }
     }
 
+    pub fn generate_maze_obstacles(&mut self) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+
+        // Start with a full grid of walls (odd coordinates are paths, even are walls)
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                if x % 2 == 0 || y % 2 == 0 {
+                    obstacles.insert(Point { x, y });
+                }
+            }
+        }
+
+        // We use a simple randomized depth-first search for maze generation
+        let mut visited = HashSet::new();
+        let mut stack = Vec::new();
+
+        // Start at a random odd coordinate
+        let start_x = (self.rng.gen_range(1..(self.width - 1) / 2) * 2) - 1;
+        let start_y = (self.rng.gen_range(1..(self.height - 1) / 2) * 2) - 1;
+        let start_point = Point { x: start_x.max(1), y: start_y.max(1) };
+
+        visited.insert(start_point);
+        stack.push(start_point);
+
+        while let Some(current) = stack.last().copied() {
+            let mut neighbors = Vec::new();
+            let dirs = [(0, -2), (0, 2), (-2, 0), (2, 0)];
+
+            for (dx, dy) in dirs {
+                let nx = i32::from(current.x) + dx;
+                let ny = i32::from(current.y) + dy;
+
+                if nx > 0 && nx < i32::from(self.width) - 1 && ny > 0 && ny < i32::from(self.height) - 1 {
+                    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Checked bounds > 0 and < width/height")]
+                    let neighbor = Point { x: nx as u16, y: ny as u16 };
+                    if !visited.contains(&neighbor) {
+                        neighbors.push(neighbor);
+                    }
+                }
+            }
+
+            if neighbors.is_empty() {
+                stack.pop();
+            } else {
+                let next = neighbors[self.rng.gen_range(0..neighbors.len())];
+                let wall_x = u16::midpoint(current.x, next.x);
+                let wall_y = u16::midpoint(current.y, next.y);
+
+                obstacles.remove(&Point { x: wall_x, y: wall_y });
+                visited.insert(next);
+                stack.push(next);
+            }
+        }
+
+        // Randomly remove some extra walls to create loops
+        let num_loops = (self.width * self.height) / 50;
+        let mut walls: Vec<Point> = obstacles.iter().copied().collect();
+        for _ in 0..num_loops {
+            if !walls.is_empty() {
+                let idx = self.rng.gen_range(0..walls.len());
+                let p = walls.remove(idx);
+                obstacles.remove(&p);
+            }
+        }
+
+        obstacles
+    }
+
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -758,7 +827,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -789,7 +858,7 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -797,15 +866,19 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
             // remove obstacles that collide with snake body
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Maze {
+            self.obstacles = self.generate_maze_obstacles();
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
             let mut obstacles = HashSet::new();
+            let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
             for _ in 0..obs_count {
                 let current_avoid = |p: &Point| {
                     avoid(p) || obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
@@ -817,6 +890,7 @@ impl Game {
             self.obstacles = obstacles;
         }
 
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze { &self.snake } else { &empty_snake };
         let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
         self.food = Self::get_random_empty_point(
             self.width,
@@ -848,7 +922,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -958,7 +1032,7 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 = if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+        let final_head1 = if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale && self.mode != GameMode::Maze {
             self.calculate_wrapped_head(next_head1)
         } else {
             let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -974,7 +1048,7 @@ impl Game {
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale && self.mode != GameMode::Maze {
                 self.calculate_wrapped_head(next_head2)
             } else {
                 let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -1198,7 +1272,7 @@ impl Game {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Maze {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");
@@ -1417,7 +1491,7 @@ impl Game {
     }
 
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
-        if self.mode == GameMode::Campaign {
+        if self.mode == GameMode::Campaign || self.mode == GameMode::Maze {
             return;
         }
         let new_obs_count =
@@ -1581,7 +1655,7 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale && self.mode != GameMode::Maze {
             Some(self.calculate_wrapped_head(p))
         } else {
             let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
@@ -1692,7 +1766,7 @@ impl Game {
                 .map(|t| {
                     let mut dx = p.x.abs_diff(t.x);
                     let mut dy = p.y.abs_diff(t.y);
-                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale && self.mode != GameMode::Maze {
                         dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                         dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
