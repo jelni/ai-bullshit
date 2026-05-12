@@ -138,6 +138,7 @@ pub enum GameMode {
     BotVsBot,
     BattleRoyale,
     TimeAttack,
+    Survival,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -293,6 +294,7 @@ pub struct Game {
     pub campaign_level: u32,
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
+    pub last_obstacle_spawn_time: Instant,
 }
 
 impl Game {
@@ -373,6 +375,7 @@ impl Game {
             campaign_level: 1,
             safe_zone_margin: 0,
             last_shrink_time: Instant::now(),
+            last_obstacle_spawn_time: Instant::now(),
         }
     }
 
@@ -578,6 +581,7 @@ impl Game {
                 self.campaign_level = state.campaign_level;
                 self.safe_zone_margin = state.safe_zone_margin;
                 self.last_shrink_time = Instant::now();
+                self.last_obstacle_spawn_time = Instant::now();
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -684,6 +688,11 @@ impl Game {
         if let Some(new_time) = self.last_shrink_time.checked_add(delta) {
             self.last_shrink_time = new_time;
         }
+
+        // Shift last obstacle spawn time
+        if let Some(new_time) = self.last_obstacle_spawn_time.checked_add(delta) {
+            self.last_obstacle_spawn_time = new_time;
+        }
     }
 
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
@@ -721,7 +730,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -748,7 +757,7 @@ impl Game {
             Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -756,7 +765,7 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
@@ -798,6 +807,7 @@ impl Game {
         self.used_bot_this_game = false;
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
+        self.last_obstacle_spawn_time = Instant::now();
     }
 
     fn respawn(&mut self) {
@@ -805,7 +815,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -833,6 +843,7 @@ impl Game {
 
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
+        self.last_obstacle_spawn_time = Instant::now();
     }
 
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
@@ -991,6 +1002,29 @@ impl Game {
             }
         }
 
+        if self.mode == GameMode::Survival && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(3) {
+            self.last_obstacle_spawn_time = Instant::now();
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+            };
+
+            if let Some(new_obstacle) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.obstacles.insert(new_obstacle);
+            }
+        }
+
         self.handle_autopilot_moves();
 
         // --- Apply Input ---
@@ -1088,7 +1122,7 @@ impl Game {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");

@@ -309,14 +309,18 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             8 => {
+                game.mode = game::GameMode::Survival;
+                game.reset();
+            },
+            9 => {
                 let _ = game.load_game();
             },
-            9 => game.state = GameState::Settings,
-            10 => game.state = GameState::NftShop,
-            11 => game.state = GameState::Stats,
-            12 => game.state = GameState::Achievements,
-            13 => game.state = GameState::Help,
-            14 => {
+            10 => game.state = GameState::Settings,
+            11 => game.state = GameState::NftShop,
+            12 => game.state = GameState::Stats,
+            13 => game.state = GameState::Achievements,
+            14 => game.state = GameState::Help,
+            15 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -326,11 +330,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 14;
+                game.menu_selection = 15;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 14 {
+            if game.menu_selection < 15 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
