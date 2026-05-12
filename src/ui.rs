@@ -183,6 +183,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Q: Quit / Back to Menu",
         "Space/Enter: Select/Start",
         "T: Toggle Bot (Autopilot)",
+        "Z: Rewind Time",
     ];
     let skin_line = format!("{} : Snake Body", game.skin);
     let legend = [

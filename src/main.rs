@@ -394,6 +394,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 game.handle_input(Direction::Right, 2);
             }
         },
+        KeyCode::Char('z' | 'Z') => {
+            game.rewind_time();
+        },
         _ => {},
     }
     true

@@ -182,6 +182,23 @@ pub const fn default_campaign_level() -> u32 {
     1
 }
 
+#[derive(Clone)]
+pub struct HistoryState {
+    pub snake: Snake,
+    pub player2: Option<Snake>,
+    pub food: Point,
+    pub obstacles: HashSet<Point>,
+    pub score: u32,
+    pub bonus_food: Option<(Point, Instant)>,
+    pub power_up: Option<PowerUp>,
+    pub lives: u32,
+    pub food_eaten_session: u32,
+    pub campaign_level: u32,
+    pub safe_zone_margin: u16,
+    pub last_shrink_time: Instant,
+    pub last_obstacle_spawn_time: Instant,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     #[serde(default)]
@@ -303,6 +320,7 @@ pub struct Game {
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
+    pub history: std::collections::VecDeque<HistoryState>,
 }
 
 impl Game {
@@ -384,6 +402,7 @@ impl Game {
             safe_zone_margin: 0,
             last_shrink_time: Instant::now(),
             last_obstacle_spawn_time: Instant::now(),
+            history: std::collections::VecDeque::new(),
         }
     }
 
@@ -593,6 +612,7 @@ impl Game {
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
+                self.history.clear();
                 true
             })
     }
@@ -820,6 +840,7 @@ impl Game {
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
         self.last_obstacle_spawn_time = Instant::now();
+        self.history.clear();
     }
 
     fn respawn(&mut self) {
@@ -971,11 +992,54 @@ impl Game {
         (final_head1, final_head2_opt, hit_wall1, hit_wall2)
     }
 
+    pub fn rewind_time(&mut self) {
+        if let Some(state) = self.history.pop_back() {
+            self.snake = state.snake;
+            self.player2 = state.player2;
+            self.food = state.food;
+            self.obstacles = state.obstacles;
+            self.score = state.score;
+            self.bonus_food = state.bonus_food;
+            self.power_up = state.power_up;
+            self.lives = state.lives;
+            self.food_eaten_session = state.food_eaten_session;
+            self.campaign_level = state.campaign_level;
+            self.safe_zone_margin = state.safe_zone_margin;
+            self.last_shrink_time = state.last_shrink_time;
+            self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
+        }
+    }
+
+    pub fn save_history_state(&mut self) {
+        let state = HistoryState {
+            snake: self.snake.clone(),
+            player2: self.player2.clone(),
+            food: self.food,
+            obstacles: self.obstacles.clone(),
+            score: self.score,
+            bonus_food: self.bonus_food,
+            power_up: self.power_up.clone(),
+            lives: self.lives,
+            food_eaten_session: self.food_eaten_session,
+            campaign_level: self.campaign_level,
+            safe_zone_margin: self.safe_zone_margin,
+            last_shrink_time: self.last_shrink_time,
+            last_obstacle_spawn_time: self.last_obstacle_spawn_time,
+        };
+
+        self.history.push_back(state);
+        if self.history.len() > 50 {
+            self.history.pop_front();
+        }
+    }
+
     #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
         }
+
+        self.save_history_state();
 
         if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
             self.handle_death("Time's up!");
