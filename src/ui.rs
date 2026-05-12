@@ -539,6 +539,7 @@ fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> i
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Drawing entities involves many distinct cases")]
 fn draw_entities<W: Write>(
     game: &Game,
     stdout: &mut W,
@@ -546,6 +547,27 @@ fn draw_entities<W: Write>(
     snake_color: Color,
     obs_color: Color,
 ) -> io::Result<()> {
+    // Draw particles
+    for p in &game.particles {
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
+        let px = p.x.round() as u16;
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
+        let py = p.y.round() as u16;
+
+        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 {
+            // Fade effect: use DarkGrey when lifetime is low, otherwise base color
+            let display_color = if p.lifetime < p.max_lifetime * 0.3 {
+                Color::DarkGrey
+            } else {
+                p.color
+            };
+
+            stdout.queue(cursor::MoveTo(px, py))?;
+            stdout.queue(SetForegroundColor(display_color))?;
+            write!(stdout, "{}", p.symbol)?;
+        }
+    }
+
     // Draw autopilot path
     if game.auto_pilot {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
