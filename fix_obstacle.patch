@@ -1,0 +1,12 @@
+--- src/game.rs
++++ src/game.rs
+@@ -963,10 +963,11 @@
+         }
+
+         self.add_obstacles_if_needed(old_food_eaten_session, final_head);
+-        if let Some(p2_head) = p2_final_head {
+-            self.add_obstacles_if_needed(old_food_eaten_session, p2_head);
+-        }
++        // if let Some(p2_head) = p2_final_head {
++        //    self.add_obstacles_if_needed(old_food_eaten_session, p2_head);
++        // }

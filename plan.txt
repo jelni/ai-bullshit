@@ -1,0 +1,16 @@
+1. Edit `src/game.rs` to add `multiplayer: bool` and `player2: Option<Snake>` to `SaveState` and `Game` structs.
+2. Edit `src/game.rs` `Game::new` and `Game::reset` to initialize multiplayer fields.
+3. Edit `src/game.rs` `Game::save_game_to_file` and `Game::load_game_from_file` to support serializing the multiplayer fields.
+4. Run `cargo check` to verify structure updates.
+5. Edit `src/game.rs` `Game::handle_input` to support an optional second input handler.
+6. Edit `src/game.rs` `Game::update` to apply multiplayer logic (movement, collision, food, growth).
+7. Run `cargo check` to verify logic updates.
+8. Edit `src/ui.rs` `draw_menu` to display the "Multiplayer" menu option.
+9. Edit `src/ui.rs` `draw_entities` to draw the second snake using a different color.
+10. Edit `src/main.rs` `handle_menu_input` to add the Multiplayer option to the match case.
+11. Edit `src/main.rs` `handle_playing_input` to map WASD to player 1 and Arrows to player 2.
+12. Run `cargo check` to verify UI and Input updates.
+13. Run `cargo test` to ensure everything is correct and there are no regressions.
+14. Run `cargo clippy --all-targets --all-features`, and fix issues.
+15. Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.
+16. Submit the final changes.

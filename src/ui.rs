@@ -57,7 +57,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Start Game", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
+        ["Start Game", "Multiplayer", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -563,6 +563,25 @@ fn draw_entities<W: Write>(
         } else {
             // Body
             write!(stdout, "{}", game.skin)?;
+        }
+    }
+
+    // Draw player 2 if it exists
+    if let Some(player2) = &game.player2 {
+        stdout.queue(SetForegroundColor(Color::Blue))?;
+        for (i, part) in player2.body.iter().enumerate() {
+            stdout.queue(cursor::MoveTo(part.x, part.y))?;
+            if i == 0 {
+                let head_char = match player2.direction {
+                    Direction::Up => '^',
+                    Direction::Down => 'v',
+                    Direction::Left => '<',
+                    Direction::Right => '>',
+                };
+                write!(stdout, "{head_char}")?;
+            } else {
+                write!(stdout, "{}", game.skin)?;
+            }
         }
     }
 

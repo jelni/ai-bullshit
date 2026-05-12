@@ -275,16 +275,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::ConfirmQuit;
         },
         KeyCode::Char(' ') | KeyCode::Enter => match game.menu_selection {
-            0 => game.reset(),
+            0 => {
+                game.multiplayer = false;
+                game.reset();
+            },
             1 => {
+                game.multiplayer = true;
+                game.reset();
+            },
+            2 => {
                 let _ = game.load_game();
             },
-            2 => game.state = GameState::Settings,
-            3 => game.state = GameState::NftShop,
-            4 => game.state = GameState::Stats,
-            5 => game.state = GameState::Achievements,
-            6 => game.state = GameState::Help,
-            7 => {
+            3 => game.state = GameState::Settings,
+            4 => game.state = GameState::NftShop,
+            5 => game.state = GameState::Stats,
+            6 => game.state = GameState::Achievements,
+            7 => game.state = GameState::Help,
+            8 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -294,11 +301,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 7;
+                game.menu_selection = 8;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 7 {
+            if game.menu_selection < 8 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -322,10 +329,38 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 game.used_bot_this_game = true;
             }
         },
-        KeyCode::Up | KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
-        KeyCode::Down | KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down),
-        KeyCode::Left | KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
-        KeyCode::Right | KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right),
+        KeyCode::Up => {
+            if game.multiplayer {
+                game.handle_input_p2(Direction::Up);
+            } else {
+                game.handle_input(Direction::Up);
+            }
+        },
+        KeyCode::Down => {
+            if game.multiplayer {
+                game.handle_input_p2(Direction::Down);
+            } else {
+                game.handle_input(Direction::Down);
+            }
+        },
+        KeyCode::Left => {
+            if game.multiplayer {
+                game.handle_input_p2(Direction::Left);
+            } else {
+                game.handle_input(Direction::Left);
+            }
+        },
+        KeyCode::Right => {
+            if game.multiplayer {
+                game.handle_input_p2(Direction::Right);
+            } else {
+                game.handle_input(Direction::Right);
+            }
+        },
+        KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up),
+        KeyCode::Char('s' | 'S') => game.handle_input(Direction::Down),
+        KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left),
+        KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right),
         _ => {},
     }
     true

@@ -161,6 +161,7 @@ pub const fn default_skin() -> char {
     '█'
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "Save state boolean flags mirror Game struct")]
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     pub snake: Snake,
@@ -187,6 +188,10 @@ pub struct SaveState {
     pub used_bot_this_game: bool,
     #[serde(default)]
     pub food_eaten_session: u32,
+    #[serde(default)]
+    pub multiplayer: bool,
+    #[serde(default)]
+    pub player2: Option<Snake>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -263,6 +268,8 @@ pub struct Game {
     pub used_bot_this_game: bool,
     pub autopilot_path: Vec<Point>,
     pub food_eaten_session: u32,
+    pub multiplayer: bool,
+    pub player2: Option<Snake>,
 }
 
 impl Game {
@@ -335,6 +342,8 @@ impl Game {
             used_bot_this_game: false,
             autopilot_path: Vec::new(),
             food_eaten_session: 0,
+            multiplayer: false,
+            player2: None,
         }
     }
 
@@ -466,6 +475,8 @@ impl Game {
             auto_pilot: self.auto_pilot,
             used_bot_this_game: self.used_bot_this_game,
             food_eaten_session: self.food_eaten_session,
+            multiplayer: self.multiplayer,
+            player2: self.player2.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -522,6 +533,13 @@ impl Game {
                 self.auto_pilot = state.auto_pilot;
                 self.used_bot_this_game = state.used_bot_this_game;
                 self.food_eaten_session = state.food_eaten_session;
+                self.multiplayer = state.multiplayer;
+                if let Some(mut p2) = state.player2 {
+                    p2.rebuild_map();
+                    self.player2 = Some(p2);
+                } else {
+                    self.player2 = None;
+                }
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -656,6 +674,17 @@ impl Game {
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_game = false;
+
+        if self.multiplayer {
+            let p2_start_x = self.width / 2;
+            let p2_start_y = self.height / 2 + 5;
+            self.player2 = Some(Snake::new(Point {
+                x: p2_start_x,
+                y: p2_start_y,
+            }));
+        } else {
+            self.player2 = None;
+        }
     }
 
     fn respawn(&mut self) {
@@ -665,11 +694,29 @@ impl Game {
             x: start_x,
             y: start_y,
         });
+        if self.multiplayer {
+            let p2_start_x = self.width / 2;
+            let p2_start_y = self.height / 2 + 5;
+            self.player2 = Some(Snake::new(Point {
+                x: p2_start_x,
+                y: p2_start_y,
+            }));
+        } else {
+            self.player2 = None;
+        }
+
         // Ensure snake doesn't spawn on obstacle
         // We also clear start_y - 1 to prevent instant death upon spawn.
         self.obstacles.retain(|p| {
             !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
         });
+        if self.multiplayer {
+            let p2_start_x = self.width / 2;
+            let p2_start_y = self.height / 2 + 5;
+            self.obstacles.retain(|p| {
+                !(p.x == p2_start_x && (p.y >= p2_start_y.saturating_sub(1) && p.y <= p2_start_y + 2))
+            });
+        }
     }
 
     pub fn handle_input(&mut self, dir: Direction) {
@@ -695,6 +742,29 @@ impl Game {
         }
     }
 
+    pub fn handle_input_p2(&mut self, dir: Direction) {
+        if let Some(player2) = &mut self.player2 {
+            if player2.direction_queue.len() >= 2 {
+                return;
+            }
+
+            let current_dir =
+                player2.direction_queue.back().copied().unwrap_or(player2.direction);
+            let is_opposite = matches!(
+                (current_dir, dir),
+                (Direction::Up, Direction::Down)
+                    | (Direction::Down, Direction::Up)
+                    | (Direction::Left, Direction::Right)
+                    | (Direction::Right, Direction::Left)
+            );
+
+            if !is_opposite && dir != current_dir {
+                player2.direction_queue.push_back(dir);
+            }
+        }
+    }
+
+    #[expect(clippy::too_many_lines, reason = "Game update requires checking multiple collisions across two players")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
@@ -711,11 +781,20 @@ impl Game {
             self.snake.direction = dir;
         }
 
+        let mut p2_final_head = None;
+        let mut p2_grow = false;
+
+        if let Some(player2) = &mut self.player2 {
+            if let Some(dir) = player2.direction_queue.pop_front() {
+                player2.direction = dir;
+            }
+        }
+
         self.manage_bonus_food();
         self.manage_power_ups();
 
         let head = self.snake.head();
-        let next_head = self.calculate_next_head(head);
+        let next_head = Self::calculate_next_head_dir(head, self.snake.direction);
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::PassThroughWalls
@@ -738,25 +817,61 @@ impl Game {
             next_head
         };
 
-        let hit_obstacle = self.obstacles.contains(&final_head);
-
         let is_invincible = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
                 && p.activation_time
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
+        let hit_obstacle = self.obstacles.contains(&final_head);
+
         if hit_wall {
-            self.handle_death("Hit Wall");
+            self.handle_death("P1 Hit Wall");
             return;
         }
 
         if hit_obstacle && !is_invincible {
-            self.handle_death("Hit Obstacle");
+            self.handle_death("P1 Hit Obstacle");
+            return;
+        }
+
+        // P2 move calculation
+        let mut p2_hit_wall = false;
+        let mut p2_hit_obstacle = false;
+        if let Some(player2) = &self.player2 {
+            let head2 = player2.head();
+            let next_head2 = Self::calculate_next_head_dir(head2, player2.direction);
+            let final_head2 = if self.wrap_mode || can_pass_through_walls {
+                self.calculate_wrapped_head(next_head2)
+            } else {
+                if next_head2.x == 0
+                    || next_head2.x >= self.width - 1
+                    || next_head2.y == 0
+                    || next_head2.y >= self.height - 1
+                {
+                    p2_hit_wall = true;
+                }
+                next_head2
+            };
+
+            p2_hit_obstacle = self.obstacles.contains(&final_head2);
+            p2_final_head = Some(final_head2);
+        }
+
+        if p2_hit_wall {
+            self.handle_death("P2 Hit Wall");
+            return;
+        }
+
+        if p2_hit_obstacle && !is_invincible {
+            self.handle_death("P2 Hit Obstacle");
             return;
         }
 
         self.process_power_up_collision(final_head);
+        if let Some(p2_head) = p2_final_head {
+             self.process_power_up_collision(p2_head);
+        }
 
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::ScoreMultiplier
@@ -767,6 +882,9 @@ impl Game {
         let old_food_eaten_session = self.food_eaten_session;
 
         let mut grow = self.check_bonus_food_collision(final_head, is_multiplier);
+        if let Some(p2_head) = p2_final_head {
+            p2_grow = self.check_bonus_food_collision(p2_head, is_multiplier);
+        }
 
         // Refined self collision check
         if self.snake.body_map.contains_key(&final_head) && !is_invincible {
@@ -774,8 +892,48 @@ impl Game {
             if !grow && is_tail {
                 // We are moving into the tail, but the tail will move. Safe.
             } else {
-                self.handle_death("Hit Self");
+                self.handle_death("P1 Hit Self");
                 return;
+            }
+        }
+
+        if let Some(player2) = &self.player2 {
+            if let Some(p2_head) = p2_final_head {
+                if player2.body_map.contains_key(&p2_head) && !is_invincible {
+                    let is_tail = player2.body.back().is_some_and(|tail| p2_head == *tail);
+                    if !p2_grow && is_tail {
+                        // Safe
+                    } else {
+                        self.handle_death("P2 Hit Self");
+                        return;
+                    }
+                }
+
+                // Cross collision check
+                if self.snake.body_map.contains_key(&p2_head) && !is_invincible {
+                    let is_tail = self.snake.body.back().is_some_and(|tail| p2_head == *tail);
+                    if !grow && is_tail {
+                        // Safe
+                    } else {
+                        self.handle_death("P2 Hit P1");
+                        return;
+                    }
+                }
+
+                if player2.body_map.contains_key(&final_head) && !is_invincible {
+                    let is_tail = player2.body.back().is_some_and(|tail| final_head == *tail);
+                    if !p2_grow && is_tail {
+                        // Safe
+                    } else {
+                        self.handle_death("P1 Hit P2");
+                        return;
+                    }
+                }
+
+                if final_head == p2_head {
+                    self.handle_death("Head to Head Collision");
+                    return;
+                }
             }
         }
 
@@ -783,14 +941,40 @@ impl Game {
             grow = true;
             if !self.process_food_collision(final_head, is_multiplier) {
                 self.snake.move_to(final_head, grow);
+                if let Some(p2_head) = p2_final_head {
+                     if let Some(player2) = &mut self.player2 {
+                         player2.move_to(p2_head, p2_grow);
+                     }
+                }
                 self.handle_win();
                 return;
+            }
+        } else if let Some(p2_head) = p2_final_head {
+            if p2_head == self.food {
+                p2_grow = true;
+                if !self.process_food_collision(p2_head, is_multiplier) {
+                    self.snake.move_to(final_head, grow);
+                    if let Some(player2) = &mut self.player2 {
+                        player2.move_to(p2_head, p2_grow);
+                    }
+                    self.handle_win();
+                    return;
+                }
             }
         }
 
         self.add_obstacles_if_needed(old_food_eaten_session, final_head);
+        // Ensure we don't accidentally double-add obstacles
+        // if let Some(p2_head) = p2_final_head {
+        //     self.add_obstacles_if_needed(old_food_eaten_session, p2_head);
+        // }
 
         self.snake.move_to(final_head, grow);
+        if let Some(player2) = &mut self.player2 {
+            if let Some(p2_head) = p2_final_head {
+                player2.move_to(p2_head, p2_grow);
+            }
+        }
     }
 
     fn process_power_up_collision(&mut self, final_head: Point) {
@@ -1032,10 +1216,6 @@ impl Game {
                 y: head.y,
             },
         }
-    }
-
-    const fn calculate_next_head(&self, head: Point) -> Point {
-        Self::calculate_next_head_dir(head, self.snake.direction)
     }
 
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
