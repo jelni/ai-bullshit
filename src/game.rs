@@ -132,6 +132,7 @@ pub enum GameMode {
     SinglePlayer,
     LocalMultiplayer,
     PlayerVsBot,
+    BotVsBot,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -658,7 +659,7 @@ impl Game {
                 });
                 self.player2 = None;
             },
-            GameMode::LocalMultiplayer | GameMode::PlayerVsBot => {
+            GameMode::LocalMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -735,7 +736,7 @@ impl Game {
                     !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
                 });
             },
-            GameMode::LocalMultiplayer | GameMode::PlayerVsBot => {
+            GameMode::LocalMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -795,13 +796,9 @@ impl Game {
             }
     }
 
-    pub fn update(&mut self) {
-        if self.state != GameState::Playing {
-            return;
-        }
-
+    fn handle_autopilot_moves(&mut self) {
         // --- Handle Player 1 Autopilot ---
-        if self.auto_pilot
+        if (self.auto_pilot || self.mode == GameMode::BotVsBot)
             && self.snake.direction_queue.is_empty()
             && let Some(dir) = self.calculate_autopilot_move()
         {
@@ -809,7 +806,7 @@ impl Game {
         }
 
         // --- Handle Player 2 Autopilot ---
-        if self.mode == GameMode::PlayerVsBot {
+        if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
             let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
             if is_empty
                 && let Some(dir) = self.calculate_p2_autopilot_move()
@@ -817,29 +814,16 @@ impl Game {
                         p2.direction_queue.push_back(dir);
                     }
         }
+    }
 
-        // --- Apply Input ---
-        if let Some(dir) = self.snake.direction_queue.pop_front() {
-            self.snake.direction = dir;
-        }
-
-        if let Some(p2) = &mut self.player2
-            && let Some(dir) = p2.direction_queue.pop_front() {
-                p2.direction = dir;
-            }
-
-        self.manage_bonus_food();
-        self.manage_power_ups();
-
-        // --- Calculate Next Heads ---
+    fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
         let head1 = self.snake.head();
         let next_head1 = Self::calculate_next_head_dir(head1, self.snake.direction);
 
-        let mut next_head2_opt = None;
-        if let Some(p2) = &self.player2 {
+        let next_head2_opt = self.player2.as_ref().map(|p2| {
             let head2 = p2.head();
-            next_head2_opt = Some(Self::calculate_next_head_dir(head2, p2.direction));
-        }
+            Self::calculate_next_head_dir(head2, p2.direction)
+        });
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::PassThroughWalls
@@ -847,7 +831,6 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        // Check collision with walls and obstacles for P1
         let mut hit_wall1 = false;
         let final_head1 = if self.wrap_mode || can_pass_through_walls {
             self.calculate_wrapped_head(next_head1)
@@ -863,9 +846,8 @@ impl Game {
         };
 
         let mut hit_wall2 = false;
-        let mut final_head2_opt = None;
-        if let Some(next_head2) = next_head2_opt {
-            let final_head2 = if self.wrap_mode || can_pass_through_walls {
+        let final_head2_opt = next_head2_opt.map(|next_head2| {
+            if self.wrap_mode || can_pass_through_walls {
                 self.calculate_wrapped_head(next_head2)
             } else {
                 if next_head2.x == 0
@@ -876,9 +858,34 @@ impl Game {
                     hit_wall2 = true;
                 }
                 next_head2
-            };
-            final_head2_opt = Some(final_head2);
+            }
+        });
+
+        (final_head1, final_head2_opt, hit_wall1, hit_wall2)
+    }
+
+    pub fn update(&mut self) {
+        if self.state != GameState::Playing {
+            return;
         }
+
+        self.handle_autopilot_moves();
+
+        // --- Apply Input ---
+        if let Some(dir) = self.snake.direction_queue.pop_front() {
+            self.snake.direction = dir;
+        }
+
+        if let Some(p2) = &mut self.player2
+            && let Some(dir) = p2.direction_queue.pop_front() {
+                p2.direction = dir;
+            }
+
+        self.manage_bonus_food();
+        self.manage_power_ups();
+
+        // --- Calculate Next Heads ---
+        let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
 
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
@@ -938,6 +945,46 @@ impl Game {
                 }
             }
 
+        let (body_p1_dead, body_p2_dead) = self.check_body_collisions(final_head1, final_head2_opt, is_invincible, p1_grow, p2_grow);
+        if body_p1_dead { p1_dead = true; }
+        if body_p2_dead { p2_dead = true; }
+
+        // Process deaths
+        if p1_dead && p2_dead {
+            self.handle_death("Draw! Both snakes died!");
+            return;
+        } else if p1_dead {
+            if self.mode == GameMode::SinglePlayer {
+                self.handle_death("You Died!");
+            } else {
+                self.handle_death("Player 2 Wins!");
+            }
+            return;
+        } else if p2_dead {
+            self.handle_death("Player 1 Wins!");
+            return;
+        }
+
+        // All good, process power ups
+        self.process_power_up_collision(final_head1);
+        if let Some(final_head2) = final_head2_opt {
+            self.process_power_up_collision(final_head2);
+        }
+
+        // Moving the snakes
+        self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
+
+        self.snake.move_to(final_head1, p1_grow);
+        if let Some(final_head2) = final_head2_opt
+            && let Some(p2) = &mut self.player2 {
+                p2.move_to(final_head2, p2_grow);
+            }
+    }
+
+    fn check_body_collisions(&self, final_head1: Point, final_head2_opt: Option<Point>, is_invincible: bool, p1_grow: bool, p2_grow: bool) -> (bool, bool) {
+        let mut p1_dead = false;
+        let mut p2_dead = false;
+
         // Body collisions
         // P1 hits itself
         if self.snake.body_map.contains_key(&final_head1) && !is_invincible {
@@ -980,37 +1027,7 @@ impl Game {
                 }
             }
         }
-
-        // Process deaths
-        if p1_dead && p2_dead {
-            self.handle_death("Draw! Both snakes died!");
-            return;
-        } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer {
-                self.handle_death("You Died!");
-            } else {
-                self.handle_death("Player 2 Wins!");
-            }
-            return;
-        } else if p2_dead {
-            self.handle_death("Player 1 Wins!");
-            return;
-        }
-
-        // All good, process power ups
-        self.process_power_up_collision(final_head1);
-        if let Some(final_head2) = final_head2_opt {
-            self.process_power_up_collision(final_head2);
-        }
-
-        // Moving the snakes
-        self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
-
-        self.snake.move_to(final_head1, p1_grow);
-        if let Some(final_head2) = final_head2_opt
-            && let Some(p2) = &mut self.player2 {
-                p2.move_to(final_head2, p2_grow);
-            }
+        (p1_dead, p2_dead)
     }
 
     fn process_power_up_collision(&mut self, final_head: Point) {
@@ -1252,10 +1269,6 @@ impl Game {
                 y: head.y,
             },
         }
-    }
-
-    const fn calculate_next_head(&self, head: Point) -> Point {
-        Self::calculate_next_head_dir(head, self.snake.direction)
     }
 
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
