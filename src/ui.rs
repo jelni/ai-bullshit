@@ -460,7 +460,49 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     draw_entities(game, stdout, food_color, snake_color, obs_color)?;
     draw_status(game, stdout)?;
     draw_overlays(game, stdout)?;
+    draw_chat(game, stdout)?;
 
+    Ok(())
+}
+
+fn draw_chat<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    if let Ok((term_width, _term_height)) = crossterm::terminal::size() {
+        let required_width = game.width + 30; // Need at least 30 cols for chat
+        if term_width >= required_width {
+            let chat_start_x = game.width + 2;
+            let chat_width = term_width.saturating_sub(chat_start_x).saturating_sub(1);
+
+            if chat_width >= 10 {
+                // Draw chat border/title
+                stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+                stdout.queue(cursor::MoveTo(chat_start_x, 1))?;
+                write!(stdout, "=== LIVE CHAT ===")?;
+
+                // Draw separator line
+                for y in 0..game.height {
+                    stdout.queue(cursor::MoveTo(game.width, y))?;
+                    write!(stdout, "│")?;
+                }
+
+                // Draw chat messages
+                let start_y = 3;
+                for (i, (msg, color)) in game.chat_log.iter().enumerate() {
+                    let y = start_y + u16::try_from(i).unwrap_or(0);
+                    if y < game.height {
+                        stdout.queue(SetForegroundColor(*color))?;
+                        stdout.queue(cursor::MoveTo(chat_start_x, y))?;
+                        // Truncate message if it's too long for the chat area
+                        let display_msg = if msg.len() > usize::from(chat_width) {
+                            &msg[..usize::from(chat_width)]
+                        } else {
+                            msg
+                        };
+                        write!(stdout, "{display_msg}")?;
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }
 
