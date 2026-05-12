@@ -281,30 +281,34 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             1 => {
-                game.mode = game::GameMode::LocalMultiplayer;
+                game.mode = game::GameMode::Campaign;
                 game.reset();
             },
             2 => {
-                game.mode = game::GameMode::OnlineMultiplayer;
+                game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
             3 => {
-                game.mode = game::GameMode::PlayerVsBot;
+                game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
             4 => {
-                game.mode = game::GameMode::BotVsBot;
+                game.mode = game::GameMode::PlayerVsBot;
                 game.reset();
             },
             5 => {
+                game.mode = game::GameMode::BotVsBot;
+                game.reset();
+            },
+            6 => {
                 let _ = game.load_game();
             },
-            6 => game.state = GameState::Settings,
-            7 => game.state = GameState::NftShop,
-            8 => game.state = GameState::Stats,
-            9 => game.state = GameState::Achievements,
-            10 => game.state = GameState::Help,
-            11 => {
+            7 => game.state = GameState::Settings,
+            8 => game.state = GameState::NftShop,
+            9 => game.state = GameState::Stats,
+            10 => game.state = GameState::Achievements,
+            11 => game.state = GameState::Help,
+            12 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -314,11 +318,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 11;
+                game.menu_selection = 12;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 11 {
+            if game.menu_selection < 12 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

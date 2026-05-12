@@ -131,6 +131,7 @@ pub fn beep() {
 pub enum GameMode {
     #[default]
     SinglePlayer,
+    Campaign,
     LocalMultiplayer,
     OnlineMultiplayer,
     PlayerVsBot,
@@ -171,6 +172,9 @@ pub const fn default_wrap_mode() -> bool {
 pub const fn default_skin() -> char {
     '█'
 }
+pub const fn default_campaign_level() -> u32 {
+    1
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -202,6 +206,8 @@ pub struct SaveState {
     pub used_bot_this_game: bool,
     #[serde(default)]
     pub food_eaten_session: u32,
+    #[serde(default = "default_campaign_level")]
+    pub campaign_level: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -280,6 +286,7 @@ pub struct Game {
     pub food_eaten_session: u32,
     pub mode: GameMode,
     pub player2: Option<Snake>,
+    pub campaign_level: u32,
 }
 
 impl Game {
@@ -357,6 +364,7 @@ impl Game {
             food_eaten_session: 0,
             mode,
             player2: None,
+            campaign_level: 1,
         }
     }
 
@@ -490,6 +498,7 @@ impl Game {
             auto_pilot: self.auto_pilot,
             used_bot_this_game: self.used_bot_this_game,
             food_eaten_session: self.food_eaten_session,
+            campaign_level: self.campaign_level,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -557,6 +566,7 @@ impl Game {
                 self.auto_pilot = state.auto_pilot;
                 self.used_bot_this_game = state.used_bot_this_game;
                 self.food_eaten_session = state.food_eaten_session;
+                self.campaign_level = state.campaign_level;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -649,12 +659,42 @@ impl Game {
         }
     }
 
+    pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+        if self.campaign_level == 1 {
+            // Level 1: empty board
+            return obstacles;
+        } else if self.campaign_level == 2 {
+            // Level 2: horizontal line
+            let y = self.height / 2;
+            let start_x = (self.width / 2).saturating_sub(2).max(1);
+            let end_x = (self.width / 2 + 2).min(self.width - 2);
+            for x in start_x..=end_x {
+                obstacles.insert(Point { x, y });
+            }
+        } else {
+            // Level 3+: cross
+            let center_x = self.width / 2;
+            let center_y = self.height / 2;
+            obstacles.insert(Point { x: center_x, y: center_y });
+            obstacles.insert(Point { x: center_x.saturating_sub(1).max(1), y: center_y });
+            obstacles.insert(Point { x: center_x + 1, y: center_y });
+            obstacles.insert(Point { x: center_x, y: center_y.saturating_sub(1).max(1) });
+            obstacles.insert(Point { x: center_x, y: center_y + 1 });
+        }
+        obstacles
+    }
+
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
 
+        if self.mode == GameMode::Campaign {
+            self.campaign_level = 1;
+        }
+
         match self.mode {
-            GameMode::SinglePlayer => {
+            GameMode::SinglePlayer | GameMode::Campaign => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -681,7 +721,7 @@ impl Game {
             Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -689,18 +729,25 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
-        let mut obstacles = HashSet::new();
-        for _ in 0..obs_count {
-            let current_avoid = |p: &Point| {
-                avoid(p) || obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
-            };
-            if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, current_avoid, &mut self.rng) {
-                obstacles.insert(p);
+        if self.mode == GameMode::Campaign {
+            self.obstacles = self.generate_campaign_obstacles();
+            // remove obstacles that collide with snake body
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p) || obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, current_avoid, &mut self.rng) {
+                    obstacles.insert(p);
+                }
             }
+            self.obstacles = obstacles;
         }
-        self.obstacles = obstacles;
 
         let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
         self.food = Self::get_random_empty_point(
@@ -728,7 +775,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer => {
+            GameMode::SinglePlayer | GameMode::Campaign => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1149,6 +1196,14 @@ impl Game {
         self.stats.coins += added_score;
         beep();
 
+        if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
+            self.campaign_level += 1;
+            self.food_eaten_session = 0;
+            self.obstacles = self.generate_campaign_obstacles();
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        }
+
         let avoid = |p: &Point| {
             self.obstacles.contains(p)
                 || *p == final_head
@@ -1166,6 +1221,9 @@ impl Game {
     }
 
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
+        if self.mode == GameMode::Campaign {
+            return;
+        }
         let new_obs_count =
             (self.food_eaten_session / 5).saturating_sub(old_food_eaten_session / 5);
         if new_obs_count > 0 {

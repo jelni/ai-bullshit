@@ -57,7 +57,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -596,7 +596,6 @@ fn draw_entities<W: Write>(
 }
 
 fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    let level = game.score / 20 + 1;
     stdout.queue(SetForegroundColor(Color::Reset))?;
     stdout.queue(cursor::MoveTo(0, game.height))?;
     let bot_str = if game.auto_pilot {
@@ -604,11 +603,20 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
-    write!(
-        stdout,
-        "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}",
-        game.score, game.high_score, game.lives, level, game.difficulty, bot_str
-    )?;
+    if game.mode == crate::game::GameMode::Campaign {
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}",
+            game.score, game.high_score, game.lives, game.campaign_level, game.difficulty, bot_str
+        )?;
+    } else {
+        let level = game.score / 20 + 1;
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}",
+            game.score, game.high_score, game.lives, level, game.difficulty, bot_str
+        )?;
+    }
 
     if let Some(power_up) = &game.power_up
         && let Some(activation_time) = power_up.activation_time
