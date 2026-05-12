@@ -144,6 +144,7 @@ pub enum GameMode {
     Zen,
     Maze,
     CustomLevel,
+    Speedrun,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -776,7 +777,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -807,7 +808,7 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -815,7 +816,7 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
@@ -880,7 +881,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1078,6 +1079,11 @@ impl Game {
             return;
         }
 
+        if self.mode == GameMode::Speedrun && self.food_eaten_session >= 50 {
+            self.handle_win();
+            return;
+        }
+
         if self.mode == GameMode::BattleRoyale && self.last_shrink_time.elapsed() >= Duration::from_secs(10) {
             let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
             if self.safe_zone_margin < max_margin {
@@ -1230,7 +1236,7 @@ impl Game {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");

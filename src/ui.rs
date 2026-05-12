@@ -58,7 +58,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -686,6 +686,13 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             stdout,
             "Score: {} | High: {} | Lives: {} | Time: {}s | {:?}{}",
             game.score, game.high_score, game.lives, time_left, game.difficulty, bot_str
+        )?;
+    } else if game.mode == crate::game::GameMode::Speedrun {
+        let elapsed = game.start_time.elapsed().as_secs();
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}",
+            game.score, game.high_score, game.lives, elapsed, game.food_eaten_session, game.difficulty, bot_str
         )?;
     } else {
         let level = game.score / 20 + 1;
