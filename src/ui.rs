@@ -451,6 +451,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Theme::Esports => {
             (Color::Red, Color::Blue, Color::Cyan, Color::Magenta)
         },
+        crate::game::Theme::Solar => {
+            (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed)
+        },
     };
 
     draw_borders(game, stdout, border_color)?;
