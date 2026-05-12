@@ -342,6 +342,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.obstacles.clear();
             },
             19 => {
+                game.mode = game::GameMode::MovingObstacles;
+                game.reset();
+            },
+            20 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -351,11 +355,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 19;
+                game.menu_selection = 20;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 19 {
+            if game.menu_selection < 20 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

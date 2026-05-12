@@ -144,6 +144,7 @@ pub enum GameMode {
     Zen,
     Maze,
     CustomLevel,
+    MovingObstacles,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -200,6 +201,7 @@ pub struct HistoryState {
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
+    pub last_obstacle_move_time: Instant,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -323,6 +325,7 @@ pub struct Game {
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
+    pub last_obstacle_move_time: Instant,
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
 }
@@ -406,6 +409,7 @@ impl Game {
             safe_zone_margin: 0,
             last_shrink_time: Instant::now(),
             last_obstacle_spawn_time: Instant::now(),
+            last_obstacle_move_time: Instant::now(),
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
         }
@@ -739,6 +743,11 @@ impl Game {
         if let Some(new_time) = self.last_obstacle_spawn_time.checked_add(delta) {
             self.last_obstacle_spawn_time = new_time;
         }
+
+        // Shift last obstacle move time
+        if let Some(new_time) = self.last_obstacle_move_time.checked_add(delta) {
+            self.last_obstacle_move_time = new_time;
+        }
     }
 
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
@@ -776,7 +785,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel | GameMode::MovingObstacles => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -872,6 +881,7 @@ impl Game {
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
         self.last_obstacle_spawn_time = Instant::now();
+        self.last_obstacle_move_time = Instant::now();
         self.history.clear();
     }
 
@@ -880,7 +890,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel | GameMode::MovingObstacles => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -909,6 +919,7 @@ impl Game {
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
         self.last_obstacle_spawn_time = Instant::now();
+        self.last_obstacle_move_time = Instant::now();
     }
 
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
@@ -1039,6 +1050,7 @@ impl Game {
             self.safe_zone_margin = state.safe_zone_margin;
             self.last_shrink_time = state.last_shrink_time;
             self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
+            self.last_obstacle_move_time = state.last_obstacle_move_time;
         }
     }
 
@@ -1057,6 +1069,7 @@ impl Game {
             safe_zone_margin: self.safe_zone_margin,
             last_shrink_time: self.last_shrink_time,
             last_obstacle_spawn_time: self.last_obstacle_spawn_time,
+            last_obstacle_move_time: self.last_obstacle_move_time,
         };
 
         self.history.push_back(state);
@@ -1131,6 +1144,51 @@ impl Game {
             ) {
                 self.obstacles.insert(new_obstacle);
             }
+        }
+
+        if self.mode == GameMode::MovingObstacles && self.last_obstacle_move_time.elapsed() >= Duration::from_secs(2) {
+            self.last_obstacle_move_time = Instant::now();
+
+            let old_obstacles: Vec<Point> = self.obstacles.iter().copied().collect();
+            let mut new_obstacles = std::collections::HashSet::new();
+
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+
+            let mut remaining_old_obstacles: std::collections::HashSet<Point> = self.obstacles.clone();
+
+            for obs in old_obstacles {
+                remaining_old_obstacles.remove(&obs);
+                let avoid = |p: &Point| {
+                    new_obstacles.contains(p)
+                        || remaining_old_obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+
+                // Filter valid adjacent points
+                let mut valid_moves = Vec::new();
+                for &dir in &dirs {
+                    let next_p = Self::calculate_next_head_dir(obs, dir);
+                    #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+                    if let Some(final_p) = self.get_final_p(next_p) {
+                        if !avoid(&final_p) {
+                            valid_moves.push(final_p);
+                        }
+                    }
+                }
+
+                if valid_moves.is_empty() {
+                    new_obstacles.insert(obs); // Cannot move, stays in place
+                } else {
+                    use rand::Rng;
+                    let idx = self.rng.gen_range(0..valid_moves.len());
+                    new_obstacles.insert(valid_moves[idx]);
+                }
+            }
+            self.obstacles = new_obstacles;
         }
 
         self.handle_autopilot_moves();
