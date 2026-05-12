@@ -110,6 +110,7 @@ pub enum PowerUpType {
     Shrink,
     ClearObstacles,
     ScoreMultiplier,
+    Teleport,
 }
 
 #[serde_as]
@@ -1040,6 +1041,47 @@ impl Game {
                 self.snake.shrink_tail();
             } else if p.p_type == PowerUpType::ClearObstacles {
                 self.obstacles.clear();
+            } else if p.p_type == PowerUpType::Teleport {
+                let avoid = |pt: &Point| {
+                    self.obstacles.contains(pt)
+                        || *pt == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *pt == bp)
+                };
+                if let Some(new_pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                ) {
+                    let old_head = self.snake.head();
+                    let dx = i32::from(new_pos.x) - i32::from(old_head.x);
+                    let dy = i32::from(new_pos.y) - i32::from(old_head.y);
+
+                    for part in &mut self.snake.body {
+                        let new_x = i32::from(part.x) + dx;
+                        let new_y = i32::from(part.y) + dy;
+
+                        // Wrap within 1..width-1 and 1..height-1
+                        let inner_width = i32::from(self.width) - 2;
+                        let inner_height = i32::from(self.height) - 2;
+
+                        // normalized coordinate (0-based)
+                        let mut nx = (new_x - 1) % inner_width;
+                        if nx < 0 {
+                            nx += inner_width;
+                        }
+
+                        let mut ny = (new_y - 1) % inner_height;
+                        if ny < 0 {
+                            ny += inner_height;
+                        }
+
+                        part.x = u16::try_from(nx + 1).unwrap_or(1);
+                        part.y = u16::try_from(ny + 1).unwrap_or(1);
+                    }
+                    self.snake.rebuild_map();
+                }
             } else {
                 p.activation_time = Some(SystemTime::now());
             }
@@ -1050,7 +1092,8 @@ impl Game {
         if let Some(p) = self.power_up.as_ref()
             && (p.p_type == PowerUpType::ExtraLife
                 || p.p_type == PowerUpType::Shrink
-                || p.p_type == PowerUpType::ClearObstacles)
+                || p.p_type == PowerUpType::ClearObstacles
+                || p.p_type == PowerUpType::Teleport)
             && p.activation_time.is_none()
             && final_head == p.location
         {
@@ -1207,7 +1250,7 @@ impl Game {
                 avoid,
                 &mut self.rng,
             ) {
-                let p_type = match self.rng.gen_range(0..8) {
+                let p_type = match self.rng.gen_range(0..9) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -1215,6 +1258,7 @@ impl Game {
                     4 => PowerUpType::Shrink,
                     5 => PowerUpType::ClearObstacles,
                     6 => PowerUpType::ScoreMultiplier,
+                    7 => PowerUpType::Teleport,
                     _ => PowerUpType::ExtraLife,
                 };
 
