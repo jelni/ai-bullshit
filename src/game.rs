@@ -202,6 +202,8 @@ pub struct HistoryState {
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
+    pub combo: u32,
+    pub last_food_time: Option<Instant>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -238,6 +240,10 @@ pub struct SaveState {
     pub campaign_level: u32,
     #[serde(default)]
     pub safe_zone_margin: u16,
+    #[serde(default)]
+    pub combo: u32,
+    #[serde(default)]
+    pub last_food_time: Option<u64>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -341,6 +347,8 @@ pub struct Game {
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
     pub particles: Vec<Particle>,
+    pub combo: u32,
+    pub last_food_time: Option<Instant>,
 }
 
 impl Game {
@@ -425,6 +433,8 @@ impl Game {
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
             particles: Vec::new(),
+            combo: 0,
+            last_food_time: None,
         }
     }
 
@@ -573,6 +583,8 @@ impl Game {
             food_eaten_session: self.food_eaten_session,
             campaign_level: self.campaign_level,
             safe_zone_margin: self.safe_zone_margin,
+            combo: self.combo,
+            last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -644,6 +656,10 @@ impl Game {
                 self.safe_zone_margin = state.safe_zone_margin;
                 self.last_shrink_time = Instant::now();
                 self.last_obstacle_spawn_time = Instant::now();
+                self.combo = state.combo;
+                self.last_food_time = state.last_food_time.and_then(|elapsed| {
+                    Instant::now().checked_sub(Duration::from_secs(elapsed))
+                });
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -756,6 +772,13 @@ impl Game {
         if let Some(new_time) = self.last_obstacle_spawn_time.checked_add(delta) {
             self.last_obstacle_spawn_time = new_time;
         }
+
+        // Shift last food time
+        if let Some(last_food) = self.last_food_time
+            && let Some(new_time) = last_food.checked_add(delta)
+        {
+            self.last_food_time = Some(new_time);
+        }
     }
 
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
@@ -784,6 +807,7 @@ impl Game {
         obstacles
     }
 
+    #[expect(clippy::too_many_lines, reason = "Game reset handles logic for different game modes")]
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
@@ -891,6 +915,8 @@ impl Game {
         self.last_obstacle_spawn_time = Instant::now();
         self.history.clear();
         self.particles.clear();
+        self.combo = 0;
+        self.last_food_time = None;
     }
 
     fn respawn(&mut self) {
@@ -1057,6 +1083,8 @@ impl Game {
             self.safe_zone_margin = state.safe_zone_margin;
             self.last_shrink_time = state.last_shrink_time;
             self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
+            self.combo = state.combo;
+            self.last_food_time = state.last_food_time;
         }
     }
 
@@ -1075,6 +1103,8 @@ impl Game {
             safe_zone_margin: self.safe_zone_margin,
             last_shrink_time: self.last_shrink_time,
             last_obstacle_spawn_time: self.last_obstacle_spawn_time,
+            combo: self.combo,
+            last_food_time: self.last_food_time,
         };
 
         self.history.push_back(state);
@@ -1440,6 +1470,18 @@ impl Game {
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
             self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crossterm::style::Color::Magenta, '★');
+
+            if let Some(last_time) = self.last_food_time {
+                if last_time.elapsed() < Duration::from_secs(5) {
+                    self.combo += 1;
+                } else {
+                    self.combo = 1;
+                }
+            } else {
+                self.combo = 1;
+            }
+            self.last_food_time = Some(Instant::now());
+
             let diff_multiplier = match self.difficulty {
                 Difficulty::Easy => 1,
                 Difficulty::Normal => 2,
@@ -1447,11 +1489,13 @@ impl Game {
                 Difficulty::Insane => 5,
                 Difficulty::GodMode => 10,
             };
-            let added_score = if is_multiplier {
+            let mut added_score = if is_multiplier {
                 10 * diff_multiplier
             } else {
                 5 * diff_multiplier
             };
+            added_score *= std::cmp::max(1, self.combo);
+
             self.score += added_score;
             self.food_eaten_session += 1;
             self.stats.total_score += added_score;
@@ -1467,6 +1511,18 @@ impl Game {
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crossterm::style::Color::Green, '+');
+
+        if let Some(last_time) = self.last_food_time {
+            if last_time.elapsed() < Duration::from_secs(5) {
+                self.combo += 1;
+            } else {
+                self.combo = 1;
+            }
+        } else {
+            self.combo = 1;
+        }
+        self.last_food_time = Some(Instant::now());
+
         let diff_multiplier = match self.difficulty {
             Difficulty::Easy => 1,
             Difficulty::Normal => 2,
@@ -1474,11 +1530,13 @@ impl Game {
             Difficulty::Insane => 5,
             Difficulty::GodMode => 10,
         };
-        let added_score = if is_multiplier {
+        let mut added_score = if is_multiplier {
             2 * diff_multiplier
         } else {
             diff_multiplier
         };
+        added_score *= std::cmp::max(1, self.combo);
+
         self.score += added_score;
         self.food_eaten_session += 1;
         self.stats.total_score += added_score;

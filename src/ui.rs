@@ -686,11 +686,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
+    let combo_str = if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
+        format!(" | Combo: {}x", game.combo)
+    } else {
+        String::new()
+    };
+
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}",
-            game.score, game.high_score, game.lives, game.campaign_level, game.difficulty, bot_str
+            "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}{}",
+            game.score, game.high_score, game.lives, game.campaign_level, game.difficulty, bot_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::BattleRoyale {
         let max_margin = (game.width.min(game.height) / 2).saturating_sub(2);
@@ -702,29 +708,29 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         };
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | {:?}{}{}",
-            game.score, game.high_score, game.lives, game.difficulty, bot_str, shrink_str
+            "Score: {} | High: {} | Lives: {} | {:?}{}{}{}",
+            game.score, game.high_score, game.lives, game.difficulty, bot_str, shrink_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::TimeAttack {
         let time_left = 60u64.saturating_sub(game.start_time.elapsed().as_secs());
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Time: {}s | {:?}{}",
-            game.score, game.high_score, game.lives, time_left, game.difficulty, bot_str
+            "Score: {} | High: {} | Lives: {} | Time: {}s | {:?}{}{}",
+            game.score, game.high_score, game.lives, time_left, game.difficulty, bot_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::Speedrun {
         let elapsed = game.start_time.elapsed().as_secs();
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}",
-            game.score, game.high_score, game.lives, elapsed, game.food_eaten_session, game.difficulty, bot_str
+            "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}{}",
+            game.score, game.high_score, game.lives, elapsed, game.food_eaten_session, game.difficulty, bot_str, combo_str
         )?;
     } else {
         let level = game.score / 20 + 1;
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}",
-            game.score, game.high_score, game.lives, level, game.difficulty, bot_str
+            "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}{}",
+            game.score, game.high_score, game.lives, level, game.difficulty, bot_str, combo_str
         )?;
     }
 
