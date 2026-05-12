@@ -7,12 +7,3 @@ bench_mem
 # Scratch files
 test.diff
 test_perf.rs
-
-# Game artifacts
-savegame*.json
-stats.json
-highscore*.txt
-
-# Patches and orig
-*.diff
-*.orig

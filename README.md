@@ -11,16 +11,8 @@ Unlike other generic snake clones, our game features an **Autopilot / Bot Mode**
 ## 📈 Business Model
 Our sensible business model:
 1. Give the game away for free to acquire a massive, fast-growing user base.
-2. Sell exclusive "Power-Up NFT" skins and premium terminal themes.
+2. Sell exclusive "Power-Up NFT" skins and premium terminal themes (coming soon).
 3. Profit.
-
-## 🤖 Bot Mode & Anti-Cheat
-We have introduced a spectator mode for viewing our advanced A* bot in action.
-You can launch it via the command line with `--bot`.
-
-To prevent players from toggling the bot to achieve illegitimate high scores, any
-game in which the bot has been activated will automatically save its high score
-under the `[BOT]` pseudonym.
 
 ## Market Focus
 We are targeting a small but exponentially growing market: terminal-based gaming enthusiasts who appreciate complex algorithms.
