@@ -301,14 +301,18 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             6 => {
+                game.mode = game::GameMode::BattleRoyale;
+                game.reset();
+            },
+            7 => {
                 let _ = game.load_game();
             },
-            7 => game.state = GameState::Settings,
-            8 => game.state = GameState::NftShop,
-            9 => game.state = GameState::Stats,
-            10 => game.state = GameState::Achievements,
-            11 => game.state = GameState::Help,
-            12 => {
+            8 => game.state = GameState::Settings,
+            9 => game.state = GameState::NftShop,
+            10 => game.state = GameState::Stats,
+            11 => game.state = GameState::Achievements,
+            12 => game.state = GameState::Help,
+            13 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -318,11 +322,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 12;
+                game.menu_selection = 13;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 12 {
+            if game.menu_selection < 13 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

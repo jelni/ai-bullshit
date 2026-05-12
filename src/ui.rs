@@ -57,7 +57,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -454,30 +454,52 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 }
 
 fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
+
+    if margin > 0 {
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for y in 0..game.height {
+            for x in 0..game.width {
+                if x < margin || x >= game.width - margin || y < margin || y >= game.height - margin {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "▒")?;
+                }
+            }
+        }
+    }
+
     if game.just_died {
         stdout.queue(SetForegroundColor(Color::Red))?;
     } else {
         stdout.queue(SetForegroundColor(border_color))?;
     }
 
-    stdout.queue(cursor::MoveTo(0, 0))?;
-    let mut top_border = String::from("╔");
-    top_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
-    top_border.push('╗');
-    write!(stdout, "{top_border}")?;
+    let min_x = margin;
+    let max_x = (game.width - 1).saturating_sub(margin).max(min_x);
+    let min_y = margin;
+    let max_y = (game.height - 1).saturating_sub(margin).max(min_y);
 
-    stdout.queue(cursor::MoveTo(0, game.height - 1))?;
-    let mut bottom_border = String::from("╚");
-    bottom_border.push_str(&"═".repeat(usize::from(game.width).saturating_sub(2)));
-    bottom_border.push('╝');
-    write!(stdout, "{bottom_border}")?;
+    if max_x > min_x && max_y > min_y {
+        stdout.queue(cursor::MoveTo(min_x, min_y))?;
+        let mut top_border = String::from("╔");
+        top_border.push_str(&"═".repeat(usize::from(max_x - min_x).saturating_sub(1)));
+        top_border.push('╗');
+        write!(stdout, "{top_border}")?;
 
-    for y in 1..game.height - 1 {
-        stdout.queue(cursor::MoveTo(0, y))?;
-        write!(stdout, "║")?;
-        stdout.queue(cursor::MoveTo(game.width - 1, y))?;
-        write!(stdout, "║")?;
+        stdout.queue(cursor::MoveTo(min_x, max_y))?;
+        let mut bottom_border = String::from("╚");
+        bottom_border.push_str(&"═".repeat(usize::from(max_x - min_x).saturating_sub(1)));
+        bottom_border.push('╝');
+        write!(stdout, "{bottom_border}")?;
+
+        for y in min_y + 1..max_y {
+            stdout.queue(cursor::MoveTo(min_x, y))?;
+            write!(stdout, "║")?;
+            stdout.queue(cursor::MoveTo(max_x, y))?;
+            write!(stdout, "║")?;
+        }
     }
+
     Ok(())
 }
 
@@ -608,6 +630,19 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             stdout,
             "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}",
             game.score, game.high_score, game.lives, game.campaign_level, game.difficulty, bot_str
+        )?;
+    } else if game.mode == crate::game::GameMode::BattleRoyale {
+        let max_margin = (game.width.min(game.height) / 2).saturating_sub(2);
+        let shrink_str = if game.safe_zone_margin < max_margin {
+            let shrink_in = 10u64.saturating_sub(game.last_shrink_time.elapsed().as_secs());
+            format!(" | Shrink in: {shrink_in}s")
+        } else {
+            " | MAX SHRINK".to_string()
+        };
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | {:?}{}{}",
+            game.score, game.high_score, game.lives, game.difficulty, bot_str, shrink_str
         )?;
     } else {
         let level = game.score / 20 + 1;
