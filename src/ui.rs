@@ -58,7 +58,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Fog of War Mode", "Portals Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -495,14 +495,25 @@ fn draw_level_editor<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
     let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
 
+    let is_visible = |x: u16, y: u16| -> bool {
+        if game.mode != crate::game::GameMode::FogOfWar {
+            return true;
+        }
+        let head = game.snake.head();
+        let dx = x.abs_diff(head.x);
+        let dy = y.abs_diff(head.y);
+        dx <= 8 && dy <= 8
+    };
+
     if margin > 0 {
         stdout.queue(SetForegroundColor(Color::Red))?;
         for y in 0..game.height {
             for x in 0..game.width {
-                if x < margin || x >= game.width - margin || y < margin || y >= game.height - margin {
-                    stdout.queue(cursor::MoveTo(x, y))?;
-                    write!(stdout, "▒")?;
-                }
+                if (x < margin || x >= game.width - margin || y < margin || y >= game.height - margin)
+                    && is_visible(x, y) {
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "▒")?;
+                    }
             }
         }
     }
@@ -519,23 +530,45 @@ fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> i
     let max_y = (game.height - 1).saturating_sub(margin).max(min_y);
 
     if max_x > min_x && max_y > min_y {
-        stdout.queue(cursor::MoveTo(min_x, min_y))?;
-        let mut top_border = String::from("╔");
-        top_border.push_str(&"═".repeat(usize::from(max_x - min_x).saturating_sub(1)));
-        top_border.push('╗');
-        write!(stdout, "{top_border}")?;
+        if is_visible(min_x, min_y) {
+            stdout.queue(cursor::MoveTo(min_x, min_y))?;
+            write!(stdout, "╔")?;
+        }
+        for x in min_x + 1..max_x {
+            if is_visible(x, min_y) {
+                stdout.queue(cursor::MoveTo(x, min_y))?;
+                write!(stdout, "═")?;
+            }
+        }
+        if is_visible(max_x, min_y) {
+            stdout.queue(cursor::MoveTo(max_x, min_y))?;
+            write!(stdout, "╗")?;
+        }
 
-        stdout.queue(cursor::MoveTo(min_x, max_y))?;
-        let mut bottom_border = String::from("╚");
-        bottom_border.push_str(&"═".repeat(usize::from(max_x - min_x).saturating_sub(1)));
-        bottom_border.push('╝');
-        write!(stdout, "{bottom_border}")?;
+        if is_visible(min_x, max_y) {
+            stdout.queue(cursor::MoveTo(min_x, max_y))?;
+            write!(stdout, "╚")?;
+        }
+        for x in min_x + 1..max_x {
+            if is_visible(x, max_y) {
+                stdout.queue(cursor::MoveTo(x, max_y))?;
+                write!(stdout, "═")?;
+            }
+        }
+        if is_visible(max_x, max_y) {
+            stdout.queue(cursor::MoveTo(max_x, max_y))?;
+            write!(stdout, "╝")?;
+        }
 
         for y in min_y + 1..max_y {
-            stdout.queue(cursor::MoveTo(min_x, y))?;
-            write!(stdout, "║")?;
-            stdout.queue(cursor::MoveTo(max_x, y))?;
-            write!(stdout, "║")?;
+            if is_visible(min_x, y) {
+                stdout.queue(cursor::MoveTo(min_x, y))?;
+                write!(stdout, "║")?;
+            }
+            if is_visible(max_x, y) {
+                stdout.queue(cursor::MoveTo(max_x, y))?;
+                write!(stdout, "║")?;
+            }
         }
     }
 
@@ -550,6 +583,31 @@ fn draw_entities<W: Write>(
     snake_color: Color,
     obs_color: Color,
 ) -> io::Result<()> {
+    let is_visible = |x: u16, y: u16| -> bool {
+        if game.mode != crate::game::GameMode::FogOfWar {
+            return true;
+        }
+        let head = game.snake.head();
+        let dx = x.abs_diff(head.x);
+        let dy = y.abs_diff(head.y);
+        dx <= 8 && dy <= 8
+    };
+
+    // Draw portals
+    let portal_colors = [Color::Blue, Color::Magenta];
+    for (idx, (p1, p2)) in game.portals.iter().enumerate() {
+        let color = portal_colors[idx % portal_colors.len()];
+        stdout.queue(SetForegroundColor(color))?;
+        if is_visible(p1.x, p1.y) {
+            stdout.queue(cursor::MoveTo(p1.x, p1.y))?;
+            write!(stdout, "O")?;
+        }
+        if is_visible(p2.x, p2.y) {
+            stdout.queue(cursor::MoveTo(p2.x, p2.y))?;
+            write!(stdout, "O")?;
+        }
+    }
+
     // Draw particles
     for p in &game.particles {
         #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
@@ -557,7 +615,7 @@ fn draw_entities<W: Write>(
         #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
         let py = p.y.round() as u16;
 
-        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 {
+        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
             // Fade effect: use DarkGrey when lifetime is low, otherwise base color
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
                 Color::DarkGrey
@@ -575,93 +633,81 @@ fn draw_entities<W: Write>(
     if game.auto_pilot {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.autopilot_path {
-            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
-            write!(stdout, "·")?;
+            if is_visible(path_point.x, path_point.y) {
+                stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+                write!(stdout, "·")?;
+            }
         }
     }
 
     // Draw food
-    stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
-    stdout.queue(SetForegroundColor(food_color))?;
-    write!(stdout, "●")?;
+    if is_visible(game.food.x, game.food.y) {
+        stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
+        stdout.queue(SetForegroundColor(food_color))?;
+        write!(stdout, "●")?;
+    }
 
     // Draw obstacles
     stdout.queue(SetForegroundColor(obs_color))?;
     for obs in &game.obstacles {
-        stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
-        write!(stdout, "X")?;
+        if is_visible(obs.x, obs.y) {
+            stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
+            write!(stdout, "X")?;
+        }
     }
 
     // Draw bonus food
-    if let Some((bonus_p, _)) = game.bonus_food {
-        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
-        write!(stdout, "★")?;
-    }
+    if let Some((bonus_p, _)) = game.bonus_food
+        && is_visible(bonus_p.x, bonus_p.y) {
+            stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            write!(stdout, "★")?;
+        }
 
     if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
-    {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        match power_up.p_type {
-            crate::game::PowerUpType::ExtraLife => {
-                stdout.queue(SetForegroundColor(Color::Magenta))?;
-                write!(stdout, "♥")?;
-            },
-            crate::game::PowerUpType::PassThroughWalls => {
-                stdout.queue(SetForegroundColor(Color::Yellow))?;
-                write!(stdout, "W")?;
-            },
-            crate::game::PowerUpType::Shrink => {
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
-                write!(stdout, "S")?;
-            },
-            crate::game::PowerUpType::ClearObstacles => {
-                stdout.queue(SetForegroundColor(Color::Red))?;
-                write!(stdout, "B")?;
-            },
-            crate::game::PowerUpType::ScoreMultiplier => {
-                stdout.queue(SetForegroundColor(Color::Green))?;
-                write!(stdout, "$")?;
-            },
-            crate::game::PowerUpType::Teleport => {
-                stdout.queue(SetForegroundColor(Color::Blue))?;
-                write!(stdout, "T")?;
-            },
-            _ => {
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
-                write!(stdout, "P")?;
-            },
+        && is_visible(power_up.location.x, power_up.location.y) {
+            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+            match power_up.p_type {
+                crate::game::PowerUpType::ExtraLife => {
+                    stdout.queue(SetForegroundColor(Color::Magenta))?;
+                    write!(stdout, "♥")?;
+                },
+                crate::game::PowerUpType::PassThroughWalls => {
+                    stdout.queue(SetForegroundColor(Color::Yellow))?;
+                    write!(stdout, "W")?;
+                },
+                crate::game::PowerUpType::Shrink => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "S")?;
+                },
+                crate::game::PowerUpType::ClearObstacles => {
+                    stdout.queue(SetForegroundColor(Color::Red))?;
+                    write!(stdout, "B")?;
+                },
+                crate::game::PowerUpType::ScoreMultiplier => {
+                    stdout.queue(SetForegroundColor(Color::Green))?;
+                    write!(stdout, "$")?;
+                },
+                crate::game::PowerUpType::Teleport => {
+                    stdout.queue(SetForegroundColor(Color::Blue))?;
+                    write!(stdout, "T")?;
+                },
+                _ => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "P")?;
+                },
+            }
         }
-    }
 
     // Draw snake
     stdout.queue(SetForegroundColor(snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(part.x, part.y))?;
-        if i == 0 {
-            // Head
-            let head_char = match game.snake.direction {
-                Direction::Up => '^',
-                Direction::Down => 'v',
-                Direction::Left => '<',
-                Direction::Right => '>',
-            };
-            write!(stdout, "{head_char}")?;
-        } else {
-            // Body
-            write!(stdout, "{}", game.skin)?;
-        }
-    }
-
-    // Draw player2
-    if let Some(p2) = &game.player2 {
-        stdout.queue(SetForegroundColor(Color::Blue))?;
-        for (i, part) in p2.body.iter().enumerate() {
+        if is_visible(part.x, part.y) {
             stdout.queue(cursor::MoveTo(part.x, part.y))?;
             if i == 0 {
                 // Head
-                let head_char = match p2.direction {
+                let head_char = match game.snake.direction {
                     Direction::Up => '^',
                     Direction::Down => 'v',
                     Direction::Left => '<',
@@ -671,6 +717,29 @@ fn draw_entities<W: Write>(
             } else {
                 // Body
                 write!(stdout, "{}", game.skin)?;
+            }
+        }
+    }
+
+    // Draw player2
+    if let Some(p2) = &game.player2 {
+        stdout.queue(SetForegroundColor(Color::Blue))?;
+        for (i, part) in p2.body.iter().enumerate() {
+            if is_visible(part.x, part.y) {
+                stdout.queue(cursor::MoveTo(part.x, part.y))?;
+                if i == 0 {
+                    // Head
+                    let head_char = match p2.direction {
+                        Direction::Up => '^',
+                        Direction::Down => 'v',
+                        Direction::Left => '<',
+                        Direction::Right => '>',
+                    };
+                    write!(stdout, "{head_char}")?;
+                } else {
+                    // Body
+                    write!(stdout, "{}", game.skin)?;
+                }
             }
         }
     }

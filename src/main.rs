@@ -270,6 +270,7 @@ fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
     let _ = ui::draw(game, stdout);
 }
 
+#[expect(clippy::too_many_lines, reason = "Menu input requires matching on many items")]
 fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
         KeyCode::Char('q' | 'Q') => {
@@ -326,18 +327,26 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             12 => {
+                game.mode = game::GameMode::FogOfWar;
+                game.reset();
+            },
+            13 => {
+                game.mode = game::GameMode::Portals;
+                game.reset();
+            },
+            14 => {
                 let _ = game.load_game();
             },
-            13 => game.state = GameState::Settings,
-            14 => game.state = GameState::NftShop,
-            15 => game.state = GameState::Stats,
-            16 => game.state = GameState::Achievements,
-            17 => game.state = GameState::Help,
-            18 => {
+            15 => game.state = GameState::Settings,
+            16 => game.state = GameState::NftShop,
+            17 => game.state = GameState::Stats,
+            18 => game.state = GameState::Achievements,
+            19 => game.state = GameState::Help,
+            20 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            19 => {
+            21 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -345,7 +354,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            20 => {
+            22 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -355,11 +364,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 20;
+                game.menu_selection = 22;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 20 {
+            if game.menu_selection < 22 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -436,28 +445,28 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left, 1),
         KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right, 1),
         KeyCode::Up => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun || game.mode == game::GameMode::FogOfWar || game.mode == game::GameMode::Portals {
                 game.handle_input(Direction::Up, 1);
             } else {
                 game.handle_input(Direction::Up, 2);
             }
         },
         KeyCode::Down => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun || game.mode == game::GameMode::FogOfWar || game.mode == game::GameMode::Portals {
                 game.handle_input(Direction::Down, 1);
             } else {
                 game.handle_input(Direction::Down, 2);
             }
         },
         KeyCode::Left => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun || game.mode == game::GameMode::FogOfWar || game.mode == game::GameMode::Portals {
                 game.handle_input(Direction::Left, 1);
             } else {
                 game.handle_input(Direction::Left, 2);
             }
         },
         KeyCode::Right => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun || game.mode == game::GameMode::FogOfWar || game.mode == game::GameMode::Portals {
                 game.handle_input(Direction::Right, 1);
             } else {
                 game.handle_input(Direction::Right, 2);

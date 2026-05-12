@@ -146,6 +146,8 @@ pub enum GameMode {
     Maze,
     CustomLevel,
     Speedrun,
+    FogOfWar,
+    Portals,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -202,6 +204,7 @@ pub struct HistoryState {
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
+    pub portals: Vec<(Point, Point)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -238,6 +241,8 @@ pub struct SaveState {
     pub campaign_level: u32,
     #[serde(default)]
     pub safe_zone_margin: u16,
+    #[serde(default)]
+    pub portals: Vec<(Point, Point)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -341,6 +346,7 @@ pub struct Game {
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
     pub particles: Vec<Particle>,
+    pub portals: Vec<(Point, Point)>,
 }
 
 impl Game {
@@ -425,6 +431,7 @@ impl Game {
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
             particles: Vec::new(),
+            portals: Vec::new(),
         }
     }
 
@@ -573,6 +580,7 @@ impl Game {
             food_eaten_session: self.food_eaten_session,
             campaign_level: self.campaign_level,
             safe_zone_margin: self.safe_zone_margin,
+            portals: self.portals.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -642,6 +650,7 @@ impl Game {
                 self.food_eaten_session = state.food_eaten_session;
                 self.campaign_level = state.campaign_level;
                 self.safe_zone_margin = state.safe_zone_margin;
+                self.portals = state.portals;
                 self.last_shrink_time = Instant::now();
                 self.last_obstacle_spawn_time = Instant::now();
                 self.state = GameState::Paused;
@@ -784,6 +793,7 @@ impl Game {
         obstacles
     }
 
+    #[expect(clippy::too_many_lines, reason = "Game reset requires many setup routines")]
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
@@ -793,7 +803,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel | GameMode::FogOfWar | GameMode::Portals => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -824,7 +834,7 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel || self.mode == GameMode::FogOfWar || self.mode == GameMode::Portals {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -832,7 +842,7 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel || self.mode == GameMode::FogOfWar || self.mode == GameMode::Portals { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
@@ -866,7 +876,24 @@ impl Game {
             self.obstacles = obstacles;
         }
 
-        let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
+        self.portals.clear();
+        if self.mode == GameMode::Portals {
+            let mut portal_points = Vec::new();
+            for _ in 0..4 {
+                let avoid_portal = |p: &Point| {
+                    self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p)) || portal_points.contains(p)
+                };
+                if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, avoid_portal, &mut self.rng, 0) {
+                    portal_points.push(p);
+                }
+            }
+            if portal_points.len() == 4 {
+                self.portals.push((portal_points[0], portal_points[1]));
+                self.portals.push((portal_points[2], portal_points[3]));
+            }
+        }
+
+        let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p)) || self.portals.iter().any(|(p1, p2)| p == p1 || p == p2);
         self.food = Self::get_random_empty_point(
             self.width,
             self.height,
@@ -898,7 +925,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel | GameMode::FogOfWar | GameMode::Portals => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -994,11 +1021,34 @@ impl Game {
 
     fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
         let head1 = self.snake.head();
-        let next_head1 = Self::calculate_next_head_dir(head1, self.snake.direction);
+        let mut next_head1 = Self::calculate_next_head_dir(head1, self.snake.direction);
+
+        // Apply portal teleportation
+        for (p1, p2) in &self.portals {
+            if next_head1 == *p1 {
+                next_head1 = *p2;
+                break;
+            } else if next_head1 == *p2 {
+                next_head1 = *p1;
+                break;
+            }
+        }
 
         let next_head2_opt = self.player2.as_ref().map(|p2| {
             let head2 = p2.head();
-            Self::calculate_next_head_dir(head2, p2.direction)
+            let mut next_head2 = Self::calculate_next_head_dir(head2, p2.direction);
+
+            // Apply portal teleportation
+            for (p1, p2) in &self.portals {
+                if next_head2 == *p1 {
+                    next_head2 = *p2;
+                    break;
+                } else if next_head2 == *p2 {
+                    next_head2 = *p1;
+                    break;
+                }
+            }
+            next_head2
         });
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
@@ -1057,6 +1107,7 @@ impl Game {
             self.safe_zone_margin = state.safe_zone_margin;
             self.last_shrink_time = state.last_shrink_time;
             self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
+            self.portals = state.portals;
         }
     }
 
@@ -1075,6 +1126,7 @@ impl Game {
             safe_zone_margin: self.safe_zone_margin,
             last_shrink_time: self.last_shrink_time,
             last_obstacle_spawn_time: self.last_obstacle_spawn_time,
+            portals: self.portals.clone(),
         };
 
         self.history.push_back(state);
@@ -1278,7 +1330,7 @@ impl Game {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::FogOfWar || self.mode == GameMode::Portals {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");
@@ -1668,6 +1720,17 @@ impl Game {
     }
 
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
+        let mut adjusted_p = p;
+        for (p1, p2) in &self.portals {
+            if adjusted_p == *p1 {
+                adjusted_p = *p2;
+                break;
+            } else if adjusted_p == *p2 {
+                adjusted_p = *p1;
+                break;
+            }
+        }
+
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
                 && pu
@@ -1676,13 +1739,13 @@ impl Game {
         });
 
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
-            Some(self.calculate_wrapped_head(p))
+            Some(self.calculate_wrapped_head(adjusted_p))
         } else {
             let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-            if p.x <= margin || p.x >= self.width - 1 - margin || p.y <= margin || p.y >= self.height - 1 - margin {
+            if adjusted_p.x <= margin || adjusted_p.x >= self.width - 1 - margin || adjusted_p.y <= margin || adjusted_p.y >= self.height - 1 - margin {
                 None // Hit wall or out of bounds
             } else {
-                Some(p)
+                Some(adjusted_p)
             }
         }
     }
