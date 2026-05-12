@@ -243,6 +243,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
         GameState::NftShop => handle_nft_shop_input(code, game),
         GameState::Achievements => handle_achievements_input(code, game),
+        GameState::LevelEditor => handle_level_editor_input(code, game),
     };
 
     if should_continue {
@@ -329,6 +330,18 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             15 => game.state = GameState::Achievements,
             16 => game.state = GameState::Help,
             17 => {
+                game.mode = game::GameMode::CustomLevel;
+                game.reset();
+            },
+            18 => {
+                game.state = GameState::LevelEditor;
+                game.editor_cursor = Some(snake::Point {
+                    x: game.width / 2,
+                    y: game.height / 2,
+                });
+                game.obstacles.clear();
+            },
+            19 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -338,14 +351,62 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 17;
+                game.menu_selection = 19;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 17 {
+            if game.menu_selection < 19 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_level_editor_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc => {
+            game.save_custom_level();
+            game.state = GameState::Menu;
+        },
+        KeyCode::Char('w' | 'W') | KeyCode::Up => {
+            if let Some(cursor) = &mut game.editor_cursor
+                && cursor.y > 1 {
+                    cursor.y -= 1;
+                }
+        },
+        KeyCode::Char('s' | 'S') | KeyCode::Down => {
+            if let Some(cursor) = &mut game.editor_cursor
+                && cursor.y < game.height - 2 {
+                    cursor.y += 1;
+                }
+        },
+        KeyCode::Char('a' | 'A') | KeyCode::Left => {
+            #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+            if let Some(cursor) = &mut game.editor_cursor {
+                if cursor.x > 1 {
+                    cursor.x -= 1;
+                }
+            }
+        },
+        KeyCode::Char('d' | 'D') | KeyCode::Right => {
+            #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+            if let Some(cursor) = &mut game.editor_cursor {
+                if cursor.x < game.width - 2 {
+                    cursor.x += 1;
+                }
+            }
+        },
+        KeyCode::Char(' ') => {
+            if let Some(cursor) = game.editor_cursor {
+                if game.obstacles.contains(&cursor) {
+                    game.obstacles.remove(&cursor);
+                } else {
+                    game.obstacles.insert(cursor);
+                }
             }
         },
         _ => {},

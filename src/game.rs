@@ -143,6 +143,7 @@ pub enum GameMode {
     Survival,
     Zen,
     Maze,
+    CustomLevel,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -159,6 +160,7 @@ pub enum GameState {
     Achievements,
     EnterName,
     ConfirmQuit,
+    LevelEditor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -322,6 +324,7 @@ pub struct Game {
     pub last_shrink_time: Instant,
     pub last_obstacle_spawn_time: Instant,
     pub history: std::collections::VecDeque<HistoryState>,
+    pub editor_cursor: Option<Point>,
 }
 
 impl Game {
@@ -404,6 +407,7 @@ impl Game {
             last_shrink_time: Instant::now(),
             last_obstacle_spawn_time: Instant::now(),
             history: std::collections::VecDeque::new(),
+            editor_cursor: None,
         }
     }
 
@@ -512,6 +516,19 @@ impl Game {
 
     pub fn save_game(&self) {
         self.save_game_to_file("savegame.json");
+    }
+
+    pub fn save_custom_level(&self) {
+        if let Ok(json) = serde_json::to_string(&self.obstacles) {
+            let _ = Self::atomic_write("custom_level.json", json);
+        }
+    }
+
+    pub fn load_custom_level() -> HashSet<Point> {
+        File::open("custom_level.json")
+            .ok()
+            .and_then(|f| serde_json::from_reader(f.take(1024 * 1024)).ok())
+            .unwrap_or_default()
     }
 
     pub fn save_game_to_file(&self, path: &str) {
@@ -759,7 +776,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -790,7 +807,7 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -798,9 +815,13 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
-        if self.mode == GameMode::Campaign {
+        if self.mode == GameMode::CustomLevel {
+            self.obstacles = Self::load_custom_level();
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
             // remove obstacles that collide with snake body
             let body_map = self.snake.body_map.clone();
@@ -859,7 +880,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1428,7 +1449,7 @@ impl Game {
     }
 
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
-        if self.mode == GameMode::Campaign || self.mode == GameMode::Maze {
+        if self.mode == GameMode::Campaign || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
             return;
         }
         let new_obs_count =
