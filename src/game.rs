@@ -136,6 +136,7 @@ pub enum GameMode {
     OnlineMultiplayer,
     PlayerVsBot,
     BotVsBot,
+    BattleRoyale,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -208,6 +209,8 @@ pub struct SaveState {
     pub food_eaten_session: u32,
     #[serde(default = "default_campaign_level")]
     pub campaign_level: u32,
+    #[serde(default)]
+    pub safe_zone_margin: u16,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -287,6 +290,8 @@ pub struct Game {
     pub mode: GameMode,
     pub player2: Option<Snake>,
     pub campaign_level: u32,
+    pub safe_zone_margin: u16,
+    pub last_shrink_time: Instant,
 }
 
 impl Game {
@@ -316,9 +321,9 @@ impl Game {
             Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
-        let obstacles = Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count);
+        let obstacles = Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count, 0);
         let avoid_food = |p: &Point| obstacles.contains(p);
-        let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng)
+        let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng, 0)
             .expect("Board cannot be full on start");
 
         // Migration step
@@ -365,6 +370,8 @@ impl Game {
             mode,
             player2: None,
             campaign_level: 1,
+            safe_zone_margin: 0,
+            last_shrink_time: Instant::now(),
         }
     }
 
@@ -499,6 +506,7 @@ impl Game {
             used_bot_this_game: self.used_bot_this_game,
             food_eaten_session: self.food_eaten_session,
             campaign_level: self.campaign_level,
+            safe_zone_margin: self.safe_zone_margin,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -567,6 +575,8 @@ impl Game {
                 self.used_bot_this_game = state.used_bot_this_game;
                 self.food_eaten_session = state.food_eaten_session;
                 self.campaign_level = state.campaign_level;
+                self.safe_zone_margin = state.safe_zone_margin;
+                self.last_shrink_time = Instant::now();
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -580,12 +590,22 @@ impl Game {
         snake: &Snake,
         avoid: impl Fn(&Point) -> bool,
         rng: &mut rand::rngs::ThreadRng,
+        margin: u16,
     ) -> Option<Point> {
         let mut i = 0;
         loop {
-            // Point must be within walls (1..WIDTH-1, 1..HEIGHT-1)
-            let x = rng.gen_range(1..width - 1);
-            let y = rng.gen_range(1..height - 1);
+            // Point must be within walls (1..WIDTH-1, 1..HEIGHT-1) and margin
+            let min_x = 1 + margin;
+            let max_x = (width - 1).saturating_sub(margin).max(min_x + 1);
+            let min_y = 1 + margin;
+            let max_y = (height - 1).saturating_sub(margin).max(min_y + 1);
+
+            if min_x >= max_x || min_y >= max_y {
+                return None;
+            }
+
+            let x = rng.gen_range(min_x..max_x);
+            let y = rng.gen_range(min_y..max_y);
             let p = Point {
                 x,
                 y,
@@ -596,8 +616,8 @@ impl Game {
             i += 1;
             if i >= 100 {
                 let mut empty = Vec::new();
-                for y_ in 1..height - 1 {
-                    for x_ in 1..width - 1 {
+                for y_ in min_y..max_y {
+                    for x_ in min_x..max_x {
                         let p_ = Point {
                             x: x_,
                             y: y_,
@@ -624,12 +644,13 @@ impl Game {
         avoid: impl Fn(&Point) -> bool,
         rng: &mut rand::rngs::ThreadRng,
         count: usize,
+        margin: u16,
     ) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
 
         for _ in 0..count {
             let current_avoid = |p: &Point| avoid(p) || obstacles.contains(p);
-            if let Some(p) = Self::get_random_empty_point(width, height, snake, current_avoid, rng)
+            if let Some(p) = Self::get_random_empty_point(width, height, snake, current_avoid, rng, margin)
             {
                 obstacles.insert(p);
             }
@@ -656,6 +677,11 @@ impl Game {
             && let Some(new_time) = activation_time.checked_add(delta)
         {
             power_up.activation_time = Some(new_time);
+        }
+
+        // Shift last shrink time
+        if let Some(new_time) = self.last_shrink_time.checked_add(delta) {
+            self.last_shrink_time = new_time;
         }
     }
 
@@ -701,7 +727,7 @@ impl Game {
                 });
                 self.player2 = None;
             },
-            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
+            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot | GameMode::BattleRoyale => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -742,7 +768,7 @@ impl Game {
                 let current_avoid = |p: &Point| {
                     avoid(p) || obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
                 };
-                if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, current_avoid, &mut self.rng) {
+                if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, current_avoid, &mut self.rng, 0) {
                     obstacles.insert(p);
                 }
             }
@@ -756,6 +782,7 @@ impl Game {
             ref_snake,
             avoid_food,
             &mut self.rng,
+            0,
         )
         .expect("Board cannot be full on reset");
         self.bonus_food = None;
@@ -768,6 +795,8 @@ impl Game {
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_game = false;
+        self.safe_zone_margin = 0;
+        self.last_shrink_time = Instant::now();
     }
 
     fn respawn(&mut self) {
@@ -785,7 +814,7 @@ impl Game {
                     !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
                 });
             },
-            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
+            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot | GameMode::BattleRoyale => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -800,6 +829,9 @@ impl Game {
                 });
             }
         }
+
+        self.safe_zone_margin = 0;
+        self.last_shrink_time = Instant::now();
     }
 
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
@@ -881,13 +913,14 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 = if self.wrap_mode || can_pass_through_walls {
+        let final_head1 = if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
             self.calculate_wrapped_head(next_head1)
         } else {
-            if next_head1.x == 0
-                || next_head1.x >= self.width - 1
-                || next_head1.y == 0
-                || next_head1.y >= self.height - 1
+            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            if next_head1.x <= margin
+                || next_head1.x >= self.width - 1 - margin
+                || next_head1.y <= margin
+                || next_head1.y >= self.height - 1 - margin
             {
                 hit_wall1 = true;
             }
@@ -896,13 +929,14 @@ impl Game {
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if self.wrap_mode || can_pass_through_walls {
+            if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
                 self.calculate_wrapped_head(next_head2)
             } else {
-                if next_head2.x == 0
-                    || next_head2.x >= self.width - 1
-                    || next_head2.y == 0
-                    || next_head2.y >= self.height - 1
+                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                if next_head2.x <= margin
+                    || next_head2.x >= self.width - 1 - margin
+                    || next_head2.y <= margin
+                    || next_head2.y >= self.height - 1 - margin
                 {
                     hit_wall2 = true;
                 }
@@ -913,9 +947,42 @@ impl Game {
         (final_head1, final_head2_opt, hit_wall1, hit_wall2)
     }
 
+    #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
+        }
+
+        if self.mode == GameMode::BattleRoyale && self.last_shrink_time.elapsed() >= Duration::from_secs(10) {
+            let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
+            if self.safe_zone_margin < max_margin {
+                self.safe_zone_margin += 1;
+                self.last_shrink_time = Instant::now();
+
+                // Relocate out-of-bounds food
+                if self.food.x <= self.safe_zone_margin || self.food.x >= self.width - 1 - self.safe_zone_margin ||
+                   self.food.y <= self.safe_zone_margin || self.food.y >= self.height - 1 - self.safe_zone_margin {
+                    let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
+                    if let Some(new_food) = Self::get_random_empty_point(self.width, self.height, &self.snake, avoid_food, &mut self.rng, self.safe_zone_margin) {
+                        self.food = new_food;
+                    }
+                }
+
+                // Relocate out-of-bounds bonus food
+                if let Some((bp, _)) = self.bonus_food
+                    && (bp.x <= self.safe_zone_margin || bp.x >= self.width - 1 - self.safe_zone_margin ||
+                       bp.y <= self.safe_zone_margin || bp.y >= self.height - 1 - self.safe_zone_margin) {
+                    self.bonus_food = None; // just remove it
+                }
+
+                // Relocate out-of-bounds power-up
+                if let Some(pu) = &self.power_up
+                    && (pu.location.x <= self.safe_zone_margin || pu.location.x >= self.width - 1 - self.safe_zone_margin ||
+                       pu.location.y <= self.safe_zone_margin || pu.location.y >= self.height - 1 - self.safe_zone_margin) {
+                    self.power_up = None; // just remove it
+                }
+                crate::game::beep(); // Beep on map shrink
+            }
         }
 
         self.handle_autopilot_moves();
@@ -939,6 +1006,18 @@ impl Game {
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
 
+        let out_of_bounds1 = if self.mode == GameMode::BattleRoyale {
+            final_head1.x <= self.safe_zone_margin || final_head1.x >= self.width - 1 - self.safe_zone_margin ||
+            final_head1.y <= self.safe_zone_margin || final_head1.y >= self.height - 1 - self.safe_zone_margin
+        } else { false };
+
+        let out_of_bounds2 = if self.mode == GameMode::BattleRoyale {
+            final_head2_opt.is_some_and(|fh2| {
+                fh2.x <= self.safe_zone_margin || fh2.x >= self.width - 1 - self.safe_zone_margin ||
+                fh2.y <= self.safe_zone_margin || fh2.y >= self.height - 1 - self.safe_zone_margin
+            })
+        } else { false };
+
         let is_invincible = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
                 && p.activation_time
@@ -950,10 +1029,10 @@ impl Game {
         let mut p1_dead = false;
         let mut p2_dead = false;
 
-        if hit_wall1 { p1_dead = true; }
+        if hit_wall1 || out_of_bounds1 { p1_dead = true; }
         if hit_obstacle1 && !is_invincible { p1_dead = true; }
 
-        if hit_wall2 { p2_dead = true; }
+        if hit_wall2 || out_of_bounds2 { p2_dead = true; }
         if hit_obstacle2 && !is_invincible { p2_dead = true; }
 
         // Head-to-Head
@@ -1101,6 +1180,7 @@ impl Game {
                     &self.snake,
                     avoid,
                     &mut self.rng,
+                    self.safe_zone_margin,
                 ) {
                     let old_head = self.snake.head();
                     let dx = i32::from(new_pos.x) - i32::from(old_head.x);
@@ -1211,7 +1291,7 @@ impl Game {
                 || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
         };
         if let Some(new_food) =
-            Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng)
+            Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng, self.safe_zone_margin)
         {
             self.food = new_food;
             true
@@ -1243,6 +1323,7 @@ impl Game {
                 avoid,
                 &mut self.rng,
                 new_obs_count as usize,
+                self.safe_zone_margin,
             );
             self.obstacles.extend(new_obstacles);
         }
@@ -1308,6 +1389,7 @@ impl Game {
                 &self.snake,
                 avoid,
                 &mut self.rng,
+                self.safe_zone_margin,
             ) {
                 let p_type = match self.rng.gen_range(0..9) {
                     0 => PowerUpType::SlowDown,
@@ -1347,6 +1429,7 @@ impl Game {
                 &self.snake,
                 avoid,
                 &mut self.rng,
+                self.safe_zone_margin,
             ) {
                 self.bonus_food = Some((bonus, Instant::now()));
             }
@@ -1382,12 +1465,15 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        if self.wrap_mode || can_pass_through_walls {
+        if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
             Some(self.calculate_wrapped_head(p))
-        } else if p.x == 0 || p.x >= self.width - 1 || p.y == 0 || p.y >= self.height - 1 {
-            None // Hit wall
         } else {
-            Some(p)
+            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            if p.x <= margin || p.x >= self.width - 1 - margin || p.y <= margin || p.y >= self.height - 1 - margin {
+                None // Hit wall or out of bounds
+            } else {
+                Some(p)
+            }
         }
     }
 
@@ -1490,7 +1576,7 @@ impl Game {
                 .map(|t| {
                     let mut dx = p.x.abs_diff(t.x);
                     let mut dy = p.y.abs_diff(t.y);
-                    if self.wrap_mode || can_pass_through_walls {
+                    if (self.wrap_mode || can_pass_through_walls) && self.mode != GameMode::BattleRoyale {
                         dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                         dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
