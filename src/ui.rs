@@ -196,6 +196,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "S : Shrink",
         "B : Bomb (Clear Obstacles)",
         "$ : 2x Score",
+        "T : Teleport",
         "P : Power-Up",
     ];
 
@@ -540,6 +541,10 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::Green))?;
                 write!(stdout, "$")?;
             },
+            crate::game::PowerUpType::Teleport => {
+                stdout.queue(SetForegroundColor(Color::Blue))?;
+                write!(stdout, "T")?;
+            },
             _ => {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
@@ -620,6 +625,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 crate::game::PowerUpType::Shrink => "Shrink",
                 crate::game::PowerUpType::ClearObstacles => "Bomb",
                 crate::game::PowerUpType::ScoreMultiplier => "2x Score",
+                crate::game::PowerUpType::Teleport => "Teleport",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;
