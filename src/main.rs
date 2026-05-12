@@ -40,9 +40,6 @@ struct Args {
 
     #[arg(long, default_value_t = false)]
     bot: bool,
-
-    #[arg(long, value_enum, default_value_t = game::GameMode::SinglePlayer)]
-    mode: game::GameMode,
 }
 
 fn main() -> io::Result<()> {
@@ -97,7 +94,7 @@ fn main() -> io::Result<()> {
 #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
 fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
-    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff, args.mode);
+    let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
 
     if args.bot {
         game.auto_pilot = true;

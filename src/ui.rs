@@ -451,6 +451,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Theme::Esports => {
             (Color::Red, Color::Blue, Color::Cyan, Color::Magenta)
         },
+        crate::game::Theme::Solar => {
+            (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed)
+        },
     };
 
     draw_borders(game, stdout, border_color)?;
@@ -836,7 +839,6 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            crate::game::GameMode::SinglePlayer,
         );
         game.menu_selection = 0; // "Single Player" selected
 
@@ -863,7 +865,6 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            crate::game::GameMode::SinglePlayer,
         );
 
         let mut buf = Vec::new();
@@ -884,7 +885,6 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            crate::game::GameMode::SinglePlayer,
         );
 
         // Test single digit (count = 3)
@@ -918,7 +918,6 @@ mod tests {
             'O',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            crate::game::GameMode::SinglePlayer,
         );
         let mut buf = Vec::new();
         draw_countdown(&large_game, &mut buf, 5).expect("Valid operation in tests");
@@ -950,7 +949,6 @@ mod settings_tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            crate::game::GameMode::SinglePlayer,
         );
         game.state = GameState::Settings;
         game.settings_selection = 1; // Theme selected

@@ -100,6 +100,7 @@ pub enum Theme {
     Hacker,
     Blockchain,
     Esports,
+    Solar,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -129,7 +130,7 @@ pub fn beep() {
     let _ = io::stdout().flush();
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Debug, clap::ValueEnum)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub enum GameMode {
     #[default]
     SinglePlayer,
@@ -245,7 +246,7 @@ pub enum ShopItem {
     Theme(Theme),
 }
 
-pub const AVAILABLE_ITEMS: [(ShopItem, u32); 14] = [
+pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
     (ShopItem::Skin('💎'), 100),
     (ShopItem::Skin('👾'), 250),
     (ShopItem::Skin('🐍'), 500),
@@ -260,6 +261,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 14] = [
     (ShopItem::Theme(Theme::Hacker), 50_000),
     (ShopItem::Theme(Theme::Blockchain), 100_000),
     (ShopItem::Theme(Theme::Esports), 250_000),
+    (ShopItem::Theme(Theme::Solar), 500_000),
 ];
 
 pub fn default_unlocked_themes() -> Vec<Theme> {
@@ -349,7 +351,6 @@ impl Game {
         skin: char,
         theme: Theme,
         difficulty: Difficulty,
-        mode: GameMode,
     ) -> Self {
         let mut rng = rand::thread_rng();
         let start_x = width / 2;
@@ -358,6 +359,8 @@ impl Game {
             x: start_x,
             y: start_y,
         });
+
+        let mode = GameMode::SinglePlayer;
 
         let obs_count = match difficulty {
             Difficulty::Easy => 1,
@@ -1982,7 +1985,6 @@ mod tests {
             '@',  // custom skin
             crate::game::Theme::Neon,
             crate::game::Difficulty::Hard,
-            GameMode::SinglePlayer,
         );
 
         // Put game in a valid state
@@ -2006,7 +2008,6 @@ mod tests {
             '█',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Easy,
-            GameMode::SinglePlayer,
         );
         let success = game2.load_game_from_file(file_path);
 
@@ -2033,7 +2034,6 @@ mod tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            GameMode::SinglePlayer,
         );
         game.high_scores.clear(); // Ensure clean state
 
@@ -2061,15 +2061,13 @@ mod tests {
 
     #[test]
     fn test_save_and_load_auto_pilot() {
-        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal,
-            GameMode::SinglePlayer);
+        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;
 
         let file_path = "savegame_test_autopilot.json";
         game.save_game_to_file(file_path);
 
-        let mut new_game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal,
-            GameMode::SinglePlayer);
+        let mut new_game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         assert!(!new_game.auto_pilot);
 
         let loaded = new_game.load_game_from_file(file_path);
@@ -2089,7 +2087,6 @@ mod tests {
             'x',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
-            GameMode::SinglePlayer,
         );
         game.power_up = Some(PowerUp {
             p_type: PowerUpType::SpeedBoost,
@@ -2118,7 +2115,6 @@ mod tests {
             '#',
             crate::game::Theme::Dark,
             crate::game::Difficulty::Normal,
-            GameMode::SinglePlayer,
         );
         // Should not panic or crash out of memory, just return false
         let loaded = game.load_game_from_file(file_path);
@@ -2137,7 +2133,6 @@ mod tests {
             'x',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
-            GameMode::SinglePlayer,
         );
         game.auto_pilot = true;
         game.used_bot_this_game = true;
@@ -2157,7 +2152,6 @@ mod tests {
             'x',
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
-            GameMode::SinglePlayer,
         );
 
         // Setup snake at (10, 10) facing Up
