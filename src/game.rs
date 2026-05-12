@@ -142,6 +142,7 @@ pub enum GameMode {
     TimeAttack,
     Survival,
     Zen,
+    Maze,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -758,7 +759,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -777,7 +778,7 @@ impl Game {
             }
         }
 
-        let obs_count = if self.mode == GameMode::Zen {
+        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze {
             0
         } else {
             match self.difficulty {
@@ -789,7 +790,7 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -797,11 +798,21 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
             // remove obstacles that collide with snake body
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Maze {
+            self.obstacles.clear();
+            let y1 = self.height / 3;
+            let y2 = 2 * self.height / 3;
+            for x in 5..(self.width - 5) {
+                self.obstacles.insert(Point { x, y: y1 });
+                self.obstacles.insert(Point { x, y: y2 });
+            }
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -848,7 +859,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Survival | GameMode::Zen | GameMode::Maze => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1417,7 +1428,7 @@ impl Game {
     }
 
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
-        if self.mode == GameMode::Campaign {
+        if self.mode == GameMode::Campaign || self.mode == GameMode::Maze {
             return;
         }
         let new_obs_count =
