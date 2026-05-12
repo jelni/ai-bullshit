@@ -349,6 +349,8 @@ pub struct Game {
     pub particles: Vec<Particle>,
     pub combo: u32,
     pub last_food_time: Option<Instant>,
+    pub chat_log: std::collections::VecDeque<(String, crossterm::style::Color)>,
+    pub last_chat_time: Option<Instant>,
 }
 
 impl Game {
@@ -435,6 +437,8 @@ impl Game {
             particles: Vec::new(),
             combo: 0,
             last_food_time: None,
+            chat_log: std::collections::VecDeque::new(),
+            last_chat_time: None,
         }
     }
 
@@ -917,6 +921,8 @@ impl Game {
         self.particles.clear();
         self.combo = 0;
         self.last_food_time = None;
+        self.chat_log.clear();
+        self.last_chat_time = None;
     }
 
     fn respawn(&mut self) {
@@ -1138,6 +1144,44 @@ impl Game {
         }
 
         self.save_history_state();
+
+        // Chat simulation logic
+        let chat_interval = if self.mode == GameMode::SinglePlayer {
+            Duration::from_secs(3)
+        } else {
+            Duration::from_millis(500)
+        };
+
+        if self.last_chat_time.is_none_or(|t| t.elapsed() >= chat_interval) && self.rng.gen_bool(0.3) {
+            let messages = [
+                "PogChamp", "Bot is insane!", "Drop skins!", "HODL", "LUL", "EZ", "F",
+                "What a play", "200 IQ", "nerf snake pls", "kappa", "monkaS", "sheeeesh"
+            ];
+            let users = [
+                "SnakeMaster99", "xX_Slayer_Xx", "CryptoBro", "GamerGirl", "BotSpectator",
+                "Noob123", "ProPlayer", "Admin", "Mod", "VIP_User"
+            ];
+            let colors = [
+                crossterm::style::Color::Red,
+                crossterm::style::Color::Green,
+                crossterm::style::Color::Yellow,
+                crossterm::style::Color::Blue,
+                crossterm::style::Color::Magenta,
+                crossterm::style::Color::Cyan,
+                crossterm::style::Color::White,
+            ];
+
+            let msg = messages[self.rng.gen_range(0..messages.len())];
+            let user = users[self.rng.gen_range(0..users.len())];
+            let color = colors[self.rng.gen_range(0..colors.len())];
+
+            let chat_line = format!("{user}: {msg}");
+            self.chat_log.push_back((chat_line, color));
+            if self.chat_log.len() > 10 {
+                self.chat_log.pop_front();
+            }
+            self.last_chat_time = Some(Instant::now());
+        }
 
         for p in &mut self.particles {
             p.x += p.vx;
