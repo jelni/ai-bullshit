@@ -58,7 +58,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Load Game", "Watch Last Replay", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -436,7 +436,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         },
         crate::game::Theme::Cyberpunk => (Color::Magenta, Color::Cyan, Color::Yellow, Color::Red),
         crate::game::Theme::Rainbow => {
-            let elapsed = usize::try_from(game.start_time.elapsed().as_secs()).unwrap_or(0);
+            let elapsed = usize::try_from(game.elapsed_time_ms / 1000).unwrap_or(0);
             let colors =
                 [Color::Red, Color::Yellow, Color::Green, Color::Cyan, Color::Blue, Color::Magenta];
             let border_c = colors[elapsed % colors.len()];
@@ -600,7 +600,7 @@ fn draw_entities<W: Write>(
     }
 
     if let Some(power_up) = &game.power_up
-        && power_up.activation_time.is_none()
+        && power_up.activation_time_ms.is_none()
     {
         stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
         match power_up.p_type {
@@ -686,7 +686,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
-    let combo_str = if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
+    let combo_str = if game.combo > 1 && game.last_food_time_ms.is_some_and(|t| game.elapsed_time_ms.saturating_sub(t) < 5000) {
         format!(" | Combo: {}x", game.combo)
     } else {
         String::new()
@@ -701,7 +701,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else if game.mode == crate::game::GameMode::BattleRoyale {
         let max_margin = (game.width.min(game.height) / 2).saturating_sub(2);
         let shrink_str = if game.safe_zone_margin < max_margin {
-            let shrink_in = 10u64.saturating_sub(game.last_shrink_time.elapsed().as_secs());
+            let shrink_in = 10u64.saturating_sub((game.elapsed_time_ms.saturating_sub(game.last_shrink_time_ms)) / 1000);
             format!(" | Shrink in: {shrink_in}s")
         } else {
             " | MAX SHRINK".to_string()
@@ -712,14 +712,14 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             game.score, game.high_score, game.lives, game.difficulty, bot_str, shrink_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::TimeAttack {
-        let time_left = 60u64.saturating_sub(game.start_time.elapsed().as_secs());
+        let time_left = 60u64.saturating_sub(game.elapsed_time_ms / 1000);
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | Time: {}s | {:?}{}{}",
             game.score, game.high_score, game.lives, time_left, game.difficulty, bot_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::Speedrun {
-        let elapsed = game.start_time.elapsed().as_secs();
+        let elapsed = game.elapsed_time_ms / 1000;
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}{}",
@@ -735,9 +735,9 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     if let Some(power_up) = &game.power_up
-        && let Some(activation_time) = power_up.activation_time
+        && let Some(activation_time_ms) = power_up.activation_time_ms
     {
-        let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+        let elapsed = (game.elapsed_time_ms.saturating_sub(activation_time_ms)) / 1000;
         if elapsed < 5 {
             let remaining = 5 - elapsed;
             let power_up_name = match power_up.p_type {

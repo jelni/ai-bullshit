@@ -2,14 +2,26 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     io::{self, Read, Write},
-    time::{Duration, Instant, SystemTime},
 };
 
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::snake::{Direction, Point, Snake};
+
+#[derive(Serialize, Deserialize)]
+pub struct Replay {
+    pub initial_seed: u64,
+    pub width: u16,
+    pub height: u16,
+    pub wrap_mode: bool,
+    pub skin: char,
+    pub theme: Theme,
+    pub difficulty: Difficulty,
+    pub mode: GameMode,
+    pub events: Vec<(u64, Direction, u8)>, // (current_tick, direction, player_id)
+}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct AStarState {
@@ -121,8 +133,7 @@ pub enum PowerUpType {
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
-    #[serde_as(as = "Option<serde_with::TimestampSeconds<i64>>")]
-    pub activation_time: Option<SystemTime>,
+    pub activation_time_ms: Option<u64>,
 }
 
 pub fn beep() {
@@ -194,16 +205,16 @@ pub struct HistoryState {
     pub food: Point,
     pub obstacles: HashSet<Point>,
     pub score: u32,
-    pub bonus_food: Option<(Point, Instant)>,
+    pub bonus_food: Option<(Point, u64)>,
     pub power_up: Option<PowerUp>,
     pub lives: u32,
     pub food_eaten_session: u32,
     pub campaign_level: u32,
     pub safe_zone_margin: u16,
-    pub last_shrink_time: Instant,
-    pub last_obstacle_spawn_time: Instant,
+    pub last_shrink_time_ms: u64,
+    pub last_obstacle_spawn_time_ms: u64,
     pub combo: u32,
-    pub last_food_time: Option<Instant>,
+    pub last_food_time_ms: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -217,7 +228,7 @@ pub struct SaveState {
     pub obstacles: HashSet<Point>,
     pub score: u32,
     #[serde(default)]
-    pub bonus_food: Option<(Point, u64)>, // elapsed seconds
+    pub bonus_food: Option<(Point, u64)>, // spawned at elapsed_time_ms
     #[serde(default)]
     pub power_up: Option<PowerUp>,
     #[serde(default = "default_lives")]
@@ -243,7 +254,15 @@ pub struct SaveState {
     #[serde(default)]
     pub combo: u32,
     #[serde(default)]
-    pub last_food_time: Option<u64>,
+    pub last_food_time_ms: Option<u64>,
+    #[serde(default)]
+    pub current_tick: u64,
+    #[serde(default)]
+    pub elapsed_time_ms: u64,
+    #[serde(default)]
+    pub last_shrink_time_ms: u64,
+    #[serde(default)]
+    pub last_obstacle_spawn_time_ms: u64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -309,14 +328,15 @@ pub struct Game {
     pub wrap_mode: bool,
     pub snake: Snake,
     pub food: Point,
-    pub bonus_food: Option<(Point, Instant)>,
+    pub bonus_food: Option<(Point, u64)>,
     pub power_up: Option<PowerUp>,
     pub obstacles: HashSet<Point>,
     pub score: u32,
     pub high_score: u32,
     pub high_scores: Vec<(String, u32)>,
     pub state: GameState,
-    pub rng: rand::rngs::ThreadRng,
+    pub rng: rand::rngs::StdRng,
+    pub initial_seed: u64,
     pub just_died: bool,
     pub skin: char,
     pub theme: Theme,
@@ -325,7 +345,6 @@ pub struct Game {
     pub settings_selection: usize,
     pub nft_selection: usize,
     pub stats: Statistics,
-    pub start_time: Instant,
     pub death_message: String,
     pub difficulty: Difficulty,
     pub player_name: String,
@@ -342,13 +361,17 @@ pub struct Game {
     pub player2: Option<Snake>,
     pub campaign_level: u32,
     pub safe_zone_margin: u16,
-    pub last_shrink_time: Instant,
-    pub last_obstacle_spawn_time: Instant,
+    pub last_shrink_time_ms: u64,
+    pub last_obstacle_spawn_time_ms: u64,
     pub history: std::collections::VecDeque<HistoryState>,
     pub editor_cursor: Option<Point>,
     pub particles: Vec<Particle>,
     pub combo: u32,
-    pub last_food_time: Option<Instant>,
+    pub last_food_time_ms: Option<u64>,
+    pub current_tick: u64,
+    pub elapsed_time_ms: u64,
+    pub replay_events: Vec<(u64, Direction, u8)>,
+    pub is_replay: bool,
 }
 
 impl Game {
@@ -360,7 +383,8 @@ impl Game {
         theme: Theme,
         difficulty: Difficulty,
     ) -> Self {
-        let mut rng = rand::thread_rng();
+        let initial_seed = rand::thread_rng().r#gen();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(initial_seed);
         let start_x = width / 2;
         let start_y = height / 2;
         let snake = Snake::new(Point {
@@ -407,6 +431,7 @@ impl Game {
             high_scores,
             state: GameState::Menu,
             rng,
+            initial_seed,
             just_died: false,
             skin,
             theme,
@@ -415,7 +440,6 @@ impl Game {
             settings_selection: 0,
             nft_selection: 0,
             stats,
-            start_time: Instant::now(),
             death_message: String::new(),
             difficulty,
             player_name: String::new(),
@@ -428,13 +452,17 @@ impl Game {
             player2: None,
             campaign_level: 1,
             safe_zone_margin: 0,
-            last_shrink_time: Instant::now(),
-            last_obstacle_spawn_time: Instant::now(),
+            last_shrink_time_ms: 0,
+            last_obstacle_spawn_time_ms: 0,
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
             particles: Vec::new(),
             combo: 0,
-            last_food_time: None,
+            last_food_time_ms: None,
+            current_tick: 0,
+            elapsed_time_ms: 0,
+            replay_events: Vec::new(),
+            is_replay: false,
         }
     }
 
@@ -571,7 +599,7 @@ impl Game {
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
-            bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
+            bonus_food: self.bonus_food,
             power_up: self.power_up.clone(),
             lives: self.lives,
             difficulty: self.difficulty,
@@ -584,7 +612,11 @@ impl Game {
             campaign_level: self.campaign_level,
             safe_zone_margin: self.safe_zone_margin,
             combo: self.combo,
-            last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
+            last_food_time_ms: self.last_food_time_ms,
+            current_tick: self.current_tick,
+            elapsed_time_ms: self.elapsed_time_ms,
+            last_shrink_time_ms: self.last_shrink_time_ms,
+            last_obstacle_spawn_time_ms: self.last_obstacle_spawn_time_ms,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -640,9 +672,7 @@ impl Game {
                 self.food = state.food;
                 self.obstacles = state.obstacles;
                 self.score = state.score;
-                self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
-                });
+                self.bonus_food = state.bonus_food;
                 self.lives = state.lives;
                 self.power_up = state.power_up;
                 self.difficulty = state.difficulty;
@@ -654,14 +684,13 @@ impl Game {
                 self.food_eaten_session = state.food_eaten_session;
                 self.campaign_level = state.campaign_level;
                 self.safe_zone_margin = state.safe_zone_margin;
-                self.last_shrink_time = Instant::now();
-                self.last_obstacle_spawn_time = Instant::now();
+                self.last_shrink_time_ms = state.last_shrink_time_ms;
+                self.last_obstacle_spawn_time_ms = state.last_obstacle_spawn_time_ms;
                 self.combo = state.combo;
-                self.last_food_time = state.last_food_time.and_then(|elapsed| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed))
-                });
+                self.last_food_time_ms = state.last_food_time_ms;
+                self.current_tick = state.current_tick;
+                self.elapsed_time_ms = state.elapsed_time_ms;
                 self.state = GameState::Paused;
-                self.start_time = Instant::now();
                 self.update_high_scores();
                 self.history.clear();
                 true
@@ -673,7 +702,7 @@ impl Game {
         height: u16,
         snake: &Snake,
         avoid: impl Fn(&Point) -> bool,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
         margin: u16,
     ) -> Option<Point> {
         let mut i = 0;
@@ -726,7 +755,7 @@ impl Game {
         height: u16,
         snake: &Snake,
         avoid: impl Fn(&Point) -> bool,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
         count: usize,
         margin: u16,
     ) -> HashSet<Point> {
@@ -742,44 +771,6 @@ impl Game {
         obstacles
     }
 
-    pub fn shift_timers(&mut self, delta: Duration) {
-        // Shift start time so time logic doesn't race when paused
-        if let Some(new_time) = self.start_time.checked_add(delta) {
-            self.start_time = new_time;
-        }
-
-        // Shift bonus food spawn time
-        if let Some((pos, spawn_time)) = self.bonus_food
-            && let Some(new_time) = spawn_time.checked_add(delta)
-        {
-            self.bonus_food = Some((pos, new_time));
-        }
-
-        // Shift power up activation time
-        if let Some(power_up) = &mut self.power_up
-            && let Some(activation_time) = power_up.activation_time
-            && let Some(new_time) = activation_time.checked_add(delta)
-        {
-            power_up.activation_time = Some(new_time);
-        }
-
-        // Shift last shrink time
-        if let Some(new_time) = self.last_shrink_time.checked_add(delta) {
-            self.last_shrink_time = new_time;
-        }
-
-        // Shift last obstacle spawn time
-        if let Some(new_time) = self.last_obstacle_spawn_time.checked_add(delta) {
-            self.last_obstacle_spawn_time = new_time;
-        }
-
-        // Shift last food time
-        if let Some(last_food) = self.last_food_time
-            && let Some(new_time) = last_food.checked_add(delta)
-        {
-            self.last_food_time = Some(new_time);
-        }
-    }
 
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
@@ -906,17 +897,18 @@ impl Game {
         self.lives = 3;
         self.state = GameState::Playing;
         self.just_died = false;
-        self.start_time = Instant::now();
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_game = false;
         self.safe_zone_margin = 0;
-        self.last_shrink_time = Instant::now();
-        self.last_obstacle_spawn_time = Instant::now();
+        self.last_shrink_time_ms = 0;
+        self.last_obstacle_spawn_time_ms = 0;
         self.history.clear();
         self.particles.clear();
         self.combo = 0;
-        self.last_food_time = None;
+        self.last_food_time_ms = None;
+        self.current_tick = 0;
+        self.elapsed_time_ms = 0;
     }
 
     fn respawn(&mut self) {
@@ -951,8 +943,8 @@ impl Game {
         }
 
         self.safe_zone_margin = 0;
-        self.last_shrink_time = Instant::now();
-        self.last_obstacle_spawn_time = Instant::now();
+        self.last_shrink_time_ms = self.elapsed_time_ms;
+        self.last_obstacle_spawn_time_ms = self.elapsed_time_ms;
     }
 
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
@@ -1029,8 +1021,8 @@ impl Game {
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::PassThroughWalls
-                && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                && p.activation_time_ms
+                    .is_some_and(|t| self.elapsed_time_ms.saturating_sub(t) < 5000)
         });
 
         let mut hit_wall1 = false;
@@ -1081,10 +1073,10 @@ impl Game {
             self.food_eaten_session = state.food_eaten_session;
             self.campaign_level = state.campaign_level;
             self.safe_zone_margin = state.safe_zone_margin;
-            self.last_shrink_time = state.last_shrink_time;
-            self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
+            self.last_shrink_time_ms = state.last_shrink_time_ms;
+            self.last_obstacle_spawn_time_ms = state.last_obstacle_spawn_time_ms;
             self.combo = state.combo;
-            self.last_food_time = state.last_food_time;
+            self.last_food_time_ms = state.last_food_time_ms;
         }
     }
 
@@ -1101,10 +1093,10 @@ impl Game {
             food_eaten_session: self.food_eaten_session,
             campaign_level: self.campaign_level,
             safe_zone_margin: self.safe_zone_margin,
-            last_shrink_time: self.last_shrink_time,
-            last_obstacle_spawn_time: self.last_obstacle_spawn_time,
+            last_shrink_time_ms: self.last_shrink_time_ms,
+            last_obstacle_spawn_time_ms: self.last_obstacle_spawn_time_ms,
             combo: self.combo,
-            last_food_time: self.last_food_time,
+            last_food_time_ms: self.last_food_time_ms,
         };
 
         self.history.push_back(state);
@@ -1131,11 +1123,56 @@ impl Game {
         }
     }
 
+    pub fn save_replay(&self) {
+        if self.is_replay { return; } // Don't save a replay of a replay
+        let replay = Replay {
+            initial_seed: self.initial_seed,
+            width: self.width,
+            height: self.height,
+            wrap_mode: self.wrap_mode,
+            skin: self.skin,
+            theme: self.theme,
+            difficulty: self.difficulty,
+            mode: self.mode,
+            events: self.replay_events.clone(),
+        };
+        if let Ok(json) = serde_json::to_string(&replay) {
+            let _ = Self::atomic_write("last_replay.json", json);
+        }
+    }
+
+    pub fn load_replay(&mut self) -> bool {
+        if let Ok(file) = File::open("last_replay.json")
+            && let Ok(replay) = serde_json::from_reader::<_, Replay>(file.take(10 * 1024 * 1024)) {
+                self.width = replay.width;
+                self.height = replay.height;
+                self.wrap_mode = replay.wrap_mode;
+                self.skin = replay.skin;
+                self.theme = replay.theme;
+                self.difficulty = replay.difficulty;
+                self.mode = replay.mode;
+                self.initial_seed = replay.initial_seed;
+
+                // Set up standard game
+                self.rng = rand::rngs::StdRng::seed_from_u64(self.initial_seed);
+                self.reset(); // Uses the newly seeded RNG
+
+                self.is_replay = true;
+                self.replay_events = replay.events;
+                self.replay_events.reverse(); // So we can pop from the back efficiently
+                return true;
+            }
+        false
+    }
+
     #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
-    pub fn update(&mut self) {
+    pub fn update(&mut self, dt_ms: u64) {
         if self.state != GameState::Playing {
             return;
         }
+
+        self.current_tick += 1;
+        self.elapsed_time_ms += dt_ms;
 
         self.save_history_state();
 
@@ -1146,7 +1183,7 @@ impl Game {
         }
         self.particles.retain(|p| p.lifetime > 0.0);
 
-        if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
+        if self.mode == GameMode::TimeAttack && self.elapsed_time_ms >= 60000 {
             self.handle_death("Time's up!");
             return;
         }
@@ -1156,11 +1193,11 @@ impl Game {
             return;
         }
 
-        if self.mode == GameMode::BattleRoyale && self.last_shrink_time.elapsed() >= Duration::from_secs(10) {
+        if self.mode == GameMode::BattleRoyale && self.elapsed_time_ms.saturating_sub(self.last_shrink_time_ms) >= 10000 {
             let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
             if self.safe_zone_margin < max_margin {
                 self.safe_zone_margin += 1;
-                self.last_shrink_time = Instant::now();
+                self.last_shrink_time_ms = self.elapsed_time_ms;
 
                 // Relocate out-of-bounds food
                 if self.food.x <= self.safe_zone_margin || self.food.x >= self.width - 1 - self.safe_zone_margin ||
@@ -1188,8 +1225,8 @@ impl Game {
             }
         }
 
-        if self.mode == GameMode::Survival && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(3) {
-            self.last_obstacle_spawn_time = Instant::now();
+        if self.mode == GameMode::Survival && self.elapsed_time_ms.saturating_sub(self.last_obstacle_spawn_time_ms) >= 3000 {
+            self.last_obstacle_spawn_time_ms = self.elapsed_time_ms;
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
                     || *p == self.food
@@ -1214,14 +1251,32 @@ impl Game {
         self.handle_autopilot_moves();
 
         // --- Apply Input ---
-        if let Some(dir) = self.snake.direction_queue.pop_front() {
-            self.snake.direction = dir;
-        }
-
-        if let Some(p2) = &mut self.player2
-            && let Some(dir) = p2.direction_queue.pop_front() {
-                p2.direction = dir;
+        if self.is_replay {
+            while let Some(&(tick, dir, player)) = self.replay_events.last() {
+                if tick == self.current_tick {
+                    self.replay_events.pop();
+                    if player == 1 {
+                        self.snake.direction = dir;
+                    } else if player == 2
+                        && let Some(p2) = &mut self.player2 {
+                            p2.direction = dir;
+                        }
+                } else {
+                    break;
+                }
             }
+        } else {
+            if let Some(dir) = self.snake.direction_queue.pop_front() {
+                self.snake.direction = dir;
+                self.replay_events.push((self.current_tick, dir, 1));
+            }
+
+            if let Some(p2) = &mut self.player2
+                && let Some(dir) = p2.direction_queue.pop_front() {
+                    p2.direction = dir;
+                    self.replay_events.push((self.current_tick, dir, 2));
+                }
+        }
 
         self.manage_bonus_food();
         self.manage_power_ups();
@@ -1246,8 +1301,8 @@ impl Game {
 
         let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::Invincibility
-                && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                && p.activation_time_ms
+                    .is_some_and(|t| self.elapsed_time_ms.saturating_sub(t) < 5000)
         });
 
         // --- Resolution ---
@@ -1271,8 +1326,8 @@ impl Game {
         let old_food_eaten_session = self.food_eaten_session;
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::ScoreMultiplier
-                && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                && p.activation_time_ms
+                    .is_some_and(|t| self.elapsed_time_ms.saturating_sub(t) < 5000)
         });
 
         let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier);
@@ -1449,7 +1504,7 @@ impl Game {
                     self.snake.rebuild_map();
                 }
             } else {
-                p.activation_time = Some(SystemTime::now());
+                p.activation_time_ms = Some(self.elapsed_time_ms);
             }
             beep();
         }
@@ -1460,7 +1515,7 @@ impl Game {
                 || p.p_type == PowerUpType::Shrink
                 || p.p_type == PowerUpType::ClearObstacles
                 || p.p_type == PowerUpType::Teleport)
-            && p.activation_time.is_none()
+            && p.activation_time_ms.is_none()
             && final_head == p.location
         {
             self.power_up = None;
@@ -1471,8 +1526,8 @@ impl Game {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
             self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crossterm::style::Color::Magenta, '★');
 
-            if let Some(last_time) = self.last_food_time {
-                if last_time.elapsed() < Duration::from_secs(5) {
+            if let Some(last_time_ms) = self.last_food_time_ms {
+                if self.elapsed_time_ms.saturating_sub(last_time_ms) < 5000 {
                     self.combo += 1;
                 } else {
                     self.combo = 1;
@@ -1480,7 +1535,7 @@ impl Game {
             } else {
                 self.combo = 1;
             }
-            self.last_food_time = Some(Instant::now());
+            self.last_food_time_ms = Some(self.elapsed_time_ms);
 
             let diff_multiplier = match self.difficulty {
                 Difficulty::Easy => 1,
@@ -1512,8 +1567,8 @@ impl Game {
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crossterm::style::Color::Green, '+');
 
-        if let Some(last_time) = self.last_food_time {
-            if last_time.elapsed() < Duration::from_secs(5) {
+        if let Some(last_time_ms) = self.last_food_time_ms {
+            if self.elapsed_time_ms.saturating_sub(last_time_ms) < 5000 {
                 self.combo += 1;
             } else {
                 self.combo = 1;
@@ -1521,7 +1576,7 @@ impl Game {
         } else {
             self.combo = 1;
         }
-        self.last_food_time = Some(Instant::now());
+        self.last_food_time_ms = Some(self.elapsed_time_ms);
 
         let diff_multiplier = match self.difficulty {
             Difficulty::Easy => 1,
@@ -1620,7 +1675,7 @@ impl Game {
 
     fn handle_win(&mut self) {
         self.stats.games_played += 1;
-        self.stats.total_time_s += self.start_time.elapsed().as_secs();
+        self.stats.total_time_s += self.elapsed_time_ms / 1000;
         self.save_stats();
         self.check_achievements();
 
@@ -1674,15 +1729,15 @@ impl Game {
                 self.power_up = Some(PowerUp {
                     p_type,
                     location,
-                    activation_time: None,
+                    activation_time_ms: None,
                 });
             }
         }
     }
 
     fn manage_bonus_food(&mut self) {
-        if let Some((_, spawn_time)) = self.bonus_food {
-            if spawn_time.elapsed() > Duration::from_secs(5) {
+        if let Some((_, spawn_time_ms)) = self.bonus_food {
+            if self.elapsed_time_ms.saturating_sub(spawn_time_ms) > 5000 {
                 self.bonus_food = None;
             }
         } else if self.rng.gen_bool(0.01) {
@@ -1699,7 +1754,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                self.bonus_food = Some((bonus, Instant::now()));
+                self.bonus_food = Some((bonus, self.elapsed_time_ms));
             }
         }
     }
@@ -1729,8 +1784,8 @@ impl Game {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
                 && pu
-                    .activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                    .activation_time_ms
+                    .is_some_and(|t| self.elapsed_time_ms.saturating_sub(t) < 5000)
         });
 
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
@@ -1749,8 +1804,8 @@ impl Game {
         let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
                 && pu
-                    .activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                    .activation_time_ms
+                    .is_some_and(|t| self.elapsed_time_ms.saturating_sub(t) < 5000)
         });
 
         if !is_invincible {
@@ -1785,7 +1840,7 @@ impl Game {
             targets.push(bf_p);
         }
         if let Some(pu) = &self.power_up
-            && pu.activation_time.is_none()
+            && pu.activation_time_ms.is_none()
         {
             targets.push(pu.location);
         }
@@ -1808,7 +1863,7 @@ impl Game {
                 targets.push(bf_p);
             }
             if let Some(pu) = &self.power_up
-                && pu.activation_time.is_none()
+                && pu.activation_time_ms.is_none()
             {
                 targets.push(pu.location);
             }
@@ -1835,8 +1890,8 @@ impl Game {
         let heuristic = |p: Point| -> u16 {
             let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::PassThroughWalls
-                    && pu.activation_time.is_some_and(|time| {
-                        time.elapsed().unwrap_or_default() < Duration::from_secs(5)
+                    && pu.activation_time_ms.is_some_and(|time| {
+                        self.elapsed_time_ms.saturating_sub(time) < 5000
                     })
             });
             targets
@@ -1996,9 +2051,11 @@ impl Game {
         beep();
 
         if self.lives == 0 {
+            self.save_replay();
+
             // Update stats on Game Over
             self.stats.games_played += 1;
-            self.stats.total_time_s += self.start_time.elapsed().as_secs();
+            self.stats.total_time_s += self.elapsed_time_ms / 1000;
             self.save_stats();
             self.check_achievements();
 
@@ -2152,7 +2209,7 @@ mod tests {
                 x: 5,
                 y: 5,
             },
-            activation_time: None,
+            activation_time_ms: None,
         });
         game.reset();
         assert!(game.power_up.is_none(), "Power-up should be cleared on reset");

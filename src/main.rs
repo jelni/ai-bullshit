@@ -91,7 +91,6 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-#[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
 fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
     let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
@@ -107,8 +106,6 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     // Initial draw
     ui::draw(&game, stdout)?;
 
-    let mut last_frame = Instant::now();
-
     'mainloop: loop {
         let base_tick_rate = match game.difficulty {
             game::Difficulty::Easy => Duration::from_millis(200),
@@ -118,23 +115,13 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             game::Difficulty::GodMode => Duration::from_millis(30),
         };
 
-        let delta = last_frame.elapsed();
-        last_frame = Instant::now();
-
-        if game.state != GameState::Playing {
-            game.shift_timers(delta);
-        }
-
         if game.state == GameState::Playing && game.just_died {
             // We just died (lost a life), show countdown before resuming
             game.just_died = false; // Reset flag so we don't loop here
-            let start = Instant::now();
             for i in (1..=3).rev() {
                 ui::draw_countdown(&game, stdout, i)?;
                 std::thread::sleep(Duration::from_secs(1));
             }
-            game.shift_timers(start.elapsed());
-            last_frame = Instant::now();
             last_tick = Instant::now();
         }
         // Calculate dynamic tick rate based on food eaten
@@ -148,9 +135,9 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
         };
 
         if let Some(power_up) = &mut game.power_up
-            && let Some(activation_time) = power_up.activation_time
+            && let Some(activation_time_ms) = power_up.activation_time_ms
         {
-            if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+            if game.elapsed_time_ms.saturating_sub(activation_time_ms) < 5000 {
                 match power_up.p_type {
                     game::PowerUpType::SlowDown => {
                         current_tick_rate += Duration::from_millis(100); // Slow down
@@ -188,10 +175,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                             break 'mainloop;
                         },
                         KeyAction::BossKey => {
-                            let boss_key_start = Instant::now();
                             handle_boss_key(&game, stdout);
-                            game.shift_timers(boss_key_start.elapsed());
-                            last_frame = Instant::now();
                             last_tick = Instant::now();
                         },
                         KeyAction::Continue => {},
@@ -210,7 +194,8 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
 
         if last_tick.elapsed() >= current_tick_rate {
             if game.state == GameState::Playing {
-                game.update();
+                #[expect(clippy::cast_possible_truncation, reason = "Current tick rate will never exceed u64 max")]
+                game.update(current_tick_rate.as_millis() as u64);
             }
             ui::draw(&game, stdout)?;
             last_tick = Instant::now();
@@ -328,16 +313,19 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             12 => {
                 let _ = game.load_game();
             },
-            13 => game.state = GameState::Settings,
-            14 => game.state = GameState::NftShop,
-            15 => game.state = GameState::Stats,
-            16 => game.state = GameState::Achievements,
-            17 => game.state = GameState::Help,
-            18 => {
+            13 => {
+                let _ = game.load_replay();
+            },
+            14 => game.state = GameState::Settings,
+            15 => game.state = GameState::NftShop,
+            16 => game.state = GameState::Stats,
+            17 => game.state = GameState::Achievements,
+            18 => game.state = GameState::Help,
+            19 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            19 => {
+            20 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -345,7 +333,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            20 => {
+            21 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -355,11 +343,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 20;
+                game.menu_selection = 21;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 20 {
+            if game.menu_selection < 21 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
