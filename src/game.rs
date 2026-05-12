@@ -132,6 +132,7 @@ pub enum GameMode {
     #[default]
     SinglePlayer,
     LocalMultiplayer,
+    OnlineMultiplayer,
     PlayerVsBot,
     BotVsBot,
 }
@@ -660,7 +661,7 @@ impl Game {
                 });
                 self.player2 = None;
             },
-            GameMode::LocalMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
+            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -737,7 +738,7 @@ impl Game {
                     !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
                 });
             },
-            GameMode::LocalMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
+            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
