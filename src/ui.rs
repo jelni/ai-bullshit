@@ -27,6 +27,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Settings => draw_settings(game, stdout)?,
         GameState::NftShop => draw_nft_shop(game, stdout)?,
         GameState::Achievements => draw_achievements(game, stdout)?,
+        GameState::LevelEditor => draw_level_editor(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -57,7 +58,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Quit"];
+        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -456,6 +457,34 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     draw_entities(game, stdout, food_color, snake_color, obs_color)?;
     draw_status(game, stdout)?;
     draw_overlays(game, stdout)?;
+
+    Ok(())
+}
+
+fn draw_level_editor<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    draw_borders(game, stdout, Color::Cyan)?;
+
+    // Draw existing obstacles
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    for obs in &game.obstacles {
+        stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
+        write!(stdout, "X")?;
+    }
+
+    // Draw cursor
+    if let Some(cursor) = game.editor_cursor {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        stdout.queue(cursor::MoveTo(cursor.x, cursor.y))?;
+        write!(stdout, "+")?;
+    }
+
+    // Draw instructions at the bottom
+    let msg = "WASD/Arrows: Move | Space: Toggle | Q/Esc: Save & Exit";
+    let msg_len = u16::try_from(msg.len()).unwrap_or(0);
+    let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(x_pos, game.height))?;
+    write!(stdout, "{msg}")?;
 
     Ok(())
 }
