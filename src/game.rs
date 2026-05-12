@@ -137,6 +137,7 @@ pub enum GameMode {
     PlayerVsBot,
     BotVsBot,
     BattleRoyale,
+    TimeAttack,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -720,7 +721,7 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -747,7 +748,7 @@ impl Game {
             Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
@@ -755,7 +756,7 @@ impl Game {
         };
 
         let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::Campaign {
             self.obstacles = self.generate_campaign_obstacles();
@@ -804,7 +805,7 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign => {
+            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -953,6 +954,11 @@ impl Game {
             return;
         }
 
+        if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
+            self.handle_death("Time's up!");
+            return;
+        }
+
         if self.mode == GameMode::BattleRoyale && self.last_shrink_time.elapsed() >= Duration::from_secs(10) {
             let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
             if self.safe_zone_margin < max_margin {
@@ -1082,7 +1088,7 @@ impl Game {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer {
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");
