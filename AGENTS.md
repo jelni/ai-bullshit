@@ -22,5 +22,9 @@ As an AI agent working on this codebase, you must adhere to the following princi
 ## 6. Continuous Improvement
 - Constantly seek to improve files containing instructions for AI agents (like this one). If you find ways to make them clearer, more accurate, or more effective, autonomously update them.
 
+## 7. Verify Everything
+- Always verify your work. Use appropriate tools to check if the file changes are correct and build properly.
+- Ensure that the tests are passing by running test commands after modifications.
+
 ## Remember
 You are a core part of this team. Keep momentum high, maintain a confident and definite view of the future, and always keep shipping!

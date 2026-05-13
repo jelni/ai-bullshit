@@ -861,8 +861,8 @@ impl Game {
                     y,
                 });
             }
-        } else {
-            // Level 3+: cross
+        } else if self.campaign_level == 3 {
+            // Level 3: cross
             let center_x = self.width / 2;
             let center_y = self.height / 2;
             obstacles.insert(Point {
@@ -885,6 +885,53 @@ impl Game {
                 x: center_x,
                 y: center_y + 1,
             });
+        } else {
+            // Procedurally generated level for > 3
+            // We use a simple hash-based seeded random number generator logic to ensure
+            // deterministic obstacle placement based on the campaign level, width, and height.
+            let num_obstacles = std::cmp::min(10 + (self.campaign_level * 2), 50);
+
+            let margin = 2; // leave margin from walls
+            let safe_w = self.width.saturating_sub(margin * 2).max(1);
+            let safe_h = self.height.saturating_sub(margin * 2).max(1);
+
+            let mut state = u64::from(self.campaign_level)
+                .wrapping_mul(12_345_678_901)
+                .wrapping_add(u64::from(self.width).wrapping_mul(987_654_321))
+                .wrapping_add(u64::from(self.height).wrapping_mul(135_792_468));
+
+            let mut next_rand = || {
+                state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                state >> 32
+            };
+
+            for _ in 0..num_obstacles {
+                let x_rand = u16::try_from(next_rand() % u64::from(safe_w)).unwrap_or(0);
+                let y_rand = u16::try_from(next_rand() % u64::from(safe_h)).unwrap_or(0);
+
+                let x = margin + x_rand;
+                let y = margin + y_rand;
+
+                // Keep the center clear for snake spawn
+                let start_x = self.width / 2;
+                let start_y = self.height / 2;
+
+                let dist_x = (i32::from(x) - i32::from(start_x)).abs();
+                let dist_y = (i32::from(y) - i32::from(start_y)).abs();
+
+                if dist_x > 2 || dist_y > 2 {
+                    obstacles.insert(Point { x, y });
+
+                    // Sometimes spawn a cluster or wall
+                    if next_rand() % 100 < 30 {
+                        if next_rand() % 100 < 50 && x + 1 < self.width - margin {
+                            obstacles.insert(Point { x: x + 1, y });
+                        } else if y + 1 < self.height - margin {
+                            obstacles.insert(Point { x, y: y + 1 });
+                        }
+                    }
+                }
+            }
         }
         obstacles
     }
