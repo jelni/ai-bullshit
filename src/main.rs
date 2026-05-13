@@ -250,7 +250,6 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::NftShop => handle_nft_shop_input(code, game),
         GameState::Achievements => handle_achievements_input(code, game),
         GameState::LevelEditor => handle_level_editor_input(code, game),
-        GameState::UpgradesShop => handle_upgrades_shop_input(code, game),
     };
 
     if should_continue {
@@ -337,15 +336,14 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             },
             13 => game.state = GameState::Settings,
             14 => game.state = GameState::NftShop,
-            15 => game.state = GameState::UpgradesShop,
-            16 => game.state = GameState::Stats,
-            17 => game.state = GameState::Achievements,
-            18 => game.state = GameState::Help,
-            19 => {
+            15 => game.state = GameState::Stats,
+            16 => game.state = GameState::Achievements,
+            17 => game.state = GameState::Help,
+            18 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            20 => {
+            19 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -353,7 +351,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            21 => {
+            20 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -363,11 +361,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 21;
+                game.menu_selection = 20;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 21 {
+            if game.menu_selection < 20 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -707,49 +705,6 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                     game.skin = skins[next_idx];
                 },
                 _ => {},
-            }
-        },
-        _ => {},
-    }
-    true
-}
-
-fn handle_upgrades_shop_input(code: KeyCode, game: &mut Game) -> bool {
-    match code {
-        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
-            game.state = GameState::Menu;
-        },
-        KeyCode::Up | KeyCode::Char('w' | 'W') => {
-            if game.upgrades_selection > 0 {
-                game.upgrades_selection -= 1;
-            } else {
-                game.upgrades_selection = 1;
-            }
-        },
-        KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.upgrades_selection < 1 {
-                game.upgrades_selection += 1;
-            } else {
-                game.upgrades_selection = 0;
-            }
-        },
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            if game.upgrades_selection == 0 {
-                let cost = (game.stats.upgrades.starting_lives + 1) * 500;
-                if game.stats.coins >= cost {
-                    game.stats.coins -= cost;
-                    game.stats.upgrades.starting_lives += 1;
-                    game.save_stats();
-                    crate::game::beep();
-                }
-            } else if game.upgrades_selection == 1 {
-                let cost = (game.stats.upgrades.coin_multiplier + 1) * 1000;
-                if game.stats.coins >= cost {
-                    game.stats.coins -= cost;
-                    game.stats.upgrades.coin_multiplier += 1;
-                    game.save_stats();
-                    crate::game::beep();
-                }
             }
         },
         _ => {},

@@ -148,7 +148,6 @@ pub enum GameState {
     EnterName,
     ConfirmQuit,
     LevelEditor,
-    UpgradesShop,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -279,12 +278,6 @@ pub fn default_unlocked_themes() -> Vec<Theme> {
     ]
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
-pub struct Upgrades {
-    pub starting_lives: u32,
-    pub coin_multiplier: u32,
-}
-
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -299,8 +292,6 @@ pub struct Statistics {
     pub unlocked_themes: Vec<Theme>,
     #[serde(default)]
     pub unlocked_achievements: Vec<Achievement>,
-    #[serde(default)]
-    pub upgrades: Upgrades,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -354,7 +345,6 @@ pub struct Game {
     pub menu_selection: usize,
     pub settings_selection: usize,
     pub nft_selection: usize,
-    pub upgrades_selection: usize,
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
@@ -430,7 +420,6 @@ impl Game {
             Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty));
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
-        let starting_lives = 3 + stats.upgrades.starting_lives;
         Self {
             width,
             height,
@@ -448,11 +437,10 @@ impl Game {
             just_died: false,
             skin,
             theme,
-            lives: starting_lives,
+            lives: 3,
             menu_selection: 0,
             settings_selection: 0,
             nft_selection: 0,
-            upgrades_selection: 0,
             stats,
             start_time: Instant::now(),
             death_message: String::new(),
@@ -1053,7 +1041,7 @@ impl Game {
         self.bonus_food = None;
         self.power_up = None;
         self.score = 0;
-        self.lives = 3 + self.stats.upgrades.starting_lives;
+        self.lives = 3;
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = Instant::now();
@@ -2150,7 +2138,7 @@ impl Game {
         self.food_eaten_session += 1;
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
-        self.stats.coins += added_score * (1 + self.stats.upgrades.coin_multiplier);
+        self.stats.coins += added_score;
         beep();
 
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
