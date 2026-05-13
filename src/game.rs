@@ -299,6 +299,8 @@ pub struct Boss {
     pub health: u32,
     pub max_health: u32,
     pub move_timer: u8,
+    #[serde(default)]
+    pub shoot_timer: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1379,6 +1381,7 @@ impl Game {
                     health: 10,
                     max_health: 10,
                     move_timer: 0,
+                    shoot_timer: 0,
                 });
                 self.spawn_particles(
                     f32::from(pos.x),
@@ -1425,6 +1428,47 @@ impl Game {
                     && !self.obstacles.contains(&new_pos)
                 {
                     boss.position = new_pos;
+                }
+            }
+
+            boss.shoot_timer += 1;
+            if boss.shoot_timer >= 15 {
+                boss.shoot_timer = 0;
+                let head = self.snake.head();
+                let dx = i32::from(head.x) - i32::from(boss.position.x);
+                let dy = i32::from(head.y) - i32::from(boss.position.y);
+
+                let dir = if dx.abs() > dy.abs() {
+                    if dx > 0 {
+                        crate::snake::Direction::Right
+                    } else {
+                        crate::snake::Direction::Left
+                    }
+                } else {
+                    if dy > 0 {
+                        crate::snake::Direction::Down
+                    } else {
+                        crate::snake::Direction::Up
+                    }
+                };
+
+                let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if laser_pos.x > margin
+                    && laser_pos.x < self.width - 1 - margin
+                    && laser_pos.y > margin
+                    && laser_pos.y < self.height - 1 - margin
+                {
+                    self.lasers.push(Laser {
+                        position: laser_pos,
+                        direction: dir,
+                        player: 3, // 3 represents Boss
+                    });
+                    beep();
                 }
             }
         }
@@ -1571,6 +1615,13 @@ impl Game {
                         p1_dead = true;
                     }
                     destroyed = true;
+                    self.spawn_particles(
+                        f32::from(laser.position.x),
+                        f32::from(laser.position.y),
+                        10,
+                        crate::color::Color::Red,
+                        'x',
+                    );
                     break;
                 }
                 if let Some(p2) = &self.player2
