@@ -16,15 +16,16 @@ jobs:
             # Wait for any potential conflict-checking jobs to complete or fail
             # we need to set the PR_URL explicitly since sometimes gh fails to resolve it
             CHECKS=$(gh pr checks "$PR_URL" --json state,name 2>/dev/null || echo '[]')
+            STATE=$(echo "$CHECKS" | jq -r '.[] | select(.name == "check-conflicts") | .state' 2>/dev/null || echo "")
 
             # If check-conflicts failed, it means we have unresolved conflicts pushed as markers
-            if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"FAILURE"'; then
+            if [ "$STATE" = "FAILURE" ]; then
                echo "check-conflicts failed (likely due to unresolved merge conflicts), not merging."
                sh -c "exit 1"
             fi
 
             # If it's SUCCESS, we can try to merge
-            if echo "$CHECKS" | grep -q '"name":"check-conflicts","state":"SUCCESS"'; then
+            if [ "$STATE" = "SUCCESS" ]; then
               if gh pr merge --auto --delete-branch --squash "$PR_URL" >/dev/null 2>&1; then
                 sh -c "exit 0"
               fi
