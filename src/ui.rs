@@ -31,7 +31,6 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::NftShop => draw_nft_shop(game, stdout)?,
         GameState::Achievements => draw_achievements(game, stdout)?,
         GameState::LevelEditor => draw_level_editor(game, stdout)?,
-        GameState::UpgradesShop => draw_upgrades_shop(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -80,7 +79,6 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Load Game",
         "Settings",
         "NFT Shop",
-        "Upgrades Shop",
         "Statistics",
         "Achievements",
         "Help",
@@ -1182,60 +1180,4 @@ mod settings_tests {
         assert!(output.contains("> Theme: Dark <"), "Settings should indicate selected item");
         assert!(output.contains("Wrap Mode: Off"), "Settings should show Wrap Mode");
     }
-}
-
-fn draw_upgrades_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    let title = "UPGRADES SHOP";
-    let title_len = u16::try_from(title.len()).unwrap_or(0);
-
-    stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
-    write!(stdout, "{title}")?;
-
-    let balance_msg = format!("Coins: {}", game.stats.coins);
-    let balance_len = u16::try_from(balance_msg.len()).unwrap_or(0);
-    stdout.queue(SetForegroundColor(Color::Yellow))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(balance_len / 2), game.height / 4 + 2))?;
-    write!(stdout, "{balance_msg}")?;
-
-    let cost_lives = (game.stats.upgrades.starting_lives + 1) * 500;
-    let cost_coins = (game.stats.upgrades.coin_multiplier + 1) * 1000;
-
-    let items = [
-        format!("Extra Starting Life: {}c (Current: {})", cost_lives, game.stats.upgrades.starting_lives),
-        format!("Coin Multiplier: {}c (Current: {}x)", cost_coins, game.stats.upgrades.coin_multiplier),
-    ];
-
-    for (i, item_msg) in items.iter().enumerate() {
-        let y_pos = game.height / 2 - 3 + u16::try_from(i).unwrap_or(0) * 2;
-        let cost = if i == 0 { cost_lives } else { cost_coins };
-
-        if i == game.upgrades_selection {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item_msg.len()).unwrap_or(0) / 2).saturating_sub(2),
-                y_pos,
-            ))?;
-            write!(stdout, "> {item_msg} <")?;
-        } else {
-            if game.stats.coins >= cost {
-                stdout.queue(SetForegroundColor(Color::White))?;
-            } else {
-                stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-            }
-            stdout.queue(cursor::MoveTo(
-                (game.width / 2).saturating_sub(u16::try_from(item_msg.len()).unwrap_or(0) / 2),
-                y_pos,
-            ))?;
-            write!(stdout, "{item_msg}")?;
-        }
-    }
-
-    let help_msg = "Use UP/DOWN to select, ENTER to buy, Q to go back";
-    let help_len = u16::try_from(help_msg.len()).unwrap_or(0);
-    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
-    write!(stdout, "{help_msg}")?;
-
-    Ok(())
 }
