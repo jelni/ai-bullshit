@@ -51,7 +51,7 @@ pub fn run() -> Result<(), JsValue> {
                 "t" | "T" => {
                     game.auto_pilot = !game.auto_pilot;
                     if game.auto_pilot {
-                        game.used_bot_this_game = true;
+                        game.used_bot_this_session = true;
                     }
                 },
                 "r" | "R" => {
