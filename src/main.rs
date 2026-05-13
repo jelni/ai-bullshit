@@ -1,3 +1,4 @@
+mod color;
 mod game;
 mod snake;
 mod ui;

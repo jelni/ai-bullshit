@@ -489,7 +489,7 @@ fn draw_chat<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 for (i, (msg, color)) in game.chat_log.iter().enumerate() {
                     let y = start_y + u16::try_from(i).unwrap_or(0);
                     if y < game.height {
-                        stdout.queue(SetForegroundColor(*color))?;
+                        stdout.queue(SetForegroundColor((*color).into()))?;
                         stdout.queue(cursor::MoveTo(chat_start_x, y))?;
                         // Truncate message if it's too long for the chat area
                         let display_msg = if msg.len() > usize::from(chat_width) {
@@ -604,7 +604,7 @@ fn draw_entities<W: Write>(
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
                 Color::DarkGrey
             } else {
-                p.color
+                p.color.into()
             };
 
             stdout.queue(cursor::MoveTo(px, py))?;
