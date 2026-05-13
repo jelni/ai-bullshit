@@ -267,7 +267,15 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
 
 #[must_use]
 pub fn default_unlocked_themes() -> Vec<Theme> {
-    vec![Theme::Classic, Theme::Dark, Theme::Retro, Theme::Neon, Theme::Ocean, Theme::Matrix, Theme::Galactic]
+    vec![
+        Theme::Classic,
+        Theme::Dark,
+        Theme::Retro,
+        Theme::Neon,
+        Theme::Ocean,
+        Theme::Matrix,
+        Theme::Galactic,
+    ]
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -1585,30 +1593,31 @@ impl Game {
                     break;
                 }
                 if let Some(boss) = &mut self.boss
-                    && boss.position == laser.position {
-                        boss.health = boss.health.saturating_sub(1);
-                        destroyed = true;
-                        if boss.health == 0 {
-                            self.score += 100;
-                            self.spawn_particles(
-                                f32::from(laser.position.x),
-                                f32::from(laser.position.y),
-                                30,
-                                crate::color::Color::Magenta,
-                                'B',
-                            );
-                            self.boss = None;
-                        } else {
-                            self.spawn_particles(
-                                f32::from(laser.position.x),
-                                f32::from(laser.position.y),
-                                5,
-                                crate::color::Color::Magenta,
-                                '*',
-                            );
-                        }
-                        break;
+                    && boss.position == laser.position
+                {
+                    boss.health = boss.health.saturating_sub(1);
+                    destroyed = true;
+                    if boss.health == 0 {
+                        self.score += 100;
+                        self.spawn_particles(
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            30,
+                            crate::color::Color::Magenta,
+                            'B',
+                        );
+                        self.boss = None;
+                    } else {
+                        self.spawn_particles(
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            5,
+                            crate::color::Color::Magenta,
+                            '*',
+                        );
                     }
+                    break;
+                }
                 // Despawn laser if it hits a snake
                 if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
                     if !is_invincible {
@@ -1625,13 +1634,15 @@ impl Game {
                     break;
                 }
                 if let Some(p2) = &self.player2
-                    && laser.player != 2 && p2.body_map.contains_key(&laser.position) {
-                        if !is_invincible {
-                            p2_dead = true;
-                        }
-                        destroyed = true;
-                        break;
+                    && laser.player != 2
+                    && p2.body_map.contains_key(&laser.position)
+                {
+                    if !is_invincible {
+                        p2_dead = true;
                     }
+                    destroyed = true;
+                    break;
+                }
             }
 
             if !destroyed {
