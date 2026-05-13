@@ -154,7 +154,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time
         {
-            if activation_time.elapsed().unwrap_or_default() < Duration::from_secs(5) {
+            if web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(activation_time) < 5 {
                 match power_up.p_type {
                     game::PowerUpType::SlowDown => {
                         current_tick_rate += Duration::from_millis(100); // Slow down

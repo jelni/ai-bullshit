@@ -949,7 +949,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if let Some(power_up) = &game.power_up
         && let Some(activation_time) = power_up.activation_time
     {
-        let elapsed = activation_time.elapsed().unwrap_or_default().as_secs();
+        let elapsed = web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(activation_time);
         if elapsed < 5 {
             let remaining = 5 - elapsed;
             let power_up_name = match power_up.p_type {

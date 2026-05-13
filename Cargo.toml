@@ -29,7 +29,7 @@ web-time = "1.1.0"
 [features]
 default = ["cli"]
 cli = ["crossterm", "clap", "libc"]
-wasm = ["getrandom", "wasm-bindgen", "console_error_panic_hook", "web-sys", "wasm-bindgen-futures"]
+wasm = ["getrandom/js", "wasm-bindgen", "console_error_panic_hook", "web-sys", "wasm-bindgen-futures"]
 
 [lints.clippy]
 pedantic = "warn"

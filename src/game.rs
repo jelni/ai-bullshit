@@ -1,8 +1,8 @@
+use web_time::{Duration, Instant};
 use std::{
     collections::HashSet,
     fs::{self, File},
     io::{self, Read, Write},
-    time::{Duration, Instant, SystemTime},
 };
 
 use rand::Rng;
@@ -106,8 +106,7 @@ pub enum PowerUpType {
 pub struct PowerUp {
     pub p_type: PowerUpType,
     pub location: Point,
-    #[serde_as(as = "Option<serde_with::TimestampSeconds<i64>>")]
-    pub activation_time: Option<SystemTime>,
+    pub activation_time: Option<u64>,
 }
 
 pub fn beep() {
@@ -442,7 +441,7 @@ impl Game {
             settings_selection: 0,
             nft_selection: 0,
             stats,
-            start_time: Instant::now(),
+            start_time: web_time::Instant::now(),
             death_message: String::new(),
             difficulty,
             player_name: String::new(),
@@ -455,8 +454,8 @@ impl Game {
             player2: None,
             campaign_level: 1,
             safe_zone_margin: 0,
-            last_shrink_time: Instant::now(),
-            last_obstacle_spawn_time: Instant::now(),
+            last_shrink_time: web_time::Instant::now(),
+            last_obstacle_spawn_time: web_time::Instant::now(),
             history: std::collections::VecDeque::new(),
             editor_cursor: None,
             particles: Vec::new(),
@@ -700,7 +699,7 @@ impl Game {
                 self.obstacles = state.obstacles;
                 self.score = state.score;
                 self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
+                    web_time::Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
                 });
                 self.lives = state.lives;
                 self.power_up = state.power_up;
@@ -713,16 +712,16 @@ impl Game {
                 self.food_eaten_session = state.food_eaten_session;
                 self.campaign_level = state.campaign_level;
                 self.safe_zone_margin = state.safe_zone_margin;
-                self.last_shrink_time = Instant::now();
-                self.last_obstacle_spawn_time = Instant::now();
+                self.last_shrink_time = web_time::Instant::now();
+                self.last_obstacle_spawn_time = web_time::Instant::now();
                 self.combo = state.combo;
                 self.last_food_time = state
                     .last_food_time
-                    .and_then(|elapsed| Instant::now().checked_sub(Duration::from_secs(elapsed)));
+                    .and_then(|elapsed| web_time::Instant::now().checked_sub(Duration::from_secs(elapsed)));
                 self.lasers = state.lasers;
                 self.boss = state.boss;
                 self.state = GameState::Paused;
-                self.start_time = Instant::now();
+                self.start_time = web_time::Instant::now();
                 self.update_high_scores();
                 self.history.clear();
                 true
@@ -820,7 +819,7 @@ impl Game {
         // Shift power up activation time
         if let Some(power_up) = &mut self.power_up
             && let Some(activation_time) = power_up.activation_time
-            && let Some(new_time) = activation_time.checked_add(delta)
+            && let Some(new_time) = activation_time.checked_add(delta.as_secs())
         {
             power_up.activation_time = Some(new_time);
         }
@@ -1044,13 +1043,13 @@ impl Game {
         self.lives = 3;
         self.state = GameState::Playing;
         self.just_died = false;
-        self.start_time = Instant::now();
+        self.start_time = web_time::Instant::now();
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_session = false;
         self.safe_zone_margin = 0;
-        self.last_shrink_time = Instant::now();
-        self.last_obstacle_spawn_time = Instant::now();
+        self.last_shrink_time = web_time::Instant::now();
+        self.last_obstacle_spawn_time = web_time::Instant::now();
         self.history.clear();
         self.particles.clear();
         self.combo = 0;
@@ -1105,8 +1104,8 @@ impl Game {
         }
 
         self.safe_zone_margin = 0;
-        self.last_shrink_time = Instant::now();
-        self.last_obstacle_spawn_time = Instant::now();
+        self.last_shrink_time = web_time::Instant::now();
+        self.last_obstacle_spawn_time = web_time::Instant::now();
     }
 
     pub fn shoot_laser(&mut self, player: u8) {
@@ -1235,7 +1234,7 @@ impl Game {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::PassThroughWalls
                 && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
         });
 
         let mut hit_wall1 = false;
@@ -1537,7 +1536,7 @@ impl Game {
             if self.chat_log.len() > 10 {
                 self.chat_log.pop_front();
             }
-            self.last_chat_time = Some(Instant::now());
+            self.last_chat_time = Some(web_time::Instant::now());
         }
 
         for p in &mut self.particles {
@@ -1551,7 +1550,7 @@ impl Game {
             || self.power_up.as_ref().is_some_and(|p| {
                 p.p_type == PowerUpType::Invincibility
                     && p.activation_time
-                        .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                        .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
             });
 
         let mut p1_dead = false;
@@ -1668,7 +1667,7 @@ impl Game {
             let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
             if self.safe_zone_margin < max_margin {
                 self.safe_zone_margin += 1;
-                self.last_shrink_time = Instant::now();
+                self.last_shrink_time = web_time::Instant::now();
 
                 // Relocate out-of-bounds food
                 if self.food.x <= self.safe_zone_margin
@@ -1719,7 +1718,7 @@ impl Game {
         if self.mode == GameMode::Survival
             && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(3)
         {
-            self.last_obstacle_spawn_time = Instant::now();
+            self.last_obstacle_spawn_time = web_time::Instant::now();
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
                     || *p == self.food
@@ -1817,7 +1816,7 @@ impl Game {
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::ScoreMultiplier
                 && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
         });
 
         let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier);
@@ -2034,7 +2033,7 @@ impl Game {
                     self.snake.rebuild_map();
                 }
             } else {
-                p.activation_time = Some(SystemTime::now());
+                p.activation_time = Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs());
             }
             beep();
         }
@@ -2071,7 +2070,7 @@ impl Game {
             } else {
                 self.combo = 1;
             }
-            self.last_food_time = Some(Instant::now());
+            self.last_food_time = Some(web_time::Instant::now());
 
             let diff_multiplier = match self.difficulty {
                 Difficulty::Easy => 1,
@@ -2118,7 +2117,7 @@ impl Game {
         } else {
             self.combo = 1;
         }
-        self.last_food_time = Some(Instant::now());
+        self.last_food_time = Some(web_time::Instant::now());
 
         let diff_multiplier = match self.difficulty {
             Difficulty::Easy => 1,
@@ -2311,7 +2310,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                self.bonus_food = Some((bonus, Instant::now()));
+                self.bonus_food = Some((bonus, web_time::Instant::now()));
             }
         }
     }
@@ -2344,7 +2343,7 @@ impl Game {
             pu.p_type == PowerUpType::PassThroughWalls
                 && pu
                     .activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
         });
 
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
@@ -2376,7 +2375,7 @@ impl Game {
                 pu.p_type == PowerUpType::Invincibility
                     && pu
                         .activation_time
-                        .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+                        .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
             });
 
         if !is_invincible {
@@ -2469,7 +2468,7 @@ impl Game {
             let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::PassThroughWalls
                     && pu.activation_time.is_some_and(|time| {
-                        time.elapsed().unwrap_or_default() < Duration::from_secs(5)
+                        web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(time) < 5
                     })
             });
             targets
