@@ -11,6 +11,9 @@ use crate::{
     snake::Direction,
 };
 
+/// # Errors
+///
+/// Returns an error if it fails to write to `stdout` or flush the buffer.
 pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     // Clear screen
     stdout.queue(Clear(ClearType::All))?;
@@ -34,6 +37,9 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
+/// # Errors
+///
+/// Returns an error if it fails to write to `stdout` or flush the buffer.
 pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::Result<()> {
     draw_game(game, stdout)?;
     let msg = format!("{count}");

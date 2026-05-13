@@ -54,6 +54,7 @@ pub enum Difficulty {
 }
 
 impl Difficulty {
+    #[must_use]
     pub const fn next(self) -> Self {
         match self {
             Self::Easy => Self::Normal,
@@ -64,6 +65,7 @@ impl Difficulty {
         }
     }
 
+    #[must_use]
     pub const fn prev(self) -> Self {
         match self {
             Self::Easy => Self::GodMode,
@@ -174,16 +176,20 @@ pub enum Achievement {
     BotUser,
 }
 
+#[must_use]
 pub const fn default_lives() -> u32 {
     3
 }
 
+#[must_use]
 pub const fn default_wrap_mode() -> bool {
     false
 }
+#[must_use]
 pub const fn default_skin() -> char {
     '█'
 }
+#[must_use]
 pub const fn default_campaign_level() -> u32 {
     1
 }
@@ -234,7 +240,7 @@ pub struct SaveState {
     #[serde(default)]
     pub auto_pilot: bool,
     #[serde(default)]
-    pub used_bot_this_game: bool,
+    pub used_bot_this_session: bool,
     #[serde(default)]
     pub food_eaten_session: u32,
     #[serde(default = "default_campaign_level")]
@@ -271,6 +277,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
     (ShopItem::Theme(Theme::Solar), 500_000),
 ];
 
+#[must_use]
 pub fn default_unlocked_themes() -> Vec<Theme> {
     vec![Theme::Classic, Theme::Dark, Theme::Retro, Theme::Neon, Theme::Ocean, Theme::Matrix]
 }
@@ -332,11 +339,7 @@ pub struct Game {
     pub player_name: String,
     pub previous_state: Option<GameState>,
     pub auto_pilot: bool,
-    #[expect(
-        clippy::struct_field_names,
-        reason = "Used specifically for game logic, name is fine"
-    )]
-    pub used_bot_this_game: bool,
+    pub used_bot_this_session: bool,
     pub autopilot_path: Vec<Point>,
     pub food_eaten_session: u32,
     pub mode: GameMode,
@@ -355,6 +358,10 @@ pub struct Game {
 }
 
 impl Game {
+    /// # Panics
+    ///
+    /// Panics if the board is completely full and there's no room for food.
+    #[must_use]
     pub fn new(
         width: u16,
         height: u16,
@@ -424,7 +431,7 @@ impl Game {
             player_name: String::new(),
             previous_state: None,
             auto_pilot: false,
-            used_bot_this_game: false,
+            used_bot_this_session: false,
             autopilot_path: Vec::new(),
             food_eaten_session: 0,
             mode,
@@ -443,10 +450,12 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn get_high_score_filename(difficulty: Difficulty) -> String {
         format!("highscore_{difficulty:?}.txt").to_lowercase()
     }
 
+    #[must_use]
     pub fn load_high_scores_from_file(path: &str) -> Vec<(String, u32)> {
         let mut content = String::new();
         File::open(path).and_then(|f| f.take(1024 * 1024).read_to_string(&mut content)).map_or_else(
@@ -573,6 +582,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn load_custom_level() -> HashSet<Point> {
         File::open("custom_level.json")
             .ok()
@@ -605,7 +615,7 @@ impl Game {
             wrap_mode: self.wrap_mode,
             skin: self.skin,
             auto_pilot: self.auto_pilot,
-            used_bot_this_game: self.used_bot_this_game,
+            used_bot_this_session: self.used_bot_this_session,
             food_eaten_session: self.food_eaten_session,
             campaign_level: self.campaign_level,
             safe_zone_margin: self.safe_zone_margin,
@@ -676,7 +686,7 @@ impl Game {
                 self.wrap_mode = state.wrap_mode;
                 self.skin = state.skin;
                 self.auto_pilot = state.auto_pilot;
-                self.used_bot_this_game = state.used_bot_this_game;
+                self.used_bot_this_session = state.used_bot_this_session;
                 self.food_eaten_session = state.food_eaten_session;
                 self.campaign_level = state.campaign_level;
                 self.safe_zone_margin = state.safe_zone_margin;
@@ -807,6 +817,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -834,6 +845,9 @@ impl Game {
     }
 
     #[expect(clippy::too_many_lines, reason = "Game reset handles logic for different game modes")]
+    /// # Panics
+    ///
+    /// Panics if the board is completely full and there's no room for food upon reset.
     pub fn reset(&mut self) {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
@@ -935,7 +949,7 @@ impl Game {
         self.start_time = Instant::now();
         self.food_eaten_session = 0;
         self.auto_pilot = false;
-        self.used_bot_this_game = false;
+        self.used_bot_this_session = false;
         self.safe_zone_margin = 0;
         self.last_shrink_time = Instant::now();
         self.last_obstacle_spawn_time = Instant::now();
@@ -1674,7 +1688,7 @@ impl Game {
         if !self.stats.unlocked_achievements.contains(&Achievement::Rich) && self.stats.coins >= 1000 {
             new_achievements.push(Achievement::Rich);
         }
-        if !self.stats.unlocked_achievements.contains(&Achievement::BotUser) && self.used_bot_this_game {
+        if !self.stats.unlocked_achievements.contains(&Achievement::BotUser) && self.used_bot_this_session {
             new_achievements.push(Achievement::BotUser);
         }
 
@@ -1693,7 +1707,7 @@ impl Game {
         let is_high_score = self.high_scores.len() < 5
             || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
         if is_high_score && self.score > 0 {
-            if self.used_bot_this_game {
+            if self.used_bot_this_session {
                 self.save_high_score("[BOT]".to_string(), self.score);
                 self.state = GameState::GameWon;
             } else {
@@ -1770,6 +1784,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub const fn calculate_next_head_dir(head: Point, dir: Direction) -> Point {
         match dir {
             Direction::Up => Point {
@@ -1791,6 +1806,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
@@ -1811,6 +1827,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, _checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
@@ -1865,6 +1882,7 @@ impl Game {
         self.flood_fill_fallback(start, 1)
     }
 
+    #[must_use]
     pub fn calculate_p2_autopilot_move(&self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
             let start = p2.head();
@@ -2072,7 +2090,7 @@ impl Game {
             let is_high_score = self.high_scores.len() < 5
                 || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
             if is_high_score && self.score > 0 {
-                if self.used_bot_this_game {
+                if self.used_bot_this_session {
                     self.save_high_score("[BOT]".to_string(), self.score);
                     self.state = GameState::GameOver;
                 } else {
@@ -2259,10 +2277,10 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game.auto_pilot = true;
-        game.used_bot_this_game = true;
+        game.used_bot_this_session = true;
         game.reset();
         assert!(
-            !game.used_bot_this_game && !game.auto_pilot,
+            !game.used_bot_this_session && !game.auto_pilot,
             "Bot flags should be cleared on reset"
         );
     }

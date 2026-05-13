@@ -27,6 +27,7 @@ pub struct Snake {
 }
 
 impl Snake {
+    #[must_use]
     pub fn new(start: Point) -> Self {
         let mut body = VecDeque::new();
         // Head
@@ -54,6 +55,10 @@ impl Snake {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if the snake does not have a head (which should never happen unless logic is broken).
+    #[must_use]
     pub fn head(&self) -> Point {
         *self.body.front().expect("Snake must have a head")
     }

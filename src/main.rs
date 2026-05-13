@@ -99,7 +99,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
 
     if args.bot {
         game.auto_pilot = true;
-        game.used_bot_this_game = true;
+        game.used_bot_this_session = true;
         game.state = GameState::Playing;
     }
 
@@ -429,7 +429,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('t' | 'T') => {
             game.auto_pilot = !game.auto_pilot;
             if game.auto_pilot {
-                game.used_bot_this_game = true;
+                game.used_bot_this_session = true;
             }
         },
         KeyCode::Char('w' | 'W') => game.handle_input(Direction::Up, 1),
