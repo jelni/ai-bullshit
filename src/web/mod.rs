@@ -1,10 +1,10 @@
 pub mod ui;
 
-use wasm_bindgen::prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::game::{Game, GameState};
 use crate::snake::Direction;
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {
@@ -13,11 +13,13 @@ pub fn run() -> Result<(), JsValue> {
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
 
-    let container = document.get_element_by_id("game-container")
+    let container = document
+        .get_element_by_id("game-container")
         .expect("should have #game-container on the page")
         .dyn_into::<web_sys::HtmlElement>()?;
 
-    let game = Game::new(40, 20, false, 'O', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
+    let game =
+        Game::new(40, 20, false, 'O', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
 
     let game = Rc::new(RefCell::new(game));
     let container = Rc::new(RefCell::new(container));
@@ -29,33 +31,46 @@ pub fn run() -> Result<(), JsValue> {
         let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::KeyboardEvent| {
             let mut game = game.borrow_mut();
             match event.key().as_str() {
-                "ArrowUp" | "w" | "W" => { game.handle_input(Direction::Up, 1); }
-                "ArrowDown" | "s" | "S" => { game.handle_input(Direction::Down, 1); }
-                "ArrowLeft" | "a" | "A" => { game.handle_input(Direction::Left, 1); }
-                "ArrowRight" | "d" | "D" => { game.handle_input(Direction::Right, 1); }
-                " " => { if game.state == GameState::Menu { game.state = GameState::Playing; } }
+                "ArrowUp" | "w" | "W" => {
+                    game.handle_input(Direction::Up, 1);
+                },
+                "ArrowDown" | "s" | "S" => {
+                    game.handle_input(Direction::Down, 1);
+                },
+                "ArrowLeft" | "a" | "A" => {
+                    game.handle_input(Direction::Left, 1);
+                },
+                "ArrowRight" | "d" | "D" => {
+                    game.handle_input(Direction::Right, 1);
+                },
+                " " => {
+                    if game.state == GameState::Menu {
+                        game.state = GameState::Playing;
+                    }
+                },
                 "t" | "T" => {
                     game.auto_pilot = !game.auto_pilot;
                     if game.auto_pilot {
                         game.used_bot_this_game = true;
                     }
-                }
+                },
                 "r" | "R" => {
                     if game.state == GameState::GameOver {
                         game.reset();
                     }
-                }
+                },
                 "p" | "P" => {
                     if game.state == GameState::Playing {
                         game.state = GameState::Paused;
                     } else if game.state == GameState::Paused {
                         game.state = GameState::Playing;
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         });
-        doc.borrow().add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())?;
+        doc.borrow()
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())?;
         closure.forget();
     }
 
@@ -71,7 +86,8 @@ pub fn run() -> Result<(), JsValue> {
         let doc_ref = doc.borrow();
 
         let delta = time - last_time;
-        if delta > 100.0 { // 10 FPS
+        if delta > 100.0 {
+            // 10 FPS
             if game_ref.state == GameState::Playing {
                 game_ref.update();
             }

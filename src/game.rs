@@ -33,16 +33,7 @@ impl PartialOrd for AStarState {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    serde::Serialize,
-    serde::Deserialize,
-    PartialEq,
-    Eq,
-    Default,
-)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Difficulty {
     Easy,
@@ -77,17 +68,7 @@ impl Difficulty {
     }
 }
 
-#[derive(
-
-    Clone,
-    Debug,
-    serde::Serialize,
-    serde::Deserialize,
-    PartialEq,
-    Eq,
-    Default,
-    Copy,
-)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Default, Copy)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Theme {
     #[default]
@@ -212,6 +193,7 @@ pub struct HistoryState {
     pub combo: u32,
     pub last_food_time: Option<Instant>,
     pub lasers: Vec<Laser>,
+    pub boss: Option<Boss>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -254,6 +236,8 @@ pub struct SaveState {
     pub last_food_time: Option<u64>,
     #[serde(default)]
     pub lasers: Vec<Laser>,
+    #[serde(default)]
+    pub boss: Option<Boss>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -306,6 +290,14 @@ pub struct Laser {
     pub position: Point,
     pub direction: crate::snake::Direction,
     pub player: u8,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Boss {
+    pub position: Point,
+    pub health: u32,
+    pub max_health: u32,
+    pub move_timer: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -366,6 +358,7 @@ pub struct Game {
     pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
     pub lasers: Vec<Laser>,
+    pub boss: Option<Boss>,
 }
 
 impl Game {
@@ -399,7 +392,8 @@ impl Game {
             Difficulty::GodMode => 20,
         };
         let avoid = |p: &Point| p.x == start_x && p.y == start_y - 1;
-        let obstacles = Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count, 0);
+        let obstacles =
+            Self::generate_obstacles(width, height, &snake, avoid, &mut rng, obs_count, 0);
         let avoid_food = |p: &Point| obstacles.contains(p);
         let food = Self::get_random_empty_point(width, height, &snake, avoid_food, &mut rng, 0)
             .expect("Board cannot be full on start");
@@ -411,7 +405,8 @@ impl Game {
             let _ = std::fs::rename("highscore.txt", "highscore_normal.txt");
         }
 
-        let high_scores = Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty));
+        let high_scores =
+            Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty));
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
         Self {
@@ -459,6 +454,7 @@ impl Game {
             chat_log: std::collections::VecDeque::new(),
             last_chat_time: None,
             lasers: Vec::new(),
+            boss: None,
         }
     }
 
@@ -557,7 +553,8 @@ impl Game {
     }
 
     pub fn update_high_scores(&mut self) {
-        self.high_scores = Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty));
+        self.high_scores =
+            Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty));
         self.high_score = self.high_scores.first().map_or(0, |(_, s)| *s);
     }
 
@@ -634,6 +631,7 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
             lasers: self.lasers.clone(),
+            boss: self.boss,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -674,9 +672,10 @@ impl Game {
                 }
 
                 if let Some(p2) = &state.player2
-                    && !p2.body.iter().all(valid_point) {
-                        return false;
-                    }
+                    && !p2.body.iter().all(valid_point)
+                {
+                    return false;
+                }
 
                 state.snake.rebuild_map();
                 if let Some(p2) = &mut state.player2 {
@@ -706,10 +705,11 @@ impl Game {
                 self.last_shrink_time = Instant::now();
                 self.last_obstacle_spawn_time = Instant::now();
                 self.combo = state.combo;
-                self.last_food_time = state.last_food_time.and_then(|elapsed| {
-                    Instant::now().checked_sub(Duration::from_secs(elapsed))
-                });
+                self.last_food_time = state
+                    .last_food_time
+                    .and_then(|elapsed| Instant::now().checked_sub(Duration::from_secs(elapsed)));
                 self.lasers = state.lasers;
+                self.boss = state.boss;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -784,7 +784,8 @@ impl Game {
 
         for _ in 0..count {
             let current_avoid = |p: &Point| avoid(p) || obstacles.contains(p);
-            if let Some(p) = Self::get_random_empty_point(width, height, snake, current_avoid, rng, margin)
+            if let Some(p) =
+                Self::get_random_empty_point(width, height, snake, current_avoid, rng, margin)
             {
                 obstacles.insert(p);
             }
@@ -843,17 +844,35 @@ impl Game {
             let start_x = (self.width / 2).saturating_sub(2).max(1);
             let end_x = (self.width / 2 + 2).min(self.width - 2);
             for x in start_x..=end_x {
-                obstacles.insert(Point { x, y });
+                obstacles.insert(Point {
+                    x,
+                    y,
+                });
             }
         } else {
             // Level 3+: cross
             let center_x = self.width / 2;
             let center_y = self.height / 2;
-            obstacles.insert(Point { x: center_x, y: center_y });
-            obstacles.insert(Point { x: center_x.saturating_sub(1).max(1), y: center_y });
-            obstacles.insert(Point { x: center_x + 1, y: center_y });
-            obstacles.insert(Point { x: center_x, y: center_y.saturating_sub(1).max(1) });
-            obstacles.insert(Point { x: center_x, y: center_y + 1 });
+            obstacles.insert(Point {
+                x: center_x,
+                y: center_y,
+            });
+            obstacles.insert(Point {
+                x: center_x.saturating_sub(1).max(1),
+                y: center_y,
+            });
+            obstacles.insert(Point {
+                x: center_x + 1,
+                y: center_y,
+            });
+            obstacles.insert(Point {
+                x: center_x,
+                y: center_y.saturating_sub(1).max(1),
+            });
+            obstacles.insert(Point {
+                x: center_x,
+                y: center_y + 1,
+            });
         }
         obstacles
     }
@@ -871,14 +890,25 @@ impl Game {
         }
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer
+            | GameMode::Campaign
+            | GameMode::TimeAttack
+            | GameMode::Speedrun
+            | GameMode::Survival
+            | GameMode::Zen
+            | GameMode::Maze
+            | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
                 });
                 self.player2 = None;
             },
-            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot | GameMode::BattleRoyale => {
+            GameMode::LocalMultiplayer
+            | GameMode::OnlineMultiplayer
+            | GameMode::PlayerVsBot
+            | GameMode::BotVsBot
+            | GameMode::BattleRoyale => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -887,7 +917,7 @@ impl Game {
                     x: start_x + 5,
                     y: start_y,
                 }));
-            }
+            },
         }
 
         let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze {
@@ -902,15 +932,38 @@ impl Game {
             }
         };
         let avoid = |p: &Point| {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
+            if self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::Campaign
+                || self.mode == GameMode::TimeAttack
+                || self.mode == GameMode::Speedrun
+                || self.mode == GameMode::Survival
+                || self.mode == GameMode::Zen
+                || self.mode == GameMode::Maze
+                || self.mode == GameMode::CustomLevel
+            {
                 p.x == start_x && p.y == start_y - 1
             } else {
                 (p.x == start_x + 5 || p.x == start_x - 5) && p.y == start_y - 1
             }
         };
 
-        let empty_snake = Snake::new(Point { x: 1, y: 1 });
-        let ref_snake = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::Campaign || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival || self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel { &self.snake } else { &empty_snake }; // For collision we'll just check avoid and body maps later
+        let empty_snake = Snake::new(Point {
+            x: 1,
+            y: 1,
+        });
+        let ref_snake = if self.mode == GameMode::SinglePlayer
+            || self.mode == GameMode::Campaign
+            || self.mode == GameMode::TimeAttack
+            || self.mode == GameMode::Speedrun
+            || self.mode == GameMode::Survival
+            || self.mode == GameMode::Zen
+            || self.mode == GameMode::Maze
+            || self.mode == GameMode::CustomLevel
+        {
+            &self.snake
+        } else {
+            &empty_snake
+        }; // For collision we'll just check avoid and body maps later
 
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
@@ -926,8 +979,14 @@ impl Game {
             let y1 = self.height / 3;
             let y2 = 2 * self.height / 3;
             for x in 5..(self.width - 5) {
-                self.obstacles.insert(Point { x, y: y1 });
-                self.obstacles.insert(Point { x, y: y2 });
+                self.obstacles.insert(Point {
+                    x,
+                    y: y1,
+                });
+                self.obstacles.insert(Point {
+                    x,
+                    y: y2,
+                });
             }
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
@@ -935,16 +994,30 @@ impl Game {
             let mut obstacles = HashSet::new();
             for _ in 0..obs_count {
                 let current_avoid = |p: &Point| {
-                    avoid(p) || obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
                 };
-                if let Some(p) = Self::get_random_empty_point(self.width, self.height, ref_snake, current_avoid, &mut self.rng, 0) {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
                     obstacles.insert(p);
                 }
             }
             self.obstacles = obstacles;
         }
 
-        let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
+        let avoid_food = |p: &Point| {
+            self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+        };
         self.food = Self::get_random_empty_point(
             self.width,
             self.height,
@@ -973,6 +1046,7 @@ impl Game {
         self.last_food_time = None;
         self.chat_log.clear();
         self.last_chat_time = None;
+        self.boss = None;
     }
 
     fn respawn(&mut self) {
@@ -980,7 +1054,14 @@ impl Game {
         let start_y = self.height / 2;
 
         match self.mode {
-            GameMode::SinglePlayer | GameMode::Campaign | GameMode::TimeAttack | GameMode::Speedrun | GameMode::Survival | GameMode::Zen | GameMode::Maze | GameMode::CustomLevel => {
+            GameMode::SinglePlayer
+            | GameMode::Campaign
+            | GameMode::TimeAttack
+            | GameMode::Speedrun
+            | GameMode::Survival
+            | GameMode::Zen
+            | GameMode::Maze
+            | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -990,7 +1071,11 @@ impl Game {
                     !(p.x == start_x && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
                 });
             },
-            GameMode::LocalMultiplayer | GameMode::OnlineMultiplayer | GameMode::PlayerVsBot | GameMode::BotVsBot | GameMode::BattleRoyale => {
+            GameMode::LocalMultiplayer
+            | GameMode::OnlineMultiplayer
+            | GameMode::PlayerVsBot
+            | GameMode::BotVsBot
+            | GameMode::BattleRoyale => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -1000,10 +1085,12 @@ impl Game {
                     y: start_y,
                 }));
                 self.obstacles.retain(|p| {
-                    !((p.x == start_x - 5 && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)) ||
-                      (p.x == start_x + 5 && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)))
+                    !((p.x == start_x - 5
+                        && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
+                        || (p.x == start_x + 5
+                            && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)))
                 });
-            }
+            },
         }
 
         self.safe_zone_margin = 0;
@@ -1033,7 +1120,11 @@ impl Game {
         let laser_pos = Self::calculate_next_head_dir(head, dir);
 
         // Check bounds before adding the laser
-        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
         if laser_pos.x > margin
             && laser_pos.x < self.width - 1 - margin
             && laser_pos.y > margin
@@ -1071,24 +1162,25 @@ impl Game {
                 self.snake.direction_queue.push_back(dir);
             }
         } else if player == 2
-            && let Some(p2) = &mut self.player2 {
-                if p2.direction_queue.len() >= 2 {
-                    return;
-                }
-
-                let current_dir = p2.direction_queue.back().copied().unwrap_or(p2.direction);
-                let is_opposite = matches!(
-                    (current_dir, dir),
-                    (Direction::Up, Direction::Down)
-                        | (Direction::Down, Direction::Up)
-                        | (Direction::Left, Direction::Right)
-                        | (Direction::Right, Direction::Left)
-                );
-
-                if !is_opposite && dir != current_dir {
-                    p2.direction_queue.push_back(dir);
-                }
+            && let Some(p2) = &mut self.player2
+        {
+            if p2.direction_queue.len() >= 2 {
+                return;
             }
+
+            let current_dir = p2.direction_queue.back().copied().unwrap_or(p2.direction);
+            let is_opposite = matches!(
+                (current_dir, dir),
+                (Direction::Up, Direction::Down)
+                    | (Direction::Down, Direction::Up)
+                    | (Direction::Left, Direction::Right)
+                    | (Direction::Right, Direction::Left)
+            );
+
+            if !is_opposite && dir != current_dir {
+                p2.direction_queue.push_back(dir);
+            }
+        }
     }
 
     fn handle_autopilot_moves(&mut self) {
@@ -1109,8 +1201,9 @@ impl Game {
             let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
             if is_empty {
                 if let Some(dir) = self.calculate_p2_autopilot_move()
-                    && let Some(p2) = &mut self.player2 {
-                        p2.direction_queue.push_back(dir);
+                    && let Some(p2) = &mut self.player2
+                {
+                    p2.direction_queue.push_back(dir);
                 }
                 if self.rng.gen_bool(0.05) {
                     self.shoot_laser(2);
@@ -1135,26 +1228,39 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 = if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
-            self.calculate_wrapped_head(next_head1)
-        } else {
-            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-            if next_head1.x <= margin
-                || next_head1.x >= self.width - 1 - margin
-                || next_head1.y <= margin
-                || next_head1.y >= self.height - 1 - margin
+        let final_head1 =
+            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
             {
-                hit_wall1 = true;
-            }
-            next_head1
-        };
+                self.calculate_wrapped_head(next_head1)
+            } else {
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if next_head1.x <= margin
+                    || next_head1.x >= self.width - 1 - margin
+                    || next_head1.y <= margin
+                    || next_head1.y >= self.height - 1 - margin
+                {
+                    hit_wall1 = true;
+                }
+                next_head1
+            };
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
+            {
                 self.calculate_wrapped_head(next_head2)
             } else {
-                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
                 if next_head2.x <= margin
                     || next_head2.x >= self.width - 1 - margin
                     || next_head2.y <= margin
@@ -1187,6 +1293,7 @@ impl Game {
             self.combo = state.combo;
             self.last_food_time = state.last_food_time;
             self.lasers = state.lasers;
+            self.boss = state.boss;
         }
     }
 
@@ -1208,6 +1315,7 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time,
             lasers: self.lasers.clone(),
+            boss: self.boss,
         };
 
         self.history.push_back(state);
@@ -1216,7 +1324,14 @@ impl Game {
         }
     }
 
-    pub fn spawn_particles(&mut self, x: f32, y: f32, count: usize, color: crate::color::Color, symbol: char) {
+    pub fn spawn_particles(
+        &mut self,
+        x: f32,
+        y: f32,
+        count: usize,
+        color: crate::color::Color,
+        symbol: char,
+    ) {
         for _ in 0..count {
             let angle = self.rng.gen_range(0.0..std::f32::consts::TAU);
             let speed = self.rng.gen_range(0.2..1.5);
@@ -1234,13 +1349,84 @@ impl Game {
         }
     }
 
-    #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Game loop inherently requires handling multiple states and events"
+    )]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
         }
 
         self.save_history_state();
+
+        // Boss Logic
+        if self.boss.is_none() && self.mode == GameMode::SinglePlayer && self.rng.gen_bool(0.005) {
+            let margin = self.safe_zone_margin + 5;
+            let avoid =
+                |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                margin,
+            ) {
+                self.boss = Some(Boss {
+                    position: pos,
+                    health: 10,
+                    max_health: 10,
+                    move_timer: 0,
+                });
+                self.spawn_particles(
+                    f32::from(pos.x),
+                    f32::from(pos.y),
+                    30,
+                    crate::color::Color::Magenta,
+                    'B',
+                );
+            }
+        }
+
+        if let Some(boss) = &mut self.boss {
+            boss.move_timer += 1;
+            if boss.move_timer >= 2 {
+                boss.move_timer = 0;
+                let head = self.snake.head();
+                let dx = i32::from(head.x) - i32::from(boss.position.x);
+                let dy = i32::from(head.y) - i32::from(boss.position.y);
+
+                let mut new_pos = boss.position;
+                if dx.abs() > dy.abs() {
+                    if dx > 0 {
+                        new_pos.x += 1;
+                    } else {
+                        new_pos.x = new_pos.x.saturating_sub(1);
+                    }
+                } else if dy != 0 {
+                    if dy > 0 {
+                        new_pos.y += 1;
+                    } else {
+                        new_pos.y = new_pos.y.saturating_sub(1);
+                    }
+                }
+
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if new_pos.x > margin
+                    && new_pos.x < self.width - 1 - margin
+                    && new_pos.y > margin
+                    && new_pos.y < self.height - 1 - margin
+                    && !self.obstacles.contains(&new_pos)
+                {
+                    boss.position = new_pos;
+                }
+            }
+        }
 
         // Chat simulation logic
         let chat_interval = if self.mode == GameMode::SinglePlayer {
@@ -1249,14 +1435,35 @@ impl Game {
             Duration::from_millis(500)
         };
 
-        if self.last_chat_time.is_none_or(|t| t.elapsed() >= chat_interval) && self.rng.gen_bool(0.3) {
+        if self.last_chat_time.is_none_or(|t| t.elapsed() >= chat_interval)
+            && self.rng.gen_bool(0.3)
+        {
             let messages = [
-                "PogChamp", "Bot is insane!", "Drop skins!", "HODL", "LUL", "EZ", "F",
-                "What a play", "200 IQ", "nerf snake pls", "kappa", "monkaS", "sheeeesh"
+                "PogChamp",
+                "Bot is insane!",
+                "Drop skins!",
+                "HODL",
+                "LUL",
+                "EZ",
+                "F",
+                "What a play",
+                "200 IQ",
+                "nerf snake pls",
+                "kappa",
+                "monkaS",
+                "sheeeesh",
             ];
             let users = [
-                "SnakeMaster99", "xX_Slayer_Xx", "CryptoBro", "GamerGirl", "BotSpectator",
-                "Noob123", "ProPlayer", "Admin", "Mod", "VIP_User"
+                "SnakeMaster99",
+                "xX_Slayer_Xx",
+                "CryptoBro",
+                "GamerGirl",
+                "BotSpectator",
+                "Noob123",
+                "ProPlayer",
+                "Admin",
+                "Mod",
+                "VIP_User",
             ];
             let colors = [
                 crate::color::Color::Red,
@@ -1287,18 +1494,23 @@ impl Game {
         }
         self.particles.retain(|p| p.lifetime > 0.0);
 
-        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|p| {
-            p.p_type == PowerUpType::Invincibility
-                && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
-        });
+        let is_invincible = self.mode == GameMode::Zen
+            || self.power_up.as_ref().is_some_and(|p| {
+                p.p_type == PowerUpType::Invincibility
+                    && p.activation_time
+                        .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+            });
 
         let mut p1_dead = false;
         let mut p2_dead = false;
 
         // --- Process Lasers ---
         let mut lasers_to_keep = Vec::new();
-        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
 
         for mut laser in std::mem::take(&mut self.lasers) {
             let mut destroyed = false;
@@ -1318,9 +1530,40 @@ impl Game {
                 if self.obstacles.contains(&laser.position) {
                     self.obstacles.remove(&laser.position);
                     destroyed = true;
-                    self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 10, crate::color::Color::Red, 'x');
+                    self.spawn_particles(
+                        f32::from(laser.position.x),
+                        f32::from(laser.position.y),
+                        10,
+                        crate::color::Color::Red,
+                        'x',
+                    );
                     break;
                 }
+                if let Some(boss) = &mut self.boss
+                    && boss.position == laser.position {
+                        boss.health = boss.health.saturating_sub(1);
+                        destroyed = true;
+                        if boss.health == 0 {
+                            self.score += 100;
+                            self.spawn_particles(
+                                f32::from(laser.position.x),
+                                f32::from(laser.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                'B',
+                            );
+                            self.boss = None;
+                        } else {
+                            self.spawn_particles(
+                                f32::from(laser.position.x),
+                                f32::from(laser.position.y),
+                                5,
+                                crate::color::Color::Magenta,
+                                '*',
+                            );
+                        }
+                        break;
+                    }
                 // Despawn laser if it hits a snake
                 if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
                     if !is_invincible {
@@ -1329,15 +1572,14 @@ impl Game {
                     destroyed = true;
                     break;
                 }
-                if let Some(p2) = &self.player2 {
-                    if laser.player != 2 && p2.body_map.contains_key(&laser.position) {
+                if let Some(p2) = &self.player2
+                    && laser.player != 2 && p2.body_map.contains_key(&laser.position) {
                         if !is_invincible {
                             p2_dead = true;
                         }
                         destroyed = true;
                         break;
                     }
-                }
             }
 
             if !destroyed {
@@ -1346,7 +1588,8 @@ impl Game {
         }
         self.lasers = lasers_to_keep;
 
-        if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
+        if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60)
+        {
             self.handle_death("Time's up!");
             return;
         }
@@ -1356,39 +1599,63 @@ impl Game {
             return;
         }
 
-        if self.mode == GameMode::BattleRoyale && self.last_shrink_time.elapsed() >= Duration::from_secs(10) {
+        if self.mode == GameMode::BattleRoyale
+            && self.last_shrink_time.elapsed() >= Duration::from_secs(10)
+        {
             let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
             if self.safe_zone_margin < max_margin {
                 self.safe_zone_margin += 1;
                 self.last_shrink_time = Instant::now();
 
                 // Relocate out-of-bounds food
-                if self.food.x <= self.safe_zone_margin || self.food.x >= self.width - 1 - self.safe_zone_margin ||
-                   self.food.y <= self.safe_zone_margin || self.food.y >= self.height - 1 - self.safe_zone_margin {
-                    let avoid_food = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
-                    if let Some(new_food) = Self::get_random_empty_point(self.width, self.height, &self.snake, avoid_food, &mut self.rng, self.safe_zone_margin) {
+                if self.food.x <= self.safe_zone_margin
+                    || self.food.x >= self.width - 1 - self.safe_zone_margin
+                    || self.food.y <= self.safe_zone_margin
+                    || self.food.y >= self.height - 1 - self.safe_zone_margin
+                {
+                    let avoid_food = |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    };
+                    if let Some(new_food) = Self::get_random_empty_point(
+                        self.width,
+                        self.height,
+                        &self.snake,
+                        avoid_food,
+                        &mut self.rng,
+                        self.safe_zone_margin,
+                    ) {
                         self.food = new_food;
                     }
                 }
 
                 // Relocate out-of-bounds bonus food
                 if let Some((bp, _)) = self.bonus_food
-                    && (bp.x <= self.safe_zone_margin || bp.x >= self.width - 1 - self.safe_zone_margin ||
-                       bp.y <= self.safe_zone_margin || bp.y >= self.height - 1 - self.safe_zone_margin) {
+                    && (bp.x <= self.safe_zone_margin
+                        || bp.x >= self.width - 1 - self.safe_zone_margin
+                        || bp.y <= self.safe_zone_margin
+                        || bp.y >= self.height - 1 - self.safe_zone_margin)
+                {
                     self.bonus_food = None; // just remove it
                 }
 
                 // Relocate out-of-bounds power-up
                 if let Some(pu) = &self.power_up
-                    && (pu.location.x <= self.safe_zone_margin || pu.location.x >= self.width - 1 - self.safe_zone_margin ||
-                       pu.location.y <= self.safe_zone_margin || pu.location.y >= self.height - 1 - self.safe_zone_margin) {
+                    && (pu.location.x <= self.safe_zone_margin
+                        || pu.location.x >= self.width - 1 - self.safe_zone_margin
+                        || pu.location.y <= self.safe_zone_margin
+                        || pu.location.y >= self.height - 1 - self.safe_zone_margin)
+                {
                     self.power_up = None; // just remove it
                 }
                 crate::game::beep(); // Beep on map shrink
             }
         }
 
-        if self.mode == GameMode::Survival && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(3) {
+        if self.mode == GameMode::Survival
+            && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(3)
+        {
             self.last_obstacle_spawn_time = Instant::now();
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
@@ -1419,9 +1686,10 @@ impl Game {
         }
 
         if let Some(p2) = &mut self.player2
-            && let Some(dir) = p2.direction_queue.pop_front() {
-                p2.direction = dir;
-            }
+            && let Some(dir) = p2.direction_queue.pop_front()
+        {
+            p2.direction = dir;
+        }
 
         self.manage_bonus_food();
         self.manage_power_ups();
@@ -1433,31 +1701,54 @@ impl Game {
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
 
         let out_of_bounds1 = if self.mode == GameMode::BattleRoyale {
-            final_head1.x <= self.safe_zone_margin || final_head1.x >= self.width - 1 - self.safe_zone_margin ||
-            final_head1.y <= self.safe_zone_margin || final_head1.y >= self.height - 1 - self.safe_zone_margin
-        } else { false };
+            final_head1.x <= self.safe_zone_margin
+                || final_head1.x >= self.width - 1 - self.safe_zone_margin
+                || final_head1.y <= self.safe_zone_margin
+                || final_head1.y >= self.height - 1 - self.safe_zone_margin
+        } else {
+            false
+        };
 
         let out_of_bounds2 = if self.mode == GameMode::BattleRoyale {
             final_head2_opt.is_some_and(|fh2| {
-                fh2.x <= self.safe_zone_margin || fh2.x >= self.width - 1 - self.safe_zone_margin ||
-                fh2.y <= self.safe_zone_margin || fh2.y >= self.height - 1 - self.safe_zone_margin
+                fh2.x <= self.safe_zone_margin
+                    || fh2.x >= self.width - 1 - self.safe_zone_margin
+                    || fh2.y <= self.safe_zone_margin
+                    || fh2.y >= self.height - 1 - self.safe_zone_margin
             })
-        } else { false };
+        } else {
+            false
+        };
 
         // --- Resolution ---
+        let hit_boss1 = self.boss.as_ref().is_some_and(|b| {
+            b.position == final_head1 || self.snake.body_map.contains_key(&b.position)
+        });
 
-        if hit_wall1 || out_of_bounds1 { p1_dead = true; }
-        if hit_obstacle1 && !is_invincible { p1_dead = true; }
+        if hit_wall1 || out_of_bounds1 {
+            p1_dead = true;
+        }
+        if hit_obstacle1 && !is_invincible {
+            p1_dead = true;
+        }
+        if hit_boss1 && !is_invincible {
+            p1_dead = true;
+        }
 
-        if hit_wall2 || out_of_bounds2 { p2_dead = true; }
-        if hit_obstacle2 && !is_invincible { p2_dead = true; }
+        if hit_wall2 || out_of_bounds2 {
+            p2_dead = true;
+        }
+        if hit_obstacle2 && !is_invincible {
+            p2_dead = true;
+        }
 
         // Head-to-Head
         if let Some(final_head2) = final_head2_opt
-            && final_head1 == final_head2 {
-                p1_dead = true;
-                p2_dead = true;
-            }
+            && final_head1 == final_head2
+        {
+            p1_dead = true;
+            p2_dead = true;
+        }
 
         let old_food_eaten_session = self.food_eaten_session;
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
@@ -1467,7 +1758,8 @@ impl Game {
         });
 
         let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier);
-        let mut p2_grow = final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier));
+        let mut p2_grow =
+            final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier));
 
         // Process food collisions (first come first serve, resolving P1 first for simplicity unless we want true tie)
         if final_head1 == self.food {
@@ -1479,27 +1771,42 @@ impl Game {
                 return;
             }
         } else if let Some(final_head2) = final_head2_opt
-            && final_head2 == self.food {
-                p2_grow = true;
-                if !self.process_food_collision(final_head2, is_multiplier) {
-                    if let Some(p2) = &mut self.player2 {
-                        p2.move_to(final_head2, p2_grow);
-                    }
-                    self.handle_win();
-                    return;
+            && final_head2 == self.food
+        {
+            p2_grow = true;
+            if !self.process_food_collision(final_head2, is_multiplier) {
+                if let Some(p2) = &mut self.player2 {
+                    p2.move_to(final_head2, p2_grow);
                 }
+                self.handle_win();
+                return;
             }
+        }
 
-        let (body_p1_dead, body_p2_dead) = self.check_body_collisions(final_head1, final_head2_opt, is_invincible, p1_grow, p2_grow);
-        if body_p1_dead { p1_dead = true; }
-        if body_p2_dead { p2_dead = true; }
+        let (body_p1_dead, body_p2_dead) = self.check_body_collisions(
+            final_head1,
+            final_head2_opt,
+            is_invincible,
+            p1_grow,
+            p2_grow,
+        );
+        if body_p1_dead {
+            p1_dead = true;
+        }
+        if body_p2_dead {
+            p2_dead = true;
+        }
 
         // Process deaths
         if p1_dead && p2_dead {
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::TimeAttack || self.mode == GameMode::Speedrun || self.mode == GameMode::Survival {
+            if self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::TimeAttack
+                || self.mode == GameMode::Speedrun
+                || self.mode == GameMode::Survival
+            {
                 self.handle_death("You Died!");
             } else {
                 self.handle_death("Player 2 Wins!");
@@ -1521,12 +1828,20 @@ impl Game {
 
         self.snake.move_to(final_head1, p1_grow);
         if let Some(final_head2) = final_head2_opt
-            && let Some(p2) = &mut self.player2 {
-                p2.move_to(final_head2, p2_grow);
-            }
+            && let Some(p2) = &mut self.player2
+        {
+            p2.move_to(final_head2, p2_grow);
+        }
     }
 
-    fn check_body_collisions(&self, final_head1: Point, final_head2_opt: Option<Point>, is_invincible: bool, p1_grow: bool, p2_grow: bool) -> (bool, bool) {
+    fn check_body_collisions(
+        &self,
+        final_head1: Point,
+        final_head2_opt: Option<Point>,
+        is_invincible: bool,
+        p1_grow: bool,
+        p2_grow: bool,
+    ) -> (bool, bool) {
         let mut p1_dead = false;
         let mut p2_dead = false;
 
@@ -1544,19 +1859,29 @@ impl Game {
         // P2 hits itself
         if let Some(final_head2) = final_head2_opt
             && let Some(p2) = &self.player2
-                && p2.body_map.contains_key(&final_head2) && !is_invincible {
-                    let is_tail = p2.body.back().is_some_and(|tail| final_head2 == *tail);
-                    if !p2_grow && is_tail {
-                        // Safe
-                    } else {
-                        p2_dead = true;
-                    }
-                }
+            && p2.body_map.contains_key(&final_head2)
+            && !is_invincible
+        {
+            let is_tail = p2.body.back().is_some_and(|tail| final_head2 == *tail);
+            if !p2_grow && is_tail {
+                // Safe
+            } else {
+                p2_dead = true;
+            }
+        }
 
         // Cross-collisions
         if let Some(final_head2) = final_head2_opt {
-            if self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&final_head1)) && !is_invincible {
-                let is_tail = self.player2.as_ref().unwrap().body.back().is_some_and(|tail| final_head1 == *tail);
+            if self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&final_head1))
+                && !is_invincible
+            {
+                let is_tail = self
+                    .player2
+                    .as_ref()
+                    .unwrap()
+                    .body
+                    .back()
+                    .is_some_and(|tail| final_head1 == *tail);
                 if !p2_grow && is_tail {
                     // Safe, moving into tail of p2 that will move
                 } else {
@@ -1585,7 +1910,13 @@ impl Game {
         };
 
         if hit_power_up {
-            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 20, crate::color::Color::Yellow, '*');
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                20,
+                crate::color::Color::Yellow,
+                '*',
+            );
         }
 
         if let Some(p) = self.power_up.as_mut()
@@ -1660,7 +1991,13 @@ impl Game {
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
-            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crate::color::Color::Magenta, '★');
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                15,
+                crate::color::Color::Magenta,
+                '★',
+            );
 
             if let Some(last_time) = self.last_food_time {
                 if last_time.elapsed() < Duration::from_secs(5) {
@@ -1701,7 +2038,13 @@ impl Game {
     }
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
-        self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crate::color::Color::Green, '+');
+        self.spawn_particles(
+            f32::from(final_head.x),
+            f32::from(final_head.y),
+            8,
+            crate::color::Color::Green,
+            '+',
+        );
 
         if let Some(last_time) = self.last_food_time {
             if last_time.elapsed() < Duration::from_secs(5) {
@@ -1749,9 +2092,14 @@ impl Game {
                 || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                 || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
         };
-        if let Some(new_food) =
-            Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng, self.safe_zone_margin)
-        {
+        if let Some(new_food) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            self.safe_zone_margin,
+        ) {
             self.food = new_food;
             true
         } else {
@@ -1760,7 +2108,10 @@ impl Game {
     }
 
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
-        if self.mode == GameMode::Campaign || self.mode == GameMode::Maze || self.mode == GameMode::CustomLevel {
+        if self.mode == GameMode::Campaign
+            || self.mode == GameMode::Maze
+            || self.mode == GameMode::CustomLevel
+        {
             return;
         }
         let new_obs_count =
@@ -1790,16 +2141,23 @@ impl Game {
 
     pub fn check_achievements(&mut self) {
         let mut new_achievements = Vec::new();
-        if !self.stats.unlocked_achievements.contains(&Achievement::FirstBlood) && self.stats.games_played > 0 {
+        if !self.stats.unlocked_achievements.contains(&Achievement::FirstBlood)
+            && self.stats.games_played > 0
+        {
             new_achievements.push(Achievement::FirstBlood);
         }
-        if !self.stats.unlocked_achievements.contains(&Achievement::HighScorer) && self.score >= 100 {
+        if !self.stats.unlocked_achievements.contains(&Achievement::HighScorer) && self.score >= 100
+        {
             new_achievements.push(Achievement::HighScorer);
         }
-        if !self.stats.unlocked_achievements.contains(&Achievement::Rich) && self.stats.coins >= 1000 {
+        if !self.stats.unlocked_achievements.contains(&Achievement::Rich)
+            && self.stats.coins >= 1000
+        {
             new_achievements.push(Achievement::Rich);
         }
-        if !self.stats.unlocked_achievements.contains(&Achievement::BotUser) && self.used_bot_this_session {
+        if !self.stats.unlocked_achievements.contains(&Achievement::BotUser)
+            && self.used_bot_this_session
+        {
             new_achievements.push(Achievement::BotUser);
         }
 
@@ -1926,11 +2284,21 @@ impl Game {
                     .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
         });
 
-        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale
+        {
             Some(self.calculate_wrapped_head(p))
         } else {
-            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-            if p.x <= margin || p.x >= self.width - 1 - margin || p.y <= margin || p.y >= self.height - 1 - margin {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            if p.x <= margin
+                || p.x >= self.width - 1 - margin
+                || p.y <= margin
+                || p.y >= self.height - 1 - margin
+            {
                 None // Hit wall or out of bounds
             } else {
                 Some(p)
@@ -1940,12 +2308,13 @@ impl Game {
 
     #[must_use]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, _checking_player: u8) -> bool {
-        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|pu| {
-            pu.p_type == PowerUpType::Invincibility
-                && pu
-                    .activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
-        });
+        let is_invincible = self.mode == GameMode::Zen
+            || self.power_up.as_ref().is_some_and(|pu| {
+                pu.p_type == PowerUpType::Invincibility
+                    && pu
+                        .activation_time
+                        .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+            });
 
         if !is_invincible {
             if self.obstacles.contains(&final_p) {
@@ -1959,13 +2328,14 @@ impl Game {
                 }
             }
             if let Some(p2) = &self.player2
-                && let Some(pos) = p2.body.iter().position(|&p| p == final_p) {
-                    let steps_to_clear =
-                        u16::try_from(p2.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
-                    if steps < steps_to_clear {
-                        return false;
-                    }
+                && let Some(pos) = p2.body.iter().position(|&p| p == final_p)
+            {
+                let steps_to_clear =
+                    u16::try_from(p2.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
+                if steps < steps_to_clear {
+                    return false;
                 }
+            }
         }
 
         true
@@ -2019,7 +2389,12 @@ impl Game {
         }
     }
 
-    fn astar_search(&self, start: Point, targets: &[Point], checking_player: u8) -> Option<(Direction, Vec<Point>)> {
+    fn astar_search(
+        &self,
+        start: Point,
+        targets: &[Point],
+        checking_player: u8,
+    ) -> Option<(Direction, Vec<Point>)> {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
@@ -2039,7 +2414,9 @@ impl Game {
                 .map(|t| {
                     let mut dx = p.x.abs_diff(t.x);
                     let mut dy = p.y.abs_diff(t.y);
-                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                        && self.mode != GameMode::BattleRoyale
+                    {
                         dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                         dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                     }
@@ -2184,7 +2561,13 @@ impl Game {
 
     fn handle_death(&mut self, cause: &str) {
         let head = self.snake.head();
-        self.spawn_particles(f32::from(head.x), f32::from(head.y), 30, crate::color::Color::Red, 'X');
+        self.spawn_particles(
+            f32::from(head.x),
+            f32::from(head.y),
+            30,
+            crate::color::Color::Red,
+            'X',
+        );
 
         self.lives -= 1;
         self.just_died = true;

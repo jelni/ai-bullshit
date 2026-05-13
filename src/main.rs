@@ -92,7 +92,10 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-#[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Game loop inherently requires handling multiple states and events"
+)]
 fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let diff = args.difficulty;
     let mut game = Game::new(args.width, args.height, args.wrap, args.skin, args.theme, diff);
@@ -228,7 +231,9 @@ enum KeyAction {
 }
 
 fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> KeyAction {
-    if game.state != GameState::EnterName && (code == KeyCode::Char('b') || code == KeyCode::Char('B')) {
+    if game.state != GameState::EnterName
+        && (code == KeyCode::Char('b') || code == KeyCode::Char('B'))
+    {
         return KeyAction::BossKey;
     }
 
@@ -379,26 +384,36 @@ fn handle_level_editor_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Char('w' | 'W') | KeyCode::Up => {
             if let Some(cursor) = &mut game.editor_cursor
-                && cursor.y > 1 {
-                    cursor.y -= 1;
-                }
+                && cursor.y > 1
+            {
+                cursor.y -= 1;
+            }
         },
         KeyCode::Char('s' | 'S') | KeyCode::Down => {
             if let Some(cursor) = &mut game.editor_cursor
-                && cursor.y < game.height - 2 {
-                    cursor.y += 1;
-                }
+                && cursor.y < game.height - 2
+            {
+                cursor.y += 1;
+            }
         },
-        KeyCode::Char('a' | 'A') | KeyCode::Left => {
-            #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+        KeyCode::Char('a' | 'A') | KeyCode::Left =>
+        {
+            #[expect(
+                clippy::collapsible_if,
+                reason = "Using let_chains requires unstable feature, we want to stay on stable"
+            )]
             if let Some(cursor) = &mut game.editor_cursor {
                 if cursor.x > 1 {
                     cursor.x -= 1;
                 }
             }
         },
-        KeyCode::Char('d' | 'D') | KeyCode::Right => {
-            #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature, we want to stay on stable")]
+        KeyCode::Char('d' | 'D') | KeyCode::Right =>
+        {
+            #[expect(
+                clippy::collapsible_if,
+                reason = "Using let_chains requires unstable feature, we want to stay on stable"
+            )]
             if let Some(cursor) = &mut game.editor_cursor {
                 if cursor.x < game.width - 2 {
                     cursor.x += 1;
@@ -437,28 +452,40 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('a' | 'A') => game.handle_input(Direction::Left, 1),
         KeyCode::Char('d' | 'D') => game.handle_input(Direction::Right, 1),
         KeyCode::Up => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::TimeAttack
+                || game.mode == game::GameMode::Speedrun
+            {
                 game.handle_input(Direction::Up, 1);
             } else {
                 game.handle_input(Direction::Up, 2);
             }
         },
         KeyCode::Down => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::TimeAttack
+                || game.mode == game::GameMode::Speedrun
+            {
                 game.handle_input(Direction::Down, 1);
             } else {
                 game.handle_input(Direction::Down, 2);
             }
         },
         KeyCode::Left => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::TimeAttack
+                || game.mode == game::GameMode::Speedrun
+            {
                 game.handle_input(Direction::Left, 1);
             } else {
                 game.handle_input(Direction::Left, 2);
             }
         },
         KeyCode::Right => {
-            if game.mode == game::GameMode::SinglePlayer || game.mode == game::GameMode::TimeAttack || game.mode == game::GameMode::Speedrun {
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::TimeAttack
+                || game.mode == game::GameMode::Speedrun
+            {
                 game.handle_input(Direction::Right, 1);
             } else {
                 game.handle_input(Direction::Right, 2);
@@ -469,7 +496,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Char(' ') => game.shoot_laser(1),
         KeyCode::Enter => {
-            if game.mode == game::GameMode::LocalMultiplayer || game.mode == game::GameMode::PlayerVsBot {
+            if game.mode == game::GameMode::LocalMultiplayer
+                || game.mode == game::GameMode::PlayerVsBot
+            {
                 game.shoot_laser(2);
             }
         },
