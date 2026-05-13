@@ -526,7 +526,7 @@ impl Game {
         let mut options = fs::File::options();
         options.write(true).create_new(true);
 
-        #[cfg(unix)]
+        #[cfg(all(unix, feature = "cli"))]
         {
             use std::os::unix::fs::OpenOptionsExt;
             options.custom_flags(libc::O_NOFOLLOW);
