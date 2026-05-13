@@ -194,6 +194,14 @@ pub const fn default_campaign_level() -> u32 {
     1
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Boss {
+    pub position: Point,
+    pub hp: u32,
+    pub max_hp: u32,
+}
+
+
 #[derive(Clone)]
 pub struct HistoryState {
     pub snake: Snake,
@@ -212,6 +220,7 @@ pub struct HistoryState {
     pub combo: u32,
     pub last_food_time: Option<Instant>,
     pub lasers: Vec<Laser>,
+    pub boss: Option<Boss>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -254,6 +263,8 @@ pub struct SaveState {
     pub last_food_time: Option<u64>,
     #[serde(default)]
     pub lasers: Vec<Laser>,
+    #[serde(default)]
+    pub boss: Option<Boss>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -366,6 +377,7 @@ pub struct Game {
     pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
     pub lasers: Vec<Laser>,
+    pub boss: Option<Boss>,
 }
 
 impl Game {
@@ -459,6 +471,7 @@ impl Game {
             chat_log: std::collections::VecDeque::new(),
             last_chat_time: None,
             lasers: Vec::new(),
+            boss: None,
         }
     }
 
@@ -634,6 +647,7 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
             lasers: self.lasers.clone(),
+            boss: self.boss.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -710,6 +724,8 @@ impl Game {
                     Instant::now().checked_sub(Duration::from_secs(elapsed))
                 });
                 self.lasers = state.lasers;
+            self.boss = state.boss;
+                self.boss = state.boss;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -973,6 +989,7 @@ impl Game {
         self.last_food_time = None;
         self.chat_log.clear();
         self.last_chat_time = None;
+        self.boss = None;
     }
 
     fn respawn(&mut self) {
@@ -1187,6 +1204,7 @@ impl Game {
             self.combo = state.combo;
             self.last_food_time = state.last_food_time;
             self.lasers = state.lasers;
+            self.boss = state.boss;
         }
     }
 
@@ -1208,6 +1226,7 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time,
             lasers: self.lasers.clone(),
+            boss: self.boss.clone(),
         };
 
         self.history.push_back(state);
@@ -1321,6 +1340,17 @@ impl Game {
                     self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 10, crate::color::Color::Red, 'x');
                     break;
                 }
+
+                // Boss hit by laser
+                if let Some(boss) = &mut self.boss {
+                    if boss.position == laser.position {
+                        boss.hp = boss.hp.saturating_sub(1);
+                        destroyed = true;
+                        self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 10, crate::color::Color::White, 'x');
+                        break;
+                    }
+                }
+
                 // Despawn laser if it hits a snake
                 if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
                     if !is_invincible {
@@ -1411,6 +1441,42 @@ impl Game {
             }
         }
 
+        // --- Boss Spawning ---
+        if self.boss.is_none() && self.score > 50 && self.rng.gen_bool(0.005) {
+            let avoid = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p));
+            if let Some(pos) = Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng, self.safe_zone_margin) {
+                self.boss = Some(Boss {
+                    position: pos,
+                    hp: 5,
+                    max_hp: 5,
+                });
+                beep();
+            }
+        }
+        // --- Boss Movement ---
+        if let Some(boss) = &mut self.boss {
+            if self.rng.gen_bool(0.3) {
+                let target = self.snake.head();
+                let dx = i32::from(target.x) - i32::from(boss.position.x);
+                let dy = i32::from(target.y) - i32::from(boss.position.y);
+                let mut next_pos = boss.position;
+                if dx.abs() > dy.abs() {
+                    if dx > 0 { next_pos.x += 1; }
+                    else { next_pos.x = next_pos.x.saturating_sub(1); }
+                } else {
+                    if dy > 0 { next_pos.y += 1; }
+                    else { next_pos.y = next_pos.y.saturating_sub(1); }
+                }
+                let avoid = |p: &Point| self.obstacles.contains(p);
+                if next_pos.x > self.safe_zone_margin && next_pos.x < self.width - 1 - self.safe_zone_margin
+                   && next_pos.y > self.safe_zone_margin && next_pos.y < self.height - 1 - self.safe_zone_margin
+                   && !avoid(&next_pos) {
+                    boss.position = next_pos;
+                }
+            }
+        }
+
+
         self.handle_autopilot_moves();
 
         // --- Apply Input ---
@@ -1428,6 +1494,13 @@ impl Game {
 
         // --- Calculate Next Heads ---
         let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
+
+        // Check boss collision with player
+        if let Some(boss) = &self.boss {
+            if final_head1 == boss.position && !is_invincible {
+                p1_dead = true;
+            }
+        }
 
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
@@ -1493,6 +1566,21 @@ impl Game {
         let (body_p1_dead, body_p2_dead) = self.check_body_collisions(final_head1, final_head2_opt, is_invincible, p1_grow, p2_grow);
         if body_p1_dead { p1_dead = true; }
         if body_p2_dead { p2_dead = true; }
+
+        // Boss death processing
+        let mut boss_died = false;
+        if let Some(boss) = &self.boss {
+            if boss.hp == 0 {
+                boss_died = true;
+                self.spawn_particles(f32::from(boss.position.x), f32::from(boss.position.y), 50, crate::color::Color::Magenta, '*');
+                self.score += 50;
+                self.stats.total_score += 50;
+                self.stats.coins += 50;
+            }
+        }
+        if boss_died {
+            self.boss = None;
+        }
 
         // Process deaths
         if p1_dead && p2_dead {

@@ -715,6 +715,21 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Boss
+    if let Some(boss) = &game.boss {
+        stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        write!(stdout, "B")?;
+
+        // Draw HP Bar
+        let hp_str = format!("{}/{}", boss.hp, boss.max_hp);
+        if boss.position.y > 1 {
+            stdout.queue(cursor::MoveTo(boss.position.x.saturating_sub((hp_str.len() / 2) as u16), boss.position.y - 1))?;
+            stdout.queue(SetForegroundColor(Color::White))?;
+            write!(stdout, "{}", hp_str)?;
+        }
+    }
+
     // Draw player2
     if let Some(p2) = &game.player2 {
         stdout.queue(SetForegroundColor(Color::Blue))?;
