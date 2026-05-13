@@ -189,6 +189,7 @@ fn draw_help<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Space/Enter: Load Game (in Menu)",
         "Q: Quit / Back to Menu",
         "Space/Enter: Select/Start",
+        "Space/Enter: Shoot Laser (P1/P2 in-game)",
         "T: Toggle Bot (Autopilot)",
         "Z: Rewind Time",
     ];
@@ -617,6 +618,18 @@ fn draw_entities<W: Write>(
             stdout.queue(SetForegroundColor(display_color))?;
             write!(stdout, "{}", p.symbol)?;
         }
+    }
+
+    // Draw lasers
+    for laser in &game.lasers {
+        let symbol = match laser.direction {
+            crate::snake::Direction::Up | crate::snake::Direction::Down => '|',
+            crate::snake::Direction::Left | crate::snake::Direction::Right => '-',
+        };
+        let color = if laser.player == 1 { snake_color } else { Color::Blue };
+        stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
+        stdout.queue(SetForegroundColor(color))?;
+        write!(stdout, "{symbol}")?;
     }
 
     // Draw autopilot path
