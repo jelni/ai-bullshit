@@ -628,6 +628,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw lasers
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    for laser in &game.lasers {
+        stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
+        let laser_char = match laser.direction {
+            Direction::Up | Direction::Down => '|',
+            Direction::Left | Direction::Right => '-',
+        };
+        write!(stdout, "{laser_char}")?;
+    }
+
     // Draw food
     stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
     stdout.queue(SetForegroundColor(food_color))?;

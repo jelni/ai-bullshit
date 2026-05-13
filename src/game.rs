@@ -11,6 +11,13 @@ use serde_with::serde_as;
 
 use crate::snake::{Direction, Point, Snake};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Laser {
+    pub position: Point,
+    pub direction: Direction,
+    pub player: u8,
+}
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct AStarState {
     f_score: u16,
@@ -211,6 +218,7 @@ pub struct HistoryState {
     pub last_obstacle_spawn_time: Instant,
     pub combo: u32,
     pub last_food_time: Option<Instant>,
+    pub lasers: Vec<Laser>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -251,6 +259,8 @@ pub struct SaveState {
     pub combo: u32,
     #[serde(default)]
     pub last_food_time: Option<u64>,
+    #[serde(default)]
+    pub lasers: Vec<Laser>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -355,6 +365,8 @@ pub struct Game {
     pub last_food_time: Option<Instant>,
     pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
+    pub lasers: Vec<Laser>,
+    pub last_laser_shot: Option<Instant>,
 }
 
 impl Game {
@@ -447,6 +459,8 @@ impl Game {
             last_food_time: None,
             chat_log: std::collections::VecDeque::new(),
             last_chat_time: None,
+            lasers: Vec::new(),
+            last_laser_shot: None,
         }
     }
 
@@ -621,6 +635,7 @@ impl Game {
             safe_zone_margin: self.safe_zone_margin,
             combo: self.combo,
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
+            lasers: self.lasers.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -696,6 +711,7 @@ impl Game {
                 self.last_food_time = state.last_food_time.and_then(|elapsed| {
                     Instant::now().checked_sub(Duration::from_secs(elapsed))
                 });
+                self.lasers = state.lasers;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -959,6 +975,8 @@ impl Game {
         self.last_food_time = None;
         self.chat_log.clear();
         self.last_chat_time = None;
+        self.lasers.clear();
+        self.last_laser_shot = None;
     }
 
     fn respawn(&mut self) {
@@ -1058,6 +1076,13 @@ impl Game {
                         p2.direction_queue.push_back(dir);
                     }
         }
+
+        if (self.auto_pilot || self.mode == GameMode::BotVsBot) && self.rng.gen_bool(0.05) {
+            self.shoot_laser(1);
+        }
+        if (self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot) && self.rng.gen_bool(0.05) {
+            self.shoot_laser(2);
+        }
     }
 
     fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
@@ -1127,6 +1152,7 @@ impl Game {
             self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
             self.combo = state.combo;
             self.last_food_time = state.last_food_time;
+            self.lasers = state.lasers;
         }
     }
 
@@ -1147,6 +1173,7 @@ impl Game {
             last_obstacle_spawn_time: self.last_obstacle_spawn_time,
             combo: self.combo,
             last_food_time: self.last_food_time,
+            lasers: self.lasers.clone(),
         };
 
         self.history.push_back(state);
@@ -1173,6 +1200,38 @@ impl Game {
         }
     }
 
+    pub fn shoot_laser(&mut self, player: u8) {
+        // Cooldown mechanism
+        if let Some(last_shot) = self.last_laser_shot {
+            if last_shot.elapsed() < Duration::from_millis(500) {
+                return; // Cooldown active
+            }
+        }
+        self.last_laser_shot = Some(Instant::now());
+
+        if player == 1 {
+            let start = self.snake.head();
+            let pos = Self::calculate_next_head_dir(start, self.snake.direction);
+            self.lasers.push(Laser {
+                position: pos,
+                direction: self.snake.direction,
+                player: 1,
+            });
+            crate::game::beep();
+        } else if player == 2 {
+            if let Some(p2) = &self.player2 {
+                let start = p2.head();
+                let pos = Self::calculate_next_head_dir(start, p2.direction);
+                self.lasers.push(Laser {
+                    position: pos,
+                    direction: p2.direction,
+                    player: 2,
+                });
+                crate::game::beep();
+            }
+        }
+    }
+
     #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
@@ -1180,6 +1239,86 @@ impl Game {
         }
 
         self.save_history_state();
+
+        // Update lasers
+        let mut new_lasers = Vec::new();
+        for mut laser in std::mem::take(&mut self.lasers) {
+            let mut destroyed = false;
+            // Move 2 steps, checking collisions on EACH step to prevent tunneling
+            for _ in 0..2 {
+                laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
+                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+                    laser.position = self.calculate_wrapped_head(laser.position);
+                }
+
+                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                let out_of_bounds = laser.position.x <= margin || laser.position.x >= self.width - 1 - margin ||
+                                    laser.position.y <= margin || laser.position.y >= self.height - 1 - margin;
+
+                if out_of_bounds {
+                    destroyed = true;
+                    break;
+                }
+
+                // Check obstacle collision
+                if self.obstacles.contains(&laser.position) {
+                    self.obstacles.remove(&laser.position);
+                    self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 10, crate::color::Color::Red, 'x');
+                    destroyed = true;
+                    break;
+                }
+
+                // Check opponent collision
+                let mut hit_snake = false;
+                let mut to_shrink_p2 = false;
+                let mut to_shrink_p1 = false;
+                let mut headshot = false;
+
+                if laser.player == 1 {
+                    if let Some(p2) = &self.player2 {
+                        if p2.body_map.contains_key(&laser.position) {
+                            hit_snake = true;
+                            if laser.position != p2.head() {
+                                to_shrink_p2 = true;
+                            } else {
+                                headshot = true;
+                            }
+                        }
+                    }
+                } else if laser.player == 2 {
+                    if self.snake.body_map.contains_key(&laser.position) {
+                        hit_snake = true;
+                        if laser.position != self.snake.head() {
+                            to_shrink_p1 = true;
+                        } else {
+                            headshot = true;
+                        }
+                    }
+                }
+
+                if hit_snake {
+                    self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 20, crate::color::Color::Red, '*');
+                    if to_shrink_p2 {
+                        if let Some(p2) = &mut self.player2 {
+                            p2.shrink_tail();
+                        }
+                    }
+                    if to_shrink_p1 {
+                        self.snake.shrink_tail();
+                    }
+                    // For headshots, we KEEP the laser alive so check_body_collisions can kill the snake.
+                    if !headshot {
+                        destroyed = true;
+                        break;
+                    }
+                }
+            }
+
+            if !destroyed {
+                new_lasers.push(laser);
+            }
+        }
+        self.lasers = new_lasers;
 
         // Chat simulation logic
         let chat_interval = if self.mode == GameMode::SinglePlayer {
@@ -1418,6 +1557,18 @@ impl Game {
     fn check_body_collisions(&self, final_head1: Point, final_head2_opt: Option<Point>, is_invincible: bool, p1_grow: bool, p2_grow: bool) -> (bool, bool) {
         let mut p1_dead = false;
         let mut p2_dead = false;
+
+        // Check if head hit a laser (we use a similar trick for head-laser collision)
+        for laser in &self.lasers {
+            if laser.player == 2 && laser.position == final_head1 {
+                p1_dead = true;
+            }
+            if let Some(final_head2) = final_head2_opt {
+                if laser.player == 1 && laser.position == final_head2 {
+                    p2_dead = true;
+                }
+            }
+        }
 
         // Body collisions
         // P1 hits itself
