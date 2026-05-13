@@ -353,6 +353,7 @@ pub struct Game {
     pub auto_pilot: bool,
     pub used_bot_this_session: bool,
     pub autopilot_path: Vec<Point>,
+    pub p2_autopilot_path: Vec<Point>,
     pub food_eaten_session: u32,
     pub mode: GameMode,
     pub player2: Option<Snake>,
@@ -449,6 +450,7 @@ impl Game {
             auto_pilot: false,
             used_bot_this_session: false,
             autopilot_path: Vec::new(),
+            p2_autopilot_path: Vec::new(),
             food_eaten_session: 0,
             mode,
             player2: None,
@@ -2425,8 +2427,7 @@ impl Game {
         self.flood_fill_fallback(start, 1)
     }
 
-    #[must_use]
-    pub fn calculate_p2_autopilot_move(&self) -> Option<Direction> {
+    pub fn calculate_p2_autopilot_move(&mut self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
             let start = p2.head();
 
@@ -2440,11 +2441,12 @@ impl Game {
                 targets.push(pu.location);
             }
 
-            if let Some((dir, _path)) = self.astar_search(start, &targets, 2) {
-                // not showing bot path for player2
+            if let Some((dir, path)) = self.astar_search(start, &targets, 2) {
+                self.p2_autopilot_path = path;
                 return Some(dir);
             }
 
+            self.p2_autopilot_path.clear();
             self.flood_fill_fallback(start, 2)
         } else {
             None
