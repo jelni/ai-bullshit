@@ -211,6 +211,7 @@ pub struct HistoryState {
     pub last_obstacle_spawn_time: Instant,
     pub combo: u32,
     pub last_food_time: Option<Instant>,
+    pub lasers: Vec<Laser>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -251,6 +252,8 @@ pub struct SaveState {
     pub combo: u32,
     #[serde(default)]
     pub last_food_time: Option<u64>,
+    #[serde(default)]
+    pub lasers: Vec<Laser>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -296,6 +299,13 @@ pub struct Statistics {
     pub unlocked_themes: Vec<Theme>,
     #[serde(default)]
     pub unlocked_achievements: Vec<Achievement>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Laser {
+    pub position: Point,
+    pub direction: crate::snake::Direction,
+    pub player: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -355,6 +365,7 @@ pub struct Game {
     pub last_food_time: Option<Instant>,
     pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
+    pub lasers: Vec<Laser>,
 }
 
 impl Game {
@@ -447,6 +458,7 @@ impl Game {
             last_food_time: None,
             chat_log: std::collections::VecDeque::new(),
             last_chat_time: None,
+            lasers: Vec::new(),
         }
     }
 
@@ -621,6 +633,7 @@ impl Game {
             safe_zone_margin: self.safe_zone_margin,
             combo: self.combo,
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
+            lasers: self.lasers.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -696,6 +709,7 @@ impl Game {
                 self.last_food_time = state.last_food_time.and_then(|elapsed| {
                     Instant::now().checked_sub(Duration::from_secs(elapsed))
                 });
+                self.lasers = state.lasers;
                 self.state = GameState::Paused;
                 self.start_time = Instant::now();
                 self.update_high_scores();
@@ -997,6 +1011,43 @@ impl Game {
         self.last_obstacle_spawn_time = Instant::now();
     }
 
+    pub fn shoot_laser(&mut self, player: u8) {
+        let active_lasers = self.lasers.iter().filter(|l| l.player == player).count();
+        if active_lasers >= 3 {
+            return; // Limit of 3 active lasers per player
+        }
+
+        let (head, dir) = if player == 1 {
+            (self.snake.head(), self.snake.direction)
+        } else if player == 2 {
+            if let Some(p2) = &self.player2 {
+                (p2.head(), p2.direction)
+            } else {
+                return;
+            }
+        } else {
+            return;
+        };
+
+        // Laser spawns exactly at the position in front of the head
+        let laser_pos = Self::calculate_next_head_dir(head, dir);
+
+        // Check bounds before adding the laser
+        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+        if laser_pos.x > margin
+            && laser_pos.x < self.width - 1 - margin
+            && laser_pos.y > margin
+            && laser_pos.y < self.height - 1 - margin
+        {
+            self.lasers.push(Laser {
+                position: laser_pos,
+                direction: dir,
+                player,
+            });
+            beep();
+        }
+    }
+
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
         // Prevent 180 degree turns and queue input if we already have one
         // We buffer up to 2 moves ahead to prevent "laggy" feel if user mashes keys.
@@ -1044,19 +1095,27 @@ impl Game {
         // --- Handle Player 1 Autopilot ---
         if (self.auto_pilot || self.mode == GameMode::BotVsBot)
             && self.snake.direction_queue.is_empty()
-            && let Some(dir) = self.calculate_autopilot_move()
         {
-            self.snake.direction_queue.push_back(dir);
+            if let Some(dir) = self.calculate_autopilot_move() {
+                self.snake.direction_queue.push_back(dir);
+            }
+            if self.rng.gen_bool(0.05) {
+                self.shoot_laser(1);
+            }
         }
 
         // --- Handle Player 2 Autopilot ---
         if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
             let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
-            if is_empty
-                && let Some(dir) = self.calculate_p2_autopilot_move()
+            if is_empty {
+                if let Some(dir) = self.calculate_p2_autopilot_move()
                     && let Some(p2) = &mut self.player2 {
                         p2.direction_queue.push_back(dir);
-                    }
+                }
+                if self.rng.gen_bool(0.05) {
+                    self.shoot_laser(2);
+                }
+            }
         }
     }
 
@@ -1127,6 +1186,7 @@ impl Game {
             self.last_obstacle_spawn_time = state.last_obstacle_spawn_time;
             self.combo = state.combo;
             self.last_food_time = state.last_food_time;
+            self.lasers = state.lasers;
         }
     }
 
@@ -1147,6 +1207,7 @@ impl Game {
             last_obstacle_spawn_time: self.last_obstacle_spawn_time,
             combo: self.combo,
             last_food_time: self.last_food_time,
+            lasers: self.lasers.clone(),
         };
 
         self.history.push_back(state);
@@ -1225,6 +1286,65 @@ impl Game {
             p.lifetime -= 1.0;
         }
         self.particles.retain(|p| p.lifetime > 0.0);
+
+        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Invincibility
+                && p.activation_time
+                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
+        });
+
+        let mut p1_dead = false;
+        let mut p2_dead = false;
+
+        // --- Process Lasers ---
+        let mut lasers_to_keep = Vec::new();
+        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+
+        for mut laser in std::mem::take(&mut self.lasers) {
+            let mut destroyed = false;
+            // Lasers move 2 units per tick
+            for _ in 0..2 {
+                laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
+
+                if laser.position.x <= margin
+                    || laser.position.x >= self.width - 1 - margin
+                    || laser.position.y <= margin
+                    || laser.position.y >= self.height - 1 - margin
+                {
+                    destroyed = true;
+                    break;
+                }
+
+                if self.obstacles.contains(&laser.position) {
+                    self.obstacles.remove(&laser.position);
+                    destroyed = true;
+                    self.spawn_particles(f32::from(laser.position.x), f32::from(laser.position.y), 10, crate::color::Color::Red, 'x');
+                    break;
+                }
+                // Despawn laser if it hits a snake
+                if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
+                    if !is_invincible {
+                        p1_dead = true;
+                    }
+                    destroyed = true;
+                    break;
+                }
+                if let Some(p2) = &self.player2 {
+                    if laser.player != 2 && p2.body_map.contains_key(&laser.position) {
+                        if !is_invincible {
+                            p2_dead = true;
+                        }
+                        destroyed = true;
+                        break;
+                    }
+                }
+            }
+
+            if !destroyed {
+                lasers_to_keep.push(laser);
+            }
+        }
+        self.lasers = lasers_to_keep;
 
         if self.mode == GameMode::TimeAttack && self.start_time.elapsed() >= Duration::from_secs(60) {
             self.handle_death("Time's up!");
@@ -1324,16 +1444,7 @@ impl Game {
             })
         } else { false };
 
-        let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|p| {
-            p.p_type == PowerUpType::Invincibility
-                && p.activation_time
-                    .is_some_and(|t| t.elapsed().unwrap_or_default() < Duration::from_secs(5))
-        });
-
         // --- Resolution ---
-
-        let mut p1_dead = false;
-        let mut p2_dead = false;
 
         if hit_wall1 || out_of_bounds1 { p1_dead = true; }
         if hit_obstacle1 && !is_invincible { p1_dead = true; }

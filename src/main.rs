@@ -467,6 +467,12 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('z' | 'Z') => {
             game.rewind_time();
         },
+        KeyCode::Char(' ') => game.shoot_laser(1),
+        KeyCode::Enter => {
+            if game.mode == game::GameMode::LocalMultiplayer || game.mode == game::GameMode::PlayerVsBot {
+                game.shoot_laser(2);
+            }
+        },
         _ => {},
     }
     true
