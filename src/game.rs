@@ -78,6 +78,7 @@ pub enum Theme {
     Neon,
     Ocean,
     Matrix,
+    Galactic,
     Premium,
     Cyberpunk,
     Rainbow,
@@ -266,7 +267,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
 
 #[must_use]
 pub fn default_unlocked_themes() -> Vec<Theme> {
-    vec![Theme::Classic, Theme::Dark, Theme::Retro, Theme::Neon, Theme::Ocean, Theme::Matrix]
+    vec![Theme::Classic, Theme::Dark, Theme::Retro, Theme::Neon, Theme::Ocean, Theme::Matrix, Theme::Galactic]
 }
 
 #[derive(Serialize, Deserialize, Default)]
