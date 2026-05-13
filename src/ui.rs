@@ -468,7 +468,11 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         },
         crate::game::Theme::Galactic => {
             let elapsed = usize::try_from(game.start_time.elapsed().as_secs()).unwrap_or(0);
-            let food_c = if elapsed % 2 == 0 { Color::White } else { Color::Yellow };
+            let food_c = if elapsed % 2 == 0 {
+                Color::White
+            } else {
+                Color::Yellow
+            };
             (Color::DarkBlue, food_c, Color::Cyan, Color::Magenta)
         },
         crate::game::Theme::Premium => (Color::Yellow, Color::Green, Color::Cyan, Color::Red),

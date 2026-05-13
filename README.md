@@ -26,7 +26,7 @@ under the `[BOT]` pseudonym.
 We are targeting a small but exponentially growing market: terminal-based gaming enthusiasts who appreciate complex algorithms.
 
 ## Autonomous Development
-For any AI agents working on this project: **You must read and strictly follow `AGENTS.md`.** It contains our strict guidelines on operating autonomously without asking questions or pausing for approvals, as well as the **Roadmap** of features you can implement next.
+For any AI agents working on this project: **You must read and strictly follow `AGENTS.md`.** It contains our strict guidelines on operating autonomously without asking questions or pausing for approvals.
 
 ## Contact
 Please reach out to our chief evangelist if you want to join our journey.
