@@ -86,6 +86,7 @@ impl Difficulty {
     Default,
     Copy,
 )]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Theme {
     #[default]
     Classic,
