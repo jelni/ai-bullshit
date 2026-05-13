@@ -752,9 +752,16 @@ fn draw_entities<W: Write>(
     }
 
     // Draw autopilot path
-    if game.auto_pilot {
+    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.autopilot_path {
+            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+            write!(stdout, "·")?;
+        }
+    }
+    if game.mode == crate::game::GameMode::PlayerVsBot || game.mode == crate::game::GameMode::BotVsBot {
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for path_point in &game.p2_autopilot_path {
             stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
             write!(stdout, "·")?;
         }
