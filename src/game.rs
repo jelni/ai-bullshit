@@ -34,7 +34,6 @@ impl PartialOrd for AStarState {
 }
 
 #[derive(
-    clap::ValueEnum,
     Clone,
     Copy,
     Debug,
@@ -44,6 +43,7 @@ impl PartialOrd for AStarState {
     Eq,
     Default,
 )]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Difficulty {
     Easy,
     #[default]
@@ -76,7 +76,7 @@ impl Difficulty {
 }
 
 #[derive(
-    clap::ValueEnum,
+
     Clone,
     Debug,
     serde::Serialize,
@@ -299,7 +299,7 @@ pub struct Particle {
     pub lifetime: f32,
     pub max_lifetime: f32,
     pub symbol: char,
-    pub color: crossterm::style::Color,
+    pub color: crate::color::Color,
 }
 
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
@@ -349,7 +349,7 @@ pub struct Game {
     pub particles: Vec<Particle>,
     pub combo: u32,
     pub last_food_time: Option<Instant>,
-    pub chat_log: std::collections::VecDeque<(String, crossterm::style::Color)>,
+    pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
 }
 
@@ -489,6 +489,7 @@ impl Game {
         stats
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
         let mut rng = rand::thread_rng();
         let suffix: u32 = rng.r#gen();
@@ -514,12 +515,20 @@ impl Game {
         self.save_stats_to_file("stats.json");
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_stats_to_file(&self, _path: &str) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_stats_to_file(&self, path: &str) {
         if let Ok(json) = serde_json::to_string(&self.stats) {
             let _ = Self::atomic_write(path, json);
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_high_score(&mut self, _name: String, _score: u32) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_high_score(&mut self, name: String, score: u32) {
         let filename = Self::get_high_score_filename(self.difficulty);
         self.save_high_score_to_file(&filename, name, score);
@@ -530,6 +539,10 @@ impl Game {
         self.high_score = self.high_scores.first().map_or(0, |(_, s)| *s);
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_high_score_to_file(&mut self, _path: &str, _name: String, _score: u32) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_high_score_to_file(&mut self, path: &str, name: String, score: u32) {
         if let Some(pos) = self.high_scores.iter().position(|(n, _)| n == &name) {
             if self.high_scores[pos].1 < score {
@@ -549,6 +562,10 @@ impl Game {
         self.save_game_to_file("savegame.json");
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_custom_level(&self) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_custom_level(&self) {
         if let Ok(json) = serde_json::to_string(&self.obstacles) {
             let _ = Self::atomic_write("custom_level.json", json);
@@ -562,6 +579,10 @@ impl Game {
             .unwrap_or_default()
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_game_to_file(&self, _path: &str) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_game_to_file(&self, path: &str) {
         let state = SaveState {
             mode: self.mode,
@@ -1119,7 +1140,7 @@ impl Game {
         }
     }
 
-    pub fn spawn_particles(&mut self, x: f32, y: f32, count: usize, color: crossterm::style::Color, symbol: char) {
+    pub fn spawn_particles(&mut self, x: f32, y: f32, count: usize, color: crate::color::Color, symbol: char) {
         for _ in 0..count {
             let angle = self.rng.gen_range(0.0..std::f32::consts::TAU);
             let speed = self.rng.gen_range(0.2..1.5);
@@ -1162,13 +1183,13 @@ impl Game {
                 "Noob123", "ProPlayer", "Admin", "Mod", "VIP_User"
             ];
             let colors = [
-                crossterm::style::Color::Red,
-                crossterm::style::Color::Green,
-                crossterm::style::Color::Yellow,
-                crossterm::style::Color::Blue,
-                crossterm::style::Color::Magenta,
-                crossterm::style::Color::Cyan,
-                crossterm::style::Color::White,
+                crate::color::Color::Red,
+                crate::color::Color::Green,
+                crate::color::Color::Yellow,
+                crate::color::Color::Blue,
+                crate::color::Color::Magenta,
+                crate::color::Color::Cyan,
+                crate::color::Color::White,
             ];
 
             let msg = messages[self.rng.gen_range(0..messages.len())];
@@ -1438,7 +1459,7 @@ impl Game {
         };
 
         if hit_power_up {
-            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 20, crossterm::style::Color::Yellow, '*');
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 20, crate::color::Color::Yellow, '*');
         }
 
         if let Some(p) = self.power_up.as_mut()
@@ -1513,7 +1534,7 @@ impl Game {
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
-            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crossterm::style::Color::Magenta, '★');
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crate::color::Color::Magenta, '★');
 
             if let Some(last_time) = self.last_food_time {
                 if last_time.elapsed() < Duration::from_secs(5) {
@@ -1554,7 +1575,7 @@ impl Game {
     }
 
     fn process_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
-        self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crossterm::style::Color::Green, '+');
+        self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 8, crate::color::Color::Green, '+');
 
         if let Some(last_time) = self.last_food_time {
             if last_time.elapsed() < Duration::from_secs(5) {
@@ -2033,7 +2054,7 @@ impl Game {
 
     fn handle_death(&mut self, cause: &str) {
         let head = self.snake.head();
-        self.spawn_particles(f32::from(head.x), f32::from(head.y), 30, crossterm::style::Color::Red, 'X');
+        self.spawn_particles(f32::from(head.x), f32::from(head.y), 30, crate::color::Color::Red, 'X');
 
         self.lives -= 1;
         self.just_died = true;
