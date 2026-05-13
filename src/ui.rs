@@ -63,8 +63,29 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let menu_items =
-        ["Single Player", "Campaign Mode", "Local Multiplayer", "Online Multiplayer", "Player vs Bot", "Bot vs Bot", "Battle Royale", "Time Attack", "Survival Mode", "Zen Mode", "Maze Mode", "Speedrun Mode", "Load Game", "Settings", "NFT Shop", "Statistics", "Achievements", "Help", "Play Custom Level", "Level Editor", "Quit"];
+    let menu_items = [
+        "Single Player",
+        "Campaign Mode",
+        "Local Multiplayer",
+        "Online Multiplayer",
+        "Player vs Bot",
+        "Bot vs Bot",
+        "Battle Royale",
+        "Time Attack",
+        "Survival Mode",
+        "Zen Mode",
+        "Maze Mode",
+        "Speedrun Mode",
+        "Load Game",
+        "Settings",
+        "NFT Shop",
+        "Statistics",
+        "Achievements",
+        "Help",
+        "Play Custom Level",
+        "Level Editor",
+        "Quit",
+    ];
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.menu_selection {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
@@ -121,8 +142,16 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     for (i, (ach, desc)) in all_achievements.iter().enumerate() {
         let is_unlocked = game.stats.unlocked_achievements.contains(ach);
-        let prefix = if is_unlocked { "[X]" } else { "[ ]" };
-        let color = if is_unlocked { Color::Green } else { Color::DarkGrey };
+        let prefix = if is_unlocked {
+            "[X]"
+        } else {
+            "[ ]"
+        };
+        let color = if is_unlocked {
+            Color::Green
+        } else {
+            Color::DarkGrey
+        };
         let line = format!("{prefix} {desc}");
         stdout.queue(SetForegroundColor(color))?;
         stdout.queue(cursor::MoveTo(
@@ -455,12 +484,8 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Theme::Blockchain => {
             (Color::DarkYellow, Color::Yellow, Color::DarkGrey, Color::DarkCyan)
         },
-        crate::game::Theme::Esports => {
-            (Color::Red, Color::Blue, Color::Cyan, Color::Magenta)
-        },
-        crate::game::Theme::Solar => {
-            (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed)
-        },
+        crate::game::Theme::Esports => (Color::Red, Color::Blue, Color::Cyan, Color::Magenta),
+        crate::game::Theme::Solar => (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed),
     };
 
     draw_borders(game, stdout, border_color)?;
@@ -542,13 +567,18 @@ fn draw_level_editor<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 }
 
 fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> io::Result<()> {
-    let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale {
+        game.safe_zone_margin
+    } else {
+        0
+    };
 
     if margin > 0 {
         stdout.queue(SetForegroundColor(Color::Red))?;
         for y in 0..game.height {
             for x in 0..game.width {
-                if x < margin || x >= game.width - margin || y < margin || y >= game.height - margin {
+                if x < margin || x >= game.width - margin || y < margin || y >= game.height - margin
+                {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, "▒")?;
                 }
@@ -601,9 +631,17 @@ fn draw_entities<W: Write>(
 ) -> io::Result<()> {
     // Draw particles
     for p in &game.particles {
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Screen coords are within valid bounds"
+        )]
         let px = p.x.round() as u16;
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "Screen coords are within valid bounds")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Screen coords are within valid bounds"
+        )]
         let py = p.y.round() as u16;
 
         if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 {
@@ -626,7 +664,11 @@ fn draw_entities<W: Write>(
             crate::snake::Direction::Up | crate::snake::Direction::Down => '|',
             crate::snake::Direction::Left | crate::snake::Direction::Right => '-',
         };
-        let color = if laser.player == 1 { snake_color } else { Color::Blue };
+        let color = if laser.player == 1 {
+            snake_color
+        } else {
+            Color::Blue
+        };
         stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
         stdout.queue(SetForegroundColor(color))?;
         write!(stdout, "{symbol}")?;
@@ -651,6 +693,13 @@ fn draw_entities<W: Write>(
     for obs in &game.obstacles {
         stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
         write!(stdout, "X")?;
+    }
+
+    // Draw Boss
+    if let Some(boss) = &game.boss {
+        stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
+        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        write!(stdout, "B")?;
     }
 
     // Draw bonus food
@@ -747,17 +796,24 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
-    let combo_str = if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
-        format!(" | Combo: {}x", game.combo)
-    } else {
-        String::new()
-    };
+    let combo_str =
+        if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
+            format!(" | Combo: {}x", game.combo)
+        } else {
+            String::new()
+        };
 
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}{}",
-            game.score, game.high_score, game.lives, game.campaign_level, game.difficulty, bot_str, combo_str
+            game.score,
+            game.high_score,
+            game.lives,
+            game.campaign_level,
+            game.difficulty,
+            bot_str,
+            combo_str
         )?;
     } else if game.mode == crate::game::GameMode::BattleRoyale {
         let max_margin = (game.width.min(game.height) / 2).saturating_sub(2);
@@ -770,7 +826,13 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | {:?}{}{}{}",
-            game.score, game.high_score, game.lives, game.difficulty, bot_str, shrink_str, combo_str
+            game.score,
+            game.high_score,
+            game.lives,
+            game.difficulty,
+            bot_str,
+            shrink_str,
+            combo_str
         )?;
     } else if game.mode == crate::game::GameMode::TimeAttack {
         let time_left = 60u64.saturating_sub(game.start_time.elapsed().as_secs());
@@ -784,7 +846,14 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}{}",
-            game.score, game.high_score, game.lives, elapsed, game.food_eaten_session, game.difficulty, bot_str, combo_str
+            game.score,
+            game.high_score,
+            game.lives,
+            elapsed,
+            game.food_eaten_session,
+            game.difficulty,
+            bot_str,
+            combo_str
         )?;
     } else {
         let level = game.score / 20 + 1;
@@ -793,6 +862,11 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}{}",
             game.score, game.high_score, game.lives, level, game.difficulty, bot_str, combo_str
         )?;
+    }
+
+    if let Some(boss) = &game.boss {
+        let boss_msg = format!(" | Boss HP: {}/{}", boss.health, boss.max_health);
+        write!(stdout, "{boss_msg}")?;
     }
 
     if let Some(power_up) = &game.power_up

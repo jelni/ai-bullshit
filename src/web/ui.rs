@@ -1,5 +1,5 @@
 use crate::game::{Game, GameState};
-use web_sys::{HtmlElement, Document};
+use web_sys::{Document, HtmlElement};
 
 pub fn draw(game: &Game, container: &HtmlElement, _document: &Document) {
     let mut output = String::new();
@@ -48,10 +48,12 @@ pub fn draw(game: &Game, container: &HtmlElement, _document: &Document) {
 
     // State dependent UI
     match game.state {
-        GameState::Menu => output.push_str("\n--- MENU ---\nPress Space to Play\nPress 't' for Bot Mode"),
+        GameState::Menu => {
+            output.push_str("\n--- MENU ---\nPress Space to Play\nPress 't' for Bot Mode")
+        },
         GameState::Paused => output.push_str("\n--- PAUSED ---\nPress 'p' to Resume"),
         GameState::GameOver => output.push_str("\n--- GAME OVER ---\nPress 'r' to Restart"),
-        _ => {}
+        _ => {},
     }
 
     container.set_inner_text(&output);
