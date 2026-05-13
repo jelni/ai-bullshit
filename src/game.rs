@@ -54,6 +54,7 @@ pub enum Difficulty {
 }
 
 impl Difficulty {
+    #[must_use]
     pub const fn next(self) -> Self {
         match self {
             Self::Easy => Self::Normal,
@@ -64,6 +65,7 @@ impl Difficulty {
         }
     }
 
+    #[must_use]
     pub const fn prev(self) -> Self {
         match self {
             Self::Easy => Self::GodMode,
@@ -174,16 +176,20 @@ pub enum Achievement {
     BotUser,
 }
 
+#[must_use]
 pub const fn default_lives() -> u32 {
     3
 }
 
+#[must_use]
 pub const fn default_wrap_mode() -> bool {
     false
 }
+#[must_use]
 pub const fn default_skin() -> char {
     '█'
 }
+#[must_use]
 pub const fn default_campaign_level() -> u32 {
     1
 }
@@ -271,6 +277,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
     (ShopItem::Theme(Theme::Solar), 500_000),
 ];
 
+#[must_use]
 pub fn default_unlocked_themes() -> Vec<Theme> {
     vec![Theme::Classic, Theme::Dark, Theme::Retro, Theme::Neon, Theme::Ocean, Theme::Matrix]
 }
@@ -355,6 +362,7 @@ pub struct Game {
 }
 
 impl Game {
+    #[must_use]
     pub fn new(
         width: u16,
         height: u16,
@@ -443,10 +451,12 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn get_high_score_filename(difficulty: Difficulty) -> String {
         format!("highscore_{difficulty:?}.txt").to_lowercase()
     }
 
+    #[must_use]
     pub fn load_high_scores_from_file(path: &str) -> Vec<(String, u32)> {
         let mut content = String::new();
         File::open(path).and_then(|f| f.take(1024 * 1024).read_to_string(&mut content)).map_or_else(
@@ -573,6 +583,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn load_custom_level() -> HashSet<Point> {
         File::open("custom_level.json")
             .ok()
@@ -807,6 +818,75 @@ impl Game {
         }
     }
 
+    fn generate_procedural_maze(width: u16, height: u16, rng: &rand::rngs::ThreadRng) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+        let cols = (width - 2) / 2;
+        let rows = (height - 2) / 2;
+
+        if cols == 0 || rows == 0 {
+            return obstacles;
+        }
+
+        for y in 1..(height - 1) {
+            for x in 1..(width - 1) {
+                if x % 2 == 0 || y % 2 == 0 {
+                    obstacles.insert(Point { x, y });
+                }
+            }
+        }
+
+        let mut rng = rng.clone();
+        let mut visited = HashSet::new();
+        let start_node = Point { x: 1, y: 1 };
+        visited.insert(start_node);
+
+        let mut stack = vec![start_node];
+
+        while let Some(current) = stack.last().copied() {
+            let mut neighbors = Vec::new();
+
+            if current.y > 2 && !visited.contains(&Point { x: current.x, y: current.y - 2 }) {
+                neighbors.push(Point { x: current.x, y: current.y - 2 });
+            }
+            if current.y + 2 < height - 1 && !visited.contains(&Point { x: current.x, y: current.y + 2 }) {
+                neighbors.push(Point { x: current.x, y: current.y + 2 });
+            }
+            if current.x > 2 && !visited.contains(&Point { x: current.x - 2, y: current.y }) {
+                neighbors.push(Point { x: current.x - 2, y: current.y });
+            }
+            if current.x + 2 < width - 1 && !visited.contains(&Point { x: current.x + 2, y: current.y }) {
+                neighbors.push(Point { x: current.x + 2, y: current.y });
+            }
+
+            if neighbors.is_empty() {
+                stack.pop();
+            } else {
+                let next = neighbors[rng.gen_range(0..neighbors.len())];
+
+                // Add some complexity to avoid warnings on i32 conversion if safe
+                let wx = u16::try_from(i32::from(current.x) + (i32::from(next.x) - i32::from(current.x)) / 2).unwrap_or(current.x);
+                let wy = u16::try_from(i32::from(current.y) + (i32::from(next.y) - i32::from(current.y)) / 2).unwrap_or(current.y);
+                obstacles.remove(&Point { x: wx, y: wy });
+
+                visited.insert(next);
+                stack.push(next);
+            }
+        }
+
+        let mut to_remove = Vec::new();
+        for obs in &obstacles {
+            if rng.gen_bool(0.15) {
+                to_remove.push(*obs);
+            }
+        }
+        for obs in to_remove {
+            obstacles.remove(&obs);
+        }
+
+        obstacles
+    }
+
+    #[must_use]
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -895,14 +975,15 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Maze {
             self.obstacles.clear();
-            let y1 = self.height / 3;
-            let y2 = 2 * self.height / 3;
-            for x in 5..(self.width - 5) {
-                self.obstacles.insert(Point { x, y: y1 });
-                self.obstacles.insert(Point { x, y: y2 });
-            }
+            self.obstacles = Self::generate_procedural_maze(self.width, self.height, &self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
+            // Ensure food and start area are clear
+            let safe_margin = 2;
+            self.obstacles.retain(|p| {
+                p.x < start_x.saturating_sub(safe_margin) || p.x > start_x.saturating_add(safe_margin) ||
+                p.y < start_y.saturating_sub(safe_margin) || p.y > start_y.saturating_add(safe_margin)
+            });
         } else {
             let mut obstacles = HashSet::new();
             for _ in 0..obs_count {
@@ -1770,6 +1851,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub const fn calculate_next_head_dir(head: Point, dir: Direction) -> Point {
         match dir {
             Direction::Up => Point {
@@ -1791,6 +1873,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
@@ -1811,6 +1894,7 @@ impl Game {
         }
     }
 
+    #[must_use]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, _checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen || self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Invincibility
@@ -1865,6 +1949,7 @@ impl Game {
         self.flood_fill_fallback(start, 1)
     }
 
+    #[must_use]
     pub fn calculate_p2_autopilot_move(&self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
             let start = p2.head();
