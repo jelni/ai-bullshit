@@ -8,65 +8,63 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             line-height: 1.6;
-            color: #333;
+            color: #ccc;
             max-width: 800px;
             margin: 0 auto;
             padding: 2rem;
+            background-color: #111;
         }
         h1, h2, h3 {
-            color: #111;
+            color: #fff;
         }
-        a {
-            color: #0066cc;
-            text-decoration: none;
+        #game-container {
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            font-size: 14px;
+            line-height: 14px;
+            text-align: left;
+            margin: 20px auto;
+            border: 1px solid #333;
+            background-color: #000;
+            padding: 10px;
+            display: inline-block;
         }
-        a:hover {
-            text-decoration: underline;
-        }
-        hr {
-            border: 0;
-            border-top: 1px solid #eee;
-            margin: 2rem 0;
+        .container-wrapper {
+            text-align: center;
         }
         .header {
-            margin-bottom: 3rem;
+            text-align: center;
+            margin-bottom: 2rem;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Snake Game Engine</h1>
-        <p>The ultimate e-sports platform in the terminal.</p>
+        <p>The ultimate e-sports platform, now in your browser.</p>
     </div>
 
-    <p>Welcome to our terminal-based Snake Game. It's simple to explain and easy to understand: you control a snake, eat food to grow, avoid obstacles, and survive as long as possible.</p>
+    <div class="container-wrapper">
+        <div id="game-container">Loading WASM engine...</div>
+    </div>
 
-    <hr>
+    <p style="text-align: center; color: #888; font-size: 0.9em;">
+        Controls: W,A,S,D or Arrow Keys to move. Space to start/pause. T to toggle Bot Mode.
+    </p>
 
-    <h2>🚀 Ambitious Vision</h2>
-    <p>We envision a future where this terminal Snake game evolves into the ultimate e-sports platform. We are building the foundational engine for a massively multiplayer, AI-assisted universe where billions of players compete globally in real-time. This is not just a game; it is the genesis of a new digital ecosystem.</p>
+    <script type="module">
+        import init from './pkg/snake_game.js';
 
-    <h2>💡 Competitive Advantage</h2>
-    <p>Unlike other generic snake clones, our game features an <strong>Autopilot / Bot Mode</strong> powered by an advanced <strong>A* Search Pathfinding Algorithm</strong>. This ensures we have a long-term monopoly effect on automated snake navigation and provides an unparalleled strategic depth.</p>
-
-    <h2>📈 Business Model</h2>
-    <p>Our sensible business model:</p>
-    <ol>
-        <li>Give the game away for free to acquire a massive, fast-growing user base.</li>
-        <li>Sell exclusive "Power-Up NFT" skins and premium terminal themes.</li>
-        <li>Profit.</li>
-    </ol>
-
-    <h2>🤖 Bot Mode & Anti-Cheat</h2>
-    <p>We have introduced a spectator mode for viewing our advanced A* bot in action. You can launch it via the command line with <code>--bot</code>.</p>
-    <p>To prevent players from toggling the bot to achieve illegitimate high scores, any game in which the bot has been activated will automatically save its high score under the <code>[BOT]</code> pseudonym.</p>
-
-    <hr>
-
-    <h2>Market Focus</h2>
-    <p>We are targeting a small but exponentially growing market: terminal-based gaming enthusiasts who appreciate complex algorithms.</p>
-
-    <h2>Contact</h2>
-    <p>Please reach out to our chief evangelist if you want to join our journey.</p>
+        async function run() {
+            try {
+                await init();
+                console.log("WASM loaded and game started");
+            } catch (e) {
+                console.error("Failed to load WASM:", e);
+                document.getElementById('game-container').innerText = "Error loading game: " + e;
+            }
+        }
+        run();
+    </script>
 </body>
 </html>
