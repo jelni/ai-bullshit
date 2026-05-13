@@ -493,11 +493,79 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Theme::Solar => (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed),
     };
 
+    draw_background(game, stdout)?;
     draw_borders(game, stdout, border_color)?;
     draw_entities(game, stdout, food_color, snake_color, obs_color)?;
     draw_status(game, stdout)?;
     draw_overlays(game, stdout)?;
     draw_chat(game, stdout)?;
+
+    Ok(())
+}
+
+fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let elapsed = usize::try_from(game.start_time.elapsed().as_millis() / 100).unwrap_or(0);
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale {
+        game.safe_zone_margin
+    } else {
+        0
+    };
+
+    let min_x = margin + 1;
+    let max_x = (game.width - 1).saturating_sub(margin).max(min_x);
+    let min_y = margin + 1;
+    let max_y = (game.height - 1).saturating_sub(margin).max(min_y);
+
+    if max_x <= min_x || max_y <= min_y {
+        return Ok(());
+    }
+
+    match game.theme {
+        crate::game::Theme::Matrix => {
+            stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+            for y in min_y..max_y {
+                for x in min_x..max_x {
+                    // Simple deterministic pseudo-random logic
+                    let noise = (x as usize * 17 + y as usize * 31 + elapsed) % 100;
+                    if noise < 5 {
+                        let c = u8::try_from(33 + ((x as usize * y as usize + elapsed) % 94)).unwrap_or(33) as char;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "{c}")?;
+                    }
+                }
+            }
+        },
+        crate::game::Theme::Galactic => {
+            for y in min_y..max_y {
+                for x in min_x..max_x {
+                    let noise = (x as usize * 73 + y as usize * 11 + elapsed / 5) % 200;
+                    if noise < 2 {
+                        stdout.queue(SetForegroundColor(Color::White))?;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, ".")?;
+                    } else if noise == 2 {
+                        stdout.queue(SetForegroundColor(Color::Yellow))?;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "*")?;
+                    }
+                }
+            }
+        },
+        crate::game::Theme::Ocean => {
+            stdout.queue(SetForegroundColor(Color::Blue))?;
+            for y in min_y..max_y {
+                for x in min_x..max_x {
+                    let wave = (x as usize + elapsed / 2) % 20;
+                    #[expect(clippy::manual_is_multiple_of, reason = "Using multiple_of requires unstable feature")]
+                    if y as usize % 2 == 0 && wave < 3 {
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "~")?;
+                    }
+                }
+            }
+        },
+        _ => {}
+    }
 
     Ok(())
 }
