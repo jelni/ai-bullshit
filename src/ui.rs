@@ -806,6 +806,17 @@ fn draw_entities<W: Write>(
         write!(stdout, "X")?;
     }
 
+    // Draw Portals
+    if let Some((p1, p2)) = game.portals {
+        stdout.queue(cursor::MoveTo(p1.x, p1.y))?;
+        stdout.queue(SetForegroundColor(Color::Cyan))?;
+        write!(stdout, "O")?;
+
+        stdout.queue(cursor::MoveTo(p2.x, p2.y))?;
+        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        write!(stdout, "O")?;
+    }
+
     // Draw Boss
     if let Some(boss) = &game.boss {
         stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;

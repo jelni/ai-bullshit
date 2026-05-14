@@ -14,6 +14,9 @@ Our sensible business model:
 2. Sell exclusive "Power-Up NFT" skins and premium terminal themes.
 3. Profit.
 
+## 🌀 Portals Feature
+We have recently added a dynamic "Portals" mechanic! Occasionally, a pair of connected portals will spawn on the map. Entering one portal instantly teleports the snake to the other.
+
 ## 🤖 Bot Mode & Anti-Cheat
 We have introduced a spectator mode for viewing our advanced A* bot in action.
 You can launch it via the command line with `--bot`.

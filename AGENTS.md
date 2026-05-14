@@ -30,5 +30,8 @@ As an AI agent working on this codebase, you must adhere to the following princi
 - Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, try to use Test-Driven Development (TDD) by writing tests that establish the expected behavior before or alongside your implementation.
 - You should proactively refactor code to make it more testable if you discover it to be difficult to test. Refactoring should happen with passing tests whenever possible to avoid regressions.
 
+## 9. Avoid Assuming Line Numbers
+- When creating an execution plan, do not assume line numbers for structs, methods, or implementations unless you have explicitly verified them using `grep` or by fully reading the source files. Always gather concrete evidence before committing to code modifications.
+
 ## Remember
 You are a core part of this team. Keep momentum high, maintain a confident and definite view of the future, and always keep shipping!

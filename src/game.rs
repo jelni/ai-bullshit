@@ -195,6 +195,7 @@ pub struct HistoryState {
     pub last_food_time: Option<Instant>,
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
+    pub portals: Option<(Point, Point)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -239,6 +240,8 @@ pub struct SaveState {
     pub lasers: Vec<Laser>,
     #[serde(default)]
     pub boss: Option<Boss>,
+    #[serde(default)]
+    pub portals: Option<(Point, Point)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -372,6 +375,7 @@ pub struct Game {
     pub last_chat_time: Option<Instant>,
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
+    pub portals: Option<(Point, Point)>,
 }
 
 impl Game {
@@ -469,6 +473,7 @@ impl Game {
             last_chat_time: None,
             lasers: Vec::new(),
             boss: None,
+            portals: None,
         }
     }
 
@@ -646,6 +651,7 @@ impl Game {
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
             lasers: self.lasers.clone(),
             boss: self.boss,
+            portals: self.portals,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -726,6 +732,7 @@ impl Game {
                 });
                 self.lasers = state.lasers;
                 self.boss = state.boss;
+                self.portals = state.portals;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -1119,6 +1126,7 @@ impl Game {
         self.chat_log.clear();
         self.last_chat_time = None;
         self.boss = None;
+        self.portals = None;
     }
 
     fn respawn(&mut self) {
@@ -1306,30 +1314,37 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 =
-            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                && self.mode != GameMode::BattleRoyale
-            {
-                self.calculate_wrapped_head(next_head1)
+        let final_head1 = if self.portals.is_some() && self.portals.unwrap().0 == next_head1 {
+            self.portals.unwrap().1
+        } else if self.portals.is_some() && self.portals.unwrap().1 == next_head1 {
+            self.portals.unwrap().0
+        } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale
+        {
+            self.calculate_wrapped_head(next_head1)
+        } else {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
             } else {
-                let margin = if self.mode == GameMode::BattleRoyale {
-                    self.safe_zone_margin
-                } else {
-                    0
-                };
-                if next_head1.x <= margin
-                    || next_head1.x >= self.width - 1 - margin
-                    || next_head1.y <= margin
-                    || next_head1.y >= self.height - 1 - margin
-                {
-                    hit_wall1 = true;
-                }
-                next_head1
+                0
             };
+            if next_head1.x <= margin
+                || next_head1.x >= self.width - 1 - margin
+                || next_head1.y <= margin
+                || next_head1.y >= self.height - 1 - margin
+            {
+                hit_wall1 = true;
+            }
+            next_head1
+        };
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+            if self.portals.is_some() && self.portals.unwrap().0 == next_head2 {
+                self.portals.unwrap().1
+            } else if self.portals.is_some() && self.portals.unwrap().1 == next_head2 {
+                self.portals.unwrap().0
+            } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                 && self.mode != GameMode::BattleRoyale
             {
                 self.calculate_wrapped_head(next_head2)
@@ -1372,6 +1387,7 @@ impl Game {
             self.last_food_time = state.last_food_time;
             self.lasers = state.lasers;
             self.boss = state.boss;
+            self.portals = state.portals;
         }
     }
 
@@ -1394,6 +1410,7 @@ impl Game {
             last_food_time: self.last_food_time,
             lasers: self.lasers.clone(),
             boss: self.boss,
+            portals: self.portals,
         };
 
         self.history.push_back(state);
@@ -1829,6 +1846,7 @@ impl Game {
 
         self.manage_bonus_food();
         self.manage_power_ups();
+        self.manage_portals();
 
         // --- Calculate Next Heads ---
         let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
@@ -2339,6 +2357,38 @@ impl Game {
         }
     }
 
+    fn manage_portals(&mut self) {
+        if self.portals.is_none() && self.rng.gen_bool(0.005) {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+            };
+
+            if let Some(portal1) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let avoid2 = |p: &Point| avoid(p) || *p == portal1;
+                if let Some(portal2) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid2,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.portals = Some((portal1, portal2));
+                }
+            }
+        }
+    }
+
     fn manage_power_ups(&mut self) {
         if self.power_up.is_none() && self.rng.gen_bool(0.02) {
             let avoid = |p: &Point| {
@@ -2424,6 +2474,14 @@ impl Game {
 
     #[must_use]
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
+        if let Some((portal1, portal2)) = self.portals {
+            if p == portal1 {
+                return Some(portal2);
+            } else if p == portal2 {
+                return Some(portal1);
+            }
+        }
+
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
                 && pu.activation_time.is_some_and(|t| {
@@ -2770,6 +2828,36 @@ mod tests {
     use std::{fs::File, io::Write};
 
     use super::*;
+
+    #[test]
+    fn test_portal_teleportation() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Place snake at (10, 10) facing Right
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 10,
+            y: 10,
+        });
+        game.snake.direction = crate::snake::Direction::Right;
+
+        // Create portals
+        let p1 = crate::snake::Point { x: 11, y: 10 };
+        let p2 = crate::snake::Point { x: 5, y: 5 };
+        game.portals = Some((p1, p2));
+
+        let (final_head1, _final_head2, hit_wall1, _hit_wall2) = game.calculate_final_heads();
+
+        // Snake moves Right into p1, so final_head1 should be p2
+        assert_eq!(final_head1, p2);
+        assert!(!hit_wall1);
+    }
 
     #[test]
     fn test_save_and_load_settings() {
