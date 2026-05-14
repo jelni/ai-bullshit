@@ -495,6 +495,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         },
         crate::game::Theme::Esports => (Color::Red, Color::Blue, Color::Cyan, Color::Magenta),
         crate::game::Theme::Solar => (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed),
+        crate::game::Theme::Metaverse => (Color::Magenta, Color::Cyan, Color::White, Color::DarkMagenta),
     };
 
     draw_background(game, stdout)?;
@@ -552,6 +553,26 @@ fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                         stdout.queue(SetForegroundColor(Color::Yellow))?;
                         stdout.queue(cursor::MoveTo(x, y))?;
                         write!(stdout, "*")?;
+                    }
+                }
+            }
+        },
+        crate::game::Theme::Metaverse => {
+            for y in min_y..max_y {
+                for x in min_x..max_x {
+                    let val = (x as usize * 29 + y as usize * 37 + elapsed) % 150;
+                    if val < 2 {
+                        stdout.queue(SetForegroundColor(Color::Magenta))?;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "✦")?;
+                    } else if val < 4 {
+                        stdout.queue(SetForegroundColor(Color::Cyan))?;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "✧")?;
+                    } else if val == 4 {
+                        stdout.queue(SetForegroundColor(Color::White))?;
+                        stdout.queue(cursor::MoveTo(x, y))?;
+                        write!(stdout, "∘")?;
                     }
                 }
             }

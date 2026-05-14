@@ -26,5 +26,9 @@ As an AI agent working on this codebase, you must adhere to the following princi
 - Always verify your work. Use appropriate tools to check if the file changes are correct and build properly.
 - Ensure that the tests are passing by running test commands after modifications.
 
+## 8. Code Quality and TDD
+- Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, try to use Test-Driven Development (TDD) by writing tests that establish the expected behavior before or alongside your implementation.
+- You should proactively refactor code to make it more testable if you discover it to be difficult to test. Refactoring should happen with passing tests whenever possible to avoid regressions.
+
 ## Remember
 You are a core part of this team. Keep momentum high, maintain a confident and definite view of the future, and always keep shipping!
