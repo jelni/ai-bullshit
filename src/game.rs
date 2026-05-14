@@ -135,6 +135,7 @@ pub enum GameMode {
     CustomLevel,
     Speedrun,
     DailyChallenge,
+    FogOfWar,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -536,7 +537,7 @@ impl Game {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn atomic_write(path: &str, content: impl AsRef<[u8]>) -> io::Result<()> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::from_entropy();
         let suffix: u32 = rng.r#gen();
         let tmp_path = format!("{path}.{suffix}.tmp");
 
@@ -1089,7 +1090,7 @@ impl Game {
                             }
                             let nx = i32::from(x) + dx;
                             let ny = i32::from(y) + dy;
-                            if grid[ny as usize][nx as usize] {
+                            if grid[usize::try_from(ny).unwrap_or(0)][usize::try_from(nx).unwrap_or(0)] {
                                 neighbor_walls += 1;
                             }
                         }
@@ -1113,7 +1114,7 @@ impl Game {
                 let cx = i32::from(start_x) + dx;
                 let cy = i32::from(start_y) + dy;
                 if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
-                    grid[cy as usize][cx as usize] = false;
+                    grid[usize::try_from(cy).unwrap_or(0)][usize::try_from(cx).unwrap_or(0)] = false;
                 }
             }
         }
@@ -1255,7 +1256,8 @@ impl Game {
             | GameMode::Cave
             | GameMode::Dungeon
             | GameMode::CustomLevel
-            | GameMode::DailyChallenge => {
+            | GameMode::DailyChallenge
+            | GameMode::FogOfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1301,6 +1303,7 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::FogOfWar
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1323,6 +1326,7 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::FogOfWar
         {
             &self.snake
         } else {
@@ -1436,7 +1440,8 @@ impl Game {
             | GameMode::Cave
             | GameMode::Dungeon
             | GameMode::CustomLevel
-            | GameMode::DailyChallenge => {
+            | GameMode::DailyChallenge
+            | GameMode::FogOfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
