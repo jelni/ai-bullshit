@@ -123,6 +123,7 @@ pub enum GameMode {
     Campaign,
     LocalMultiplayer,
     OnlineMultiplayer,
+    Tournament,
     PlayerVsBot,
     BotVsBot,
     BattleRoyale,
@@ -1348,6 +1349,7 @@ impl Game {
             },
             GameMode::LocalMultiplayer
             | GameMode::OnlineMultiplayer
+            | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
             | GameMode::BattleRoyale => {
@@ -1547,6 +1549,7 @@ impl Game {
             },
             GameMode::LocalMultiplayer
             | GameMode::OnlineMultiplayer
+            | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
             | GameMode::BattleRoyale => {
