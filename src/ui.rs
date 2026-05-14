@@ -81,6 +81,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Dungeon Mode",
         "Speedrun Mode",
         "Fog Of War Mode",
+        "Evolution Mode",
         "Load Game",
         "Settings",
         "NFT Shop",

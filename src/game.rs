@@ -136,6 +136,7 @@ pub enum GameMode {
     Speedrun,
     DailyChallenge,
     FogOfWar,
+    Evolution,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -1072,6 +1073,73 @@ impl Game {
         obstacles
     }
 
+    pub fn evolve_game_of_life(&mut self) {
+        if self.mode != GameMode::Evolution {
+            return;
+        }
+
+        let mut next_obstacles = HashSet::new();
+
+        for y in 1..self.height - 1 {
+            for x in 1..self.width - 1 {
+                let p = Point { x, y };
+
+                // Exclude safe zone near snake heads
+                let mut safe = false;
+                let h1 = self.snake.head();
+                if (i32::from(x) - i32::from(h1.x)).abs() <= 2 && (i32::from(y) - i32::from(h1.y)).abs() <= 2 {
+                    safe = true;
+                }
+                if let Some(p2) = &self.player2 {
+                    let h2 = p2.head();
+                    if (i32::from(x) - i32::from(h2.x)).abs() <= 2 && (i32::from(y) - i32::from(h2.y)).abs() <= 2 {
+                        safe = true;
+                    }
+                }
+
+                if safe {
+                    continue;
+                }
+
+                let mut neighbors = 0;
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
+                        let nx = i32::from(x) + dx;
+                        let ny = i32::from(y) + dy;
+                        if self.obstacles.contains(&Point {
+                            x: u16::try_from(nx).unwrap_or(0),
+                            y: u16::try_from(ny).unwrap_or(0),
+                        }) {
+                            neighbors += 1;
+                        }
+                    }
+                }
+
+                let is_alive = self.obstacles.contains(&p);
+                if is_alive && (neighbors == 2 || neighbors == 3) {
+                    next_obstacles.insert(p);
+                } else if !is_alive && neighbors == 3 {
+                    next_obstacles.insert(p);
+                }
+            }
+        }
+
+        // Remove obstacles colliding with snakes, food, etc.
+        let avoid = |p: &Point| {
+            self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+        };
+        next_obstacles.retain(|p| !avoid(p));
+
+        self.obstacles = next_obstacles;
+    }
+
     #[must_use]
     pub fn generate_cave_obstacles(
         width: u16,
@@ -1273,7 +1341,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar => {
+            | GameMode::FogOfWar | GameMode::Evolution => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1319,7 +1387,7 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::FogOfWar
+                || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1342,7 +1410,7 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
-            || self.mode == GameMode::FogOfWar
+            || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
         {
             &self.snake
         } else {
@@ -1379,6 +1447,18 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Dungeon {
             self.obstacles = Self::generate_dungeon_obstacles(self.width, self.height, &mut self.rng);
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Evolution {
+            // Seed the board with random noise for Evolution mode, similar to cave mode but completely random
+            let fill_probability = 0.2;
+            for y in 1..self.height - 1 {
+                for x in 1..self.width - 1 {
+                    if self.rng.gen_bool(fill_probability) {
+                        self.obstacles.insert(Point { x, y });
+                    }
+                }
+            }
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -1457,7 +1537,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar => {
+            | GameMode::FogOfWar | GameMode::Evolution => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2191,6 +2271,13 @@ impl Game {
             ) {
                 self.obstacles.insert(new_obstacle);
             }
+        }
+
+        if self.mode == GameMode::Evolution
+            && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(2)
+        {
+            self.last_obstacle_spawn_time = web_time::Instant::now();
+            self.evolve_game_of_life();
         }
 
         self.handle_autopilot_moves();
@@ -3795,5 +3882,46 @@ mod tests {
         // Without portals, the shortest path would be down/right many times.
         let next_move = game.calculate_autopilot_move();
         assert_eq!(next_move, Some(crate::snake::Direction::Right));
+    }
+}
+
+#[cfg(test)]
+mod evolution_tests {
+    use super::*;
+    use crate::game::{GameMode, Theme, Difficulty};
+
+    #[test]
+    fn test_evolve_game_of_life() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            Theme::Classic,
+            Difficulty::Normal,
+        );
+        game.mode = GameMode::Evolution;
+
+        // Clear all obstacles and set up a glider at top-left corner
+        game.obstacles.clear();
+        game.obstacles.insert(Point { x: 2, y: 1 });
+        game.obstacles.insert(Point { x: 3, y: 2 });
+        game.obstacles.insert(Point { x: 1, y: 3 });
+        game.obstacles.insert(Point { x: 2, y: 3 });
+        game.obstacles.insert(Point { x: 3, y: 3 });
+
+        // Move snake far away so safe zone doesn't interfere
+        game.snake = crate::snake::Snake::new(Point { x: 10, y: 10 });
+        game.player2 = None;
+
+        game.evolve_game_of_life();
+
+        // The glider should evolve to the next state
+        assert!(!game.obstacles.contains(&Point { x: 2, y: 1 }));
+        assert!(game.obstacles.contains(&Point { x: 1, y: 2 }));
+        assert!(game.obstacles.contains(&Point { x: 3, y: 2 }));
+        assert!(game.obstacles.contains(&Point { x: 2, y: 3 }));
+        assert!(game.obstacles.contains(&Point { x: 3, y: 3 }));
+        assert!(game.obstacles.contains(&Point { x: 2, y: 4 }));
     }
 }

@@ -358,19 +358,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             16 => {
+                game.mode = game::GameMode::Evolution;
+                game.reset();
+            },
+            17 => {
                 let _ = game.load_game();
             },
-            17 => game.state = GameState::Settings,
-            18 => game.state = GameState::NftShop,
-            19 => game.state = GameState::SkillTree,
-            20 => game.state = GameState::Stats,
-            21 => game.state = GameState::Achievements,
-            22 => game.state = GameState::Help,
-            23 => {
+            18 => game.state = GameState::Settings,
+            19 => game.state = GameState::NftShop,
+            20 => game.state = GameState::SkillTree,
+            21 => game.state = GameState::Stats,
+            22 => game.state = GameState::Achievements,
+            23 => game.state = GameState::Help,
+            24 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            24 => {
+            25 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -378,7 +382,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            25 => {
+            26 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -388,11 +392,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 25;
+                game.menu_selection = 26;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 25 {
+            if game.menu_selection < 26 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -484,6 +488,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::FogOfWar
+                || game.mode == game::GameMode::Evolution
             {
                 game.handle_input(Direction::Up, 1);
             } else {
@@ -496,6 +501,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::FogOfWar
+                || game.mode == game::GameMode::Evolution
             {
                 game.handle_input(Direction::Down, 1);
             } else {
@@ -508,6 +514,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::FogOfWar
+                || game.mode == game::GameMode::Evolution
             {
                 game.handle_input(Direction::Left, 1);
             } else {
@@ -520,6 +527,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::FogOfWar
+                || game.mode == game::GameMode::Evolution
             {
                 game.handle_input(Direction::Right, 1);
             } else {
