@@ -100,6 +100,7 @@ pub enum PowerUpType {
     ClearObstacles,
     ScoreMultiplier,
     Teleport,
+    Magnet,
 }
 
 #[serde_as]
@@ -1444,6 +1445,64 @@ impl Game {
         }
     }
 
+    pub fn apply_magnet(&mut self) {
+        if let Some(pu) = &self.power_up
+            && pu.p_type == PowerUpType::Magnet
+            && pu.activation_time.is_some_and(|t| {
+                web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    .saturating_sub(t)
+                    < 5
+            })
+            && self.rng.gen_bool(0.25)
+        {
+            let head = self.snake.head();
+            let mut best_dist = u16::MAX;
+            let mut best_pos = None;
+
+            let current_dist = self.food.x.abs_diff(head.x).saturating_add(self.food.y.abs_diff(head.y));
+
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(self.food, d);
+
+                // Margin check
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if next_p.x <= margin
+                    || next_p.x >= self.width - 1 - margin
+                    || next_p.y <= margin
+                    || next_p.y >= self.height - 1 - margin
+                {
+                    continue;
+                }
+
+                if self.obstacles.contains(&next_p) || self.snake.body_map.contains_key(&next_p) {
+                    continue;
+                }
+                if let Some(p2) = &self.player2
+                    && p2.body_map.contains_key(&next_p) {
+                        continue;
+                    }
+
+                let dist = next_p.x.abs_diff(head.x).saturating_add(next_p.y.abs_diff(head.y));
+                if dist < current_dist && dist < best_dist {
+                    best_dist = dist;
+                    best_pos = Some(next_p);
+                }
+            }
+
+            if let Some(new_food_pos) = best_pos {
+                self.food = new_food_pos;
+            }
+        }
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "Game loop inherently requires handling multiple states and events"
@@ -1847,6 +1906,7 @@ impl Game {
         self.manage_bonus_food();
         self.manage_power_ups();
         self.manage_portals();
+        self.apply_magnet();
 
         // --- Calculate Next Heads ---
         let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
@@ -2405,7 +2465,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..9) {
+                let p_type = match self.rng.gen_range(0..10) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -2414,6 +2474,7 @@ impl Game {
                     5 => PowerUpType::ClearObstacles,
                     6 => PowerUpType::ScoreMultiplier,
                     7 => PowerUpType::Teleport,
+                    8 => PowerUpType::Magnet,
                     _ => PowerUpType::ExtraLife,
                 };
 
@@ -3071,6 +3132,51 @@ mod tests {
         // Calculate autopilot move
         let next_move = game.calculate_autopilot_move();
         assert_eq!(next_move, Some(crate::snake::Direction::Up));
+    }
+
+    #[test]
+    fn test_apply_magnet() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Place snake at (10, 10)
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+
+        // Place food at (10, 15)
+        game.food = crate::snake::Point { x: 10, y: 15 };
+
+        // Ensure no obstacles
+        game.obstacles.clear();
+
+        // Give the magnet powerup
+        game.power_up = Some(PowerUp {
+            p_type: PowerUpType::Magnet,
+            location: crate::snake::Point { x: 1, y: 1 },
+            activation_time: Some(
+                web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            ),
+        });
+
+        // We use rng.gen_bool(0.25), so we might need a few calls to trigger it.
+        // Let's call it 100 times, it's virtually guaranteed to trigger.
+        for _ in 0..100 {
+            game.apply_magnet();
+            if game.food.y < 15 {
+                break;
+            }
+        }
+
+        // The food should have moved closer (y < 15)
+        assert!(game.food.y < 15, "Food should have moved closer to the snake");
     }
 
     #[test]
