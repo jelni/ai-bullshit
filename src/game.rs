@@ -1,9 +1,9 @@
-use web_time::{Duration, Instant};
 use std::{
     collections::HashSet,
     fs::{self, File},
     io::{self, Read, Write},
 };
+use web_time::{Duration, Instant};
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -701,7 +701,9 @@ impl Game {
                 self.obstacles = state.obstacles;
                 self.score = state.score;
                 self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
-                    web_time::Instant::now().checked_sub(Duration::from_secs(elapsed)).map(|t| (p, t))
+                    web_time::Instant::now()
+                        .checked_sub(Duration::from_secs(elapsed))
+                        .map(|t| (p, t))
                 });
                 self.lives = state.lives;
                 self.power_up = state.power_up;
@@ -717,9 +719,9 @@ impl Game {
                 self.last_shrink_time = web_time::Instant::now();
                 self.last_obstacle_spawn_time = web_time::Instant::now();
                 self.combo = state.combo;
-                self.last_food_time = state
-                    .last_food_time
-                    .and_then(|elapsed| web_time::Instant::now().checked_sub(Duration::from_secs(elapsed)));
+                self.last_food_time = state.last_food_time.and_then(|elapsed| {
+                    web_time::Instant::now().checked_sub(Duration::from_secs(elapsed))
+                });
                 self.lasers = state.lasers;
                 self.boss = state.boss;
                 self.state = GameState::Paused;
@@ -920,14 +922,23 @@ impl Game {
                 let dist_y = (i32::from(y) - i32::from(start_y)).abs();
 
                 if dist_x > 2 || dist_y > 2 {
-                    obstacles.insert(Point { x, y });
+                    obstacles.insert(Point {
+                        x,
+                        y,
+                    });
 
                     // Sometimes spawn a cluster or wall
                     if next_rand() % 100 < 30 {
                         if next_rand() % 100 < 50 && x + 1 < self.width - margin {
-                            obstacles.insert(Point { x: x + 1, y });
+                            obstacles.insert(Point {
+                                x: x + 1,
+                                y,
+                            });
                         } else if y + 1 < self.height - margin {
-                            obstacles.insert(Point { x, y: y + 1 });
+                            obstacles.insert(Point {
+                                x,
+                                y: y + 1,
+                            });
                         }
                     }
                 }
@@ -1282,8 +1293,14 @@ impl Game {
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::PassThroughWalls
-                && p.activation_time
-                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
+                && p.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < 5
+                })
         });
 
         let mut hit_wall1 = false;
@@ -1598,8 +1615,14 @@ impl Game {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|p| {
                 p.p_type == PowerUpType::Invincibility
-                    && p.activation_time
-                        .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
+                    && p.activation_time.is_some_and(|t| {
+                        web_time::SystemTime::now()
+                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_sub(t)
+                            < 5
+                    })
             });
 
         let mut p1_dead = false;
@@ -1864,8 +1887,14 @@ impl Game {
         let old_food_eaten_session = self.food_eaten_session;
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::ScoreMultiplier
-                && p.activation_time
-                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
+                && p.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < 5
+                })
         });
 
         let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier);
@@ -2082,7 +2111,12 @@ impl Game {
                     self.snake.rebuild_map();
                 }
             } else {
-                p.activation_time = Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs());
+                p.activation_time = Some(
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                );
             }
             beep();
         }
@@ -2390,9 +2424,14 @@ impl Game {
     pub fn get_final_p(&self, p: Point) -> Option<Point> {
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
-                && pu
-                    .activation_time
-                    .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
+                && pu.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < 5
+                })
         });
 
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
@@ -2422,9 +2461,14 @@ impl Game {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::Invincibility
-                    && pu
-                        .activation_time
-                        .is_some_and(|t| web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(t) < 5)
+                    && pu.activation_time.is_some_and(|t| {
+                        web_time::SystemTime::now()
+                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_sub(t)
+                            < 5
+                    })
             });
 
         if !is_invincible {
@@ -2517,7 +2561,12 @@ impl Game {
             let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::PassThroughWalls
                     && pu.activation_time.is_some_and(|time| {
-                        web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(time) < 5
+                        web_time::SystemTime::now()
+                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_sub(time)
+                            < 5
                     })
             });
             targets

@@ -18,11 +18,23 @@ pub fn run() -> Result<(), JsValue> {
         .expect("should have #game-container on the page")
         .dyn_into::<web_sys::HtmlElement>()?;
 
+    // Create canvas
+    let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+    // Set canvas size (cell size = 15 pixels)
+    canvas.set_width(40 * 15);
+    canvas.set_height(20 * 15);
+
+    container.set_inner_html(""); // Clear loading text
+    container.append_child(&canvas)?;
+
+    let ctx = canvas.get_context("2d")?.unwrap().dyn_into::<web_sys::CanvasRenderingContext2d>()?;
+
     let game =
         Game::new(40, 20, false, 'O', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
 
     let game = Rc::new(RefCell::new(game));
-    let container = Rc::new(RefCell::new(container));
+    let ctx = Rc::new(RefCell::new(ctx));
     let doc = Rc::new(RefCell::new(document));
 
     // Setup keyboard listener
@@ -82,8 +94,7 @@ pub fn run() -> Result<(), JsValue> {
 
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move |time: f64| {
         let mut game_ref = game.borrow_mut();
-        let container_ref = container.borrow();
-        let doc_ref = doc.borrow();
+        let ctx_ref = ctx.borrow();
 
         let delta = time - last_time;
         if delta > 100.0 {
@@ -91,7 +102,7 @@ pub fn run() -> Result<(), JsValue> {
             if game_ref.state == GameState::Playing {
                 game_ref.update();
             }
-            ui::draw(&game_ref, &container_ref, &doc_ref);
+            ui::draw(&game_ref, &ctx_ref);
             last_time = time;
         }
 
