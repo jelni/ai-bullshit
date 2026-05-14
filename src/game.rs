@@ -131,6 +131,7 @@ pub enum GameMode {
     Zen,
     Maze,
     Cave,
+    Dungeon,
     CustomLevel,
     Speedrun,
     DailyChallenge,
@@ -823,6 +824,114 @@ impl Game {
         obstacles
     }
 
+    #[must_use]
+    pub fn generate_dungeon_obstacles(
+        width: u16,
+        height: u16,
+        rng: &mut rand::rngs::StdRng,
+    ) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+        // Fill entire board with walls
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
+                obstacles.insert(Point { x, y });
+            }
+        }
+
+        // Simple Room Generation Algorithm (BSP-like approach or simple random placement)
+        // For simplicity, we randomly place non-overlapping rooms, then connect them with corridors.
+
+        let mut rooms: Vec<(u16, u16, u16, u16)> = Vec::new(); // (x, y, w, h)
+        let num_rooms = rng.gen_range(3..=6);
+
+        // Make sure the center has a room so snake can spawn
+        let start_x = width / 2;
+        let start_y = height / 2;
+        let center_room_w = rng.gen_range(3..=5);
+        let center_room_h = rng.gen_range(3..=5);
+        let center_room_x = start_x.saturating_sub(center_room_w / 2).max(1);
+        let center_room_y = start_y.saturating_sub(center_room_h / 2).max(1);
+        rooms.push((center_room_x, center_room_y, center_room_w, center_room_h));
+
+        for _ in 1..num_rooms {
+            let w = rng.gen_range(3..=7);
+            let h = rng.gen_range(3..=7);
+            let x = rng.gen_range(2..width.saturating_sub(w + 1).max(3));
+            let y = rng.gen_range(2..height.saturating_sub(h + 1).max(3));
+
+            // Optional overlap check (skip for simpler random layout)
+            let mut overlap = false;
+            for &(rx, ry, rw, rh) in &rooms {
+                if x < rx + rw && x + w > rx && y < ry + rh && y + h > ry {
+                    overlap = true;
+                    break;
+                }
+            }
+
+            if !overlap {
+                rooms.push((x, y, w, h));
+            }
+        }
+
+        // Carve rooms
+        for &(rx, ry, rw, rh) in &rooms {
+            for y in ry..ry + rh {
+                for x in rx..rx + rw {
+                    obstacles.remove(&Point { x, y });
+                }
+            }
+        }
+
+        // Connect rooms with corridors
+        for i in 0..rooms.len() - 1 {
+            let (r1_x, r1_y, r1_w, r1_h) = rooms[i];
+            let (r2_x, r2_y, r2_w, r2_h) = rooms[i + 1];
+
+            let c1_x = r1_x + r1_w / 2;
+            let c1_y = r1_y + r1_h / 2;
+            let c2_x = r2_x + r2_w / 2;
+            let c2_y = r2_y + r2_h / 2;
+
+            // Carve horizontal then vertical
+            let mut x = c1_x;
+            let mut y = c1_y;
+
+            while x != c2_x {
+                obstacles.remove(&Point { x, y });
+                if x < c2_x {
+                    x += 1;
+                } else {
+                    x -= 1;
+                }
+            }
+
+            while y != c2_y {
+                obstacles.remove(&Point { x, y });
+                if y < c2_y {
+                    y += 1;
+                } else {
+                    y -= 1;
+                }
+            }
+        }
+
+        // Final safety check for center
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
+                    obstacles.remove(&Point {
+                        x: u16::try_from(cx).unwrap_or(0),
+                        y: u16::try_from(cy).unwrap_or(0),
+                    });
+                }
+            }
+        }
+
+        obstacles
+    }
+
     pub fn shift_timers(&mut self, delta: Duration) {
         // Shift start time so time logic doesn't race when paused
         if let Some(new_time) = self.start_time.checked_add(delta) {
@@ -1144,6 +1253,7 @@ impl Game {
             | GameMode::Zen
             | GameMode::Maze
             | GameMode::Cave
+            | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge => {
                 self.snake = Snake::new(Point {
@@ -1168,7 +1278,7 @@ impl Game {
             },
         }
 
-        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::Cave {
+        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::Cave || self.mode == GameMode::Dungeon {
             0
         } else {
             match self.difficulty {
@@ -1188,6 +1298,7 @@ impl Game {
                 || self.mode == GameMode::Zen
                 || self.mode == GameMode::Maze
                 || self.mode == GameMode::Cave
+                || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
             {
@@ -1209,6 +1320,7 @@ impl Game {
             || self.mode == GameMode::Zen
             || self.mode == GameMode::Maze
             || self.mode == GameMode::Cave
+            || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
         {
@@ -1243,6 +1355,10 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Cave {
             self.obstacles = Self::generate_cave_obstacles(self.width, self.height, &mut self.rng);
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Dungeon {
+            self.obstacles = Self::generate_dungeon_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -1318,6 +1434,7 @@ impl Game {
             | GameMode::Zen
             | GameMode::Maze
             | GameMode::Cave
+            | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge => {
                 self.snake = Snake::new(Point {
@@ -3133,6 +3250,32 @@ mod tests {
     use std::{fs::File, io::Write};
 
     use super::*;
+
+    #[test]
+    fn test_generate_dungeon_obstacles() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let width = 20;
+        let height = 20;
+        let obstacles = Game::generate_dungeon_obstacles(width, height, &mut rng);
+
+        assert!(!obstacles.is_empty(), "Dungeon generation should create obstacles (walls)");
+
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
+                    assert!(
+                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        "Center area should be free of obstacles in dungeon mode"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_generate_cave_obstacles() {

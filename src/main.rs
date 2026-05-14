@@ -343,22 +343,26 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             13 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
             14 => {
+                game.mode = game::GameMode::Speedrun;
+                game.reset();
+            },
+            15 => {
                 let _ = game.load_game();
             },
-            15 => game.state = GameState::Settings,
-            16 => game.state = GameState::NftShop,
-            17 => game.state = GameState::Stats,
-            18 => game.state = GameState::Achievements,
-            19 => game.state = GameState::Help,
-            20 => {
+            16 => game.state = GameState::Settings,
+            17 => game.state = GameState::NftShop,
+            18 => game.state = GameState::Stats,
+            19 => game.state = GameState::Achievements,
+            20 => game.state = GameState::Help,
+            21 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            21 => {
+            22 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -366,7 +370,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            22 => {
+            23 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -376,11 +380,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 22;
+                game.menu_selection = 23;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 22 {
+            if game.menu_selection < 23 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
