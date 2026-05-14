@@ -77,6 +77,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Maze Mode",
         "Cave Mode",
         "Speedrun Mode",
+        "Boss Rush Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -496,7 +497,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         },
         crate::game::Theme::Esports => (Color::Red, Color::Blue, Color::Cyan, Color::Magenta),
         crate::game::Theme::Solar => (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed),
-        crate::game::Theme::Metaverse => (Color::Magenta, Color::Cyan, Color::White, Color::DarkMagenta),
+        crate::game::Theme::Metaverse => {
+            (Color::Magenta, Color::Cyan, Color::White, Color::DarkMagenta)
+        },
     };
 
     draw_background(game, stdout)?;
@@ -911,7 +914,12 @@ fn draw_entities<W: Write>(
     Ok(())
 }
 
-fn draw_base_status<W: Write>(game: &Game, stdout: &mut W, bot_str: &str, combo_str: &str) -> io::Result<()> {
+fn draw_base_status<W: Write>(
+    game: &Game,
+    stdout: &mut W,
+    bot_str: &str,
+    combo_str: &str,
+) -> io::Result<()> {
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,

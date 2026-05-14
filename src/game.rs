@@ -133,6 +133,7 @@ pub enum GameMode {
     Cave,
     CustomLevel,
     Speedrun,
+    BossRush,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -873,7 +874,10 @@ impl Game {
         // Fill entire board with walls
         for y in 1..=max_y {
             for x in 1..=max_x {
-                obstacles.insert(Point { x, y });
+                obstacles.insert(Point {
+                    x,
+                    y,
+                });
             }
         }
 
@@ -886,8 +890,14 @@ impl Game {
         let start_maze_x = (rng.gen_range(1..=std::cmp::max(1, max_x / 2)) * 2) - 1;
         let start_maze_y = (rng.gen_range(1..=std::cmp::max(1, max_y / 2)) * 2) - 1;
 
-        let mut stack = vec![Point { x: start_maze_x, y: start_maze_y }];
-        obstacles.remove(&Point { x: start_maze_x, y: start_maze_y });
+        let mut stack = vec![Point {
+            x: start_maze_x,
+            y: start_maze_y,
+        }];
+        obstacles.remove(&Point {
+            x: start_maze_x,
+            y: start_maze_y,
+        });
 
         while let Some(current) = stack.last().copied() {
             let mut neighbors = Vec::new();
@@ -942,6 +952,9 @@ impl Game {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if coordinate conversion to `usize` fails during cave generation.
     pub fn generate_cave_obstacles(
         width: u16,
         height: u16,
@@ -973,9 +986,9 @@ impl Game {
                             if dx == 0 && dy == 0 {
                                 continue;
                             }
-                            let nx = x as i32 + dx;
-                            let ny = y as i32 + dy;
-                            if grid[ny as usize][nx as usize] {
+                            let nx = i32::from(x) + dx;
+                            let ny = i32::from(y) + dy;
+                            if grid[usize::try_from(ny).unwrap()][usize::try_from(nx).unwrap()] {
                                 neighbor_walls += 1;
                             }
                         }
@@ -996,10 +1009,10 @@ impl Game {
         let start_y = height / 2;
         for dy in -3..=3 {
             for dx in -3..=3 {
-                let cx = start_x as i32 + dx;
-                let cy = start_y as i32 + dy;
-                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
-                    grid[cy as usize][cx as usize] = false;
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
+                    grid[usize::try_from(cy).unwrap()][usize::try_from(cx).unwrap()] = false;
                 }
             }
         }
@@ -1009,7 +1022,10 @@ impl Game {
         for y in 1..(height - 1) {
             for x in 1..(width - 1) {
                 if grid[y as usize][x as usize] {
-                    obstacles.insert(Point { x, y });
+                    obstacles.insert(Point {
+                        x,
+                        y,
+                    });
                 }
             }
         }
@@ -1135,6 +1151,7 @@ impl Game {
             | GameMode::Campaign
             | GameMode::TimeAttack
             | GameMode::Speedrun
+            | GameMode::BossRush
             | GameMode::Survival
             | GameMode::Zen
             | GameMode::Maze
@@ -1162,7 +1179,10 @@ impl Game {
             },
         }
 
-        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::Cave {
+        let obs_count = if self.mode == GameMode::Zen
+            || self.mode == GameMode::Maze
+            || self.mode == GameMode::Cave
+        {
             0
         } else {
             match self.difficulty {
@@ -1178,6 +1198,7 @@ impl Game {
                 || self.mode == GameMode::Campaign
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
+                || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Survival
                 || self.mode == GameMode::Zen
                 || self.mode == GameMode::Maze
@@ -1198,6 +1219,7 @@ impl Game {
             || self.mode == GameMode::Campaign
             || self.mode == GameMode::TimeAttack
             || self.mode == GameMode::Speedrun
+            || self.mode == GameMode::BossRush
             || self.mode == GameMode::Survival
             || self.mode == GameMode::Zen
             || self.mode == GameMode::Maze
@@ -1295,6 +1317,7 @@ impl Game {
             | GameMode::Campaign
             | GameMode::TimeAttack
             | GameMode::Speedrun
+            | GameMode::BossRush
             | GameMode::Survival
             | GameMode::Zen
             | GameMode::Maze
@@ -1619,7 +1642,8 @@ impl Game {
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
 
-            let current_dist = self.food.x.abs_diff(head.x).saturating_add(self.food.y.abs_diff(head.y));
+            let current_dist =
+                self.food.x.abs_diff(head.x).saturating_add(self.food.y.abs_diff(head.y));
 
             let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
             for &d in &dirs {
@@ -1643,9 +1667,10 @@ impl Game {
                     continue;
                 }
                 if let Some(p2) = &self.player2
-                    && p2.body_map.contains_key(&next_p) {
-                        continue;
-                    }
+                    && p2.body_map.contains_key(&next_p)
+                {
+                    continue;
+                }
 
                 let dist = next_p.x.abs_diff(head.x).saturating_add(next_p.y.abs_diff(head.y));
                 if dist < current_dist && dist < best_dist {
@@ -1672,7 +1697,34 @@ impl Game {
         self.save_history_state();
 
         // Boss Logic
-        if self.boss.is_none() && self.mode == GameMode::SinglePlayer && self.rng.gen_bool(0.005) {
+        if self.boss.is_none() && self.mode == GameMode::BossRush {
+            let margin = self.safe_zone_margin + 5;
+            let avoid =
+                |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                margin,
+            ) {
+                let health = 1 + self.campaign_level * 2;
+                self.boss = Some(Boss {
+                    position: pos,
+                    health,
+                    max_health: health,
+                    move_timer: 0,
+                    shoot_timer: 0,
+                });
+                self.campaign_level += 1;
+                self.chat_log
+                    .push_back(("System: BOSS INCOMING!".to_string(), crate::color::Color::Red));
+            }
+        } else if self.boss.is_none()
+            && self.mode == GameMode::SinglePlayer
+            && self.rng.gen_bool(0.005)
+        {
             let margin = self.safe_zone_margin + 5;
             let avoid =
                 |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
@@ -2169,6 +2221,7 @@ impl Game {
             if self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
+                || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Survival
             {
                 self.handle_death("You Died!");
@@ -2738,7 +2791,11 @@ impl Game {
             let next_p = Self::calculate_next_head_dir(start, d);
 
             // Basic bounds checking for BFS, we avoid margin since boss operates strictly inside
-            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
 
             if next_p.x > margin
                 && next_p.x < self.width - 1 - margin
@@ -2762,7 +2819,11 @@ impl Game {
 
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
 
                 if next_p.x > margin
                     && next_p.x < self.width - 1 - margin
@@ -2871,10 +2932,7 @@ impl Game {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Search algorithm is inherently complex and long"
-    )]
+    #[expect(clippy::too_many_lines, reason = "Search algorithm is inherently complex and long")]
     fn astar_search(
         &self,
         start: Point,
@@ -2910,7 +2968,8 @@ impl Game {
                             && self.mode != GameMode::BattleRoyale
                         {
                             dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                            dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                            dy =
+                                std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                         }
                         dx.saturating_add(dy)
                     };
@@ -2918,9 +2977,14 @@ impl Game {
                     let dist_direct = calc_dist(p, *t);
 
                     if let Some((portal1, portal2)) = self.portals {
-                        let dist_via_portal1 = calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
-                        let dist_via_portal2 = calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
-                        std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+                        let dist_via_portal1 =
+                            calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
+                        let dist_via_portal2 =
+                            calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
+                        std::cmp::min(
+                            dist_direct,
+                            std::cmp::min(dist_via_portal1, dist_via_portal2),
+                        )
                     } else {
                         dist_direct
                     }
@@ -3128,11 +3192,14 @@ mod tests {
 
         for dy in -3..=3 {
             for dx in -3..=3 {
-                let cx = start_x as i32 + dx;
-                let cy = start_y as i32 + dy;
-                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
                     assert!(
-                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        !obstacles.contains(&Point {
+                            x: cx as u16,
+                            y: cy as u16
+                        }),
                         "Center area should be free of obstacles"
                     );
                 }
@@ -3159,8 +3226,14 @@ mod tests {
         game.snake.direction = crate::snake::Direction::Right;
 
         // Create portals
-        let p1 = crate::snake::Point { x: 11, y: 10 };
-        let p2 = crate::snake::Point { x: 5, y: 5 };
+        let p1 = crate::snake::Point {
+            x: 11,
+            y: 10,
+        };
+        let p2 = crate::snake::Point {
+            x: 5,
+            y: 5,
+        };
         game.portals = Some((p1, p2));
 
         let (final_head1, _final_head2, hit_wall1, _hit_wall2) = game.calculate_final_heads();
@@ -3380,10 +3453,16 @@ mod tests {
         );
 
         // Place snake at (10, 10)
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 10,
+            y: 10,
+        });
 
         // Place food at (10, 15)
-        game.food = crate::snake::Point { x: 10, y: 15 };
+        game.food = crate::snake::Point {
+            x: 10,
+            y: 15,
+        };
 
         // Ensure no obstacles
         game.obstacles.clear();
@@ -3391,7 +3470,10 @@ mod tests {
         // Give the magnet powerup
         game.power_up = Some(PowerUp {
             p_type: PowerUpType::Magnet,
-            location: crate::snake::Point { x: 1, y: 1 },
+            location: crate::snake::Point {
+                x: 1,
+                y: 1,
+            },
             activation_time: Some(
                 web_time::SystemTime::now()
                     .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -3432,7 +3514,10 @@ mod tests {
                 let cy = i32::from(start_y) + dy;
                 if cx > 0 && cx <= i32::from(width - 2) && cy > 0 && cy <= i32::from(height - 2) {
                     assert!(
-                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        !obstacles.contains(&Point {
+                            x: cx as u16,
+                            y: cy as u16
+                        }),
                         "Center area should be free of obstacles"
                     );
                 }
@@ -3457,11 +3542,20 @@ mod tests {
         // Create a horizontal wall blocking direct downward path
         // from (10, 5) to (10, 15)
         for x in 8..=12 {
-            game.obstacles.insert(Point { x, y: 10 });
+            game.obstacles.insert(Point {
+                x,
+                y: 10,
+            });
         }
 
-        let start = Point { x: 10, y: 5 };
-        let target = Point { x: 10, y: 15 };
+        let start = Point {
+            x: 10,
+            y: 5,
+        };
+        let target = Point {
+            x: 10,
+            y: 15,
+        };
 
         // Ensure BFS finds a way around the wall (should not go straight down into the wall)
         let dir = game.bfs_pathfind(start, target);
@@ -3471,7 +3565,8 @@ mod tests {
         // Let's trace it and ensure it actually reaches without hitting the wall
         let mut current = start;
         let mut reached = false;
-        for _ in 0..100 { // Max steps
+        for _ in 0..100 {
+            // Max steps
             if current == target {
                 reached = true;
                 break;
@@ -3488,6 +3583,26 @@ mod tests {
     }
 
     #[test]
+    fn test_boss_rush_mode() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Dark,
+            crate::game::Difficulty::Normal,
+        );
+        game.mode = GameMode::BossRush;
+        game.reset();
+        assert_eq!(game.campaign_level, 1);
+
+        game.update();
+        assert!(game.boss.is_some());
+        assert_eq!(game.boss.as_ref().unwrap().health, 3);
+        assert_eq!(game.campaign_level, 2);
+    }
+
+    #[test]
     fn test_calculate_autopilot_uses_portals() {
         let mut game = Game::new(
             20,
@@ -3499,15 +3614,27 @@ mod tests {
         );
 
         // Setup snake at (2, 2)
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 2, y: 2 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 2,
+            y: 2,
+        });
         game.snake.direction = crate::snake::Direction::Down; // Facing down to avoid immediate 180
 
         // Place food far away at (18, 18)
-        game.food = crate::snake::Point { x: 18, y: 18 };
+        game.food = crate::snake::Point {
+            x: 18,
+            y: 18,
+        };
 
         // Place a portal right next to the snake at (3, 2) and its pair near the food at (17, 18)
-        let p1 = crate::snake::Point { x: 3, y: 2 };
-        let p2 = crate::snake::Point { x: 17, y: 18 };
+        let p1 = crate::snake::Point {
+            x: 3,
+            y: 2,
+        };
+        let p2 = crate::snake::Point {
+            x: 17,
+            y: 18,
+        };
         game.portals = Some((p1, p2));
 
         // Let's clear any obstacles that might interfere

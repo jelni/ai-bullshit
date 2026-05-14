@@ -97,7 +97,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     // Draw power_up
     if let Some(power_up) = &game.power_up {
-        if power_up.activation_time.is_none() && power_up.location.x < game.width && power_up.location.y < game.height {
+        if power_up.activation_time.is_none()
+            && power_up.location.x < game.width
+            && power_up.location.y < game.height
+        {
             ctx.set_fill_style_str("#00FFFF");
             ctx.fill_rect(
                 f64::from(power_up.location.x) * cell_size,
