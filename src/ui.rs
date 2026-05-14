@@ -878,21 +878,7 @@ fn draw_entities<W: Write>(
     Ok(())
 }
 
-fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    stdout.queue(SetForegroundColor(Color::Reset))?;
-    stdout.queue(cursor::MoveTo(0, game.height))?;
-    let bot_str = if game.auto_pilot {
-        " | [BOT MODE]"
-    } else {
-        ""
-    };
-    let combo_str =
-        if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
-            format!(" | Combo: {}x", game.combo)
-        } else {
-            String::new()
-        };
-
+fn draw_base_status<W: Write>(game: &Game, stdout: &mut W, bot_str: &str, combo_str: &str) -> io::Result<()> {
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
@@ -953,12 +939,10 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             game.score, game.high_score, game.lives, level, game.difficulty, bot_str, combo_str
         )?;
     }
+    Ok(())
+}
 
-    if let Some(boss) = &game.boss {
-        let boss_msg = format!(" | Boss HP: {}/{}", boss.health, boss.max_health);
-        write!(stdout, "{boss_msg}")?;
-    }
-
+fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if let Some(power_up) = &game.power_up
         && let Some(activation_time) = power_up.activation_time
     {
@@ -984,6 +968,33 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             write!(stdout, "{power_up_msg}")?;
         }
     }
+    Ok(())
+}
+
+fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    stdout.queue(SetForegroundColor(Color::Reset))?;
+    stdout.queue(cursor::MoveTo(0, game.height))?;
+    let bot_str = if game.auto_pilot {
+        " | [BOT MODE]"
+    } else {
+        ""
+    };
+    let combo_str =
+        if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
+            format!(" | Combo: {}x", game.combo)
+        } else {
+            String::new()
+        };
+
+    draw_base_status(game, stdout, bot_str, &combo_str)?;
+
+    if let Some(boss) = &game.boss {
+        let boss_msg = format!(" | Boss HP: {}/{}", boss.health, boss.max_health);
+        write!(stdout, "{boss_msg}")?;
+    }
+
+    draw_powerup_status(game, stdout)?;
+
     Ok(())
 }
 
