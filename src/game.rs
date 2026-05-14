@@ -5,7 +5,7 @@ use std::{
 };
 use web_time::{Duration, Instant};
 
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -133,6 +133,7 @@ pub enum GameMode {
     Cave,
     CustomLevel,
     Speedrun,
+    DailyChallenge,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -343,7 +344,7 @@ pub struct Game {
     pub high_score: u32,
     pub high_scores: Vec<(String, u32)>,
     pub state: GameState,
-    pub rng: rand::rngs::ThreadRng,
+    pub rng: rand::rngs::StdRng,
     pub just_died: bool,
     pub skin: char,
     pub theme: Theme,
@@ -393,15 +394,13 @@ impl Game {
         theme: Theme,
         difficulty: Difficulty,
     ) -> Self {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::from_entropy();
         let start_x = width / 2;
         let start_y = height / 2;
         let snake = Snake::new(Point {
             x: start_x,
             y: start_y,
         });
-
-        let mode = GameMode::SinglePlayer;
 
         let obs_count = match difficulty {
             Difficulty::Easy => 1,
@@ -424,8 +423,10 @@ impl Game {
             let _ = std::fs::rename("highscore.txt", "highscore_normal.txt");
         }
 
+        let mode = GameMode::SinglePlayer;
+
         let high_scores =
-            Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty));
+            Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty, mode));
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
         Self {
@@ -480,8 +481,12 @@ impl Game {
     }
 
     #[must_use]
-    pub fn get_high_score_filename(difficulty: Difficulty) -> String {
-        format!("highscore_{difficulty:?}.txt").to_lowercase()
+    pub fn get_high_score_filename(difficulty: Difficulty, mode: GameMode) -> String {
+        if mode == GameMode::DailyChallenge {
+            "highscore_daily.txt".to_string()
+        } else {
+            format!("highscore_{difficulty:?}.txt").to_lowercase()
+        }
     }
 
     #[must_use]
@@ -569,13 +574,13 @@ impl Game {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn save_high_score(&mut self, name: String, score: u32) {
-        let filename = Self::get_high_score_filename(self.difficulty);
+        let filename = Self::get_high_score_filename(self.difficulty, self.mode);
         self.save_high_score_to_file(&filename, name, score);
     }
 
     pub fn update_high_scores(&mut self) {
         self.high_scores =
-            Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty));
+            Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty, self.mode));
         self.high_score = self.high_scores.first().map_or(0, |(_, s)| *s);
     }
 
@@ -748,7 +753,7 @@ impl Game {
         height: u16,
         snake: &Snake,
         avoid: impl Fn(&Point) -> bool,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
         margin: u16,
     ) -> Option<Point> {
         let mut i = 0;
@@ -801,7 +806,7 @@ impl Game {
         height: u16,
         snake: &Snake,
         avoid: impl Fn(&Point) -> bool,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
         count: usize,
         margin: u16,
     ) -> HashSet<Point> {
@@ -861,7 +866,7 @@ impl Game {
     pub fn generate_maze_obstacles(
         width: u16,
         height: u16,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
     ) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
 
@@ -945,7 +950,7 @@ impl Game {
     pub fn generate_cave_obstacles(
         width: u16,
         height: u16,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut rand::rngs::StdRng,
     ) -> HashSet<Point> {
         let mut grid = vec![vec![false; width as usize]; height as usize];
 
@@ -973,8 +978,8 @@ impl Game {
                             if dx == 0 && dy == 0 {
                                 continue;
                             }
-                            let nx = x as i32 + dx;
-                            let ny = y as i32 + dy;
+                            let nx = i32::from(x) + dx;
+                            let ny = i32::from(y) + dy;
                             if grid[ny as usize][nx as usize] {
                                 neighbor_walls += 1;
                             }
@@ -996,9 +1001,9 @@ impl Game {
         let start_y = height / 2;
         for dy in -3..=3 {
             for dx in -3..=3 {
-                let cx = start_x as i32 + dx;
-                let cy = start_y as i32 + dy;
-                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
                     grid[cy as usize][cx as usize] = false;
                 }
             }
@@ -1139,7 +1144,8 @@ impl Game {
             | GameMode::Zen
             | GameMode::Maze
             | GameMode::Cave
-            | GameMode::CustomLevel => {
+            | GameMode::CustomLevel
+            | GameMode::DailyChallenge => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1183,6 +1189,7 @@ impl Game {
                 || self.mode == GameMode::Maze
                 || self.mode == GameMode::Cave
                 || self.mode == GameMode::CustomLevel
+                || self.mode == GameMode::DailyChallenge
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1203,11 +1210,23 @@ impl Game {
             || self.mode == GameMode::Maze
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
+            || self.mode == GameMode::DailyChallenge
         {
             &self.snake
         } else {
             &empty_snake
         }; // For collision we'll just check avoid and body maps later
+
+        if self.mode == GameMode::DailyChallenge {
+            let days_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / 86400;
+            self.rng = rand::rngs::StdRng::seed_from_u64(days_since_epoch);
+        } else {
+            self.rng = rand::rngs::StdRng::from_entropy();
+        }
 
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
@@ -1299,7 +1318,8 @@ impl Game {
             | GameMode::Zen
             | GameMode::Maze
             | GameMode::Cave
-            | GameMode::CustomLevel => {
+            | GameMode::CustomLevel
+            | GameMode::DailyChallenge => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1672,7 +1692,7 @@ impl Game {
         self.save_history_state();
 
         // Boss Logic
-        if self.boss.is_none() && self.mode == GameMode::SinglePlayer && self.rng.gen_bool(0.005) {
+        if self.boss.is_none() && (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge) && self.rng.gen_bool(0.005) {
             let margin = self.safe_zone_margin + 5;
             let avoid =
                 |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
@@ -1769,7 +1789,7 @@ impl Game {
         }
 
         // Chat simulation logic
-        let chat_interval = if self.mode == GameMode::SinglePlayer {
+        let chat_interval = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge {
             Duration::from_secs(3)
         } else {
             Duration::from_millis(500)
@@ -2170,6 +2190,7 @@ impl Game {
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
                 || self.mode == GameMode::Survival
+                || self.mode == GameMode::DailyChallenge
             {
                 self.handle_death("You Died!");
             } else {
@@ -2481,6 +2502,7 @@ impl Game {
             || self.mode == GameMode::Maze
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
+            || self.mode == GameMode::DailyChallenge
         {
             return;
         }
@@ -3114,7 +3136,7 @@ mod tests {
 
     #[test]
     fn test_generate_cave_obstacles() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::from_entropy();
         let width = 20;
         let height = 20;
         let obstacles = Game::generate_cave_obstacles(width, height, &mut rng);
@@ -3415,7 +3437,7 @@ mod tests {
 
     #[test]
     fn test_generate_maze_obstacles() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::from_entropy();
         let width = 21; // Odd numbers work best
         let height = 21;
         let obstacles = Game::generate_maze_obstacles(width, height, &mut rng);
@@ -3485,6 +3507,49 @@ mod tests {
         }
 
         assert!(reached, "Following BFS should reach target");
+    }
+
+    #[test]
+    fn test_daily_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::DailyChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::DailyChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch day
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+
+        // Run some deterministic steps by eating a few pieces of food and check if next foods match
+        for _ in 0..5 {
+            let next_food = game1.food;
+            // teleport snake to eat food directly
+            game1.snake.move_to(next_food, true);
+            game1.process_food_collision(next_food, false);
+
+            game2.snake.move_to(next_food, true);
+            game2.process_food_collision(next_food, false);
+
+            assert_eq!(game1.food, game2.food, "Food generation drifted");
+            assert_eq!(game1.obstacles, game2.obstacles, "Obstacles generation drifted");
+        }
     }
 
     #[test]
