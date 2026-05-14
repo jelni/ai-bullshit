@@ -75,6 +75,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Survival Mode",
         "Zen Mode",
         "Maze Mode",
+        "Cave Mode",
         "Speedrun Mode",
         "Load Game",
         "Settings",

@@ -335,22 +335,26 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             11 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Cave;
                 game.reset();
             },
             12 => {
+                game.mode = game::GameMode::Speedrun;
+                game.reset();
+            },
+            13 => {
                 let _ = game.load_game();
             },
-            13 => game.state = GameState::Settings,
-            14 => game.state = GameState::NftShop,
-            15 => game.state = GameState::Stats,
-            16 => game.state = GameState::Achievements,
-            17 => game.state = GameState::Help,
-            18 => {
+            14 => game.state = GameState::Settings,
+            15 => game.state = GameState::NftShop,
+            16 => game.state = GameState::Stats,
+            17 => game.state = GameState::Achievements,
+            18 => game.state = GameState::Help,
+            19 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            19 => {
+            20 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -358,7 +362,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            20 => {
+            21 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -368,11 +372,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 20;
+                game.menu_selection = 21;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 20 {
+            if game.menu_selection < 21 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
