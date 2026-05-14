@@ -86,6 +86,7 @@ pub enum Theme {
     Blockchain,
     Esports,
     Solar,
+    Metaverse,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -246,7 +247,7 @@ pub enum ShopItem {
     Theme(Theme),
 }
 
-pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
+pub const AVAILABLE_ITEMS: [(ShopItem, u32); 16] = [
     (ShopItem::Skin('💎'), 100),
     (ShopItem::Skin('👾'), 250),
     (ShopItem::Skin('🐍'), 500),
@@ -262,6 +263,7 @@ pub const AVAILABLE_ITEMS: [(ShopItem, u32); 15] = [
     (ShopItem::Theme(Theme::Blockchain), 100_000),
     (ShopItem::Theme(Theme::Esports), 250_000),
     (ShopItem::Theme(Theme::Solar), 500_000),
+    (ShopItem::Theme(Theme::Metaverse), 1_000_000),
 ];
 
 #[must_use]
