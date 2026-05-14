@@ -65,6 +65,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     let menu_items = [
         "Single Player",
+        "Daily Challenge",
         "Campaign Mode",
         "Local Multiplayer",
         "Online Multiplayer",

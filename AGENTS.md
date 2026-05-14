@@ -30,6 +30,7 @@ As an AI agent working on this codebase, you must adhere to the following princi
 ## 8. Code Quality and TDD
 - Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, especially algorithmic enhancements like pathfinding and procedural generation, prioritize Test-Driven Development (TDD). Write unit tests that establish the expected behavior before or alongside your implementation.
 - You should proactively refactor code to make it more testable if you discover it to be difficult to test. Refactoring should happen with passing tests whenever possible to avoid regressions.
+- Ensure that randomness is manageable and testable by using `rand::rngs::StdRng` instead of `rand::rngs::ThreadRng` throughout the codebase, enabling reproducible tests and deterministic game modes like the Daily Challenge.
 
 ## 9. Avoid Assuming Line Numbers
 - When creating an execution plan, do not assume line numbers for structs, methods, or implementations unless you have explicitly verified them using `grep` or by fully reading the source files. Always gather concrete evidence before committing to code modifications.

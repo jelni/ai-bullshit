@@ -17,6 +17,9 @@ Our sensible business model:
 ## 🌀 Portals Feature
 We have recently added a dynamic "Portals" mechanic! Occasionally, a pair of connected portals will spawn on the map. Entering one portal instantly teleports the snake to the other.
 
+## 🏆 Daily Challenge
+We have introduced a **Daily Challenge** mode! Every day, a globally synchronized seed is generated based on the days since the UNIX epoch. This guarantees that all players worldwide face the exact same procedural maze, obstacles, and food spawns for that day, fostering true competitive e-sports. The RNG architecture is fully refactored to use `StdRng` for testability and determinism.
+
 ## 🤖 Bot Mode & Anti-Cheat
 We have introduced a spectator mode for viewing our advanced A* bot in action.
 You can launch it via the command line with `--bot`.
