@@ -30,6 +30,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Settings => draw_settings(game, stdout)?,
         GameState::NftShop => draw_nft_shop(game, stdout)?,
         GameState::Achievements => draw_achievements(game, stdout)?,
+        GameState::SkillTree => draw_skill_tree(game, stdout)?,
         GameState::LevelEditor => draw_level_editor(game, stdout)?,
     }
 
@@ -83,6 +84,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Load Game",
         "Settings",
         "NFT Shop",
+        "Upgrades",
         "Statistics",
         "Achievements",
         "Help",
@@ -374,6 +376,89 @@ fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 y_pos,
             ))?;
             write!(stdout, "{item_msg}")?;
+        }
+    }
+
+    let help_msg = "Use UP/DOWN to select, ENTER to buy, Q to go back";
+    let help_len = u16::try_from(help_msg.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(help_len / 2), game.height - 2))?;
+    write!(stdout, "{help_msg}")?;
+
+    Ok(())
+}
+
+fn draw_skill_tree<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "SKILL TREE UPGRADES";
+    let title_len = u16::try_from(title.len()).unwrap_or(0);
+
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
+    write!(stdout, "{title}")?;
+
+    let balance_msg = format!("Coins: {}", game.stats.coins);
+    let balance_len = u16::try_from(balance_msg.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(balance_len / 2),
+        game.height / 4 + 2,
+    ))?;
+    write!(stdout, "{balance_msg}")?;
+
+    let upgrades = [
+        (
+            "Power-Up Duration",
+            game.stats.upgrade_powerup_duration,
+            500 * (1 + u32::from(game.stats.upgrade_powerup_duration)),
+        ),
+        (
+            "Extra Lives",
+            game.stats.upgrade_extra_lives,
+            1000 * (1 + u32::from(game.stats.upgrade_extra_lives)),
+        ),
+        (
+            "Laser Capacity",
+            game.stats.upgrade_laser_capacity,
+            1500 * (1 + u32::from(game.stats.upgrade_laser_capacity)),
+        ),
+        (
+            "Coin Multiplier",
+            game.stats.upgrade_coin_multiplier,
+            2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier)),
+        ),
+    ];
+
+    for (i, (name, level, cost)) in upgrades.iter().enumerate() {
+        let msg = if *level >= 10 {
+            format!("{name} [MAXED]")
+        } else {
+            format!("{name} [Lvl {level}]: {cost}c")
+        };
+
+        let y_pos = game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2;
+
+        if i == game.skill_tree_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2)
+                    .saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2)
+                    .saturating_sub(2),
+                y_pos,
+            ))?;
+            write!(stdout, "> {msg} <")?;
+        } else {
+            if *level >= 10 {
+                stdout.queue(SetForegroundColor(Color::Green))?;
+            } else if game.stats.coins >= *cost {
+                stdout.queue(SetForegroundColor(Color::White))?;
+            } else {
+                stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            }
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2),
+                y_pos,
+            ))?;
+            write!(stdout, "{msg}")?;
         }
     }
 
@@ -1019,8 +1104,9 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
             .unwrap_or_default()
             .as_secs()
             .saturating_sub(activation_time);
-        if elapsed < 5 {
-            let remaining = 5 - elapsed;
+        let duration = game.powerup_duration();
+        if elapsed < duration {
+            let remaining = duration - elapsed;
             let power_up_name = match power_up.p_type {
                 crate::game::PowerUpType::SlowDown => "Slowdown",
                 crate::game::PowerUpType::SpeedBoost => "Speed Boost",
