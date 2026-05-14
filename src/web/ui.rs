@@ -47,6 +47,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Portals
+    if let Some((p1, p2)) = game.portals {
+        if p1.x < game.width && p1.y < game.height {
+            ctx.set_fill_style_str("#00FFFF"); // Cyan
+            ctx.fill_rect(
+                f64::from(p1.x) * cell_size,
+                f64::from(p1.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+        if p2.x < game.width && p2.y < game.height {
+            ctx.set_fill_style_str("#FF00FF"); // Magenta
+            ctx.fill_rect(
+                f64::from(p2.x) * cell_size,
+                f64::from(p2.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw snake
     ctx.set_fill_style_str("#FFFFFF");
     for part in &game.snake.body {
