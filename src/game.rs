@@ -148,6 +148,7 @@ pub enum GameState {
     Help,
     Settings,
     NftShop,
+    SkillTree,
     Stats,
     Achievements,
     EnterName,
@@ -301,6 +302,14 @@ pub struct Statistics {
     pub unlocked_themes: Vec<Theme>,
     #[serde(default)]
     pub unlocked_achievements: Vec<Achievement>,
+    #[serde(default)]
+    pub upgrade_powerup_duration: u8,
+    #[serde(default)]
+    pub upgrade_extra_lives: u8,
+    #[serde(default)]
+    pub upgrade_laser_capacity: u8,
+    #[serde(default)]
+    pub upgrade_coin_multiplier: u8,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -354,6 +363,7 @@ pub struct Game {
     pub menu_selection: usize,
     pub settings_selection: usize,
     pub nft_selection: usize,
+    pub skill_tree_selection: usize,
     pub stats: Statistics,
     pub start_time: Instant,
     pub death_message: String,
@@ -384,6 +394,11 @@ pub struct Game {
 }
 
 impl Game {
+    #[must_use]
+    pub fn powerup_duration(&self) -> u64 {
+        5 + u64::from(self.stats.upgrade_powerup_duration)
+    }
+
     /// # Panics
     ///
     /// Panics if the board is completely full and there's no room for food.
@@ -448,10 +463,11 @@ impl Game {
             just_died: false,
             skin,
             theme,
-            lives: 3,
+            lives: 3 + u32::from(stats.upgrade_extra_lives),
             menu_selection: 0,
             settings_selection: 0,
             nft_selection: 0,
+            skill_tree_selection: 0,
             stats,
             start_time: web_time::Instant::now(),
             death_message: String::new(),
@@ -1405,7 +1421,7 @@ impl Game {
         self.bonus_food = None;
         self.power_up = None;
         self.score = 0;
-        self.lives = 3;
+        self.lives = 3 + u32::from(self.stats.upgrade_extra_lives);
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = web_time::Instant::now();
@@ -1480,8 +1496,9 @@ impl Game {
 
     pub fn shoot_laser(&mut self, player: u8) {
         let active_lasers = self.lasers.iter().filter(|l| l.player == player).count();
-        if active_lasers >= 3 {
-            return; // Limit of 3 active lasers per player
+        let max_lasers = 3 + usize::from(self.stats.upgrade_laser_capacity);
+        if active_lasers >= max_lasers {
+            return; // Limit active lasers per player
         }
 
         let (head, dir) = if player == 1 {
@@ -1609,7 +1626,7 @@ impl Game {
                         .unwrap_or_default()
                         .as_secs()
                         .saturating_sub(t)
-                        < 5
+                        < self.powerup_duration()
                 })
         });
 
@@ -1753,7 +1770,7 @@ impl Game {
                     .unwrap_or_default()
                     .as_secs()
                     .saturating_sub(t)
-                    < 5
+                    < self.powerup_duration()
             })
             && self.rng.gen_bool(0.25)
         {
@@ -1985,7 +2002,7 @@ impl Game {
                             .unwrap_or_default()
                             .as_secs()
                             .saturating_sub(t)
-                            < 5
+                            < self.powerup_duration()
                     })
             });
 
@@ -2259,7 +2276,7 @@ impl Game {
                         .unwrap_or_default()
                         .as_secs()
                         .saturating_sub(t)
-                        < 5
+                        < self.powerup_duration()
                 })
         });
 
@@ -2536,11 +2553,15 @@ impl Game {
             };
             added_score *= std::cmp::max(1, self.combo);
 
+            let coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+
             self.score += added_score;
             self.food_eaten_session += 1;
             self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
-            self.stats.coins += added_score;
+            self.stats.coins += coins_earned;
             self.bonus_food = None;
             beep();
             true
@@ -2583,11 +2604,15 @@ impl Game {
         };
         added_score *= std::cmp::max(1, self.combo);
 
+        let coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+
         self.score += added_score;
         self.food_eaten_session += 1;
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
-        self.stats.coins += added_score;
+        self.stats.coins += coins_earned;
         beep();
 
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
@@ -2840,7 +2865,7 @@ impl Game {
                         .unwrap_or_default()
                         .as_secs()
                         .saturating_sub(t)
-                        < 5
+                        < self.powerup_duration()
                 })
         });
 
@@ -2938,7 +2963,7 @@ impl Game {
                             .unwrap_or_default()
                             .as_secs()
                             .saturating_sub(t)
-                            < 5
+                            < self.powerup_duration()
                     })
             });
 
@@ -3041,7 +3066,7 @@ impl Game {
                             .unwrap_or_default()
                             .as_secs()
                             .saturating_sub(time)
-                            < 5
+                            < self.powerup_duration()
                     })
             });
             targets
@@ -3698,6 +3723,46 @@ mod tests {
             assert_eq!(game1.food, game2.food, "Food generation drifted");
             assert_eq!(game1.obstacles, game2.obstacles, "Obstacles generation drifted");
         }
+    }
+
+    #[test]
+    fn test_upgrades() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Test lives upgrade
+        game.stats.upgrade_extra_lives = 2;
+        game.reset();
+        assert_eq!(game.lives, 5);
+
+        // Test powerup duration upgrade
+        game.stats.upgrade_powerup_duration = 3;
+        assert_eq!(game.powerup_duration(), 8);
+
+        // Test laser capacity upgrade
+        game.stats.upgrade_laser_capacity = 2;
+        game.lasers.clear();
+        for _ in 0..10 {
+            game.shoot_laser(1);
+        }
+        // Base is 3 + 2 upgrade = 5 lasers
+        let active_lasers = game.lasers.iter().filter(|l| l.player == 1).count();
+        assert_eq!(active_lasers, 5);
+
+        // Test coin multiplier upgrade
+        game.stats.upgrade_coin_multiplier = 5; // +100% coins
+        let initial_coins = game.stats.coins;
+        let p = game.food;
+        game.snake.move_to(p, true);
+        game.process_food_collision(p, false); // Base added score for normal difficulty is 2, combo is 1
+        // Coin multiplier should make coins earned 4
+        assert_eq!(game.stats.coins - initial_coins, 4);
     }
 
     #[test]

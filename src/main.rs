@@ -151,6 +151,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             base_tick_rate
         };
 
+        let powerup_duration = game.powerup_duration();
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time
         {
@@ -159,7 +160,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                 .unwrap_or_default()
                 .as_secs()
                 .saturating_sub(activation_time)
-                < 5
+                < powerup_duration
             {
                 match power_up.p_type {
                     game::PowerUpType::SlowDown => {
@@ -256,6 +257,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::ConfirmQuit => handle_confirm_quit_input(code, game),
         GameState::NftShop => handle_nft_shop_input(code, game),
         GameState::Achievements => handle_achievements_input(code, game),
+        GameState::SkillTree => handle_skill_tree_input(code, game),
         GameState::LevelEditor => handle_level_editor_input(code, game),
     };
 
@@ -360,14 +362,15 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             },
             17 => game.state = GameState::Settings,
             18 => game.state = GameState::NftShop,
-            19 => game.state = GameState::Stats,
-            20 => game.state = GameState::Achievements,
-            21 => game.state = GameState::Help,
-            22 => {
+            19 => game.state = GameState::SkillTree,
+            20 => game.state = GameState::Stats,
+            21 => game.state = GameState::Achievements,
+            22 => game.state = GameState::Help,
+            23 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            23 => {
+            24 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -375,7 +378,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            24 => {
+            25 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -385,11 +388,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 24;
+                game.menu_selection = 25;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 24 {
+            if game.menu_selection < 25 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -618,6 +621,71 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Char('n' | 'N') => {
             if let Some(state) = game.previous_state {
                 game.state = state;
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.skill_tree_selection > 0 {
+                game.skill_tree_selection -= 1;
+            } else {
+                game.skill_tree_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.skill_tree_selection < 3 {
+                game.skill_tree_selection += 1;
+            } else {
+                game.skill_tree_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            match game.skill_tree_selection {
+                0 => {
+                    let cost = 500 * (1 + u32::from(game.stats.upgrade_powerup_duration));
+                    if game.stats.upgrade_powerup_duration < 10 && game.stats.coins >= cost {
+                        game.stats.coins -= cost;
+                        game.stats.upgrade_powerup_duration += 1;
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                1 => {
+                    let cost = 1000 * (1 + u32::from(game.stats.upgrade_extra_lives));
+                    if game.stats.upgrade_extra_lives < 10 && game.stats.coins >= cost {
+                        game.stats.coins -= cost;
+                        game.stats.upgrade_extra_lives += 1;
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                2 => {
+                    let cost = 1500 * (1 + u32::from(game.stats.upgrade_laser_capacity));
+                    if game.stats.upgrade_laser_capacity < 10 && game.stats.coins >= cost {
+                        game.stats.coins -= cost;
+                        game.stats.upgrade_laser_capacity += 1;
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                3 => {
+                    let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
+                    if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
+                        game.stats.coins -= cost;
+                        game.stats.upgrade_coin_multiplier += 1;
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                _ => {},
             }
         },
         _ => {},
