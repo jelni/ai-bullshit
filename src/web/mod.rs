@@ -43,21 +43,38 @@ pub fn run() -> Result<(), JsValue> {
         let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::KeyboardEvent| {
             let mut game = game.borrow_mut();
             match event.key().as_str() {
-                "ArrowUp" | "w" | "W" => {
+                "w" | "W" => {
                     game.handle_input(Direction::Up, 1);
                 },
-                "ArrowDown" | "s" | "S" => {
+                "s" | "S" => {
                     game.handle_input(Direction::Down, 1);
                 },
-                "ArrowLeft" | "a" | "A" => {
+                "a" | "A" => {
                     game.handle_input(Direction::Left, 1);
                 },
-                "ArrowRight" | "d" | "D" => {
+                "d" | "D" => {
                     game.handle_input(Direction::Right, 1);
+                },
+                "ArrowUp" => {
+                    game.handle_input(Direction::Up, 2);
+                },
+                "ArrowDown" => {
+                    game.handle_input(Direction::Down, 2);
+                },
+                "ArrowLeft" => {
+                    game.handle_input(Direction::Left, 2);
+                },
+                "ArrowRight" => {
+                    game.handle_input(Direction::Right, 2);
+                },
+                "Enter" => {
+                    game.shoot_laser(2);
                 },
                 " " => {
                     if game.state == GameState::Menu {
                         game.state = GameState::Playing;
+                    } else if game.state == GameState::Playing {
+                        game.shoot_laser(1);
                     }
                 },
                 "t" | "T" => {
