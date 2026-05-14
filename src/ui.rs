@@ -79,6 +79,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Cave Mode",
         "Dungeon Mode",
         "Speedrun Mode",
+        "Fog Of War Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -734,6 +735,17 @@ fn draw_entities<W: Write>(
     snake_color: Color,
     obs_color: Color,
 ) -> io::Result<()> {
+    let is_visible = |px: u16, py: u16| -> bool {
+        if game.mode == crate::game::GameMode::FogOfWar {
+            let head = game.snake.head();
+            let dx = f32::from(px) - f32::from(head.x);
+            let dy = f32::from(py) - f32::from(head.y);
+            f32::hypot(dx, dy) <= 6.0
+        } else {
+            true
+        }
+    };
+
     // Draw particles
     for p in &game.particles {
         #[expect(
@@ -749,7 +761,7 @@ fn draw_entities<W: Write>(
         )]
         let py = p.y.round() as u16;
 
-        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 {
+        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
             // Fade effect: use DarkGrey when lifetime is low, otherwise base color
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
                 Color::DarkGrey
@@ -765,26 +777,30 @@ fn draw_entities<W: Write>(
 
     // Draw lasers
     for laser in &game.lasers {
-        let symbol = match laser.direction {
-            crate::snake::Direction::Up | crate::snake::Direction::Down => '|',
-            crate::snake::Direction::Left | crate::snake::Direction::Right => '-',
-        };
-        let color = if laser.player == 1 {
-            snake_color
-        } else {
-            Color::Blue
-        };
-        stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
-        stdout.queue(SetForegroundColor(color))?;
-        write!(stdout, "{symbol}")?;
+        if is_visible(laser.position.x, laser.position.y) {
+            let symbol = match laser.direction {
+                crate::snake::Direction::Up | crate::snake::Direction::Down => '|',
+                crate::snake::Direction::Left | crate::snake::Direction::Right => '-',
+            };
+            let color = if laser.player == 1 {
+                snake_color
+            } else {
+                Color::Blue
+            };
+            stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "{symbol}")?;
+        }
     }
 
     // Draw autopilot path
     if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.autopilot_path {
-            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
-            write!(stdout, "·")?;
+            if is_visible(path_point.x, path_point.y) {
+                stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+                write!(stdout, "·")?;
+            }
         }
     }
     if game.mode == crate::game::GameMode::PlayerVsBot
@@ -792,50 +808,63 @@ fn draw_entities<W: Write>(
     {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.p2_autopilot_path {
-            stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
-            write!(stdout, "·")?;
+            if is_visible(path_point.x, path_point.y) {
+                stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
+                write!(stdout, "·")?;
+            }
         }
     }
 
     // Draw food
-    stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
-    stdout.queue(SetForegroundColor(food_color))?;
-    write!(stdout, "●")?;
+    if is_visible(game.food.x, game.food.y) {
+        stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
+        stdout.queue(SetForegroundColor(food_color))?;
+        write!(stdout, "●")?;
+    }
 
     // Draw obstacles
     stdout.queue(SetForegroundColor(obs_color))?;
     for obs in &game.obstacles {
-        stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
-        write!(stdout, "X")?;
+        if is_visible(obs.x, obs.y) {
+            stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
+            write!(stdout, "X")?;
+        }
     }
 
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
-        stdout.queue(cursor::MoveTo(p1.x, p1.y))?;
-        stdout.queue(SetForegroundColor(Color::Cyan))?;
-        write!(stdout, "O")?;
+        if is_visible(p1.x, p1.y) {
+            stdout.queue(cursor::MoveTo(p1.x, p1.y))?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            write!(stdout, "O")?;
+        }
 
-        stdout.queue(cursor::MoveTo(p2.x, p2.y))?;
-        stdout.queue(SetForegroundColor(Color::Magenta))?;
-        write!(stdout, "O")?;
+        if is_visible(p2.x, p2.y) {
+            stdout.queue(cursor::MoveTo(p2.x, p2.y))?;
+            stdout.queue(SetForegroundColor(Color::Magenta))?;
+            write!(stdout, "O")?;
+        }
     }
 
     // Draw Boss
-    if let Some(boss) = &game.boss {
-        stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
-        stdout.queue(SetForegroundColor(Color::Magenta))?;
-        write!(stdout, "B")?;
-    }
+    if let Some(boss) = &game.boss
+        && is_visible(boss.position.x, boss.position.y) {
+            stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
+            stdout.queue(SetForegroundColor(Color::Magenta))?;
+            write!(stdout, "B")?;
+        }
 
     // Draw bonus food
-    if let Some((bonus_p, _)) = game.bonus_food {
-        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
-        write!(stdout, "★")?;
-    }
+    if let Some((bonus_p, _)) = game.bonus_food
+        && is_visible(bonus_p.x, bonus_p.y) {
+            stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            write!(stdout, "★")?;
+        }
 
     if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
+        && is_visible(power_up.location.x, power_up.location.y)
     {
         stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
         match power_up.p_type {
@@ -873,30 +902,11 @@ fn draw_entities<W: Write>(
     // Draw snake
     stdout.queue(SetForegroundColor(snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
-        stdout.queue(cursor::MoveTo(part.x, part.y))?;
-        if i == 0 {
-            // Head
-            let head_char = match game.snake.direction {
-                Direction::Up => '^',
-                Direction::Down => 'v',
-                Direction::Left => '<',
-                Direction::Right => '>',
-            };
-            write!(stdout, "{head_char}")?;
-        } else {
-            // Body
-            write!(stdout, "{}", game.skin)?;
-        }
-    }
-
-    // Draw player2
-    if let Some(p2) = &game.player2 {
-        stdout.queue(SetForegroundColor(Color::Blue))?;
-        for (i, part) in p2.body.iter().enumerate() {
+        if is_visible(part.x, part.y) {
             stdout.queue(cursor::MoveTo(part.x, part.y))?;
             if i == 0 {
                 // Head
-                let head_char = match p2.direction {
+                let head_char = match game.snake.direction {
                     Direction::Up => '^',
                     Direction::Down => 'v',
                     Direction::Left => '<',
@@ -906,6 +916,29 @@ fn draw_entities<W: Write>(
             } else {
                 // Body
                 write!(stdout, "{}", game.skin)?;
+            }
+        }
+    }
+
+    // Draw player2
+    if let Some(p2) = &game.player2 {
+        stdout.queue(SetForegroundColor(Color::Blue))?;
+        for (i, part) in p2.body.iter().enumerate() {
+            if is_visible(part.x, part.y) {
+                stdout.queue(cursor::MoveTo(part.x, part.y))?;
+                if i == 0 {
+                    // Head
+                    let head_char = match p2.direction {
+                        Direction::Up => '^',
+                        Direction::Down => 'v',
+                        Direction::Left => '<',
+                        Direction::Right => '>',
+                    };
+                    write!(stdout, "{head_char}")?;
+                } else {
+                    // Body
+                    write!(stdout, "{}", game.skin)?;
+                }
             }
         }
     }

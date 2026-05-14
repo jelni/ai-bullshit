@@ -283,6 +283,7 @@ fn handle_boss_key(game: &Game, stdout: &mut Stdout) {
     let _ = ui::draw(game, stdout);
 }
 
+#[expect(clippy::too_many_lines, reason = "Game menu requires handling multiple options")]
 fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
         KeyCode::Char('q' | 'Q') => {
@@ -351,18 +352,22 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             15 => {
+                game.mode = game::GameMode::FogOfWar;
+                game.reset();
+            },
+            16 => {
                 let _ = game.load_game();
             },
-            16 => game.state = GameState::Settings,
-            17 => game.state = GameState::NftShop,
-            18 => game.state = GameState::Stats,
-            19 => game.state = GameState::Achievements,
-            20 => game.state = GameState::Help,
-            21 => {
+            17 => game.state = GameState::Settings,
+            18 => game.state = GameState::NftShop,
+            19 => game.state = GameState::Stats,
+            20 => game.state = GameState::Achievements,
+            21 => game.state = GameState::Help,
+            22 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            22 => {
+            23 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -370,7 +375,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            23 => {
+            24 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -380,11 +385,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 23;
+                game.menu_selection = 24;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 23 {
+            if game.menu_selection < 24 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -475,6 +480,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::FogOfWar
             {
                 game.handle_input(Direction::Up, 1);
             } else {
@@ -486,6 +492,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::FogOfWar
             {
                 game.handle_input(Direction::Down, 1);
             } else {
@@ -497,6 +504,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::FogOfWar
             {
                 game.handle_input(Direction::Left, 1);
             } else {
@@ -508,6 +516,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::FogOfWar
             {
                 game.handle_input(Direction::Right, 1);
             } else {
