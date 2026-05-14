@@ -1314,9 +1314,9 @@ impl Game {
         });
 
         let mut hit_wall1 = false;
-        let final_head1 = if self.portals.is_some() && self.portals.unwrap().0 == next_head1 {
+        let final_head1 = if self.portals.is_some_and(|(p1, _)| p1 == next_head1) {
             self.portals.unwrap().1
-        } else if self.portals.is_some() && self.portals.unwrap().1 == next_head1 {
+        } else if self.portals.is_some_and(|(_, p2)| p2 == next_head1) {
             self.portals.unwrap().0
         } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
@@ -1340,9 +1340,9 @@ impl Game {
 
         let mut hit_wall2 = false;
         let final_head2_opt = next_head2_opt.map(|next_head2| {
-            if self.portals.is_some() && self.portals.unwrap().0 == next_head2 {
+            if self.portals.is_some_and(|(p1, _)| p1 == next_head2) {
                 self.portals.unwrap().1
-            } else if self.portals.is_some() && self.portals.unwrap().1 == next_head2 {
+            } else if self.portals.is_some_and(|(_, p2)| p2 == next_head2) {
                 self.portals.unwrap().0
             } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                 && self.mode != GameMode::BattleRoyale
@@ -2604,6 +2604,10 @@ impl Game {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Search algorithm is inherently complex and long"
+    )]
     fn astar_search(
         &self,
         start: Point,
@@ -2632,15 +2636,27 @@ impl Game {
             targets
                 .iter()
                 .map(|t| {
-                    let mut dx = p.x.abs_diff(t.x);
-                    let mut dy = p.y.abs_diff(t.y);
-                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                        && self.mode != GameMode::BattleRoyale
-                    {
-                        dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                        dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                    let calc_dist = |p1: Point, p2: Point| -> u16 {
+                        let mut dx = p1.x.abs_diff(p2.x);
+                        let mut dy = p1.y.abs_diff(p2.y);
+                        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                            && self.mode != GameMode::BattleRoyale
+                        {
+                            dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                            dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                        }
+                        dx.saturating_add(dy)
+                    };
+
+                    let dist_direct = calc_dist(p, *t);
+
+                    if let Some((portal1, portal2)) = self.portals {
+                        let dist_via_portal1 = calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
+                        let dist_via_portal2 = calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
+                        std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+                    } else {
+                        dist_direct
                     }
-                    dx.saturating_add(dy)
                 })
                 .min()
                 .unwrap_or(0)
@@ -3055,5 +3071,37 @@ mod tests {
         // Calculate autopilot move
         let next_move = game.calculate_autopilot_move();
         assert_eq!(next_move, Some(crate::snake::Direction::Up));
+    }
+
+    #[test]
+    fn test_calculate_autopilot_uses_portals() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Setup snake at (2, 2)
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 2, y: 2 });
+        game.snake.direction = crate::snake::Direction::Down; // Facing down to avoid immediate 180
+
+        // Place food far away at (18, 18)
+        game.food = crate::snake::Point { x: 18, y: 18 };
+
+        // Place a portal right next to the snake at (3, 2) and its pair near the food at (17, 18)
+        let p1 = crate::snake::Point { x: 3, y: 2 };
+        let p2 = crate::snake::Point { x: 17, y: 18 };
+        game.portals = Some((p1, p2));
+
+        // Let's clear any obstacles that might interfere
+        game.obstacles.clear();
+
+        // The shortest path should be to move Right into the portal at (3, 2), teleport to (17, 18), then move Right to (18, 18).
+        // Without portals, the shortest path would be down/right many times.
+        let next_move = game.calculate_autopilot_move();
+        assert_eq!(next_move, Some(crate::snake::Direction::Right));
     }
 }

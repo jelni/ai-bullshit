@@ -25,6 +25,7 @@ As an AI agent working on this codebase, you must adhere to the following princi
 ## 7. Verify Everything
 - Always verify your work. Use appropriate tools to check if the file changes are correct and build properly.
 - Ensure that the tests are passing by running test commands after modifications.
+- Run `./clippy.sh` to ensure no new warnings or regressions were introduced in code quality.
 
 ## 8. Code Quality and TDD
 - Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, try to use Test-Driven Development (TDD) by writing tests that establish the expected behavior before or alongside your implementation.
