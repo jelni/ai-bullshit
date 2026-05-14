@@ -532,7 +532,8 @@ fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                     // Simple deterministic pseudo-random logic
                     let noise = (x as usize * 17 + y as usize * 31 + elapsed) % 100;
                     if noise < 5 {
-                        let c = u8::try_from(33 + ((x as usize * y as usize + elapsed) % 94)).unwrap_or(33) as char;
+                        let c = u8::try_from(33 + ((x as usize * y as usize + elapsed) % 94))
+                            .unwrap_or(33) as char;
                         stdout.queue(cursor::MoveTo(x, y))?;
                         write!(stdout, "{c}")?;
                     }
@@ -560,7 +561,10 @@ fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             for y in min_y..max_y {
                 for x in min_x..max_x {
                     let wave = (x as usize + elapsed / 2) % 20;
-                    #[expect(clippy::manual_is_multiple_of, reason = "Using multiple_of requires unstable feature")]
+                    #[expect(
+                        clippy::manual_is_multiple_of,
+                        reason = "Using multiple_of requires unstable feature"
+                    )]
                     if y as usize % 2 == 0 && wave < 3 {
                         stdout.queue(cursor::MoveTo(x, y))?;
                         write!(stdout, "~")?;
@@ -568,7 +572,7 @@ fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 }
             }
         },
-        _ => {}
+        _ => {},
     }
 
     Ok(())
@@ -759,7 +763,9 @@ fn draw_entities<W: Write>(
             write!(stdout, "·")?;
         }
     }
-    if game.mode == crate::game::GameMode::PlayerVsBot || game.mode == crate::game::GameMode::BotVsBot {
+    if game.mode == crate::game::GameMode::PlayerVsBot
+        || game.mode == crate::game::GameMode::BotVsBot
+    {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.p2_autopilot_path {
             stdout.queue(cursor::MoveTo(path_point.x, path_point.y))?;
@@ -956,7 +962,11 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     if let Some(power_up) = &game.power_up
         && let Some(activation_time) = power_up.activation_time
     {
-        let elapsed = web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs().saturating_sub(activation_time);
+        let elapsed = web_time::SystemTime::now()
+            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .saturating_sub(activation_time);
         if elapsed < 5 {
             let remaining = 5 - elapsed;
             let power_up_name = match power_up.p_type {
