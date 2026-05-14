@@ -130,6 +130,7 @@ pub enum GameMode {
     Survival,
     Zen,
     Maze,
+    Cave,
     CustomLevel,
     Speedrun,
 }
@@ -941,6 +942,82 @@ impl Game {
     }
 
     #[must_use]
+    pub fn generate_cave_obstacles(
+        width: u16,
+        height: u16,
+        rng: &mut rand::rngs::ThreadRng,
+    ) -> HashSet<Point> {
+        let mut grid = vec![vec![false; width as usize]; height as usize];
+
+        // 1. Initialize with random noise
+        let fill_probability = 0.45;
+        for y in 0..height {
+            for x in 0..width {
+                if x == 0 || y == 0 || x == width - 1 || y == height - 1 {
+                    grid[y as usize][x as usize] = true; // Walls on borders
+                } else if rng.gen_bool(fill_probability) {
+                    grid[y as usize][x as usize] = true;
+                }
+            }
+        }
+
+        // 2. Cellular Automata Smoothing Iterations
+        let iterations = 4;
+        for _ in 0..iterations {
+            let mut next_grid = grid.clone();
+            for y in 1..(height - 1) {
+                for x in 1..(width - 1) {
+                    let mut neighbor_walls = 0;
+                    for dy in -1..=1 {
+                        for dx in -1..=1 {
+                            if dx == 0 && dy == 0 {
+                                continue;
+                            }
+                            let nx = x as i32 + dx;
+                            let ny = y as i32 + dy;
+                            if grid[ny as usize][nx as usize] {
+                                neighbor_walls += 1;
+                            }
+                        }
+                    }
+
+                    if grid[y as usize][x as usize] {
+                        next_grid[y as usize][x as usize] = neighbor_walls >= 4;
+                    } else {
+                        next_grid[y as usize][x as usize] = neighbor_walls >= 5;
+                    }
+                }
+            }
+            grid = next_grid;
+        }
+
+        // 3. Clear center for spawn
+        let start_x = width / 2;
+        let start_y = height / 2;
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = start_x as i32 + dx;
+                let cy = start_y as i32 + dy;
+                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                    grid[cy as usize][cx as usize] = false;
+                }
+            }
+        }
+
+        // 4. Convert grid to HashSet
+        let mut obstacles = HashSet::new();
+        for y in 1..(height - 1) {
+            for x in 1..(width - 1) {
+                if grid[y as usize][x as usize] {
+                    obstacles.insert(Point { x, y });
+                }
+            }
+        }
+
+        obstacles
+    }
+
+    #[must_use]
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -1061,6 +1138,7 @@ impl Game {
             | GameMode::Survival
             | GameMode::Zen
             | GameMode::Maze
+            | GameMode::Cave
             | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -1084,7 +1162,7 @@ impl Game {
             },
         }
 
-        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze {
+        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::Cave {
             0
         } else {
             match self.difficulty {
@@ -1103,6 +1181,7 @@ impl Game {
                 || self.mode == GameMode::Survival
                 || self.mode == GameMode::Zen
                 || self.mode == GameMode::Maze
+                || self.mode == GameMode::Cave
                 || self.mode == GameMode::CustomLevel
             {
                 p.x == start_x && p.y == start_y - 1
@@ -1122,6 +1201,7 @@ impl Game {
             || self.mode == GameMode::Survival
             || self.mode == GameMode::Zen
             || self.mode == GameMode::Maze
+            || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
         {
             &self.snake
@@ -1140,6 +1220,10 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Maze {
             self.obstacles = Self::generate_maze_obstacles(self.width, self.height, &mut self.rng);
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Cave {
+            self.obstacles = Self::generate_cave_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -1214,6 +1298,7 @@ impl Game {
             | GameMode::Survival
             | GameMode::Zen
             | GameMode::Maze
+            | GameMode::Cave
             | GameMode::CustomLevel => {
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -2394,6 +2479,7 @@ impl Game {
     fn add_obstacles_if_needed(&mut self, old_food_eaten_session: u32, final_head: Point) {
         if self.mode == GameMode::Campaign
             || self.mode == GameMode::Maze
+            || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
         {
             return;
@@ -3025,6 +3111,34 @@ mod tests {
     use std::{fs::File, io::Write};
 
     use super::*;
+
+    #[test]
+    fn test_generate_cave_obstacles() {
+        let mut rng = rand::thread_rng();
+        let width = 20;
+        let height = 20;
+        let obstacles = Game::generate_cave_obstacles(width, height, &mut rng);
+
+        // Ensure generation creates at least some obstacles (walls)
+        assert!(!obstacles.is_empty(), "Cave generation should create obstacles");
+
+        // Center should be free
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = start_x as i32 + dx;
+                let cy = start_y as i32 + dy;
+                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                    assert!(
+                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        "Center area should be free of obstacles"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_portal_teleportation() {
