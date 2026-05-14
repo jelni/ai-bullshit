@@ -28,7 +28,7 @@ As an AI agent working on this codebase, you must adhere to the following princi
 - Run `./clippy.sh` to ensure no new warnings or regressions were introduced in code quality.
 
 ## 8. Code Quality and TDD
-- Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, try to use Test-Driven Development (TDD) by writing tests that establish the expected behavior before or alongside your implementation.
+- Always strive for high code quality and testable logic. When fixing bugs or implementing complex features, especially algorithmic enhancements like pathfinding and procedural generation, prioritize Test-Driven Development (TDD). Write unit tests that establish the expected behavior before or alongside your implementation.
 - You should proactively refactor code to make it more testable if you discover it to be difficult to test. Refactoring should happen with passing tests whenever possible to avoid regressions.
 
 ## 9. Avoid Assuming Line Numbers

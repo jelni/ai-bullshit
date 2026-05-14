@@ -857,6 +857,90 @@ impl Game {
     }
 
     #[must_use]
+    pub fn generate_maze_obstacles(
+        width: u16,
+        height: u16,
+        rng: &mut rand::rngs::ThreadRng,
+    ) -> HashSet<Point> {
+        let mut obstacles = HashSet::new();
+
+        // Ensure width and height are odd to make maze paths align nicely
+        // (1 is wall, 0 is path)
+        let max_x = width.saturating_sub(2);
+        let max_y = height.saturating_sub(2);
+
+        // Fill entire board with walls
+        for y in 1..=max_y {
+            for x in 1..=max_x {
+                obstacles.insert(Point { x, y });
+            }
+        }
+
+        // Keep the center clear for spawn
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        // DFS to carve paths
+        // Start at a random odd coordinate
+        let start_maze_x = (rng.gen_range(1..=std::cmp::max(1, max_x / 2)) * 2) - 1;
+        let start_maze_y = (rng.gen_range(1..=std::cmp::max(1, max_y / 2)) * 2) - 1;
+
+        let mut stack = vec![Point { x: start_maze_x, y: start_maze_y }];
+        obstacles.remove(&Point { x: start_maze_x, y: start_maze_y });
+
+        while let Some(current) = stack.last().copied() {
+            let mut neighbors = Vec::new();
+            let dirs = [(0, -2), (0, 2), (-2, 0), (2, 0)];
+
+            for (dx, dy) in dirs {
+                let nx = i32::from(current.x) + dx;
+                let ny = i32::from(current.y) + dy;
+
+                if nx > 0 && nx <= i32::from(max_x) && ny > 0 && ny <= i32::from(max_y) {
+                    let next_p = Point {
+                        x: u16::try_from(nx).unwrap_or(0),
+                        y: u16::try_from(ny).unwrap_or(0),
+                    };
+                    if obstacles.contains(&next_p) {
+                        neighbors.push((
+                            next_p,
+                            Point {
+                                x: u16::try_from(i32::from(current.x) + dx / 2).unwrap_or(0),
+                                y: u16::try_from(i32::from(current.y) + dy / 2).unwrap_or(0),
+                            },
+                        ));
+                    }
+                }
+            }
+
+            if neighbors.is_empty() {
+                stack.pop();
+            } else {
+                let (next_p, wall_p) = neighbors[rng.gen_range(0..neighbors.len())];
+                obstacles.remove(&wall_p);
+                obstacles.remove(&next_p);
+                stack.push(next_p);
+            }
+        }
+
+        // Clear center to ensure player can spawn and move
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx <= i32::from(max_x) && cy > 0 && cy <= i32::from(max_y) {
+                    obstacles.remove(&Point {
+                        x: u16::try_from(cx).unwrap_or(0),
+                        y: u16::try_from(cy).unwrap_or(0),
+                    });
+                }
+            }
+        }
+
+        obstacles
+    }
+
+    #[must_use]
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -1055,19 +1139,7 @@ impl Game {
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Maze {
-            self.obstacles.clear();
-            let y1 = self.height / 3;
-            let y2 = 2 * self.height / 3;
-            for x in 5..(self.width - 5) {
-                self.obstacles.insert(Point {
-                    x,
-                    y: y1,
-                });
-                self.obstacles.insert(Point {
-                    x,
-                    y: y2,
-                });
-            }
+            self.obstacles = Self::generate_maze_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -1544,41 +1616,27 @@ impl Game {
             }
         }
 
-        if let Some(boss) = &mut self.boss {
+        if let Some(mut boss) = self.boss.take() {
             boss.move_timer += 1;
             if boss.move_timer >= 2 {
                 boss.move_timer = 0;
                 let head = self.snake.head();
-                let dx = i32::from(head.x) - i32::from(boss.position.x);
-                let dy = i32::from(head.y) - i32::from(boss.position.y);
 
-                let mut new_pos = boss.position;
-                if dx.abs() > dy.abs() {
-                    if dx > 0 {
-                        new_pos.x += 1;
+                if let Some(dir) = self.bfs_pathfind(boss.position, head) {
+                    let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                    let margin = if self.mode == GameMode::BattleRoyale {
+                        self.safe_zone_margin
                     } else {
-                        new_pos.x = new_pos.x.saturating_sub(1);
+                        0
+                    };
+                    if next_pos.x > margin
+                        && next_pos.x < self.width - 1 - margin
+                        && next_pos.y > margin
+                        && next_pos.y < self.height - 1 - margin
+                        && !self.obstacles.contains(&next_pos)
+                    {
+                        boss.position = next_pos;
                     }
-                } else if dy != 0 {
-                    if dy > 0 {
-                        new_pos.y += 1;
-                    } else {
-                        new_pos.y = new_pos.y.saturating_sub(1);
-                    }
-                }
-
-                let margin = if self.mode == GameMode::BattleRoyale {
-                    self.safe_zone_margin
-                } else {
-                    0
-                };
-                if new_pos.x > margin
-                    && new_pos.x < self.width - 1 - margin
-                    && new_pos.y > margin
-                    && new_pos.y < self.height - 1 - margin
-                    && !self.obstacles.contains(&new_pos)
-                {
-                    boss.position = new_pos;
                 }
             }
 
@@ -1622,6 +1680,7 @@ impl Game {
                     beep();
                 }
             }
+            self.boss = Some(boss);
         }
 
         // Chat simulation logic
@@ -2578,6 +2637,67 @@ impl Game {
     }
 
     #[must_use]
+    pub fn bfs_pathfind(&self, start: Point, target: Point) -> Option<Direction> {
+        let mut queue = std::collections::VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut first_step = std::collections::HashMap::new();
+
+        queue.push_back((start, 0));
+        visited.insert(start);
+
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+
+        // First handle direct neighbors to seed `first_step` map
+        for &d in &dirs {
+            let next_p = Self::calculate_next_head_dir(start, d);
+
+            // Basic bounds checking for BFS, we avoid margin since boss operates strictly inside
+            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+
+            if next_p.x > margin
+                && next_p.x < self.width - 1 - margin
+                && next_p.y > margin
+                && next_p.y < self.height - 1 - margin
+                && !self.obstacles.contains(&next_p)
+            {
+                if next_p == target {
+                    return Some(d);
+                }
+                queue.push_back((next_p, 1));
+                visited.insert(next_p);
+                first_step.insert(next_p, d);
+            }
+        }
+
+        while let Some((current, dist)) = queue.pop_front() {
+            if current == target {
+                return first_step.get(&current).copied();
+            }
+
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(current, d);
+                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+
+                if next_p.x > margin
+                    && next_p.x < self.width - 1 - margin
+                    && next_p.y > margin
+                    && next_p.y < self.height - 1 - margin
+                    && !self.obstacles.contains(&next_p)
+                    && !visited.contains(&next_p)
+                {
+                    visited.insert(next_p);
+                    if let Some(&first) = first_step.get(&current) {
+                        first_step.insert(next_p, first);
+                    }
+                    queue.push_back((next_p, dist + 1));
+                }
+            }
+        }
+
+        None
+    }
+
+    #[must_use]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, _checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
@@ -3177,6 +3297,80 @@ mod tests {
 
         // The food should have moved closer (y < 15)
         assert!(game.food.y < 15, "Food should have moved closer to the snake");
+    }
+
+    #[test]
+    fn test_generate_maze_obstacles() {
+        let mut rng = rand::thread_rng();
+        let width = 21; // Odd numbers work best
+        let height = 21;
+        let obstacles = Game::generate_maze_obstacles(width, height, &mut rng);
+
+        assert!(!obstacles.is_empty(), "Maze generation should create obstacles");
+
+        // Center should be free
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx <= i32::from(width - 2) && cy > 0 && cy <= i32::from(height - 2) {
+                    assert!(
+                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        "Center area should be free of obstacles"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bfs_pathfind() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Clear obstacles
+        game.obstacles.clear();
+
+        // Create a horizontal wall blocking direct downward path
+        // from (10, 5) to (10, 15)
+        for x in 8..=12 {
+            game.obstacles.insert(Point { x, y: 10 });
+        }
+
+        let start = Point { x: 10, y: 5 };
+        let target = Point { x: 10, y: 15 };
+
+        // Ensure BFS finds a way around the wall (should not go straight down into the wall)
+        let dir = game.bfs_pathfind(start, target);
+
+        assert!(dir.is_some(), "BFS should find a path around the wall");
+
+        // Let's trace it and ensure it actually reaches without hitting the wall
+        let mut current = start;
+        let mut reached = false;
+        for _ in 0..100 { // Max steps
+            if current == target {
+                reached = true;
+                break;
+            }
+            if let Some(next_dir) = game.bfs_pathfind(current, target) {
+                current = Game::calculate_next_head_dir(current, next_dir);
+                assert!(!game.obstacles.contains(&current), "Path should not hit obstacles");
+            } else {
+                break; // No path found
+            }
+        }
+
+        assert!(reached, "Following BFS should reach target");
     }
 
     #[test]
