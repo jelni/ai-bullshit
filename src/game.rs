@@ -101,6 +101,7 @@ pub enum PowerUpType {
     ScoreMultiplier,
     Teleport,
     Magnet,
+    LaserSpread,
 }
 
 #[serde_as]
@@ -1252,9 +1253,23 @@ impl Game {
     }
 
     pub fn shoot_laser(&mut self, player: u8) {
+        let has_spread = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::LaserSpread
+                && p.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < 5
+                })
+        });
+
         let active_lasers = self.lasers.iter().filter(|l| l.player == player).count();
-        if active_lasers >= 3 {
-            return; // Limit of 3 active lasers per player
+        let limit = if has_spread { 9 } else { 3 };
+
+        if active_lasers >= limit {
+            return; // Limit of 3 or 9 active lasers per player
         }
 
         let (head, dir) = if player == 1 {
@@ -1269,25 +1284,38 @@ impl Game {
             return;
         };
 
-        // Laser spawns exactly at the position in front of the head
-        let laser_pos = Self::calculate_next_head_dir(head, dir);
+        let mut dirs = vec![dir];
+        if has_spread {
+            dirs.push(dir.turn_left());
+            dirs.push(dir.turn_right());
+        }
 
-        // Check bounds before adding the laser
-        let margin = if self.mode == GameMode::BattleRoyale {
-            self.safe_zone_margin
-        } else {
-            0
-        };
-        if laser_pos.x > margin
-            && laser_pos.x < self.width - 1 - margin
-            && laser_pos.y > margin
-            && laser_pos.y < self.height - 1 - margin
-        {
-            self.lasers.push(Laser {
-                position: laser_pos,
-                direction: dir,
-                player,
-            });
+        let mut played_sound = false;
+        for d in dirs {
+            // Laser spawns exactly at the position in front of the head
+            let laser_pos = Self::calculate_next_head_dir(head, d);
+
+            // Check bounds before adding the laser
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            if laser_pos.x > margin
+                && laser_pos.x < self.width - 1 - margin
+                && laser_pos.y > margin
+                && laser_pos.y < self.height - 1 - margin
+            {
+                self.lasers.push(Laser {
+                    position: laser_pos,
+                    direction: d,
+                    player,
+                });
+                played_sound = true;
+            }
+        }
+
+        if played_sound {
             beep();
         }
     }
@@ -2524,7 +2552,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..10) {
+                let p_type = match self.rng.gen_range(0..11) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -2534,6 +2562,7 @@ impl Game {
                     6 => PowerUpType::ScoreMultiplier,
                     7 => PowerUpType::Teleport,
                     8 => PowerUpType::Magnet,
+                    9 => PowerUpType::LaserSpread,
                     _ => PowerUpType::ExtraLife,
                 };
 
@@ -3025,6 +3054,47 @@ mod tests {
     use std::{fs::File, io::Write};
 
     use super::*;
+
+    #[test]
+    fn test_laser_spread() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Place snake at (10, 10) facing Right
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+        game.snake.direction = crate::snake::Direction::Right;
+
+        // Ensure no obstacles block lasers
+        game.obstacles.clear();
+
+        // Give the LaserSpread powerup
+        game.power_up = Some(PowerUp {
+            p_type: PowerUpType::LaserSpread,
+            location: crate::snake::Point { x: 1, y: 1 },
+            activation_time: Some(
+                web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            ),
+        });
+
+        game.lasers.clear();
+        game.shoot_laser(1);
+
+        assert_eq!(game.lasers.len(), 3, "LaserSpread should spawn 3 lasers");
+
+        let dirs: Vec<_> = game.lasers.iter().map(|l| l.direction).collect();
+        assert!(dirs.contains(&crate::snake::Direction::Right), "Should spawn forward laser");
+        assert!(dirs.contains(&crate::snake::Direction::Up), "Should spawn left laser");
+        assert!(dirs.contains(&crate::snake::Direction::Down), "Should spawn right laser");
+    }
 
     #[test]
     fn test_portal_teleportation() {

@@ -177,7 +177,8 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                     | game::PowerUpType::ClearObstacles
                     | game::PowerUpType::ScoreMultiplier
                     | game::PowerUpType::Teleport
-                    | game::PowerUpType::Magnet => {}, // Tick rate unaffected
+                    | game::PowerUpType::Magnet
+                    | game::PowerUpType::LaserSpread => {}, // Tick rate unaffected
                 }
             } else {
                 game.power_up = None; // Power-up expired

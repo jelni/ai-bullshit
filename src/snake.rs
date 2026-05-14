@@ -10,6 +10,28 @@ pub enum Direction {
     Right,
 }
 
+impl Direction {
+    #[must_use]
+    pub const fn turn_left(self) -> Self {
+        match self {
+            Self::Up => Self::Left,
+            Self::Left => Self::Down,
+            Self::Down => Self::Right,
+            Self::Right => Self::Up,
+        }
+    }
+
+    #[must_use]
+    pub const fn turn_right(self) -> Self {
+        match self {
+            Self::Up => Self::Right,
+            Self::Right => Self::Down,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
+        }
+    }
+}
+
 #[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Point {
     pub x: u16,
@@ -104,6 +126,25 @@ impl Snake {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_direction_turning() {
+        let up = Direction::Up;
+        assert_eq!(up.turn_left(), Direction::Left);
+        assert_eq!(up.turn_right(), Direction::Right);
+
+        let down = Direction::Down;
+        assert_eq!(down.turn_left(), Direction::Right);
+        assert_eq!(down.turn_right(), Direction::Left);
+
+        let left = Direction::Left;
+        assert_eq!(left.turn_left(), Direction::Down);
+        assert_eq!(left.turn_right(), Direction::Up);
+
+        let right = Direction::Right;
+        assert_eq!(right.turn_left(), Direction::Up);
+        assert_eq!(right.turn_right(), Direction::Down);
+    }
 
     #[test]
     fn test_snake_new() {
