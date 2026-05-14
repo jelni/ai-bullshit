@@ -314,67 +314,71 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             5 => {
-                game.mode = game::GameMode::PlayerVsBot;
+                game.mode = game::GameMode::Tournament;
                 game.reset();
             },
             6 => {
-                game.mode = game::GameMode::BotVsBot;
+                game.mode = game::GameMode::PlayerVsBot;
                 game.reset();
             },
             7 => {
-                game.mode = game::GameMode::BattleRoyale;
+                game.mode = game::GameMode::BotVsBot;
                 game.reset();
             },
             8 => {
-                game.mode = game::GameMode::TimeAttack;
+                game.mode = game::GameMode::BattleRoyale;
                 game.reset();
             },
             9 => {
-                game.mode = game::GameMode::Survival;
+                game.mode = game::GameMode::TimeAttack;
                 game.reset();
             },
             10 => {
-                game.mode = game::GameMode::Zen;
+                game.mode = game::GameMode::Survival;
                 game.reset();
             },
             11 => {
-                game.mode = game::GameMode::Maze;
+                game.mode = game::GameMode::Zen;
                 game.reset();
             },
             12 => {
-                game.mode = game::GameMode::Cave;
+                game.mode = game::GameMode::Maze;
                 game.reset();
             },
             13 => {
-                game.mode = game::GameMode::Dungeon;
+                game.mode = game::GameMode::Cave;
                 game.reset();
             },
             14 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
             15 => {
-                game.mode = game::GameMode::FogOfWar;
+                game.mode = game::GameMode::Speedrun;
                 game.reset();
             },
             16 => {
-                game.mode = game::GameMode::Evolution;
+                game.mode = game::GameMode::FogOfWar;
                 game.reset();
             },
             17 => {
+                game.mode = game::GameMode::Evolution;
+                game.reset();
+            },
+            18 => {
                 let _ = game.load_game();
             },
-            18 => game.state = GameState::Settings,
-            19 => game.state = GameState::NftShop,
-            20 => game.state = GameState::SkillTree,
-            21 => game.state = GameState::Stats,
-            22 => game.state = GameState::Achievements,
-            23 => game.state = GameState::Help,
-            24 => {
+            19 => game.state = GameState::Settings,
+            20 => game.state = GameState::NftShop,
+            21 => game.state = GameState::SkillTree,
+            22 => game.state = GameState::Stats,
+            23 => game.state = GameState::Achievements,
+            24 => game.state = GameState::Help,
+            25 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            25 => {
+            26 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -382,7 +386,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            26 => {
+            27 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -392,11 +396,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 26;
+                game.menu_selection = 27;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 26 {
+            if game.menu_selection < 27 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

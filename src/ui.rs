@@ -70,6 +70,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Campaign Mode",
         "Local Multiplayer",
         "Online Multiplayer",
+        "Tournament",
         "Player vs Bot",
         "Bot vs Bot",
         "Battle Royale",
