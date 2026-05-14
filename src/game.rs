@@ -1119,9 +1119,7 @@ impl Game {
                 }
 
                 let is_alive = self.obstacles.contains(&p);
-                if is_alive && (neighbors == 2 || neighbors == 3) {
-                    next_obstacles.insert(p);
-                } else if !is_alive && neighbors == 3 {
+                if neighbors == 3 || (is_alive && neighbors == 2) {
                     next_obstacles.insert(p);
                 }
             }
@@ -3913,6 +3911,11 @@ mod evolution_tests {
         // Move snake far away so safe zone doesn't interfere
         game.snake = crate::snake::Snake::new(Point { x: 10, y: 10 });
         game.player2 = None;
+
+        // Move food, bonus food and powerup far away so they don't interfere
+        game.food = Point { x: 15, y: 15 };
+        game.bonus_food = None;
+        game.power_up = None;
 
         game.evolve_game_of_life();
 
