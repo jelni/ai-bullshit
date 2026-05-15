@@ -3258,6 +3258,7 @@ impl Game {
     }
 
     #[must_use]
+    #[expect(clippy::too_many_lines)]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
@@ -3340,20 +3341,25 @@ impl Game {
 
             // Predictive Opponent Avoidance
             if steps == 1 {
+                let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                 if checking_player == 1 {
                     if let Some(p2) = &self.player2 {
-                        let p2_next_head = Self::calculate_next_head_dir(p2.head(), p2.direction);
-                        if let Some(final_p2_next) = self.get_final_p(p2_next_head)
-                            && final_p == final_p2_next {
+                        for &d in &dirs {
+                            let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
+                            if let Some(final_p2_next) = self.get_final_p(p2_next_head)
+                                && final_p == final_p2_next {
+                                    return false;
+                                }
+                        }
+                    }
+                } else if checking_player == 2 {
+                    for &d in &dirs {
+                        let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
+                        if let Some(final_p1_next) = self.get_final_p(p1_next_head)
+                            && final_p == final_p1_next {
                                 return false;
                             }
                     }
-                } else if checking_player == 2 {
-                    let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
-                    if let Some(final_p1_next) = self.get_final_p(p1_next_head)
-                        && final_p == final_p1_next {
-                            return false;
-                        }
                 }
             }
         }
