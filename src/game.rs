@@ -3342,39 +3342,51 @@ impl Game {
             if steps == 1 {
                 if checking_player == 1 {
                     if let Some(p2) = &self.player2 {
-                        let mut p2_next = p2.head();
-                        match p2.direction {
-                            Direction::Up => p2_next.y = p2_next.y.wrapping_sub(1),
-                            Direction::Down => p2_next.y = p2_next.y.saturating_add(1),
-                            Direction::Left => p2_next.x = p2_next.x.wrapping_sub(1),
-                            Direction::Right => p2_next.x = p2_next.x.saturating_add(1),
+                        let p2_head = p2.head();
+                        let dx = i32::from(final_p.x).abs_diff(i32::from(p2_head.x));
+                        let dy = i32::from(final_p.y).abs_diff(i32::from(p2_head.y));
+                        if (dx == 1 && dy == 0) || (dx == 0 && dy == 1) {
+                            return false;
                         }
                         if self.wrap_mode {
+                            let mut p2_next = p2.head();
+                            match p2.direction {
+                                Direction::Up => p2_next.y = p2_next.y.wrapping_sub(1),
+                                Direction::Down => p2_next.y = p2_next.y.saturating_add(1),
+                                Direction::Left => p2_next.x = p2_next.x.wrapping_sub(1),
+                                Direction::Right => p2_next.x = p2_next.x.saturating_add(1),
+                            }
                             if p2_next.x == u16::MAX { p2_next.x = self.width - 1; }
                             if p2_next.y == u16::MAX { p2_next.y = self.height - 1; }
                             if p2_next.x >= self.width { p2_next.x = 0; }
                             if p2_next.y >= self.height { p2_next.y = 0; }
-                        }
-                        if final_p == p2_next {
-                            return false;
+                            if final_p == p2_next {
+                                return false;
+                            }
                         }
                     }
                 } else if checking_player == 2 {
-                    let mut p1_next = self.snake.head();
-                    match self.snake.direction {
-                        Direction::Up => p1_next.y = p1_next.y.wrapping_sub(1),
-                        Direction::Down => p1_next.y = p1_next.y.saturating_add(1),
-                        Direction::Left => p1_next.x = p1_next.x.wrapping_sub(1),
-                        Direction::Right => p1_next.x = p1_next.x.saturating_add(1),
+                    let p1_head = self.snake.head();
+                    let dx = i32::from(final_p.x).abs_diff(i32::from(p1_head.x));
+                    let dy = i32::from(final_p.y).abs_diff(i32::from(p1_head.y));
+                    if (dx == 1 && dy == 0) || (dx == 0 && dy == 1) {
+                        return false;
                     }
                     if self.wrap_mode {
+                        let mut p1_next = self.snake.head();
+                        match self.snake.direction {
+                            Direction::Up => p1_next.y = p1_next.y.wrapping_sub(1),
+                            Direction::Down => p1_next.y = p1_next.y.saturating_add(1),
+                            Direction::Left => p1_next.x = p1_next.x.wrapping_sub(1),
+                            Direction::Right => p1_next.x = p1_next.x.saturating_add(1),
+                        }
                         if p1_next.x == u16::MAX { p1_next.x = self.width - 1; }
                         if p1_next.y == u16::MAX { p1_next.y = self.height - 1; }
                         if p1_next.x >= self.width { p1_next.x = 0; }
                         if p1_next.y >= self.height { p1_next.y = 0; }
-                    }
-                    if final_p == p1_next {
-                        return false;
+                        if final_p == p1_next {
+                            return false;
+                        }
                     }
                 }
             }
@@ -4225,6 +4237,7 @@ mod tests {
         game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
         game.snake.direction = crate::snake::Direction::Right;
         game.food = crate::snake::Point { x: 9, y: 5 };
+        game.obstacles.clear();
 
         // Placing boss right in front of the snake
         game.boss = Some(Boss {
@@ -4254,6 +4267,7 @@ mod tests {
         game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
         game.snake.direction = crate::snake::Direction::Right;
         game.food = crate::snake::Point { x: 9, y: 5 };
+        game.obstacles.clear();
 
         // Placing laser right in front of the snake
         game.lasers.push(Laser {
