@@ -138,6 +138,7 @@ pub enum GameMode {
     DailyChallenge,
     FogOfWar,
     Evolution,
+    Chaos,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -250,6 +251,8 @@ pub struct SaveState {
     pub boss: Option<Boss>,
     #[serde(default)]
     pub portals: Option<(Point, Point)>,
+    #[serde(default)]
+    pub chaos_message: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -393,6 +396,8 @@ pub struct Game {
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
     pub portals: Option<(Point, Point)>,
+    pub chaos_message: String,
+    pub last_chaos_time: Instant,
 }
 
 impl Game {
@@ -497,6 +502,8 @@ impl Game {
             lasers: Vec::new(),
             boss: None,
             portals: None,
+            chaos_message: String::new(),
+            last_chaos_time: web_time::Instant::now(),
         }
     }
 
@@ -679,6 +686,7 @@ impl Game {
             lasers: self.lasers.clone(),
             boss: self.boss,
             portals: self.portals,
+            chaos_message: self.chaos_message.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1340,7 +1348,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar | GameMode::Evolution | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1519,6 +1527,8 @@ impl Game {
         self.last_chat_time = None;
         self.boss = None;
         self.portals = None;
+        self.chaos_message.clear();
+        self.last_chaos_time = web_time::Instant::now();
     }
 
     fn respawn(&mut self) {
@@ -1537,7 +1547,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar | GameMode::Evolution | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2281,6 +2291,11 @@ impl Game {
             self.evolve_game_of_life();
         }
 
+        if self.mode == GameMode::Chaos && self.last_chaos_time.elapsed() >= Duration::from_secs(10) {
+            self.last_chaos_time = web_time::Instant::now();
+            self.trigger_chaos_event();
+        }
+
         self.handle_autopilot_moves();
 
         // --- Apply Input ---
@@ -2886,6 +2901,145 @@ impl Game {
                     activation_time: None,
                 });
             }
+        }
+    }
+
+    #[expect(clippy::too_many_lines, reason = "Chaos events match arm needs length")]
+    fn trigger_chaos_event(&mut self) {
+        let event_type = self.rng.gen_range(0..7);
+        match event_type {
+            0 => {
+                self.chaos_message = "Reverse Snake!".to_string();
+                if self.snake.body.len() > 1 {
+                    let mut body_vec: Vec<_> = self.snake.body.iter().copied().collect();
+                    body_vec.reverse();
+                    self.snake.body = body_vec.into_iter().collect();
+                    let new_head = self.snake.head();
+                    // New neck is the segment immediately following the new head in the deque.
+                    // Because `head()` returns the back of the deque, the neck is at len() - 2.
+                    let new_neck = self.snake.body[self.snake.body.len() - 2];
+
+                    let dx = i32::from(new_head.x) - i32::from(new_neck.x);
+                    let dy = i32::from(new_head.y) - i32::from(new_neck.y);
+                    self.snake.direction = if dx > 0 {
+                        Direction::Right
+                    } else if dx < 0 {
+                        Direction::Left
+                    } else if dy > 0 {
+                        Direction::Down
+                    } else {
+                        Direction::Up
+                    };
+                    self.snake.direction_queue.clear();
+                }
+            },
+            1 => {
+                self.chaos_message = "Raining Food!".to_string();
+                // Instead of moving the main food 10 times, we set up a bonus food or give free points with particles
+                for _ in 0..10 {
+                    let avoid = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
+                    if let Some(pos) = Self::get_random_empty_point(
+                        self.width,
+                        self.height,
+                        &self.snake,
+                        avoid,
+                        &mut self.rng,
+                        0,
+                    ) {
+                        self.spawn_particles(
+                            f32::from(pos.x),
+                            f32::from(pos.y),
+                            10,
+                            crate::color::Color::Green,
+                            '+',
+                        );
+                        self.score += 10; // Free points scattered like food
+                    }
+                }
+            },
+            2 => {
+                self.chaos_message = "Obstacle Hell!".to_string();
+                for _ in 0..15 {
+                    let avoid = |p: &Point| self.snake.body_map.contains_key(p) || *p == self.food;
+                    if let Some(pos) = Self::get_random_empty_point(
+                        self.width,
+                        self.height,
+                        &self.snake,
+                        avoid,
+                        &mut self.rng,
+                        0,
+                    ) {
+                        self.obstacles.insert(pos);
+                    }
+                }
+            },
+            3 => {
+                self.chaos_message = "Clear Board!".to_string();
+                let obstacles_to_remove: Vec<Point> = self.obstacles.iter().copied().collect();
+                for pos in obstacles_to_remove {
+                    self.spawn_particles(
+                        f32::from(pos.x),
+                        f32::from(pos.y),
+                        10,
+                        crate::color::Color::Red,
+                        '*',
+                    );
+                }
+                self.obstacles.clear();
+            },
+            4 => {
+                self.chaos_message = "Wormholes!".to_string();
+                let avoid = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
+                if let Some(p1) = Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng, 2)
+                    && let Some(p2) = Self::get_random_empty_point(self.width, self.height, &self.snake, avoid, &mut self.rng, 2)
+                {
+                    self.portals = Some((p1, p2));
+                }
+            },
+            5 => {
+                self.chaos_message = "Laser Frenzy!".to_string();
+                let head = self.snake.head();
+                for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                    let laser_pos = Self::calculate_next_head_dir(head, dir);
+                    if laser_pos.x > 0 && laser_pos.x < self.width - 1 && laser_pos.y > 0 && laser_pos.y < self.height - 1 {
+                        self.lasers.push(Laser {
+                            position: laser_pos,
+                            direction: dir,
+                            player: 1,
+                        });
+                    }
+                }
+            },
+            6 => {
+                self.chaos_message = "Boss Encounter!".to_string();
+                if self.boss.is_none() {
+                    let avoid = |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
+                    if let Some(pos) = Self::get_random_empty_point(
+                        self.width,
+                        self.height,
+                        &self.snake,
+                        avoid,
+                        &mut self.rng,
+                        5,
+                    ) {
+                        self.boss = Some(Boss {
+                            position: pos,
+                            health: 5,
+                            max_health: 5,
+                            move_timer: 0,
+                            shoot_timer: 0,
+                        });
+                        self.spawn_particles(
+                            f32::from(pos.x),
+                            f32::from(pos.y),
+                            30,
+                            crate::color::Color::Magenta,
+                            'B',
+                        );
+                    }
+                }
+            },
+            _ => {},
         }
     }
 

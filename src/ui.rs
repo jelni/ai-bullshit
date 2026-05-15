@@ -83,6 +83,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Speedrun Mode",
         "Fog Of War Mode",
         "Evolution Mode",
+        "Chaos Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1178,6 +1179,17 @@ fn draw_overlays<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let x_sub = (game.width / 2).saturating_sub(sub_msg_len / 2);
         stdout.queue(cursor::MoveTo(x_sub, y_pos + 2))?;
         write!(stdout, "{sub_msg}")?;
+        stdout.queue(SetForegroundColor(Color::Reset))?;
+    }
+
+    if game.mode == crate::game::GameMode::Chaos && !game.chaos_message.is_empty() {
+        let msg_len = u16::try_from(game.chaos_message.len()).unwrap_or(0);
+        let x_pos = (game.width / 2).saturating_sub(msg_len / 2);
+        let y_pos = 2;
+
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        stdout.queue(cursor::MoveTo(x_pos, y_pos))?;
+        write!(stdout, "{}", game.chaos_message)?;
         stdout.queue(SetForegroundColor(Color::Reset))?;
     }
 
