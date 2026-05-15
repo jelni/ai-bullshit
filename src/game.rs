@@ -2025,11 +2025,15 @@ impl Game {
         }
 
         if let Some(mut boss) = self.boss.take() {
-            let move_threshold = if self.mode == GameMode::BossRush {
+            let mut move_threshold = if self.mode == GameMode::BossRush {
                 std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
             } else {
                 2
             };
+
+            if boss.health <= boss.max_health / 2 {
+                move_threshold = std::cmp::max(1, move_threshold / 2);
+            }
 
             boss.move_timer += 1;
             if boss.move_timer >= move_threshold {
@@ -2054,11 +2058,15 @@ impl Game {
                 }
             }
 
-            let shoot_threshold = if self.mode == GameMode::BossRush {
+            let mut shoot_threshold = if self.mode == GameMode::BossRush {
                 std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
             } else {
                 15
             };
+
+            if boss.health <= boss.max_health / 2 {
+                shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
+            }
 
             boss.shoot_timer += 1;
             if boss.shoot_timer >= shoot_threshold {
@@ -2148,7 +2156,25 @@ impl Game {
                                 crate::color::Color::Magenta,
                                 'B',
                             );
+
+                            let boss_pos = boss.position;
                             self.boss = None;
+
+                            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                            for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                                let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                                if laser_pos.x > margin
+                                    && laser_pos.x < self.width - 1 - margin
+                                    && laser_pos.y > margin
+                                    && laser_pos.y < self.height - 1 - margin
+                                {
+                                    self.lasers.push(Laser {
+                                        position: laser_pos,
+                                        direction: dir,
+                                        player: 3, // 3 represents Boss
+                                    });
+                                }
+                            }
                         } else {
                             self.boss = Some(boss);
                             self.spawn_particles(
@@ -2300,7 +2326,12 @@ impl Game {
                 {
                     boss.health = boss.health.saturating_sub(1);
                     destroyed = true;
-                    if boss.health == 0 {
+
+                    let boss_pos = boss.position;
+                    let boss_health = boss.health;
+
+                    if boss_health == 0 {
+                        self.boss = None;
                         if self.mode == GameMode::BossRush {
                             self.score += 1000 * self.campaign_level;
                             self.campaign_level += 1;
@@ -2314,7 +2345,22 @@ impl Game {
                             crate::color::Color::Magenta,
                             'B',
                         );
-                        self.boss = None;
+
+                        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                        for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                            let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                            if laser_pos.x > margin
+                                && laser_pos.x < self.width - 1 - margin
+                                && laser_pos.y > margin
+                                && laser_pos.y < self.height - 1 - margin
+                            {
+                                lasers_to_keep.push(Laser {
+                                    position: laser_pos,
+                                    direction: dir,
+                                    player: 3, // 3 represents Boss
+                                });
+                            }
+                        }
                     } else {
                         self.spawn_particles(
                             f32::from(laser.position.x),
@@ -3302,11 +3348,15 @@ impl Game {
                 }
             }
             if let Some(boss) = &self.boss {
-                let move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
                     std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
                 } else {
                     2
                 });
+
+                if boss.health <= boss.max_health / 2 {
+                    move_threshold = std::cmp::max(1, move_threshold / 2);
+                }
 
                 let moves = (u32::from(steps) + u32::from(boss.move_timer)) / move_threshold;
                 let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
@@ -3315,11 +3365,15 @@ impl Game {
                     return false;
                 }
 
-                let shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
+                let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                     std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
                 } else {
                     15
                 });
+
+                if boss.health <= boss.max_health / 2 {
+                    shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
+                }
 
                 let shoots = (u32::from(steps) + u32::from(boss.shoot_timer)) / shoot_threshold;
                 if shoots > 0

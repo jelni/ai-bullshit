@@ -32,4 +32,5 @@ fn test_bot_predicts_boss() {
 
     // We should ensure the snake doesn't go straight down if the boss is going to move up to 5,6.
     println!("next_move: {:?}", next_move);
+    assert_ne!(next_move, Some(snake::Direction::Down), "Snake should avoid moving down into the boss's predicted path");
 }
