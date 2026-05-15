@@ -3234,6 +3234,10 @@ impl Game {
             if self.lasers.iter().any(|l| l.position == final_p) {
                 return false;
             }
+            if let Some(col) = self.lightning_column
+                && final_p.x == col {
+                    return false;
+                }
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
                 let steps_to_clear =
                     u16::try_from(self.snake.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
@@ -4082,6 +4086,29 @@ mod tests {
         }
 
         assert!(struck, "Lightning should strike during a storm");
+    }
+
+    #[test]
+    fn test_calculate_autopilot_avoids_lightning() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.mode = GameMode::SinglePlayer;
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
+        game.snake.direction = crate::snake::Direction::Right;
+        game.food = crate::snake::Point { x: 7, y: 5 }; // Food is straight ahead
+        game.lightning_column = Some(6); // Lightning blocks the direct path
+
+        let dir = game.calculate_autopilot_move();
+        assert!(
+            dir == Some(crate::snake::Direction::Up) || dir == Some(crate::snake::Direction::Down) || dir == Some(crate::snake::Direction::Left),
+            "Bot should avoid the lightning column. Actual dir: {:?}", dir
+        );
     }
 
     #[test]
