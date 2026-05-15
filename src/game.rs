@@ -3258,6 +3258,7 @@ impl Game {
     }
 
     #[must_use]
+    #[expect(clippy::too_many_lines)]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
