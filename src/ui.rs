@@ -6,8 +6,9 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
+use rand::{Rng, SeedableRng};
 use crate::{
-    game::{Game, GameState},
+    game::{Game, GameState, Weather},
     snake::Direction,
 };
 
@@ -863,6 +864,57 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Weather Effects
+    let mut rng = rand::rngs::StdRng::seed_from_u64(
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "We only need lower bits for a deterministic PRNG seed"
+        )]
+        {
+            web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64
+        },
+    );
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
+    match game.weather {
+        Weather::Rain => {
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            for _ in 0..15 {
+                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "|")?;
+                }
+            }
+        },
+        Weather::Snow => {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            for _ in 0..10 {
+                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "*")?;
+                }
+            }
+        },
+        _ => {}
+    }
+
+    // Draw Lightning Strike
+    if let Some(col) = game.lightning_column {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        for y in margin + 1..game.height.saturating_sub(margin).saturating_sub(1) {
+            if is_visible(col, y) {
+                stdout.queue(cursor::MoveTo(col, y))?;
+                write!(stdout, "|")?;
+            }
+        }
+    }
+
     // Draw lasers
     for laser in &game.lasers {
         if is_visible(laser.position.x, laser.position.y) {
@@ -1149,6 +1201,12 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
+    let weather_str = match game.weather {
+        crate::game::Weather::Clear => "",
+        crate::game::Weather::Rain => " | Weather: Rain",
+        crate::game::Weather::Snow => " | Weather: Snow",
+        crate::game::Weather::Storm => " | Weather: Storm",
+    };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
             format!(" | Combo: {}x", game.combo)
@@ -1157,6 +1215,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
+
+    write!(stdout, "{weather_str}")?;
 
     if let Some(boss) = &game.boss {
         let boss_msg = format!(" | Boss HP: {}/{}", boss.health, boss.max_health);
