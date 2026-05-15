@@ -138,6 +138,8 @@ pub enum GameMode {
     DailyChallenge,
     FogOfWar,
     Evolution,
+    Cityscape,
+    Fractal,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -1216,6 +1218,180 @@ impl Game {
     }
 
     #[must_use]
+    pub fn generate_cityscape_obstacles(
+        width: u16,
+        height: u16,
+        rng: &mut rand::rngs::StdRng,
+    ) -> HashSet<Point> {
+        struct Rect {
+            x: u16,
+            y: u16,
+            w: u16,
+            h: u16,
+        }
+
+        let mut obstacles = HashSet::new();
+
+        let mut blocks = vec![Rect {
+            x: 1,
+            y: 1,
+            w: width.saturating_sub(2),
+            h: height.saturating_sub(2),
+        }];
+
+        let mut i = 0;
+        while i < blocks.len() {
+            let b_x = blocks[i].x;
+            let b_y = blocks[i].y;
+            let b_w = blocks[i].w;
+            let b_h = blocks[i].h;
+
+            if b_w >= 8 && b_h >= 8 && rng.gen_bool(0.75) {
+                let split_horiz = if b_w > b_h * 2 {
+                    false
+                } else if b_h > b_w * 2 {
+                    true
+                } else {
+                    rng.gen_bool(0.5)
+                };
+
+                if split_horiz {
+                    let split_y = rng.gen_range(3..b_h.saturating_sub(3));
+                    blocks.push(Rect {
+                        x: b_x,
+                        y: b_y,
+                        w: b_w,
+                        h: split_y,
+                    });
+                    blocks.push(Rect {
+                        x: b_x,
+                        y: b_y + split_y + 1,
+                        w: b_w,
+                        h: b_h - split_y - 1,
+                    });
+                } else {
+                    let split_x = rng.gen_range(3..b_w.saturating_sub(3));
+                    blocks.push(Rect {
+                        x: b_x,
+                        y: b_y,
+                        w: split_x,
+                        h: b_h,
+                    });
+                    blocks.push(Rect {
+                        x: b_x + split_x + 1,
+                        y: b_y,
+                        w: b_w - split_x - 1,
+                        h: b_h,
+                    });
+                }
+                blocks.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+
+        for b in blocks {
+            for y in b.y..b.y + b.h {
+                for x in b.x..b.x + b.w {
+                    obstacles.insert(Point { x, y });
+                }
+            }
+        }
+
+        // Clear center for spawn
+        let start_x = width / 2;
+        let start_y = height / 2;
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width) && cy > 0 && cy < i32::from(height) {
+                    obstacles.remove(&Point {
+                        x: u16::try_from(cx).unwrap_or(0),
+                        y: u16::try_from(cy).unwrap_or(0),
+                    });
+                }
+            }
+        }
+
+        obstacles
+    }
+
+    #[must_use]
+    pub fn generate_fractal_obstacles(
+        width: u16,
+        height: u16,
+        rng: &mut rand::rngs::StdRng,
+    ) -> HashSet<Point> {
+        let mut grid = vec![vec![false; width as usize]; height as usize];
+
+        // 1. Initialize with random noise
+        let fill_probability = 0.5;
+        for y in 0..height {
+            for x in 0..width {
+                if x == 0 || y == 0 || x == width - 1 || y == height - 1 || rng.gen_bool(fill_probability) {
+                    grid[y as usize][x as usize] = true;
+                }
+            }
+        }
+
+        // 2. Cellular Automata Smoothing Iterations for more fractal-like appearance
+        let iterations = 8;
+        for _ in 0..iterations {
+            let mut next_grid = grid.clone();
+            for y in 1..(height - 1) {
+                for x in 1..(width - 1) {
+                    let mut neighbor_walls = 0;
+                    for dy in -1..=1 {
+                        for dx in -1..=1 {
+                            if dx == 0 && dy == 0 {
+                                continue;
+                            }
+                            let nx = i32::from(x) + dx;
+                            let ny = i32::from(y) + dy;
+                            if grid[usize::try_from(ny).unwrap_or(0)][usize::try_from(nx).unwrap_or(0)] {
+                                neighbor_walls += 1;
+                            }
+                        }
+                    }
+
+                    if grid[y as usize][x as usize] {
+                        next_grid[y as usize][x as usize] = neighbor_walls >= 4;
+                    } else {
+                        next_grid[y as usize][x as usize] = neighbor_walls >= 5;
+                    }
+                }
+            }
+            grid = next_grid;
+        }
+
+        // 3. Clear center for spawn
+        let start_x = width / 2;
+        let start_y = height / 2;
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
+                    grid[usize::try_from(cy).unwrap_or(0)][usize::try_from(cx).unwrap_or(0)] = false;
+                }
+            }
+        }
+
+        // 4. Convert grid to HashSet
+        let mut obstacles = HashSet::new();
+        for y in 1..(height - 1) {
+            for x in 1..(width - 1) {
+                if grid[y as usize][x as usize] {
+                    obstacles.insert(Point { x, y });
+                }
+            }
+        }
+
+        obstacles
+    }
+
+    #[must_use]
     pub fn generate_campaign_obstacles(&self) -> HashSet<Point> {
         let mut obstacles = HashSet::new();
         if self.campaign_level == 1 {
@@ -1340,7 +1516,10 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::Cityscape
+            | GameMode::Fractal => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1387,7 +1566,10 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
+                || self.mode == GameMode::FogOfWar
+                || self.mode == GameMode::Evolution
+                || self.mode == GameMode::Cityscape
+                || self.mode == GameMode::Fractal
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1410,7 +1592,10 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
-            || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
+            || self.mode == GameMode::FogOfWar
+            || self.mode == GameMode::Evolution
+            || self.mode == GameMode::Cityscape
+            || self.mode == GameMode::Fractal
         {
             &self.snake
         } else {
@@ -1459,6 +1644,14 @@ impl Game {
                     }
                 }
             }
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Cityscape {
+            self.obstacles = Self::generate_cityscape_obstacles(self.width, self.height, &mut self.rng);
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Fractal {
+            self.obstacles = Self::generate_fractal_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else {
@@ -1537,7 +1730,10 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::Cityscape
+            | GameMode::Fractal => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3389,6 +3585,62 @@ mod tests {
                     assert!(
                         !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
                         "Center area should be free of obstacles in dungeon mode"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_generate_cityscape_obstacles() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let width = 40;
+        let height = 40;
+        let obstacles = Game::generate_cityscape_obstacles(width, height, &mut rng);
+
+        // Ensure generation creates at least some obstacles (buildings)
+        assert!(!obstacles.is_empty(), "Cityscape generation should create obstacles");
+
+        // Center should be free
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = start_x as i32 + dx;
+                let cy = start_y as i32 + dy;
+                if cx > 0 && cx < width as i32 && cy > 0 && cy < height as i32 {
+                    assert!(
+                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        "Center area should be free of obstacles"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_generate_fractal_obstacles() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let width = 20;
+        let height = 20;
+        let obstacles = Game::generate_fractal_obstacles(width, height, &mut rng);
+
+        // Ensure generation creates at least some obstacles
+        assert!(!obstacles.is_empty(), "Fractal generation should create obstacles");
+
+        // Center should be free
+        let start_x = width / 2;
+        let start_y = height / 2;
+
+        for dy in -3..=3 {
+            for dx in -3..=3 {
+                let cx = start_x as i32 + dx;
+                let cy = start_y as i32 + dy;
+                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                    assert!(
+                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        "Center area should be free of obstacles"
                     );
                 }
             }
