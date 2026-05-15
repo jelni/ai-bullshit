@@ -55,7 +55,7 @@ pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::
     Ok(())
 }
 
-fn get_elo_rank(elo: u32) -> &'static str {
+const fn get_elo_rank(elo: u32) -> &'static str {
     if elo < 1200 {
         "Bronze"
     } else if elo < 1400 {
