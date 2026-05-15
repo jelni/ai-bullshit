@@ -138,6 +138,7 @@ pub enum GameMode {
     DailyChallenge,
     FogOfWar,
     Evolution,
+    BossRush,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -164,6 +165,7 @@ pub enum Achievement {
     HighScorer,
     Rich,
     BotUser,
+    BossSlayer,
 }
 
 #[must_use]
@@ -1324,7 +1326,7 @@ impl Game {
         let start_x = self.width / 2;
         let start_y = self.height / 2;
 
-        if self.mode == GameMode::Campaign {
+        if self.mode == GameMode::Campaign || self.mode == GameMode::BossRush {
             self.campaign_level = 1;
         }
 
@@ -1340,7 +1342,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1387,7 +1389,7 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
+                || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution || self.mode == GameMode::BossRush
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1410,7 +1412,7 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
-            || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution
+            || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution || self.mode == GameMode::BossRush
         {
             &self.snake
         } else {
@@ -1537,7 +1539,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution => {
+            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1912,7 +1914,13 @@ impl Game {
         self.save_history_state();
 
         // Boss Logic
-        if self.boss.is_none() && (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge) && self.rng.gen_bool(0.005) {
+        let should_spawn_boss = if self.mode == GameMode::BossRush {
+            true
+        } else {
+            (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge) && self.rng.gen_bool(0.005)
+        };
+
+        if self.boss.is_none() && should_spawn_boss {
             let margin = self.safe_zone_margin + 5;
             let avoid =
                 |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
@@ -1924,10 +1932,15 @@ impl Game {
                 &mut self.rng,
                 margin,
             ) {
+                let boss_health = if self.mode == GameMode::BossRush {
+                    10 + self.campaign_level * 5
+                } else {
+                    10
+                };
                 self.boss = Some(Boss {
                     position: pos,
-                    health: 10,
-                    max_health: 10,
+                    health: boss_health,
+                    max_health: boss_health,
                     move_timer: 0,
                     shoot_timer: 0,
                 });
@@ -1942,8 +1955,14 @@ impl Game {
         }
 
         if let Some(mut boss) = self.boss.take() {
+            let move_threshold = if self.mode == GameMode::BossRush {
+                std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+            } else {
+                2
+            };
+
             boss.move_timer += 1;
-            if boss.move_timer >= 2 {
+            if boss.move_timer >= move_threshold {
                 boss.move_timer = 0;
                 let head = self.snake.head();
 
@@ -1965,8 +1984,14 @@ impl Game {
                 }
             }
 
+            let shoot_threshold = if self.mode == GameMode::BossRush {
+                std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+            } else {
+                15
+            };
+
             boss.shoot_timer += 1;
-            if boss.shoot_timer >= 15 {
+            if boss.shoot_timer >= shoot_threshold {
                 boss.shoot_timer = 0;
                 let head = self.snake.head();
                 let dx = i32::from(head.x) - i32::from(boss.position.x);
@@ -2131,7 +2156,12 @@ impl Game {
                     boss.health = boss.health.saturating_sub(1);
                     destroyed = true;
                     if boss.health == 0 {
-                        self.score += 100;
+                        if self.mode == GameMode::BossRush {
+                            self.score += 1000 * self.campaign_level;
+                            self.campaign_level += 1;
+                        } else {
+                            self.score += 100;
+                        }
                         self.spawn_particles(
                             f32::from(laser.position.x),
                             f32::from(laser.position.y),
@@ -2418,6 +2448,7 @@ impl Game {
                 || self.mode == GameMode::Speedrun
                 || self.mode == GameMode::Survival
                 || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::BossRush
             {
                 self.handle_death("You Died!");
             } else {
@@ -2786,6 +2817,12 @@ impl Game {
             && self.used_bot_this_session
         {
             new_achievements.push(Achievement::BotUser);
+        }
+        if !self.stats.unlocked_achievements.contains(&Achievement::BossSlayer)
+            && self.mode == GameMode::BossRush
+            && self.campaign_level > 5
+        {
+            new_achievements.push(Achievement::BossSlayer);
         }
 
         if !new_achievements.is_empty() {

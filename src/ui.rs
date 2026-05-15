@@ -83,6 +83,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Speedrun Mode",
         "Fog Of War Mode",
         "Evolution Mode",
+        "Boss Rush Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1082,6 +1083,18 @@ fn draw_base_status<W: Write>(game: &Game, stdout: &mut W, bot_str: &str, combo_
             game.lives,
             elapsed,
             game.food_eaten_session,
+            game.difficulty,
+            bot_str,
+            combo_str
+        )?;
+    } else if game.mode == crate::game::GameMode::BossRush {
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | Boss Lvl: {} | {:?}{}{}",
+            game.score,
+            game.high_score,
+            game.lives,
+            game.campaign_level,
             game.difficulty,
             bot_str,
             combo_str
