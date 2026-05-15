@@ -3342,39 +3342,61 @@ impl Game {
             if steps == 1 {
                 if checking_player == 1 {
                     if let Some(p2) = &self.player2 {
-                        let mut p2_next = p2.head();
-                        match p2.direction {
-                            Direction::Up => p2_next.y = p2_next.y.wrapping_sub(1),
-                            Direction::Down => p2_next.y = p2_next.y.saturating_add(1),
-                            Direction::Left => p2_next.x = p2_next.x.wrapping_sub(1),
-                            Direction::Right => p2_next.x = p2_next.x.saturating_add(1),
-                        }
-                        if self.wrap_mode {
-                            if p2_next.x == u16::MAX { p2_next.x = self.width - 1; }
-                            if p2_next.y == u16::MAX { p2_next.y = self.height - 1; }
-                            if p2_next.x >= self.width { p2_next.x = 0; }
-                            if p2_next.y >= self.height { p2_next.y = 0; }
-                        }
-                        if final_p == p2_next {
-                            return false;
+                        let p2_head = p2.head();
+                        for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                            let opposite = match p2.direction {
+                                Direction::Up => Direction::Down,
+                                Direction::Down => Direction::Up,
+                                Direction::Left => Direction::Right,
+                                Direction::Right => Direction::Left,
+                            };
+                            if dir != opposite {
+                                let mut p2_next = p2_head;
+                                match dir {
+                                    Direction::Up => p2_next.y = p2_next.y.wrapping_sub(1),
+                                    Direction::Down => p2_next.y = p2_next.y.saturating_add(1),
+                                    Direction::Left => p2_next.x = p2_next.x.wrapping_sub(1),
+                                    Direction::Right => p2_next.x = p2_next.x.saturating_add(1),
+                                }
+                                if self.wrap_mode {
+                                    if p2_next.x == u16::MAX { p2_next.x = self.width - 1; }
+                                    if p2_next.y == u16::MAX { p2_next.y = self.height - 1; }
+                                    if p2_next.x >= self.width { p2_next.x = 0; }
+                                    if p2_next.y >= self.height { p2_next.y = 0; }
+                                }
+                                if final_p == p2_next {
+                                    return false;
+                                }
+                            }
                         }
                     }
                 } else if checking_player == 2 {
-                    let mut p1_next = self.snake.head();
-                    match self.snake.direction {
-                        Direction::Up => p1_next.y = p1_next.y.wrapping_sub(1),
-                        Direction::Down => p1_next.y = p1_next.y.saturating_add(1),
-                        Direction::Left => p1_next.x = p1_next.x.wrapping_sub(1),
-                        Direction::Right => p1_next.x = p1_next.x.saturating_add(1),
-                    }
-                    if self.wrap_mode {
-                        if p1_next.x == u16::MAX { p1_next.x = self.width - 1; }
-                        if p1_next.y == u16::MAX { p1_next.y = self.height - 1; }
-                        if p1_next.x >= self.width { p1_next.x = 0; }
-                        if p1_next.y >= self.height { p1_next.y = 0; }
-                    }
-                    if final_p == p1_next {
-                        return false;
+                    let p1_head = self.snake.head();
+                    for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                        let opposite = match self.snake.direction {
+                            Direction::Up => Direction::Down,
+                            Direction::Down => Direction::Up,
+                            Direction::Left => Direction::Right,
+                            Direction::Right => Direction::Left,
+                        };
+                        if dir != opposite {
+                            let mut p1_next = p1_head;
+                            match dir {
+                                Direction::Up => p1_next.y = p1_next.y.wrapping_sub(1),
+                                Direction::Down => p1_next.y = p1_next.y.saturating_add(1),
+                                Direction::Left => p1_next.x = p1_next.x.wrapping_sub(1),
+                                Direction::Right => p1_next.x = p1_next.x.saturating_add(1),
+                            }
+                            if self.wrap_mode {
+                                if p1_next.x == u16::MAX { p1_next.x = self.width - 1; }
+                                if p1_next.y == u16::MAX { p1_next.y = self.height - 1; }
+                                if p1_next.x >= self.width { p1_next.x = 0; }
+                                if p1_next.y >= self.height { p1_next.y = 0; }
+                            }
+                            if final_p == p1_next {
+                                return false;
+                            }
+                        }
                     }
                 }
             }
