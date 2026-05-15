@@ -307,6 +307,10 @@ pub fn default_unlocked_themes() -> Vec<Theme> {
     ]
 }
 
+pub const fn default_elo() -> u32 {
+    1000
+}
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -329,6 +333,10 @@ pub struct Statistics {
     pub upgrade_laser_capacity: u8,
     #[serde(default)]
     pub upgrade_coin_multiplier: u8,
+    #[serde(default = "default_elo")]
+    pub player_elo: u32,
+    #[serde(default = "default_elo")]
+    pub bot_elo: u32,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -598,6 +606,33 @@ impl Game {
 
     pub fn save_stats(&self) {
         self.save_stats_to_file("stats.json");
+    }
+
+    pub fn update_elo(&mut self, player_won: bool, draw: bool) {
+        let p_elo = f64::from(self.stats.player_elo);
+        let b_elo = f64::from(self.stats.bot_elo);
+
+        let expected_p = 1.0 / (1.0 + 10.0_f64.powf((b_elo - p_elo) / 400.0));
+        let expected_b = 1.0 / (1.0 + 10.0_f64.powf((p_elo - b_elo) / 400.0));
+
+        let (score_p, score_b) = if draw {
+            (0.5, 0.5)
+        } else if player_won {
+            (1.0, 0.0)
+        } else {
+            (0.0, 1.0)
+        };
+
+        let k = 32.0;
+
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let new_p_elo = (p_elo + k * (score_p - expected_p)).max(0.0).round() as u32;
+
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let new_b_elo = (b_elo + k * (score_b - expected_b)).max(0.0).round() as u32;
+
+        self.stats.player_elo = new_p_elo;
+        self.stats.bot_elo = new_b_elo;
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -2570,6 +2605,10 @@ impl Game {
 
         // Process deaths
         if p1_dead && p2_dead {
+            if self.mode == GameMode::PlayerVsBot {
+                self.update_elo(false, true);
+                self.save_stats();
+            }
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
@@ -2582,10 +2621,18 @@ impl Game {
             {
                 self.handle_death("You Died!");
             } else {
+                if self.mode == GameMode::PlayerVsBot {
+                    self.update_elo(false, false);
+                    self.save_stats();
+                }
                 self.handle_death("Player 2 Wins!");
             }
             return;
         } else if p2_dead {
+            if self.mode == GameMode::PlayerVsBot {
+                self.update_elo(true, false);
+                self.save_stats();
+            }
             self.handle_death("Player 1 Wins!");
             return;
         }
@@ -4218,6 +4265,39 @@ mod tests {
         // Since the direct path (Right) is blocked by the laser, it should choose Up or Down.
         let next_move = game.calculate_autopilot_move();
         assert!(next_move == Some(crate::snake::Direction::Up) || next_move == Some(crate::snake::Direction::Down));
+    }
+
+    #[test]
+    fn test_elo_calculation() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.stats.player_elo = 1000;
+        game.stats.bot_elo = 1000;
+
+        // Draw
+        game.update_elo(false, true);
+        assert_eq!(game.stats.player_elo, 1000);
+        assert_eq!(game.stats.bot_elo, 1000);
+
+        // Player wins
+        game.update_elo(true, false);
+        assert!(game.stats.player_elo > 1000);
+        assert!(game.stats.bot_elo < 1000);
+
+        let p_elo_after_win = game.stats.player_elo;
+        let b_elo_after_loss = game.stats.bot_elo;
+
+        // Player loses
+        game.update_elo(false, false);
+        // Player should lose more points than they gained because their ELO was higher than the bot's
+        assert!(game.stats.player_elo < p_elo_after_win);
+        assert!(game.stats.bot_elo > b_elo_after_loss);
     }
 
     #[test]

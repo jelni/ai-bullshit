@@ -55,6 +55,22 @@ pub fn draw_countdown<W: Write>(game: &Game, stdout: &mut W, count: u32) -> io::
     Ok(())
 }
 
+fn get_elo_rank(elo: u32) -> &'static str {
+    if elo < 1200 {
+        "Bronze"
+    } else if elo < 1400 {
+        "Silver"
+    } else if elo < 1600 {
+        "Gold"
+    } else if elo < 1800 {
+        "Platinum"
+    } else if elo < 2000 {
+        "Diamond"
+    } else {
+        "Grandmaster"
+    }
+}
+
 fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "SNAKE GAME";
 
@@ -64,6 +80,14 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height / 2 - 5,
     ))?;
     write!(stdout, "{title}")?;
+
+    let rank_str = format!("Rank: {} ({})", get_elo_rank(game.stats.player_elo), game.stats.player_elo);
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(rank_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{rank_str}")?;
 
     let menu_items = [
         "Single Player",
@@ -190,6 +214,8 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         format!("Total Score: {}", game.stats.total_score),
         format!("Total Food Eaten: {}", game.stats.total_food_eaten),
         format!("Total Time (s): {}", game.stats.total_time_s),
+        format!("Competitive Rank: {} ({})", get_elo_rank(game.stats.player_elo), game.stats.player_elo),
+        format!("Bot ELO: {}", game.stats.bot_elo),
     ];
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
