@@ -32,7 +32,10 @@ As an AI agent working on this codebase, you must adhere to the following princi
 - You should proactively refactor code to make it more testable if you discover it to be difficult to test. Refactoring should happen with passing tests whenever possible to avoid regressions.
 - Ensure that randomness is manageable and testable by using `rand::rngs::StdRng` instead of `rand::rngs::ThreadRng` throughout the codebase, enabling reproducible tests and deterministic game modes like the Daily Challenge.
 
-## 9. Avoid Assuming Line Numbers
+## 9. Entity Avoidance
+- Ensure that any updates to pathfinding logic or bot maneuvering also consider dynamic entities like Bosses and Lasers, treating them as obstacles that the AI must actively avoid.
+
+## 10. Avoid Assuming Line Numbers
 - When creating an execution plan, do not assume line numbers for structs, methods, or implementations unless you have explicitly verified them using `grep` or by fully reading the source files. Always gather concrete evidence before committing to code modifications.
 
 ## Remember

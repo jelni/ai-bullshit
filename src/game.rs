@@ -3228,6 +3228,12 @@ impl Game {
             if self.obstacles.contains(&final_p) {
                 return false;
             }
+            if self.boss.as_ref().is_some_and(|b| b.position == final_p) {
+                return false;
+            }
+            if self.lasers.iter().any(|l| l.position == final_p) {
+                return false;
+            }
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
                 let steps_to_clear =
                     u16::try_from(self.snake.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
@@ -4076,6 +4082,61 @@ mod tests {
         }
 
         assert!(struck, "Lightning should strike during a storm");
+    }
+
+    #[test]
+    fn test_calculate_autopilot_avoids_boss() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
+        game.snake.direction = crate::snake::Direction::Right;
+        game.food = crate::snake::Point { x: 9, y: 5 };
+
+        // Placing boss right in front of the snake
+        game.boss = Some(Boss {
+            position: crate::snake::Point { x: 6, y: 5 },
+            health: 10,
+            max_health: 10,
+            move_timer: 0,
+            shoot_timer: 0,
+        });
+
+        // Since the direct path (Right) is blocked by the boss, it should choose Up or Down.
+        // Assuming no obstacles, it should not be Right.
+        let next_move = game.calculate_autopilot_move();
+        assert!(next_move == Some(crate::snake::Direction::Up) || next_move == Some(crate::snake::Direction::Down));
+    }
+
+    #[test]
+    fn test_calculate_autopilot_avoids_laser() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
+        game.snake.direction = crate::snake::Direction::Right;
+        game.food = crate::snake::Point { x: 9, y: 5 };
+
+        // Placing laser right in front of the snake
+        game.lasers.push(Laser {
+            position: crate::snake::Point { x: 6, y: 5 },
+            direction: crate::snake::Direction::Left,
+            player: 0,
+        });
+
+        // Since the direct path (Right) is blocked by the laser, it should choose Up or Down.
+        let next_move = game.calculate_autopilot_move();
+        assert!(next_move == Some(crate::snake::Direction::Up) || next_move == Some(crate::snake::Direction::Down));
     }
 
     #[test]
