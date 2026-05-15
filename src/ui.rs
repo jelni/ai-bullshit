@@ -1086,6 +1086,18 @@ fn draw_base_status<W: Write>(game: &Game, stdout: &mut W, bot_str: &str, combo_
             bot_str,
             combo_str
         )?;
+    } else if game.mode == crate::game::GameMode::Tournament {
+        write!(
+            stdout,
+            "Score: {} | High: {} | Lives: {} | Tourney Rnd: {} | {:?}{}{}",
+            game.score,
+            game.high_score,
+            game.lives,
+            game.tournament_round,
+            game.difficulty,
+            bot_str,
+            combo_str
+        )?;
     } else {
         let level = game.score / 20 + 1;
         write!(

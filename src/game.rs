@@ -204,6 +204,7 @@ pub struct HistoryState {
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
     pub portals: Option<(Point, Point)>,
+    pub tournament_round: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -250,6 +251,12 @@ pub struct SaveState {
     pub boss: Option<Boss>,
     #[serde(default)]
     pub portals: Option<(Point, Point)>,
+    #[serde(default = "default_tournament_round")]
+    pub tournament_round: u32,
+}
+
+const fn default_tournament_round() -> u32 {
+    1
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -393,6 +400,7 @@ pub struct Game {
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
     pub portals: Option<(Point, Point)>,
+    pub tournament_round: u32,
 }
 
 impl Game {
@@ -497,6 +505,7 @@ impl Game {
             lasers: Vec::new(),
             boss: None,
             portals: None,
+            tournament_round: 1,
         }
     }
 
@@ -679,6 +688,7 @@ impl Game {
             lasers: self.lasers.clone(),
             boss: self.boss,
             portals: self.portals,
+            tournament_round: self.tournament_round,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -760,6 +770,7 @@ impl Game {
                 self.lasers = state.lasers;
                 self.boss = state.boss;
                 self.portals = state.portals;
+                self.tournament_round = state.tournament_round;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -1786,6 +1797,7 @@ impl Game {
             self.lasers = state.lasers;
             self.boss = state.boss;
             self.portals = state.portals;
+            self.tournament_round = state.tournament_round;
         }
     }
 
@@ -1809,6 +1821,7 @@ impl Game {
             lasers: self.lasers.clone(),
             boss: self.boss,
             portals: self.portals,
+            tournament_round: self.tournament_round,
         };
 
         self.history.push_back(state);
@@ -1906,6 +1919,16 @@ impl Game {
     )]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
+            return;
+        }
+
+        if self.mode == GameMode::OnlineMultiplayer {
+            self.handle_death("Not yet implemented");
+            return;
+        }
+
+        if self.mode == GameMode::Tournament && self.food_eaten_session >= 10 {
+            self.handle_win();
             return;
         }
 
@@ -2795,6 +2818,21 @@ impl Game {
     }
 
     fn handle_win(&mut self) {
+        if self.mode == GameMode::Tournament {
+            self.tournament_round += 1;
+            self.food_eaten_session = 0;
+            self.obstacles = self.generate_campaign_obstacles();
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+            // Just return without GameWon if we want to immediately play the next round,
+            // or we could show a round complete screen. Let's just continue playing!
+            // Update difficulty modifier based on round?
+            if self.tournament_round > 10 {
+                // Real win after 10 rounds
+            } else {
+                return;
+            }
+        }
         self.stats.games_played += 1;
         self.stats.total_time_s += self.start_time.elapsed().as_secs();
         self.save_stats();
@@ -3329,7 +3367,14 @@ impl Game {
             'X',
         );
 
-        self.lives -= 1;
+        if self.mode == GameMode::Tournament {
+            self.lives = 0; // Immediate game over in Tournament
+            self.death_message = format!("Round {}: {}", self.tournament_round, cause);
+        } else {
+            self.lives -= 1;
+            self.death_message = cause.to_string();
+        }
+
         self.just_died = true;
         beep();
 
@@ -3340,7 +3385,6 @@ impl Game {
             self.save_stats();
             self.check_achievements();
 
-            self.death_message = cause.to_string();
             let is_high_score = self.high_scores.len() < 5
                 || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
             if is_high_score && self.score > 0 {
@@ -3768,6 +3812,30 @@ mod tests {
         }
 
         assert!(reached, "Following BFS should reach target");
+    }
+
+    #[test]
+    fn test_tournament_progression() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.mode = GameMode::Tournament;
+        game.reset();
+
+        assert_eq!(game.tournament_round, 1);
+        game.food_eaten_session = 10;
+
+        // Simulating the condition inside update() logic
+        game.update();
+
+        // Ensure it progressed
+        assert_eq!(game.tournament_round, 2);
+        assert_eq!(game.food_eaten_session, 0);
     }
 
     #[test]
