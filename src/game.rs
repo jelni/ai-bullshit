@@ -630,10 +630,10 @@ impl Game {
         let new_p_elo = (p_elo + k * (score_p - expected_p)).max(0.0).round() as u32;
 
         #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let new_b_elo = (b_elo + k * (score_b - expected_b)).max(0.0).round() as u32;
+        let new_bot_elo = (b_elo + k * (score_b - expected_b)).max(0.0).round() as u32;
 
         self.stats.player_elo = new_p_elo;
-        self.stats.bot_elo = new_b_elo;
+        self.stats.bot_elo = new_bot_elo;
     }
 
     #[cfg(target_arch = "wasm32")]
