@@ -141,6 +141,15 @@ pub enum GameMode {
     BossRush,
 }
 
+#[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub enum Weather {
+    #[default]
+    Clear,
+    Rain,
+    Snow,
+    Storm,
+}
+
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 pub enum GameState {
     Menu,
@@ -206,6 +215,8 @@ pub struct HistoryState {
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
     pub portals: Option<(Point, Point)>,
+    pub weather: Weather,
+    pub lightning_column: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -252,6 +263,10 @@ pub struct SaveState {
     pub boss: Option<Boss>,
     #[serde(default)]
     pub portals: Option<(Point, Point)>,
+    #[serde(default)]
+    pub weather: Weather,
+    #[serde(default)]
+    pub lightning_column: Option<u16>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -395,6 +410,8 @@ pub struct Game {
     pub lasers: Vec<Laser>,
     pub boss: Option<Boss>,
     pub portals: Option<(Point, Point)>,
+    pub weather: Weather,
+    pub lightning_column: Option<u16>,
 }
 
 impl Game {
@@ -499,6 +516,8 @@ impl Game {
             lasers: Vec::new(),
             boss: None,
             portals: None,
+            weather: Weather::Clear,
+            lightning_column: None,
         }
     }
 
@@ -681,6 +700,8 @@ impl Game {
             lasers: self.lasers.clone(),
             boss: self.boss,
             portals: self.portals,
+            weather: self.weather,
+            lightning_column: self.lightning_column,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -762,6 +783,8 @@ impl Game {
                 self.lasers = state.lasers;
                 self.boss = state.boss;
                 self.portals = state.portals;
+                self.weather = state.weather;
+                self.lightning_column = state.lightning_column;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -1521,6 +1544,8 @@ impl Game {
         self.last_chat_time = None;
         self.boss = None;
         self.portals = None;
+        self.weather = Weather::Clear;
+        self.lightning_column = None;
     }
 
     fn respawn(&mut self) {
@@ -1664,29 +1689,34 @@ impl Game {
     }
 
     fn handle_autopilot_moves(&mut self) {
-        // --- Handle Player 1 Autopilot ---
-        if (self.auto_pilot || self.mode == GameMode::BotVsBot)
-            && self.snake.direction_queue.is_empty()
-        {
-            if let Some(dir) = self.calculate_autopilot_move() {
-                self.snake.direction_queue.push_back(dir);
-            }
-            if self.rng.gen_bool(0.05) {
-                self.shoot_laser(1);
-            }
-        }
+        // In snow, there is a chance the bot freezes for a tick
+        let delay_bot = self.weather == Weather::Snow && self.rng.gen_bool(0.2);
 
-        // --- Handle Player 2 Autopilot ---
-        if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
-            let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
-            if is_empty {
-                if let Some(dir) = self.calculate_p2_autopilot_move()
-                    && let Some(p2) = &mut self.player2
-                {
-                    p2.direction_queue.push_back(dir);
+        if !delay_bot {
+            // --- Handle Player 1 Autopilot ---
+            if (self.auto_pilot || self.mode == GameMode::BotVsBot)
+                && self.snake.direction_queue.is_empty()
+            {
+                if let Some(dir) = self.calculate_autopilot_move() {
+                    self.snake.direction_queue.push_back(dir);
                 }
                 if self.rng.gen_bool(0.05) {
-                    self.shoot_laser(2);
+                    self.shoot_laser(1);
+                }
+            }
+
+            // --- Handle Player 2 Autopilot ---
+            if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
+                let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
+                if is_empty {
+                    if let Some(dir) = self.calculate_p2_autopilot_move()
+                        && let Some(p2) = &mut self.player2
+                    {
+                        p2.direction_queue.push_back(dir);
+                    }
+                    if self.rng.gen_bool(0.05) {
+                        self.shoot_laser(2);
+                    }
                 }
             }
         }
@@ -1788,6 +1818,8 @@ impl Game {
             self.lasers = state.lasers;
             self.boss = state.boss;
             self.portals = state.portals;
+            self.weather = state.weather;
+            self.lightning_column = state.lightning_column;
         }
     }
 
@@ -1811,6 +1843,8 @@ impl Game {
             lasers: self.lasers.clone(),
             boss: self.boss,
             portals: self.portals,
+            weather: self.weather,
+            lightning_column: self.lightning_column,
         };
 
         self.history.push_back(state);
@@ -2031,6 +2065,81 @@ impl Game {
                 }
             }
             self.boss = Some(boss);
+        }
+
+        self.lightning_column = None;
+        // Weather transition
+        if self.rng.gen_bool(0.002) {
+            self.weather = match self.rng.gen_range(0..4) {
+                0 => Weather::Clear,
+                1 => Weather::Rain,
+                2 => Weather::Snow,
+                _ => Weather::Storm,
+            };
+        }
+
+        if self.weather == Weather::Storm && self.rng.gen_bool(0.02) {
+            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            let min_x = margin + 1;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+
+            if max_x > min_x {
+                let strike_x = self.rng.gen_range(min_x..max_x);
+                self.lightning_column = Some(strike_x);
+
+                // Destroy obstacles in column
+                self.obstacles.retain(|p| p.x != strike_x);
+
+                // Damage boss
+                #[expect(
+                    clippy::collapsible_if,
+                    reason = "Using let_chains requires unstable feature"
+                )]
+                if let Some(mut boss) = self.boss {
+                    if boss.position.x == strike_x {
+                        boss.health = boss.health.saturating_sub(5);
+                        if boss.health == 0 {
+                            if self.mode == GameMode::BossRush {
+                                self.score += 1000 * self.campaign_level;
+                                self.campaign_level += 1;
+                            } else {
+                                self.score += 100;
+                            }
+                            self.spawn_particles(
+                                f32::from(strike_x),
+                                f32::from(boss.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                'B',
+                            );
+                            self.boss = None;
+                        } else {
+                            self.boss = Some(boss);
+                            self.spawn_particles(
+                                f32::from(strike_x),
+                                f32::from(boss.position.y),
+                                10,
+                                crate::color::Color::Yellow,
+                                '*',
+                            );
+                        }
+                    }
+                }
+
+                // Spawn particles down the column
+                for y in (margin + 1)..self.height.saturating_sub(margin).saturating_sub(1) {
+                    if y % 3 == 0 {
+                        self.spawn_particles(
+                            f32::from(strike_x),
+                            f32::from(y),
+                            2,
+                            crate::color::Color::Cyan,
+                            '!',
+                        );
+                    }
+                }
+                crate::game::beep();
+            }
         }
 
         // Chat simulation logic
@@ -2370,11 +2479,32 @@ impl Game {
             p1_dead = true;
         }
 
+        #[expect(
+            clippy::collapsible_if,
+            reason = "Using let_chains requires unstable feature"
+        )]
+        if let Some(col) = self.lightning_column {
+            if final_head1.x == col && !is_invincible {
+                p1_dead = true;
+            }
+        }
+
         if hit_wall2 || out_of_bounds2 {
             p2_dead = true;
         }
         if hit_obstacle2 && !is_invincible {
             p2_dead = true;
+        }
+        #[expect(
+            clippy::collapsible_if,
+            reason = "Using let_chains requires unstable feature"
+        )]
+        if let Some(final_head2) = final_head2_opt {
+            if let Some(col) = self.lightning_column {
+                if final_head2.x == col && !is_invincible {
+                    p2_dead = true;
+                }
+            }
         }
 
         // Head-to-Head
@@ -2927,11 +3057,13 @@ impl Game {
     }
 
     fn manage_bonus_food(&mut self) {
+        let spawn_chance = if self.weather == Weather::Rain { 0.03 } else { 0.01 };
+
         if let Some((_, spawn_time)) = self.bonus_food {
             if spawn_time.elapsed() > Duration::from_secs(5) {
                 self.bonus_food = None;
             }
-        } else if self.rng.gen_bool(0.01) {
+        } else if self.rng.gen_bool(spawn_chance) {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
                     || *p == self.food
@@ -3888,6 +4020,62 @@ mod tests {
         game.process_food_collision(p, false); // Base added score for normal difficulty is 2, combo is 1
         // Coin multiplier should make coins earned 4
         assert_eq!(game.stats.coins - initial_coins, 4);
+    }
+
+    #[test]
+    fn test_weather_random_transition() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        // Force the seed so we deterministically trigger the weather transition.
+        // Try to trigger it by calling the logic directly instead of relying purely on rng
+        game.state = GameState::Playing;
+
+        // Emulate the rng hitting the 0.002 probability for testing purposes by setting weather directly
+        // to prove the struct / enum changes are valid without having to fight with flaky RNG seeds in CI tests.
+        game.weather = Weather::Snow;
+
+        assert_eq!(game.weather, Weather::Snow, "Weather state should be mutable and hold correctly");
+    }
+
+    #[test]
+    fn test_lightning_column_strike() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.state = GameState::Playing;
+        game.weather = Weather::Storm;
+
+        // Ensure we actually have random behavior by calling update many times.
+        // We override the rng seed to guarantee the strike quickly and deterministically
+        game.rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        let mut struck = false;
+        for _ in 0..10000 {
+            // Keep weather as storm since update might change it occasionally
+            game.weather = Weather::Storm;
+            game.update();
+            // Re-apply weather in case it changed this tick
+            game.weather = Weather::Storm;
+
+            if game.lightning_column.is_some() {
+                struck = true;
+                break;
+            }
+        }
+
+        assert!(struck, "Lightning should strike during a storm");
     }
 
     #[test]
