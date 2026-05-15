@@ -3228,12 +3228,51 @@ impl Game {
             if self.obstacles.contains(&final_p) {
                 return false;
             }
-            if self.boss.as_ref().is_some_and(|b| b.position == final_p) {
-                return false;
+            if let Some(boss) = &self.boss {
+                let move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                    std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                } else {
+                    2
+                });
+
+                let moves = (u32::from(steps) + u32::from(boss.move_timer)) / move_threshold;
+                let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                if dist <= moves {
+                    return false;
+                }
+
+                let shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
+                    std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+                } else {
+                    15
+                });
+
+                let shoots = (u32::from(steps) + u32::from(boss.shoot_timer)) / shoot_threshold;
+                if shoots > 0
+                    && (final_p.x == boss.position.x || final_p.y == boss.position.y) {
+                        return false;
+                    }
             }
-            if self.lasers.iter().any(|l| l.position == final_p) {
-                return false;
+
+            for l in &self.lasers {
+                let dx = i32::from(final_p.x) - i32::from(l.position.x);
+                let dy = i32::from(final_p.y) - i32::from(l.position.y);
+                let on_ray = match l.direction {
+                    Direction::Up => dx == 0 && dy <= 0,
+                    Direction::Down => dx == 0 && dy >= 0,
+                    Direction::Left => dy == 0 && dx <= 0,
+                    Direction::Right => dy == 0 && dx >= 0,
+                };
+                if on_ray {
+                    let d = u16::try_from(dx.abs().max(dy.abs())).unwrap_or(0);
+                    let step_dist = u32::from(steps) * 2;
+                    if step_dist.abs_diff(u32::from(d)) <= 2 {
+                        return false;
+                    }
+                }
             }
+
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
                 let steps_to_clear =
                     u16::try_from(self.snake.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
