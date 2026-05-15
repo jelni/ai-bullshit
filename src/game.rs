@@ -3277,6 +3277,30 @@ impl Game {
             if self.obstacles.contains(&final_p) {
                 return false;
             }
+
+            // Predictive Opponent Avoidance
+            if steps == 1 {
+                let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+                if checking_player == 1 {
+                    if let Some(p2) = &self.player2 {
+                        for &d in &dirs {
+                            let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
+                            if let Some(final_p2_next) = self.get_final_p(p2_next_head)
+                                && final_p == final_p2_next {
+                                    return false;
+                                }
+                        }
+                    }
+                } else if checking_player == 2 {
+                    for &d in &dirs {
+                        let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
+                        if let Some(final_p1_next) = self.get_final_p(p1_next_head)
+                            && final_p == final_p1_next {
+                                return false;
+                            }
+                    }
+                }
+            }
             if let Some(boss) = &self.boss {
                 let move_threshold = u32::from(if self.mode == GameMode::BossRush {
                     std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
