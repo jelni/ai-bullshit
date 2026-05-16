@@ -47,6 +47,19 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw poison food
+    if let Some((poison_p, _)) = game.poison_food {
+        ctx.set_fill_style_str("#800080"); // DarkMagenta
+        if poison_p.x < game.width && poison_p.y < game.height {
+            ctx.fill_rect(
+                f64::from(poison_p.x) * cell_size,
+                f64::from(poison_p.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
         if p1.x < game.width && p1.y < game.height {

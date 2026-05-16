@@ -1028,6 +1028,14 @@ fn draw_entities<W: Write>(
             write!(stdout, "★")?;
         }
 
+    // Draw poison food
+    if let Some((poison_p, _)) = game.poison_food
+        && is_visible(poison_p.x, poison_p.y) {
+            stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+            write!(stdout, "X")?;
+        }
+
     if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
         && is_visible(power_up.location.x, power_up.location.y)
