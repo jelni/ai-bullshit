@@ -3455,6 +3455,12 @@ impl Game {
                 return false;
             }
 
+            if let Some(col) = self.lightning_column {
+                if final_p.x == col {
+                    return false;
+                }
+            }
+
             // Predictive Opponent Avoidance
             if steps == 1 {
                 let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
