@@ -2964,10 +2964,10 @@ impl Game {
 
             if player == 1 {
                 self.snake.shrink_tail();
-            } else if player == 2 {
-                if let Some(p2) = &mut self.player2 {
-                    p2.shrink_tail();
-                }
+            } else if player == 2
+                && let Some(p2) = &mut self.player2
+            {
+                p2.shrink_tail();
             }
 
             self.poison_food = None;
@@ -3455,10 +3455,10 @@ impl Game {
                 return false;
             }
 
-            if let Some(col) = self.lightning_column {
-                if final_p.x == col {
-                    return false;
-                }
+            if let Some(col) = self.lightning_column
+                && final_p.x == col
+            {
+                return false;
             }
 
             // Predictive Opponent Avoidance

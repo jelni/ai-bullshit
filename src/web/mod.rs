@@ -7,6 +7,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
+#[expect(clippy::missing_panics_doc, clippy::missing_errors_doc)]
 pub fn run() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
