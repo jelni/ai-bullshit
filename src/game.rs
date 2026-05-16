@@ -140,6 +140,7 @@ pub enum GameMode {
     FogOfWar,
     Evolution,
     BossRush,
+    MassiveMultiplayer,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -1453,7 +1454,10 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::BossRush
+            | GameMode::MassiveMultiplayer => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1620,8 +1624,6 @@ impl Game {
         self.just_died = false;
         self.start_time = web_time::Instant::now();
         self.food_eaten_session = 0;
-        self.auto_pilot = false;
-        self.used_bot_this_session = false;
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -1630,6 +1632,16 @@ impl Game {
         self.combo = 0;
         self.last_food_time = None;
         self.chat_log.clear();
+
+        if self.mode == GameMode::MassiveMultiplayer {
+            self.auto_pilot = true;
+            self.used_bot_this_session = true;
+            self.chat_log.push_back(("SYSTEM: Simulating 100 bots entering the arena...".to_string(), crate::color::Color::Cyan));
+            self.chat_log.push_back(("SYSTEM: AI-Assisted universe initialized.".to_string(), crate::color::Color::Magenta));
+        } else {
+            self.auto_pilot = false;
+            self.used_bot_this_session = false;
+        }
         self.last_chat_time = None;
         self.boss = None;
         self.portals = None;
@@ -1653,7 +1665,10 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::BossRush
+            | GameMode::MassiveMultiplayer => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3503,9 +3518,10 @@ impl Game {
                     }
 
                     let moves = (u32::from(steps) + u32::from(boss.move_timer)) / move_threshold;
+                    let danger_radius = std::cmp::min(moves, 4);
                     let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
 
-                    if dist <= moves {
+                    if dist <= danger_radius {
                         return false;
                     }
 
