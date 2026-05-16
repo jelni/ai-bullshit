@@ -93,7 +93,7 @@ fn test_boss_death_nova() {
 
     // The laser that hit the boss is destroyed.
     // Death nova spawns 4 new lasers.
-    assert_eq!(game.lasers.len(), 4, "Death nova should spawn 4 lasers");
+    assert_eq!(game.lasers.len(), initial_laser_count + 3, "Death nova should spawn 4 lasers");
 
     // Verify the lasers are positioned around the boss
     let mut dirs = vec![];
