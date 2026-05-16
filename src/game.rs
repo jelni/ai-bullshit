@@ -204,6 +204,7 @@ pub struct HistoryState {
     pub obstacles: HashSet<Point>,
     pub score: u32,
     pub bonus_food: Option<(Point, Instant)>,
+    pub poison_food: Option<(Point, Instant)>,
     pub power_up: Option<PowerUp>,
     pub lives: u32,
     pub food_eaten_session: u32,
@@ -232,6 +233,8 @@ pub struct SaveState {
     pub score: u32,
     #[serde(default)]
     pub bonus_food: Option<(Point, u64)>, // elapsed seconds
+    #[serde(default)]
+    pub poison_food: Option<(Point, u64)>, // elapsed seconds
     #[serde(default)]
     pub power_up: Option<PowerUp>,
     #[serde(default = "default_lives")]
@@ -378,6 +381,7 @@ pub struct Game {
     pub snake: Snake,
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
+    pub poison_food: Option<(Point, Instant)>,
     pub power_up: Option<PowerUp>,
     pub obstacles: HashSet<Point>,
     pub score: u32,
@@ -484,6 +488,7 @@ impl Game {
             snake,
             food,
             bonus_food: None,
+            poison_food: None,
             power_up: None,
             obstacles,
             score: 0,
@@ -721,6 +726,7 @@ impl Game {
             obstacles: self.obstacles.clone(),
             score: self.score,
             bonus_food: self.bonus_food.map(|(p, t)| (p, t.elapsed().as_secs())),
+            poison_food: self.poison_food.map(|(p, t)| (p, t.elapsed().as_secs())),
             power_up: self.power_up.clone(),
             lives: self.lives,
             difficulty: self.difficulty,
@@ -772,6 +778,11 @@ impl Game {
                 {
                     return false;
                 }
+                if let Some((pp, _)) = &state.poison_food
+                    && !valid_point(pp)
+                {
+                    return false;
+                }
                 if let Some(pu) = &state.power_up
                     && !valid_point(&pu.location)
                 {
@@ -796,6 +807,11 @@ impl Game {
                 self.obstacles = state.obstacles;
                 self.score = state.score;
                 self.bonus_food = state.bonus_food.and_then(|(p, elapsed)| {
+                    web_time::Instant::now()
+                        .checked_sub(Duration::from_secs(elapsed))
+                        .map(|t| (p, t))
+                });
+                self.poison_food = state.poison_food.and_then(|(p, elapsed)| {
                     web_time::Instant::now()
                         .checked_sub(Duration::from_secs(elapsed))
                         .map(|t| (p, t))
@@ -1026,6 +1042,13 @@ impl Game {
             self.bonus_food = Some((pos, new_time));
         }
 
+        // Shift poison food spawn time
+        if let Some((pos, spawn_time)) = self.poison_food
+            && let Some(new_time) = spawn_time.checked_add(delta)
+        {
+            self.poison_food = Some((pos, new_time));
+        }
+
         // Shift power up activation time
         if let Some(power_up) = &mut self.power_up
             && let Some(activation_time) = power_up.activation_time
@@ -1194,6 +1217,7 @@ impl Game {
                 || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
                 || *p == self.food
                 || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
                 || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
         };
         next_obstacles.retain(|p| !avoid(p));
@@ -1561,6 +1585,7 @@ impl Game {
         )
         .expect("Board cannot be full on reset");
         self.bonus_food = None;
+        self.poison_food = None;
         self.power_up = None;
         self.score = 0;
         self.lives = 3 + u32::from(self.stats.upgrade_extra_lives);
@@ -1843,6 +1868,7 @@ impl Game {
             self.obstacles = state.obstacles;
             self.score = state.score;
             self.bonus_food = state.bonus_food;
+            self.poison_food = state.poison_food;
             self.power_up = state.power_up;
             self.lives = state.lives;
             self.food_eaten_session = state.food_eaten_session;
@@ -1868,6 +1894,7 @@ impl Game {
             obstacles: self.obstacles.clone(),
             score: self.score,
             bonus_food: self.bonus_food,
+            poison_food: self.poison_food,
             power_up: self.power_up.clone(),
             lives: self.lives,
             food_eaten_session: self.food_eaten_session,
@@ -2643,6 +2670,11 @@ impl Game {
         let mut p2_grow =
             final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier));
 
+        self.check_poison_food_collision(final_head1, 1);
+        if let Some(final_head2) = final_head2_opt {
+            self.check_poison_food_collision(final_head2, 2);
+        }
+
         // Process food collisions (first come first serve, resolving P1 first for simplicity unless we want true tie)
         if final_head1 == self.food {
             p1_grow = true;
@@ -2887,6 +2919,31 @@ impl Game {
             && final_head == p.location
         {
             self.power_up = None;
+        }
+    }
+
+    fn check_poison_food_collision(&mut self, final_head: Point, player: u8) {
+        if self.poison_food.is_some_and(|(poison_p, _)| final_head == poison_p) {
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                15,
+                crate::color::Color::Magenta,
+                'X',
+            );
+
+            self.score = self.score.saturating_sub(10);
+
+            if player == 1 {
+                self.snake.shrink_tail();
+            } else if player == 2 {
+                if let Some(p2) = &mut self.player2 {
+                    p2.shrink_tail();
+                }
+            }
+
+            self.poison_food = None;
+            beep();
         }
     }
 
@@ -3363,6 +3420,10 @@ impl Game {
 
         if !is_invincible {
             if self.obstacles.contains(&final_p) {
+                return false;
+            }
+
+            if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
             }
 
