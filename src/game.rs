@@ -899,6 +899,33 @@ impl Game {
         }
     }
 
+    fn manage_poison_food(&mut self) {
+        let spawn_chance = 0.015;
+
+        if let Some((_, spawn_time)) = self.poison_food {
+            if spawn_time.elapsed() > Duration::from_secs(8) {
+                self.poison_food = None;
+            }
+        } else if self.rng.gen_bool(spawn_chance) {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+            };
+            if let Some(poison) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.poison_food = Some((poison, web_time::Instant::now()));
+            }
+        }
+    }
+
     fn generate_obstacles(
         width: u16,
         height: u16,
@@ -2563,6 +2590,7 @@ impl Game {
         }
 
         self.manage_bonus_food();
+        self.manage_poison_food();
         self.manage_power_ups();
         self.manage_portals();
         self.apply_magnet();
