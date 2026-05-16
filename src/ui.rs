@@ -6,11 +6,11 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
-use rand::{Rng, SeedableRng};
 use crate::{
     game::{Game, GameState, Weather},
     snake::Direction,
 };
+use rand::{Rng, SeedableRng};
 
 /// # Errors
 ///
@@ -81,7 +81,8 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{title}")?;
 
-    let rank_str = format!("Rank: {} ({})", get_elo_rank(game.stats.player_elo), game.stats.player_elo);
+    let rank_str =
+        format!("Rank: {} ({})", get_elo_rank(game.stats.player_elo), game.stats.player_elo);
     stdout.queue(SetForegroundColor(Color::Cyan))?;
     stdout.queue(cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(rank_str.len()).unwrap_or(0) / 2),
@@ -214,7 +215,11 @@ fn draw_stats<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         format!("Total Score: {}", game.stats.total_score),
         format!("Total Food Eaten: {}", game.stats.total_food_eaten),
         format!("Total Time (s): {}", game.stats.total_time_s),
-        format!("Competitive Rank: {} ({})", get_elo_rank(game.stats.player_elo), game.stats.player_elo),
+        format!(
+            "Competitive Rank: {} ({})",
+            get_elo_rank(game.stats.player_elo),
+            game.stats.player_elo
+        ),
         format!("Bot ELO: {}", game.stats.bot_elo),
     ];
 
@@ -423,7 +428,8 @@ fn draw_skill_tree<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title_len = u16::try_from(title.len()).unwrap_or(0);
 
     stdout.queue(SetForegroundColor(Color::Cyan))?;
-    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
+    stdout
+        .queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
     write!(stdout, "{title}")?;
 
     let balance_msg = format!("Coins: {}", game.stats.coins);
@@ -614,7 +620,9 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         },
         crate::game::Theme::Esports => (Color::Red, Color::Blue, Color::Cyan, Color::Magenta),
         crate::game::Theme::Solar => (Color::Yellow, Color::Red, Color::DarkYellow, Color::DarkRed),
-        crate::game::Theme::Metaverse => (Color::Magenta, Color::Cyan, Color::White, Color::DarkMagenta),
+        crate::game::Theme::Metaverse => {
+            (Color::Magenta, Color::Cyan, Color::White, Color::DarkMagenta)
+        },
     };
 
     draw_background(game, stdout)?;
@@ -903,13 +911,19 @@ fn draw_entities<W: Write>(
                 .as_millis() as u64
         },
     );
-    let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale {
+        game.safe_zone_margin
+    } else {
+        0
+    };
     match game.weather {
         Weather::Rain => {
             stdout.queue(SetForegroundColor(Color::Cyan))?;
             for _ in 0..15 {
-                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
-                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
                 if is_visible(x, y) {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, "|")?;
@@ -919,15 +933,17 @@ fn draw_entities<W: Write>(
         Weather::Snow => {
             stdout.queue(SetForegroundColor(Color::White))?;
             for _ in 0..10 {
-                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
-                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
                 if is_visible(x, y) {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, "*")?;
                 }
             }
         },
-        _ => {}
+        _ => {},
     }
 
     // Draw Lightning Strike
@@ -1014,27 +1030,30 @@ fn draw_entities<W: Write>(
 
     // Draw Boss
     if let Some(boss) = &game.boss
-        && is_visible(boss.position.x, boss.position.y) {
-            stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
-            stdout.queue(SetForegroundColor(Color::Magenta))?;
-            write!(stdout, "B")?;
-        }
+        && is_visible(boss.position.x, boss.position.y)
+    {
+        stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
+        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        write!(stdout, "B")?;
+    }
 
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food
-        && is_visible(bonus_p.x, bonus_p.y) {
-            stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            write!(stdout, "★")?;
-        }
+        && is_visible(bonus_p.x, bonus_p.y)
+    {
+        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        write!(stdout, "★")?;
+    }
 
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food
-        && is_visible(poison_p.x, poison_p.y) {
-            stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
-            stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
-            write!(stdout, "X")?;
-        }
+        && is_visible(poison_p.x, poison_p.y)
+    {
+        stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
+        stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+        write!(stdout, "X")?;
+    }
 
     if let Some(power_up) = &game.power_up
         && power_up.activation_time.is_none()
@@ -1120,7 +1139,12 @@ fn draw_entities<W: Write>(
     Ok(())
 }
 
-fn draw_base_status<W: Write>(game: &Game, stdout: &mut W, bot_str: &str, combo_str: &str) -> io::Result<()> {
+fn draw_base_status<W: Write>(
+    game: &Game,
+    stdout: &mut W,
+    bot_str: &str,
+    combo_str: &str,
+) -> io::Result<()> {
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,

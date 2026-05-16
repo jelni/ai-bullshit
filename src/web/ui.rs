@@ -39,7 +39,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     // Draw food
     ctx.set_fill_style_str("#00FF00");
-    if game.food.x < game.width && game.food.y < game.height && is_visible(f64::from(game.food.x), f64::from(game.food.y)) {
+    if game.food.x < game.width
+        && game.food.y < game.height
+        && is_visible(f64::from(game.food.x), f64::from(game.food.y))
+    {
         ctx.fill_rect(
             f64::from(game.food.x) * cell_size,
             f64::from(game.food.y) * cell_size,
@@ -51,7 +54,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw obstacles
     ctx.set_fill_style_str("#FF0000");
     for obs in &game.obstacles {
-        if obs.x < game.width && obs.y < game.height && is_visible(f64::from(obs.x), f64::from(obs.y)) {
+        if obs.x < game.width
+            && obs.y < game.height
+            && is_visible(f64::from(obs.x), f64::from(obs.y))
+        {
             ctx.fill_rect(
                 f64::from(obs.x) * cell_size,
                 f64::from(obs.y) * cell_size,
@@ -64,7 +70,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food {
         ctx.set_fill_style_str("#800080"); // DarkMagenta
-        if poison_p.x < game.width && poison_p.y < game.height && is_visible(f64::from(poison_p.x), f64::from(poison_p.y)) {
+        if poison_p.x < game.width
+            && poison_p.y < game.height
+            && is_visible(f64::from(poison_p.x), f64::from(poison_p.y))
+        {
             ctx.fill_rect(
                 f64::from(poison_p.x) * cell_size,
                 f64::from(poison_p.y) * cell_size,
@@ -99,7 +108,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw boss
     if let Some(boss) = &game.boss {
         ctx.set_fill_style_str("#FF00FF");
-        if boss.position.x < game.width && boss.position.y < game.height && is_visible(f64::from(boss.position.x), f64::from(boss.position.y)) {
+        if boss.position.x < game.width
+            && boss.position.y < game.height
+            && is_visible(f64::from(boss.position.x), f64::from(boss.position.y))
+        {
             ctx.fill_rect(
                 f64::from(boss.position.x) * cell_size,
                 f64::from(boss.position.y) * cell_size,
@@ -112,7 +124,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food {
         ctx.set_fill_style_str("#FFFF00");
-        if bonus_p.x < game.width && bonus_p.y < game.height && is_visible(f64::from(bonus_p.x), f64::from(bonus_p.y)) {
+        if bonus_p.x < game.width
+            && bonus_p.y < game.height
+            && is_visible(f64::from(bonus_p.x), f64::from(bonus_p.y))
+        {
             ctx.fill_rect(
                 f64::from(bonus_p.x) * cell_size,
                 f64::from(bonus_p.y) * cell_size,
@@ -125,7 +140,11 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw power_up
     #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
     if let Some(power_up) = &game.power_up {
-        if power_up.activation_time.is_none() && power_up.location.x < game.width && power_up.location.y < game.height && is_visible(f64::from(power_up.location.x), f64::from(power_up.location.y)) {
+        if power_up.activation_time.is_none()
+            && power_up.location.x < game.width
+            && power_up.location.y < game.height
+            && is_visible(f64::from(power_up.location.x), f64::from(power_up.location.y))
+        {
             ctx.set_fill_style_str("#00FFFF");
             ctx.fill_rect(
                 f64::from(power_up.location.x) * cell_size,
@@ -138,7 +157,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     // Draw lasers
     for laser in &game.lasers {
-        if laser.position.x < game.width && laser.position.y < game.height && is_visible(f64::from(laser.position.x), f64::from(laser.position.y)) {
+        if laser.position.x < game.width
+            && laser.position.y < game.height
+            && is_visible(f64::from(laser.position.x), f64::from(laser.position.y))
+        {
             if laser.player == 1 {
                 ctx.set_fill_style_str("#FFFFFF");
             } else {
@@ -154,7 +176,11 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     }
 
     // Draw Weather Effects
-    let margin = if game.mode == crate::game::GameMode::BattleRoyale { game.safe_zone_margin } else { 0 };
+    let margin = if game.mode == crate::game::GameMode::BattleRoyale {
+        game.safe_zone_margin
+    } else {
+        0
+    };
     #[expect(
         clippy::cast_possible_truncation,
         reason = "We only need lower bits for a deterministic PRNG seed"
@@ -163,15 +189,17 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64
+            .as_millis() as u64,
     );
 
     match game.weather {
         crate::game::Weather::Rain => {
             ctx.set_fill_style_str("#00FFFF"); // Cyan
             for _ in 0..15 {
-                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
-                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
                 if is_visible(f64::from(x), f64::from(y)) {
                     ctx.fill_rect(
                         f64::from(x).mul_add(cell_size, cell_size * 0.4),
@@ -185,8 +213,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         crate::game::Weather::Snow => {
             ctx.set_fill_style_str("#FFFFFF"); // White
             for _ in 0..10 {
-                let x = rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
-                let y = rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
                 if is_visible(f64::from(x), f64::from(y)) {
                     ctx.fill_rect(
                         f64::from(x).mul_add(cell_size, cell_size * 0.3),
@@ -197,7 +227,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 }
             }
         },
-        _ => {}
+        _ => {},
     }
 
     // Draw Lightning Strike
@@ -243,7 +273,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     // Draw snake
     ctx.set_fill_style_str("#FFFFFF");
     for part in &game.snake.body {
-        if part.x < game.width && part.y < game.height && is_visible(f64::from(part.x), f64::from(part.y)) {
+        if part.x < game.width
+            && part.y < game.height
+            && is_visible(f64::from(part.x), f64::from(part.y))
+        {
             ctx.fill_rect(
                 f64::from(part.x) * cell_size,
                 f64::from(part.y) * cell_size,
@@ -257,7 +290,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     if let Some(p2) = &game.player2 {
         ctx.set_fill_style_str("#0000FF");
         for part in &p2.body {
-            if part.x < game.width && part.y < game.height && is_visible(f64::from(part.x), f64::from(part.y)) {
+            if part.x < game.width
+                && part.y < game.height
+                && is_visible(f64::from(part.x), f64::from(part.y))
+            {
                 ctx.fill_rect(
                     f64::from(part.x) * cell_size,
                     f64::from(part.y) * cell_size,

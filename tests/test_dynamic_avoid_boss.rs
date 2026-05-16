@@ -2,22 +2,25 @@ use snake_game::*;
 
 #[test]
 fn test_bot_predicts_boss() {
-    let mut game = game::Game::new(
-        20,
-        20,
-        false,
-        'x',
-        game::Theme::Classic,
-        game::Difficulty::Normal,
-    );
-    game.snake = snake::Snake::new(snake::Point { x: 5, y: 5 });
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.snake = snake::Snake::new(snake::Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = snake::Direction::Right;
-    game.food = snake::Point { x: 5, y: 10 }; // Food is down
+    game.food = snake::Point {
+        x: 5,
+        y: 10,
+    }; // Food is down
 
     // Boss at x=5, y=7
     // Next turn we move Down to 5,6. Boss moves closer to us. Will it hit us?
     game.boss = Some(game::Boss {
-        position: snake::Point { x: 5, y: 7 },
+        position: snake::Point {
+            x: 5,
+            y: 7,
+        },
         health: 10,
         max_health: 10,
         move_timer: 1, // Will move this turn
@@ -32,5 +35,9 @@ fn test_bot_predicts_boss() {
 
     // We should ensure the snake doesn't go straight down if the boss is going to move up to 5,6.
     println!("next_move: {:?}", next_move);
-    assert_ne!(next_move, Some(snake::Direction::Down), "Snake should avoid moving down into the boss's predicted path");
+    assert_ne!(
+        next_move,
+        Some(snake::Direction::Down),
+        "Snake should avoid moving down into the boss's predicted path"
+    );
 }

@@ -662,8 +662,10 @@ impl Game {
     }
 
     pub fn update_high_scores(&mut self) {
-        self.high_scores =
-            Self::load_high_scores_from_file(&Self::get_high_score_filename(self.difficulty, self.mode));
+        self.high_scores = Self::load_high_scores_from_file(&Self::get_high_score_filename(
+            self.difficulty,
+            self.mode,
+        ));
         self.high_score = self.high_scores.first().map_or(0, |(_, s)| *s);
     }
 
@@ -958,7 +960,10 @@ impl Game {
         // Fill entire board with walls
         for y in 1..height - 1 {
             for x in 1..width - 1 {
-                obstacles.insert(Point { x, y });
+                obstacles.insert(Point {
+                    x,
+                    y,
+                });
             }
         }
 
@@ -1001,7 +1006,10 @@ impl Game {
         for &(rx, ry, rw, rh) in &rooms {
             for y in ry..ry + rh {
                 for x in rx..rx + rw {
-                    obstacles.remove(&Point { x, y });
+                    obstacles.remove(&Point {
+                        x,
+                        y,
+                    });
                 }
             }
         }
@@ -1021,7 +1029,10 @@ impl Game {
             let mut y = c1_y;
 
             while x != c2_x {
-                obstacles.remove(&Point { x, y });
+                obstacles.remove(&Point {
+                    x,
+                    y,
+                });
                 if x < c2_x {
                     x += 1;
                 } else {
@@ -1030,7 +1041,10 @@ impl Game {
             }
 
             while y != c2_y {
-                obstacles.remove(&Point { x, y });
+                obstacles.remove(&Point {
+                    x,
+                    y,
+                });
                 if y < c2_y {
                     y += 1;
                 } else {
@@ -1118,7 +1132,10 @@ impl Game {
         // Fill entire board with walls
         for y in 1..=max_y {
             for x in 1..=max_x {
-                obstacles.insert(Point { x, y });
+                obstacles.insert(Point {
+                    x,
+                    y,
+                });
             }
         }
 
@@ -1131,8 +1148,14 @@ impl Game {
         let start_maze_x = (rng.gen_range(1..=std::cmp::max(1, max_x / 2)) * 2) - 1;
         let start_maze_y = (rng.gen_range(1..=std::cmp::max(1, max_y / 2)) * 2) - 1;
 
-        let mut stack = vec![Point { x: start_maze_x, y: start_maze_y }];
-        obstacles.remove(&Point { x: start_maze_x, y: start_maze_y });
+        let mut stack = vec![Point {
+            x: start_maze_x,
+            y: start_maze_y,
+        }];
+        obstacles.remove(&Point {
+            x: start_maze_x,
+            y: start_maze_y,
+        });
 
         while let Some(current) = stack.last().copied() {
             let mut neighbors = Vec::new();
@@ -1195,17 +1218,24 @@ impl Game {
 
         for y in 1..self.height - 1 {
             for x in 1..self.width - 1 {
-                let p = Point { x, y };
+                let p = Point {
+                    x,
+                    y,
+                };
 
                 // Exclude safe zone near snake heads
                 let mut safe = false;
                 let h1 = self.snake.head();
-                if (i32::from(x) - i32::from(h1.x)).abs() <= 2 && (i32::from(y) - i32::from(h1.y)).abs() <= 2 {
+                if (i32::from(x) - i32::from(h1.x)).abs() <= 2
+                    && (i32::from(y) - i32::from(h1.y)).abs() <= 2
+                {
                     safe = true;
                 }
                 if let Some(p2) = &self.player2 {
                     let h2 = p2.head();
-                    if (i32::from(x) - i32::from(h2.x)).abs() <= 2 && (i32::from(y) - i32::from(h2.y)).abs() <= 2 {
+                    if (i32::from(x) - i32::from(h2.x)).abs() <= 2
+                        && (i32::from(y) - i32::from(h2.y)).abs() <= 2
+                    {
                         safe = true;
                     }
                 }
@@ -1286,7 +1316,9 @@ impl Game {
                             }
                             let nx = i32::from(x) + dx;
                             let ny = i32::from(y) + dy;
-                            if grid[usize::try_from(ny).unwrap_or(0)][usize::try_from(nx).unwrap_or(0)] {
+                            if grid[usize::try_from(ny).unwrap_or(0)]
+                                [usize::try_from(nx).unwrap_or(0)]
+                            {
                                 neighbor_walls += 1;
                             }
                         }
@@ -1310,7 +1342,8 @@ impl Game {
                 let cx = i32::from(start_x) + dx;
                 let cy = i32::from(start_y) + dy;
                 if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
-                    grid[usize::try_from(cy).unwrap_or(0)][usize::try_from(cx).unwrap_or(0)] = false;
+                    grid[usize::try_from(cy).unwrap_or(0)][usize::try_from(cx).unwrap_or(0)] =
+                        false;
                 }
             }
         }
@@ -1320,7 +1353,10 @@ impl Game {
         for y in 1..(height - 1) {
             for x in 1..(width - 1) {
                 if grid[y as usize][x as usize] {
-                    obstacles.insert(Point { x, y });
+                    obstacles.insert(Point {
+                        x,
+                        y,
+                    });
                 }
             }
         }
@@ -1453,7 +1489,9 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::BossRush => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1477,7 +1515,11 @@ impl Game {
             },
         }
 
-        let obs_count = if self.mode == GameMode::Zen || self.mode == GameMode::Maze || self.mode == GameMode::Cave || self.mode == GameMode::Dungeon {
+        let obs_count = if self.mode == GameMode::Zen
+            || self.mode == GameMode::Maze
+            || self.mode == GameMode::Cave
+            || self.mode == GameMode::Dungeon
+        {
             0
         } else {
             match self.difficulty {
@@ -1500,7 +1542,9 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution || self.mode == GameMode::BossRush
+                || self.mode == GameMode::FogOfWar
+                || self.mode == GameMode::Evolution
+                || self.mode == GameMode::BossRush
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1523,7 +1567,9 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
-            || self.mode == GameMode::FogOfWar || self.mode == GameMode::Evolution || self.mode == GameMode::BossRush
+            || self.mode == GameMode::FogOfWar
+            || self.mode == GameMode::Evolution
+            || self.mode == GameMode::BossRush
         {
             &self.snake
         } else {
@@ -1559,7 +1605,8 @@ impl Game {
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Dungeon {
-            self.obstacles = Self::generate_dungeon_obstacles(self.width, self.height, &mut self.rng);
+            self.obstacles =
+                Self::generate_dungeon_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
         } else if self.mode == GameMode::Evolution {
@@ -1568,7 +1615,10 @@ impl Game {
             for y in 1..self.height - 1 {
                 for x in 1..self.width - 1 {
                     if self.rng.gen_bool(fill_probability) {
-                        self.obstacles.insert(Point { x, y });
+                        self.obstacles.insert(Point {
+                            x,
+                            y,
+                        });
                     }
                 }
             }
@@ -1653,7 +1703,9 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
-            | GameMode::FogOfWar | GameMode::Evolution | GameMode::BossRush => {
+            | GameMode::FogOfWar
+            | GameMode::Evolution
+            | GameMode::BossRush => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1777,6 +1829,81 @@ impl Game {
         }
     }
 
+    #[must_use]
+    pub fn should_bot_shoot(&self, player: u8) -> bool {
+        let (head, dir) = if player == 1 {
+            (
+                self.snake.head(),
+                self.snake.direction_queue.back().copied().unwrap_or(self.snake.direction),
+            )
+        } else if player == 2 {
+            if let Some(p2) = &self.player2 {
+                (p2.head(), p2.direction_queue.back().copied().unwrap_or(p2.direction))
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        };
+
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let mut current_pos = Self::calculate_next_head_dir(head, dir);
+
+        // Raycast
+        let mut steps = 0;
+        while current_pos.x > margin
+            && current_pos.x < self.width - 1 - margin
+            && current_pos.y > margin
+            && current_pos.y < self.height - 1 - margin
+        {
+            steps += 1;
+            // Shoot if we hit a Boss
+            if let Some(boss) = &self.boss
+                && boss.position == current_pos
+            {
+                return true;
+            }
+
+            // Shoot if we hit the other player
+            if player == 1 {
+                if let Some(p2) = &self.player2
+                    && p2.body_map.contains_key(&current_pos)
+                {
+                    return true;
+                }
+            } else if player == 2 && self.snake.body_map.contains_key(&current_pos) {
+                return true;
+            }
+
+            // Shoot if we hit an obstacle, provided it is relatively close
+            if self.obstacles.contains(&current_pos) {
+                return steps <= 5;
+            }
+
+            // If we hit our own body, stop the raycast (don't shoot ourselves, laser breaks here)
+            // Wait, laser actually despawns if it hits any snake. We checked opponent above.
+            // Let's check our own body. If so, return false.
+            if player == 1 {
+                if self.snake.body_map.contains_key(&current_pos) {
+                    return false;
+                }
+            } else if player == 2
+                && let Some(p2) = &self.player2
+                && p2.body_map.contains_key(&current_pos)
+            {
+                return false;
+            }
+
+            current_pos = Self::calculate_next_head_dir(current_pos, dir);
+        }
+
+        false
+    }
+
     fn handle_autopilot_moves(&mut self) {
         // In snow, there is a chance the bot freezes for a tick
         let delay_bot = self.weather == Weather::Snow && self.rng.gen_bool(0.2);
@@ -1789,21 +1916,22 @@ impl Game {
                 if let Some(dir) = self.calculate_autopilot_move() {
                     self.snake.direction_queue.push_back(dir);
                 }
-                if self.rng.gen_bool(0.05) {
+                if self.should_bot_shoot(1) {
                     self.shoot_laser(1);
                 }
             }
 
             // --- Handle Player 2 Autopilot ---
             if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
-                let is_empty = self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
+                let is_empty =
+                    self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
                 if is_empty {
                     if let Some(dir) = self.calculate_p2_autopilot_move()
                         && let Some(p2) = &mut self.player2
                     {
                         p2.direction_queue.push_back(dir);
                     }
-                    if self.rng.gen_bool(0.05) {
+                    if self.should_bot_shoot(2) {
                         self.shoot_laser(2);
                     }
                 }
@@ -1986,7 +2114,8 @@ impl Game {
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
 
-            let current_dist = self.food.x.abs_diff(head.x).saturating_add(self.food.y.abs_diff(head.y));
+            let current_dist =
+                self.food.x.abs_diff(head.x).saturating_add(self.food.y.abs_diff(head.y));
 
             let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
             for &d in &dirs {
@@ -2010,9 +2139,10 @@ impl Game {
                     continue;
                 }
                 if let Some(p2) = &self.player2
-                    && p2.body_map.contains_key(&next_p) {
-                        continue;
-                    }
+                    && p2.body_map.contains_key(&next_p)
+                {
+                    continue;
+                }
 
                 let dist = next_p.x.abs_diff(head.x).saturating_add(next_p.y.abs_diff(head.y));
                 if dist < current_dist && dist < best_dist {
@@ -2054,7 +2184,8 @@ impl Game {
         let should_spawn_boss = if self.mode == GameMode::BossRush {
             true
         } else {
-            (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge) && self.rng.gen_bool(0.005)
+            (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge)
+                && self.rng.gen_bool(0.005)
         };
 
         if self.boss.is_none() && should_spawn_boss {
@@ -2094,7 +2225,10 @@ impl Game {
         if let Some(mut boss) = self.boss.take() {
             if !is_time_frozen {
                 let mut move_threshold = if self.mode == GameMode::BossRush {
-                    std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                    std::cmp::max(
+                        1,
+                        3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5),
+                    )
                 } else {
                     2
                 };
@@ -2127,7 +2261,10 @@ impl Game {
                 }
 
                 let mut shoot_threshold = if self.mode == GameMode::BossRush {
-                    std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+                    std::cmp::max(
+                        5,
+                        15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                    )
                 } else {
                     15
                 };
@@ -2192,7 +2329,11 @@ impl Game {
         }
 
         if self.weather == Weather::Storm && self.rng.gen_bool(0.02) {
-            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
             let min_x = margin + 1;
             let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
 
@@ -2229,8 +2370,14 @@ impl Game {
                             let boss_pos = boss.position;
                             self.boss = None;
 
-                            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-                            for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+                            for &dir in
+                                &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+                            {
                                 let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
                                 if laser_pos.x > margin
                                     && laser_pos.x < self.width - 1 - margin
@@ -2274,11 +2421,12 @@ impl Game {
         }
 
         // Chat simulation logic
-        let chat_interval = if self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge {
-            Duration::from_secs(3)
-        } else {
-            Duration::from_millis(500)
-        };
+        let chat_interval =
+            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge {
+                Duration::from_secs(3)
+            } else {
+                Duration::from_millis(500)
+            };
 
         if self.last_chat_time.is_none_or(|t| t.elapsed() >= chat_interval)
             && self.rng.gen_bool(0.3)
@@ -2368,7 +2516,11 @@ impl Game {
 
             // If time is frozen, the laser does not move.
             // We just do collision checks at its current position.
-            let loops = if is_time_frozen { 1 } else { 2 };
+            let loops = if is_time_frozen {
+                1
+            } else {
+                2
+            };
             for _ in 0..loops {
                 if !is_time_frozen {
                     laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
@@ -2420,8 +2572,14 @@ impl Game {
                             'B',
                         );
 
-                        let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-                        for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                        let margin = if self.mode == GameMode::BattleRoyale {
+                            self.safe_zone_margin
+                        } else {
+                            0
+                        };
+                        for &dir in
+                            &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+                        {
                             let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
                             if laser_pos.x > margin
                                 && laser_pos.x < self.width - 1 - margin
@@ -2627,7 +2785,8 @@ impl Game {
         });
 
         let hit_laser1 = self.lasers.iter().any(|l| l.player != 1 && l.position == final_head1);
-        let hit_laser2 = final_head2_opt.is_some_and(|fh2| self.lasers.iter().any(|l| l.player != 2 && l.position == fh2));
+        let hit_laser2 = final_head2_opt
+            .is_some_and(|fh2| self.lasers.iter().any(|l| l.player != 2 && l.position == fh2));
 
         if hit_wall1 || out_of_bounds1 {
             p1_dead = true;
@@ -2642,10 +2801,7 @@ impl Game {
             p1_dead = true;
         }
 
-        #[expect(
-            clippy::collapsible_if,
-            reason = "Using let_chains requires unstable feature"
-        )]
+        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
         if let Some(col) = self.lightning_column {
             if final_head1.x == col && !is_invincible {
                 p1_dead = true;
@@ -2661,10 +2817,7 @@ impl Game {
         if hit_laser2 && !is_invincible {
             p2_dead = true;
         }
-        #[expect(
-            clippy::collapsible_if,
-            reason = "Using let_chains requires unstable feature"
-        )]
+        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
         if let Some(final_head2) = final_head2_opt {
             if let Some(col) = self.lightning_column {
                 if final_head2.x == col && !is_invincible {
@@ -3266,7 +3419,11 @@ impl Game {
     }
 
     fn manage_bonus_food(&mut self) {
-        let spawn_chance = if self.weather == Weather::Rain { 0.03 } else { 0.01 };
+        let spawn_chance = if self.weather == Weather::Rain {
+            0.03
+        } else {
+            0.01
+        };
 
         if let Some((_, spawn_time)) = self.bonus_food {
             if spawn_time.elapsed() > Duration::from_secs(5) {
@@ -3373,7 +3530,11 @@ impl Game {
             let next_p = Self::calculate_next_head_dir(start, d);
 
             // Basic bounds checking for BFS, we avoid margin since boss operates strictly inside
-            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
 
             if next_p.x > margin
                 && next_p.x < self.width - 1 - margin
@@ -3398,7 +3559,11 @@ impl Game {
 
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
 
                 if next_p.x > margin
                     && next_p.x < self.width - 1 - margin
@@ -3471,18 +3636,20 @@ impl Game {
                         for &d in &dirs {
                             let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
                             if let Some(final_p2_next) = self.get_final_p(p2_next_head)
-                                && final_p == final_p2_next {
-                                    return false;
-                                }
+                                && final_p == final_p2_next
+                            {
+                                return false;
+                            }
                         }
                     }
                 } else if checking_player == 2 {
                     for &d in &dirs {
                         let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
                         if let Some(final_p1_next) = self.get_final_p(p1_next_head)
-                            && final_p == final_p1_next {
-                                return false;
-                            }
+                            && final_p == final_p1_next
+                        {
+                            return false;
+                        }
                     }
                 }
             }
@@ -3493,7 +3660,12 @@ impl Game {
                     }
                 } else if checking_player != 3 {
                     let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
-                        std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                        std::cmp::max(
+                            1,
+                            3_u8.saturating_sub(
+                                u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                            ),
+                        )
                     } else {
                         2
                     });
@@ -3503,14 +3675,18 @@ impl Game {
                     }
 
                     let moves = (u32::from(steps) + u32::from(boss.move_timer)) / move_threshold;
-                    let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
+                    let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                        + u32::from(final_p.y.abs_diff(boss.position.y));
 
                     if dist <= moves {
                         return false;
                     }
 
                     let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
-                        std::cmp::max(5, 15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+                        std::cmp::max(
+                            5,
+                            15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                        )
                     } else {
                         15
                     });
@@ -3520,10 +3696,10 @@ impl Game {
                     }
 
                     let shoots = (u32::from(steps) + u32::from(boss.shoot_timer)) / shoot_threshold;
-                    if shoots > 0
-                        && (final_p.x == boss.position.x || final_p.y == boss.position.y) {
-                            return false;
-                        }
+                    if shoots > 0 && (final_p.x == boss.position.x || final_p.y == boss.position.y)
+                    {
+                        return false;
+                    }
                 }
             }
 
@@ -3576,18 +3752,20 @@ impl Game {
                         for &d in &dirs {
                             let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
                             if let Some(final_p2_next) = self.get_final_p(p2_next_head)
-                                && final_p == final_p2_next {
-                                    return false;
-                                }
+                                && final_p == final_p2_next
+                            {
+                                return false;
+                            }
                         }
                     }
                 } else if checking_player == 2 {
                     for &d in &dirs {
                         let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
                         if let Some(final_p1_next) = self.get_final_p(p1_next_head)
-                            && final_p == final_p1_next {
-                                return false;
-                            }
+                            && final_p == final_p1_next
+                        {
+                            return false;
+                        }
                     }
                 }
             }
@@ -3644,10 +3822,7 @@ impl Game {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Search algorithm is inherently complex and long"
-    )]
+    #[expect(clippy::too_many_lines, reason = "Search algorithm is inherently complex and long")]
     fn astar_search(
         &self,
         start: Point,
@@ -3683,7 +3858,8 @@ impl Game {
                             && self.mode != GameMode::BattleRoyale
                         {
                             dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                            dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                            dy =
+                                std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                         }
                         dx.saturating_add(dy)
                     };
@@ -3691,9 +3867,14 @@ impl Game {
                     let dist_direct = calc_dist(p, *t);
 
                     if let Some((portal1, portal2)) = self.portals {
-                        let dist_via_portal1 = calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
-                        let dist_via_portal2 = calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
-                        std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+                        let dist_via_portal1 =
+                            calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
+                        let dist_via_portal2 =
+                            calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
+                        std::cmp::min(
+                            dist_direct,
+                            std::cmp::min(dist_via_portal1, dist_via_portal2),
+                        )
                     } else {
                         dist_direct
                     }
@@ -3903,7 +4084,10 @@ mod tests {
                 let cy = i32::from(start_y) + dy;
                 if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
                     assert!(
-                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        !obstacles.contains(&Point {
+                            x: cx as u16,
+                            y: cy as u16
+                        }),
                         "Center area should be free of obstacles in dungeon mode"
                     );
                 }
@@ -3931,7 +4115,10 @@ mod tests {
                 let cy = start_y as i32 + dy;
                 if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
                     assert!(
-                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        !obstacles.contains(&Point {
+                            x: cx as u16,
+                            y: cy as u16
+                        }),
                         "Center area should be free of obstacles"
                     );
                 }
@@ -3958,8 +4145,14 @@ mod tests {
         game.snake.direction = crate::snake::Direction::Right;
 
         // Create portals
-        let p1 = crate::snake::Point { x: 11, y: 10 };
-        let p2 = crate::snake::Point { x: 5, y: 5 };
+        let p1 = crate::snake::Point {
+            x: 11,
+            y: 10,
+        };
+        let p2 = crate::snake::Point {
+            x: 5,
+            y: 5,
+        };
         game.portals = Some((p1, p2));
 
         let (final_head1, _final_head2, hit_wall1, _hit_wall2) = game.calculate_final_heads();
@@ -4179,10 +4372,16 @@ mod tests {
         );
 
         // Place snake at (10, 10)
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 10,
+            y: 10,
+        });
 
         // Place food at (10, 15)
-        game.food = crate::snake::Point { x: 10, y: 15 };
+        game.food = crate::snake::Point {
+            x: 10,
+            y: 15,
+        };
 
         // Ensure no obstacles
         game.obstacles.clear();
@@ -4190,7 +4389,10 @@ mod tests {
         // Give the magnet powerup
         game.power_up = Some(PowerUp {
             p_type: PowerUpType::Magnet,
-            location: crate::snake::Point { x: 1, y: 1 },
+            location: crate::snake::Point {
+                x: 1,
+                y: 1,
+            },
             activation_time: Some(
                 web_time::SystemTime::now()
                     .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -4231,7 +4433,10 @@ mod tests {
                 let cy = i32::from(start_y) + dy;
                 if cx > 0 && cx <= i32::from(width - 2) && cy > 0 && cy <= i32::from(height - 2) {
                     assert!(
-                        !obstacles.contains(&Point { x: cx as u16, y: cy as u16 }),
+                        !obstacles.contains(&Point {
+                            x: cx as u16,
+                            y: cy as u16
+                        }),
                         "Center area should be free of obstacles"
                     );
                 }
@@ -4256,11 +4461,20 @@ mod tests {
         // Create a horizontal wall blocking direct downward path
         // from (10, 5) to (10, 15)
         for x in 8..=12 {
-            game.obstacles.insert(Point { x, y: 10 });
+            game.obstacles.insert(Point {
+                x,
+                y: 10,
+            });
         }
 
-        let start = Point { x: 10, y: 5 };
-        let target = Point { x: 10, y: 15 };
+        let start = Point {
+            x: 10,
+            y: 5,
+        };
+        let target = Point {
+            x: 10,
+            y: 15,
+        };
 
         // Ensure BFS finds a way around the wall (should not go straight down into the wall)
         let dir = game.bfs_pathfind(start, target);
@@ -4270,7 +4484,8 @@ mod tests {
         // Let's trace it and ensure it actually reaches without hitting the wall
         let mut current = start;
         let mut reached = false;
-        for _ in 0..100 { // Max steps
+        for _ in 0..100 {
+            // Max steps
             if current == target {
                 reached = true;
                 break;
@@ -4388,7 +4603,11 @@ mod tests {
         // to prove the struct / enum changes are valid without having to fight with flaky RNG seeds in CI tests.
         game.weather = Weather::Snow;
 
-        assert_eq!(game.weather, Weather::Snow, "Weather state should be mutable and hold correctly");
+        assert_eq!(
+            game.weather,
+            Weather::Snow,
+            "Weather state should be mutable and hold correctly"
+        );
     }
 
     #[test]
@@ -4435,13 +4654,22 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 5,
+            y: 5,
+        });
         game.snake.direction = crate::snake::Direction::Right;
-        game.food = crate::snake::Point { x: 9, y: 5 };
+        game.food = crate::snake::Point {
+            x: 9,
+            y: 5,
+        };
 
         // Placing boss right in front of the snake
         game.boss = Some(Boss {
-            position: crate::snake::Point { x: 6, y: 5 },
+            position: crate::snake::Point {
+                x: 6,
+                y: 5,
+            },
             health: 10,
             max_health: 10,
             move_timer: 0,
@@ -4451,7 +4679,10 @@ mod tests {
         // Since the direct path (Right) is blocked by the boss, it should choose Up or Down.
         // Assuming no obstacles, it should not be Right.
         let next_move = game.calculate_autopilot_move();
-        assert!(next_move == Some(crate::snake::Direction::Up) || next_move == Some(crate::snake::Direction::Down));
+        assert!(
+            next_move == Some(crate::snake::Direction::Up)
+                || next_move == Some(crate::snake::Direction::Down)
+        );
     }
 
     #[test]
@@ -4464,20 +4695,32 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 5, y: 5 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 5,
+            y: 5,
+        });
         game.snake.direction = crate::snake::Direction::Right;
-        game.food = crate::snake::Point { x: 9, y: 5 };
+        game.food = crate::snake::Point {
+            x: 9,
+            y: 5,
+        };
 
         // Placing laser right in front of the snake
         game.lasers.push(Laser {
-            position: crate::snake::Point { x: 6, y: 5 },
+            position: crate::snake::Point {
+                x: 6,
+                y: 5,
+            },
             direction: crate::snake::Direction::Left,
             player: 0,
         });
 
         // Since the direct path (Right) is blocked by the laser, it should choose Up or Down.
         let next_move = game.calculate_autopilot_move();
-        assert!(next_move == Some(crate::snake::Direction::Up) || next_move == Some(crate::snake::Direction::Down));
+        assert!(
+            next_move == Some(crate::snake::Direction::Up)
+                || next_move == Some(crate::snake::Direction::Down)
+        );
     }
 
     #[test]
@@ -4525,15 +4768,27 @@ mod tests {
         );
 
         // Setup snake at (2, 2)
-        game.snake = crate::snake::Snake::new(crate::snake::Point { x: 2, y: 2 });
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 2,
+            y: 2,
+        });
         game.snake.direction = crate::snake::Direction::Down; // Facing down to avoid immediate 180
 
         // Place food far away at (18, 18)
-        game.food = crate::snake::Point { x: 18, y: 18 };
+        game.food = crate::snake::Point {
+            x: 18,
+            y: 18,
+        };
 
         // Place a portal right next to the snake at (3, 2) and its pair near the food at (17, 18)
-        let p1 = crate::snake::Point { x: 3, y: 2 };
-        let p2 = crate::snake::Point { x: 17, y: 18 };
+        let p1 = crate::snake::Point {
+            x: 3,
+            y: 2,
+        };
+        let p2 = crate::snake::Point {
+            x: 17,
+            y: 18,
+        };
         game.portals = Some((p1, p2));
 
         // Let's clear any obstacles that might interfere
@@ -4549,45 +4804,77 @@ mod tests {
 #[cfg(test)]
 mod evolution_tests {
     use super::*;
-    use crate::game::{GameMode, Theme, Difficulty};
+    use crate::game::{Difficulty, GameMode, Theme};
 
     #[test]
     fn test_evolve_game_of_life() {
-        let mut game = Game::new(
-            20,
-            20,
-            false,
-            'x',
-            Theme::Classic,
-            Difficulty::Normal,
-        );
+        let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Evolution;
 
         // Clear all obstacles and set up a glider at top-left corner
         game.obstacles.clear();
-        game.obstacles.insert(Point { x: 2, y: 1 });
-        game.obstacles.insert(Point { x: 3, y: 2 });
-        game.obstacles.insert(Point { x: 1, y: 3 });
-        game.obstacles.insert(Point { x: 2, y: 3 });
-        game.obstacles.insert(Point { x: 3, y: 3 });
+        game.obstacles.insert(Point {
+            x: 2,
+            y: 1,
+        });
+        game.obstacles.insert(Point {
+            x: 3,
+            y: 2,
+        });
+        game.obstacles.insert(Point {
+            x: 1,
+            y: 3,
+        });
+        game.obstacles.insert(Point {
+            x: 2,
+            y: 3,
+        });
+        game.obstacles.insert(Point {
+            x: 3,
+            y: 3,
+        });
 
         // Move snake far away so safe zone doesn't interfere
-        game.snake = crate::snake::Snake::new(Point { x: 10, y: 10 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 10,
+            y: 10,
+        });
         game.player2 = None;
 
         // Move food, bonus food and powerup far away so they don't interfere
-        game.food = Point { x: 15, y: 15 };
+        game.food = Point {
+            x: 15,
+            y: 15,
+        };
         game.bonus_food = None;
         game.power_up = None;
 
         game.evolve_game_of_life();
 
         // The glider should evolve to the next state
-        assert!(!game.obstacles.contains(&Point { x: 2, y: 1 }));
-        assert!(game.obstacles.contains(&Point { x: 1, y: 2 }));
-        assert!(game.obstacles.contains(&Point { x: 3, y: 2 }));
-        assert!(game.obstacles.contains(&Point { x: 2, y: 3 }));
-        assert!(game.obstacles.contains(&Point { x: 3, y: 3 }));
-        assert!(game.obstacles.contains(&Point { x: 2, y: 4 }));
+        assert!(!game.obstacles.contains(&Point {
+            x: 2,
+            y: 1
+        }));
+        assert!(game.obstacles.contains(&Point {
+            x: 1,
+            y: 2
+        }));
+        assert!(game.obstacles.contains(&Point {
+            x: 3,
+            y: 2
+        }));
+        assert!(game.obstacles.contains(&Point {
+            x: 2,
+            y: 3
+        }));
+        assert!(game.obstacles.contains(&Point {
+            x: 3,
+            y: 3
+        }));
+        assert!(game.obstacles.contains(&Point {
+            x: 2,
+            y: 4
+        }));
     }
 }
