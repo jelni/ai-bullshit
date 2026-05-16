@@ -3380,6 +3380,7 @@ impl Game {
                 && next_p.y > margin
                 && next_p.y < self.height - 1 - margin
                 && !self.obstacles.contains(&next_p)
+                && self.is_safe_final_p(next_p, 1, 3)
             {
                 if next_p == target {
                     return Some(d);
@@ -3405,6 +3406,7 @@ impl Game {
                     && next_p.y < self.height - 1 - margin
                     && !self.obstacles.contains(&next_p)
                     && !visited.contains(&next_p)
+                    && self.is_safe_final_p(next_p, dist + 1, 3)
                 {
                     visited.insert(next_p);
                     if let Some(&first) = first_step.get(&current) {
@@ -3489,7 +3491,7 @@ impl Game {
                     if final_p == boss.position {
                         return false;
                     }
-                } else {
+                } else if checking_player != 3 {
                     let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
                         std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
                     } else {
