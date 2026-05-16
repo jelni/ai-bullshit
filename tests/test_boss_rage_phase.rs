@@ -2,17 +2,17 @@ use snake_game::*;
 
 #[test]
 fn test_boss_rage_phase() {
-    let mut game = game::Game::new(
-        20,
-        20,
-        false,
-        'x',
-        game::Theme::Classic,
-        game::Difficulty::Normal,
-    );
-    game.snake = snake::Snake::new(snake::Point { x: 5, y: 5 });
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.snake = snake::Snake::new(snake::Point {
+        x: 5,
+        y: 5,
+    });
 
-    let boss_pos = snake::Point { x: 5, y: 15 };
+    let boss_pos = snake::Point {
+        x: 5,
+        y: 15,
+    };
     game.boss = Some(game::Boss {
         position: boss_pos,
         health: 10,
@@ -56,16 +56,13 @@ fn test_boss_rage_phase() {
 
 #[test]
 fn test_boss_death_nova() {
-    let mut game = game::Game::new(
-        20,
-        20,
-        false,
-        'x',
-        game::Theme::Classic,
-        game::Difficulty::Normal,
-    );
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
 
-    let boss_pos = snake::Point { x: 10, y: 10 };
+    let boss_pos = snake::Point {
+        x: 10,
+        y: 10,
+    };
     game.boss = Some(game::Boss {
         position: boss_pos,
         health: 1, // 1 HP left
@@ -76,7 +73,10 @@ fn test_boss_death_nova() {
 
     // Spawn a laser that will hit the boss next tick
     game.lasers.push(game::Laser {
-        position: snake::Point { x: 10, y: 12 }, // Dist 2, will move 2 and hit 10,10
+        position: snake::Point {
+            x: 10,
+            y: 12,
+        }, // Dist 2, will move 2 and hit 10,10
         direction: snake::Direction::Up,
         player: 1, // Player's laser
     });

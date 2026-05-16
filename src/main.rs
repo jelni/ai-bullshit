@@ -668,46 +668,44 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                 game.skill_tree_selection = 0;
             }
         },
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            match game.skill_tree_selection {
-                0 => {
-                    let cost = 500 * (1 + u32::from(game.stats.upgrade_powerup_duration));
-                    if game.stats.upgrade_powerup_duration < 10 && game.stats.coins >= cost {
-                        game.stats.coins -= cost;
-                        game.stats.upgrade_powerup_duration += 1;
-                        game.save_stats();
-                        crate::game::beep();
-                    }
-                },
-                1 => {
-                    let cost = 1000 * (1 + u32::from(game.stats.upgrade_extra_lives));
-                    if game.stats.upgrade_extra_lives < 10 && game.stats.coins >= cost {
-                        game.stats.coins -= cost;
-                        game.stats.upgrade_extra_lives += 1;
-                        game.save_stats();
-                        crate::game::beep();
-                    }
-                },
-                2 => {
-                    let cost = 1500 * (1 + u32::from(game.stats.upgrade_laser_capacity));
-                    if game.stats.upgrade_laser_capacity < 10 && game.stats.coins >= cost {
-                        game.stats.coins -= cost;
-                        game.stats.upgrade_laser_capacity += 1;
-                        game.save_stats();
-                        crate::game::beep();
-                    }
-                },
-                3 => {
-                    let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
-                    if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
-                        game.stats.coins -= cost;
-                        game.stats.upgrade_coin_multiplier += 1;
-                        game.save_stats();
-                        crate::game::beep();
-                    }
-                },
-                _ => {},
-            }
+        KeyCode::Enter | KeyCode::Char(' ') => match game.skill_tree_selection {
+            0 => {
+                let cost = 500 * (1 + u32::from(game.stats.upgrade_powerup_duration));
+                if game.stats.upgrade_powerup_duration < 10 && game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.upgrade_powerup_duration += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            1 => {
+                let cost = 1000 * (1 + u32::from(game.stats.upgrade_extra_lives));
+                if game.stats.upgrade_extra_lives < 10 && game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.upgrade_extra_lives += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            2 => {
+                let cost = 1500 * (1 + u32::from(game.stats.upgrade_laser_capacity));
+                if game.stats.upgrade_laser_capacity < 10 && game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.upgrade_laser_capacity += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            3 => {
+                let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
+                if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.upgrade_coin_multiplier += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            _ => {},
         },
         _ => {},
     }
