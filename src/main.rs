@@ -151,6 +151,10 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
             base_tick_rate
         };
 
+        if game.skin == '🐍' {
+            current_tick_rate = current_tick_rate.saturating_sub(Duration::from_millis(15)).max(Duration::from_millis(30));
+        }
+
         let powerup_duration = game.powerup_duration();
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time

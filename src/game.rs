@@ -487,6 +487,27 @@ impl Game {
             Self::load_high_scores_from_file(&Self::get_high_score_filename(difficulty, mode));
         let high_score = high_scores.first().map_or(0, |(_, s)| *s);
         let stats = Self::load_stats();
+        let initial_lives = if skin == '💎' {
+            3 + u32::from(stats.upgrade_extra_lives) + 1
+        } else {
+            3 + u32::from(stats.upgrade_extra_lives)
+        };
+
+        let initial_power_up = if skin == '🚀' {
+            Some(PowerUp {
+                p_type: PowerUpType::SpeedBoost,
+                location: Point { x: 0, y: 0 }, // Location doesn't matter since it's instantly active
+                activation_time: Some(
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                ),
+            })
+        } else {
+            None
+        };
+
         Self {
             width,
             height,
@@ -495,7 +516,7 @@ impl Game {
             food,
             bonus_food: None,
             poison_food: None,
-            power_up: None,
+            power_up: initial_power_up,
             obstacles,
             score: 0,
             high_score,
@@ -505,7 +526,7 @@ impl Game {
             just_died: false,
             skin,
             theme,
-            lives: 3 + u32::from(stats.upgrade_extra_lives),
+            lives: initial_lives,
             menu_selection: 0,
             settings_selection: 0,
             nft_selection: 0,
@@ -1702,9 +1723,26 @@ impl Game {
         .expect("Board cannot be full on reset");
         self.bonus_food = None;
         self.poison_food = None;
-        self.power_up = None;
+        if self.skin == '🚀' {
+            self.power_up = Some(PowerUp {
+                p_type: PowerUpType::SpeedBoost,
+                location: Point { x: 0, y: 0 },
+                activation_time: Some(
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                ),
+            });
+        } else {
+            self.power_up = None;
+        }
         self.score = 0;
-        self.lives = 3 + u32::from(self.stats.upgrade_extra_lives);
+        self.lives = if self.skin == '💎' {
+            3 + u32::from(self.stats.upgrade_extra_lives) + 1
+        } else {
+            3 + u32::from(self.stats.upgrade_extra_lives)
+        };
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = web_time::Instant::now();
@@ -1793,7 +1831,10 @@ impl Game {
 
     pub fn shoot_laser(&mut self, player: u8) {
         let active_lasers = self.lasers.iter().filter(|l| l.player == player).count();
-        let max_lasers = 3 + usize::from(self.stats.upgrade_laser_capacity);
+        let mut max_lasers = 3 + usize::from(self.stats.upgrade_laser_capacity);
+        if player == 1 && self.skin == '👾' {
+            max_lasers += 5;
+        }
         if active_lasers >= max_lasers {
             return; // Limit active lasers per player
         }
@@ -2843,7 +2884,19 @@ impl Game {
             p1_dead = true;
         }
         if hit_obstacle1 && !is_invincible {
-            p1_dead = true;
+            if self.skin == '🦍' {
+                self.obstacles.remove(&final_head1);
+                self.spawn_particles(
+                    f32::from(final_head1.x),
+                    f32::from(final_head1.y),
+                    20,
+                    crate::color::Color::Red,
+                    'X',
+                );
+                crate::game::beep();
+            } else {
+                p1_dead = true;
+            }
         }
         if hit_boss1 && !is_invincible {
             p1_dead = true;
@@ -3311,7 +3364,10 @@ impl Game {
             };
             added_score *= std::cmp::max(1, self.combo);
 
-            let coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+            let mut coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+            if self.skin == '₿' {
+                coin_multiplier *= 2.0;
+            }
             #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
 
@@ -3362,7 +3418,10 @@ impl Game {
         };
         added_score *= std::cmp::max(1, self.combo);
 
-        let coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+        let mut coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+        if self.skin == '₿' {
+            coin_multiplier *= 2.0;
+        }
         #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
 
@@ -3502,7 +3561,8 @@ impl Game {
     }
 
     fn manage_portals(&mut self) {
-        if self.portals.is_none() && self.rng.gen_bool(0.005) {
+        let spawn_chance = if self.skin == 'Ξ' { 0.02 } else { 0.005 };
+        if self.portals.is_none() && self.rng.gen_bool(spawn_chance) {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
                     || *p == self.food
@@ -3573,10 +3633,10 @@ impl Game {
     }
 
     fn manage_bonus_food(&mut self) {
-        let spawn_chance = if self.weather == Weather::Rain {
-            0.03
+        let spawn_chance = if self.skin == 'Ð' {
+            if self.weather == Weather::Rain { 0.12 } else { 0.04 }
         } else {
-            0.01
+            if self.weather == Weather::Rain { 0.03 } else { 0.01 }
         };
 
         if let Some((_, spawn_time)) = self.bonus_food {
@@ -4949,6 +5009,92 @@ mod tests {
         // Player should lose more points than they gained because their ELO was higher than the bot's
         assert!(game.stats.player_elo < p_elo_after_win);
         assert!(game.stats.bot_elo > b_elo_after_loss);
+    }
+
+    #[test]
+    fn test_diamond_extra_life() {
+        let mut game_normal = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        let base_lives = game_normal.lives;
+
+        game_normal.skin = '💎';
+        game_normal.reset();
+        assert_eq!(game_normal.lives, base_lives + 1);
+    }
+
+    #[test]
+    fn test_bitcoin_doubles_coins() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        let initial_coins = game.stats.coins;
+
+        // Base added score for Normal difficulty without multiplier is 2
+        game.process_food_collision(Point { x: 5, y: 5 }, false);
+        // Base multiplier is 1.0, so 2 * 1.0 = 2
+        assert_eq!(game.stats.coins - initial_coins, 2);
+
+        let initial_coins_btc = game.stats.coins;
+        game.skin = '₿';
+        // Test same collision, but we need to account for the combo multiplier since we just ate food
+        // game.combo will be 2 on the second eat.
+        // Base score = 2 * combo 2 = 4. BTC doubles coin to 8.
+        game.process_food_collision(Point { x: 5, y: 5 }, false);
+        assert_eq!(game.stats.coins - initial_coins_btc, 8);
+    }
+
+    #[test]
+    fn test_gorilla_smashes_walls() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            '🦍',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.obstacles.clear();
+        let target = Point { x: 5, y: 5 };
+        game.obstacles.insert(target);
+        game.snake = crate::snake::Snake::new(Point { x: 5, y: 6 });
+        game.snake.direction = crate::snake::Direction::Up; // Facing up towards 5, 5
+        game.state = GameState::Playing;
+
+        let mut old_lives = game.lives;
+        game.update();
+
+        assert_eq!(game.lives, old_lives, "Gorilla should not lose life on wall");
+        assert!(!game.obstacles.contains(&target), "Gorilla should smash the wall");
+
+        let mut game_normal = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game_normal.obstacles.clear();
+        game_normal.obstacles.insert(target);
+        game_normal.snake = crate::snake::Snake::new(Point { x: 5, y: 6 });
+        game_normal.snake.direction = crate::snake::Direction::Up;
+        game_normal.state = GameState::Playing;
+
+        old_lives = game_normal.lives;
+        game_normal.update();
+        assert_eq!(game_normal.lives, old_lives - 1, "Normal skin should lose life on wall");
+        assert!(game_normal.obstacles.contains(&target), "Normal skin should not smash wall");
     }
 
     #[test]

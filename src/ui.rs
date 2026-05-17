@@ -371,10 +371,21 @@ fn draw_nft_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let (is_unlocked, item_msg) = match item {
             crate::game::ShopItem::Skin(skin) => {
                 let unlocked = game.stats.unlocked_skins.contains(&skin);
+                let passive = match skin {
+                    '💎' => " [+1 Life]",
+                    '👾' => " [+5 Lasers]",
+                    '🐍' => " [+Speed]",
+                    '🚀' => " [Start w/ SpeedBoost]",
+                    '🦍' => " [Wall Smasher]",
+                    '₿' => " [2x Coins]",
+                    'Ξ' => " [+Portals]",
+                    'Ð' => " [+Bonus Food]",
+                    _ => "",
+                };
                 let msg = if unlocked {
-                    format!("Skin '{skin}': Owned")
+                    format!("Skin '{skin}'{passive}: Owned")
                 } else {
-                    format!("Skin '{skin}': {price}c")
+                    format!("Skin '{skin}'{passive}: {price}c")
                 };
                 (unlocked, msg)
             },
