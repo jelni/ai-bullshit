@@ -67,6 +67,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Mines
+    ctx.set_fill_style_str("#FFA500");
+    for mine in &game.mines {
+        if mine.x < game.width
+            && mine.y < game.height
+            && is_visible(f64::from(mine.x), f64::from(mine.y))
+        {
+            ctx.fill_rect(
+                f64::from(mine.x) * cell_size,
+                f64::from(mine.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food {
         ctx.set_fill_style_str("#800080"); // DarkMagenta
