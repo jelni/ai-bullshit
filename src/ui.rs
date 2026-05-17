@@ -1013,6 +1013,15 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Mines
+    stdout.queue(SetForegroundColor(Color::Red))?;
+    for mine in &game.mines {
+        if is_visible(mine.x, mine.y) {
+            stdout.queue(cursor::MoveTo(mine.x, mine.y))?;
+            write!(stdout, "M")?;
+        }
+    }
+
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
         if is_visible(p1.x, p1.y) {

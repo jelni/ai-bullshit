@@ -219,6 +219,7 @@ pub struct HistoryState {
     pub portals: Option<(Point, Point)>,
     pub weather: Weather,
     pub lightning_column: Option<u16>,
+    pub mines: HashSet<Point>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -271,6 +272,8 @@ pub struct SaveState {
     pub weather: Weather,
     #[serde(default)]
     pub lightning_column: Option<u16>,
+    #[serde(default)]
+    pub mines: HashSet<Point>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -426,6 +429,7 @@ pub struct Game {
     pub portals: Option<(Point, Point)>,
     pub weather: Weather,
     pub lightning_column: Option<u16>,
+    pub mines: HashSet<Point>,
 }
 
 impl Game {
@@ -533,6 +537,7 @@ impl Game {
             portals: None,
             weather: Weather::Clear,
             lightning_column: None,
+            mines: HashSet::new(),
         }
     }
 
@@ -747,6 +752,7 @@ impl Game {
             portals: self.portals,
             weather: self.weather,
             lightning_column: self.lightning_column,
+            mines: self.mines.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -840,6 +846,7 @@ impl Game {
                 self.portals = state.portals;
                 self.weather = state.weather;
                 self.lightning_column = state.lightning_column;
+                self.mines = state.mines;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -897,6 +904,32 @@ impl Game {
                 }
                 // Fallback if the board is completely full
                 return None;
+            }
+        }
+    }
+
+    fn manage_mines(&mut self) {
+        let spawn_chance = 0.005;
+
+        if self.rng.gen_bool(spawn_chance) && self.mines.len() < 5 {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || (self.portals.is_some() && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
+            };
+            if let Some(mine) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.mines.insert(mine);
             }
         }
     }
@@ -1685,6 +1718,7 @@ impl Game {
         self.portals = None;
         self.weather = Weather::Clear;
         self.lightning_column = None;
+        self.mines = HashSet::new();
     }
 
     fn respawn(&mut self) {
@@ -2038,6 +2072,7 @@ impl Game {
             self.portals = state.portals;
             self.weather = state.weather;
             self.lightning_column = state.lightning_column;
+            self.mines = state.mines;
         }
     }
 
@@ -2064,6 +2099,7 @@ impl Game {
             portals: self.portals,
             weather: self.weather,
             lightning_column: self.lightning_column,
+            mines: self.mines.clone(),
         };
 
         self.history.push_back(state);
@@ -2751,6 +2787,7 @@ impl Game {
         self.manage_poison_food();
         self.manage_power_ups();
         self.manage_portals();
+        self.manage_mines();
         self.apply_magnet();
 
         // --- Calculate Next Heads ---
@@ -2833,6 +2870,83 @@ impl Game {
             p1_dead = true;
             p2_dead = true;
         }
+
+        // --- Process Mine Collisions ---
+        let mut exploded_mines = Vec::new();
+
+        let hit_mine1 = self.mines.contains(&final_head1);
+        let hit_mine2 = final_head2_opt.is_some_and(|fh2| self.mines.contains(&fh2));
+
+        if hit_mine1 && !is_invincible {
+            exploded_mines.push(final_head1);
+            p1_dead = true;
+        }
+
+        if hit_mine2 && !is_invincible {
+            if let Some(fh2) = final_head2_opt {
+                exploded_mines.push(fh2);
+            }
+            p2_dead = true;
+        }
+
+        // --- Process Mine Explosions ---
+        for mine in exploded_mines {
+            self.mines.remove(&mine);
+            self.spawn_particles(
+                f32::from(mine.x),
+                f32::from(mine.y),
+                40,
+                crate::color::Color::Red,
+                'X',
+            );
+            beep();
+
+            // Destroy everything in a 1-tile radius
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let cx = i32::from(mine.x) + dx;
+                    let cy = i32::from(mine.y) + dy;
+                    if cx > 0 && cx < i32::from(self.width - 1) && cy > 0 && cy < i32::from(self.height - 1) {
+                        let p = Point {
+                            x: u16::try_from(cx).unwrap_or(0),
+                            y: u16::try_from(cy).unwrap_or(0),
+                        };
+
+                        self.obstacles.remove(&p);
+                        self.mines.remove(&p);
+
+                        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+                        if let Some(boss) = &mut self.boss {
+                            if boss.position == p {
+                                boss.health = boss.health.saturating_sub(5);
+                                if boss.health == 0 {
+                                    if self.mode == GameMode::BossRush {
+                                        self.score += 1000 * self.campaign_level;
+                                        self.campaign_level += 1;
+                                    } else {
+                                        self.score += 100;
+                                    }
+                                    let boss_pos = boss.position;
+                                    self.boss = None;
+                                    let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+                                    for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                                        let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                                        if laser_pos.x > margin && laser_pos.x < self.width - 1 - margin && laser_pos.y > margin && laser_pos.y < self.height - 1 - margin {
+                                            self.lasers.push(Laser {
+                                                position: laser_pos,
+                                                direction: dir,
+                                                player: 3,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
 
         let old_food_eaten_session = self.food_eaten_session;
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
@@ -3619,6 +3733,10 @@ impl Game {
             }
 
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
+                return false;
+            }
+
+            if self.mines.contains(&final_p) {
                 return false;
             }
 
@@ -4631,7 +4749,12 @@ mod tests {
         for _ in 0..10000 {
             // Keep weather as storm since update might change it occasionally
             game.weather = Weather::Storm;
+            // Hack to bypass game over during loop if snake dies to random effects/mines
+            let old_lives = game.lives;
             game.update();
+            game.lives = old_lives;
+            game.state = GameState::Playing;
+
             // Re-apply weather in case it changed this tick
             game.weather = Weather::Storm;
 
