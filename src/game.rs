@@ -921,7 +921,8 @@ impl Game {
                     || self.poison_food.is_some_and(|(pp, _)| *p == pp)
                     || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
                     || self.mines.contains(p)
-                    || (self.portals.is_some() && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
+                    || (self.portals.is_some()
+                        && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
             };
             if let Some(mine) = Self::get_random_empty_point(
                 self.width,
@@ -2919,7 +2920,11 @@ impl Game {
                 for dx in -1..=1 {
                     let cx = i32::from(mine.x) + dx;
                     let cy = i32::from(mine.y) + dy;
-                    if cx > 0 && cx < i32::from(self.width - 1) && cy > 0 && cy < i32::from(self.height - 1) {
+                    if cx > 0
+                        && cx < i32::from(self.width - 1)
+                        && cy > 0
+                        && cy < i32::from(self.height - 1)
+                    {
                         let p = Point {
                             x: u16::try_from(cx).unwrap_or(0),
                             y: u16::try_from(cy).unwrap_or(0),
@@ -2928,7 +2933,10 @@ impl Game {
                         self.obstacles.remove(&p);
                         self.mines.remove(&p);
 
-                        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+                        #[expect(
+                            clippy::collapsible_if,
+                            reason = "Using let_chains requires unstable feature"
+                        )]
                         if let Some(boss) = &mut self.boss {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
@@ -2941,10 +2949,24 @@ impl Game {
                                     }
                                     let boss_pos = boss.position;
                                     self.boss = None;
-                                    let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-                                    for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
-                                        let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
-                                        if laser_pos.x > margin && laser_pos.x < self.width - 1 - margin && laser_pos.y > margin && laser_pos.y < self.height - 1 - margin {
+                                    let margin = if self.mode == GameMode::BattleRoyale {
+                                        self.safe_zone_margin
+                                    } else {
+                                        0
+                                    };
+                                    for &dir in &[
+                                        Direction::Up,
+                                        Direction::Down,
+                                        Direction::Left,
+                                        Direction::Right,
+                                    ] {
+                                        let laser_pos =
+                                            Self::calculate_next_head_dir(boss_pos, dir);
+                                        if laser_pos.x > margin
+                                            && laser_pos.x < self.width - 1 - margin
+                                            && laser_pos.y > margin
+                                            && laser_pos.y < self.height - 1 - margin
+                                        {
                                             self.lasers.push(Laser {
                                                 position: laser_pos,
                                                 direction: dir,
@@ -2959,7 +2981,6 @@ impl Game {
                 }
             }
         }
-
 
         let old_food_eaten_session = self.food_eaten_session;
         let is_multiplier = self.power_up.as_ref().is_some_and(|p| {
@@ -3995,8 +4016,7 @@ impl Game {
                     && self.mode != GameMode::BattleRoyale
                 {
                     dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                    dy =
-                        std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                    dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                 }
                 dx.saturating_add(dy)
             };
@@ -4109,7 +4129,12 @@ impl Game {
         None
     }
 
-    fn flood_fill_fallback(&self, start: Point, current_dir: Direction, checking_player: u8) -> Option<Direction> {
+    fn flood_fill_fallback(
+        &self,
+        start: Point,
+        current_dir: Direction,
+        checking_player: u8,
+    ) -> Option<Direction> {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut best_dir = None;
         let mut max_open_space = 0;
