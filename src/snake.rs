@@ -10,6 +10,19 @@ pub enum Direction {
     Right,
 }
 
+impl Direction {
+    #[must_use]
+    pub const fn is_opposite(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Up, Self::Down)
+                | (Self::Down, Self::Up)
+                | (Self::Left, Self::Right)
+                | (Self::Right, Self::Left)
+        )
+    }
+}
+
 #[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Point {
     pub x: u16,

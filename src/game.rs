@@ -3913,6 +3913,7 @@ impl Game {
 
     pub fn calculate_autopilot_move(&mut self) -> Option<Direction> {
         let start = self.snake.head();
+        let current_dir = self.snake.direction;
 
         let mut targets = vec![self.food];
         if let Some((bf_p, _)) = self.bonus_food {
@@ -3924,18 +3925,19 @@ impl Game {
             targets.push(pu.location);
         }
 
-        if let Some((dir, path)) = self.astar_search(start, &targets, 1) {
+        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
         }
 
         self.autopilot_path.clear();
-        self.flood_fill_fallback(start, 1)
+        self.flood_fill_fallback(start, current_dir, 1)
     }
 
     pub fn calculate_p2_autopilot_move(&mut self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
             let start = p2.head();
+            let current_dir = p2.direction;
 
             let mut targets = vec![self.food];
             if let Some((bf_p, _)) = self.bonus_food {
@@ -3947,13 +3949,13 @@ impl Game {
                 targets.push(pu.location);
             }
 
-            if let Some((dir, path)) = self.astar_search(start, &targets, 2) {
+            if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
                 self.p2_autopilot_path = path;
                 return Some(dir);
             }
 
             self.p2_autopilot_path.clear();
-            self.flood_fill_fallback(start, 2)
+            self.flood_fill_fallback(start, current_dir, 2)
         } else {
             None
         }
@@ -3963,6 +3965,7 @@ impl Game {
     fn astar_search(
         &self,
         start: Point,
+        current_dir: Direction,
         targets: &[Point],
         checking_player: u8,
     ) -> Option<(Direction, Vec<Point>)> {
@@ -3985,22 +3988,40 @@ impl Game {
                             < self.powerup_duration()
                     })
             });
+            let calc_dist = |p1: Point, p2: Point| -> u16 {
+                let mut dx = p1.x.abs_diff(p2.x);
+                let mut dy = p1.y.abs_diff(p2.y);
+                if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
+                {
+                    dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                    dy =
+                        std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                }
+                dx.saturating_add(dy)
+            };
+
+            let mut penalty = 0_u16;
+
+            // Entity avoidance: add penalty for being close to a boss
+            if let Some(boss) = &self.boss {
+                let d = calc_dist(p, boss.position);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+
+            // Entity avoidance: add penalty for being close to lasers
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+
             targets
                 .iter()
                 .map(|t| {
-                    let calc_dist = |p1: Point, p2: Point| -> u16 {
-                        let mut dx = p1.x.abs_diff(p2.x);
-                        let mut dy = p1.y.abs_diff(p2.y);
-                        if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                            && self.mode != GameMode::BattleRoyale
-                        {
-                            dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                            dy =
-                                std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
-                        }
-                        dx.saturating_add(dy)
-                    };
-
                     let dist_direct = calc_dist(p, *t);
 
                     if let Some((portal1, portal2)) = self.portals {
@@ -4018,10 +4039,14 @@ impl Game {
                 })
                 .min()
                 .unwrap_or(0)
+                .saturating_add(penalty)
         };
 
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
+            if d.is_opposite(current_dir) {
+                continue;
+            }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
                 && self.is_safe_final_p(final_p, 1, checking_player)
@@ -4084,12 +4109,15 @@ impl Game {
         None
     }
 
-    fn flood_fill_fallback(&self, start: Point, checking_player: u8) -> Option<Direction> {
+    fn flood_fill_fallback(&self, start: Point, current_dir: Direction, checking_player: u8) -> Option<Direction> {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut best_dir = None;
         let mut max_open_space = 0;
 
         for &d in &dirs {
+            if d.is_opposite(current_dir) {
+                continue;
+            }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
                 && self.is_safe_final_p(final_p, 1, checking_player)
