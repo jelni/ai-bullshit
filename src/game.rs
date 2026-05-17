@@ -177,6 +177,7 @@ pub enum Achievement {
     Rich,
     BotUser,
     BossSlayer,
+    MassiveMultiplayerEnthusiast,
 }
 
 #[must_use]
@@ -3440,6 +3441,12 @@ impl Game {
             && self.campaign_level > 5
         {
             new_achievements.push(Achievement::BossSlayer);
+        }
+
+        if !self.stats.unlocked_achievements.contains(&Achievement::MassiveMultiplayerEnthusiast)
+            && self.mode == GameMode::MassiveMultiplayer
+        {
+            new_achievements.push(Achievement::MassiveMultiplayerEnthusiast);
         }
 
         if !new_achievements.is_empty() {
