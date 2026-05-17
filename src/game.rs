@@ -140,6 +140,7 @@ pub enum GameMode {
     FogOfWar,
     Evolution,
     BossRush,
+    MassiveMultiplayer,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -1524,7 +1525,8 @@ impl Game {
             | GameMode::DailyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
-            | GameMode::BossRush => {
+            | GameMode::BossRush
+            | GameMode::MassiveMultiplayer => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1578,6 +1580,7 @@ impl Game {
                 || self.mode == GameMode::FogOfWar
                 || self.mode == GameMode::Evolution
                 || self.mode == GameMode::BossRush
+                || self.mode == GameMode::MassiveMultiplayer
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1603,6 +1606,7 @@ impl Game {
             || self.mode == GameMode::FogOfWar
             || self.mode == GameMode::Evolution
             || self.mode == GameMode::BossRush
+            || self.mode == GameMode::MassiveMultiplayer
         {
             &self.snake
         } else {
@@ -1713,6 +1717,13 @@ impl Game {
         self.combo = 0;
         self.last_food_time = None;
         self.chat_log.clear();
+        if self.mode == GameMode::MassiveMultiplayer {
+            self.auto_pilot = true;
+            self.chat_log.push_back((
+                "SYSTEM: Simulating 100 bots entering the arena...".to_string(),
+                crate::color::Color::Magenta,
+            ));
+        }
         self.last_chat_time = None;
         self.boss = None;
         self.portals = None;
@@ -1739,7 +1750,8 @@ impl Game {
             | GameMode::DailyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
-            | GameMode::BossRush => {
+            | GameMode::BossRush
+            | GameMode::MassiveMultiplayer => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
