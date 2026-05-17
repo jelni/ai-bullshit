@@ -371,19 +371,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             19 => {
+                game.mode = game::GameMode::MassiveMultiplayer;
+                game.reset();
+            },
+            20 => {
                 let _ = game.load_game();
             },
-            20 => game.state = GameState::Settings,
-            21 => game.state = GameState::NftShop,
-            22 => game.state = GameState::SkillTree,
-            23 => game.state = GameState::Stats,
-            24 => game.state = GameState::Achievements,
-            25 => game.state = GameState::Help,
-            26 => {
+            21 => game.state = GameState::Settings,
+            22 => game.state = GameState::NftShop,
+            23 => game.state = GameState::SkillTree,
+            24 => game.state = GameState::Stats,
+            25 => game.state = GameState::Achievements,
+            26 => game.state = GameState::Help,
+            27 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            27 => {
+            28 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -391,7 +395,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            28 => {
+            29 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -401,11 +405,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 28;
+                game.menu_selection = 29;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 28 {
+            if game.menu_selection < 29 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -499,6 +503,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
+                || game.mode == game::GameMode::MassiveMultiplayer
             {
                 game.handle_input(Direction::Up, 1);
             } else {
@@ -513,6 +518,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
+                || game.mode == game::GameMode::MassiveMultiplayer
             {
                 game.handle_input(Direction::Down, 1);
             } else {
@@ -527,6 +533,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
+                || game.mode == game::GameMode::MassiveMultiplayer
             {
                 game.handle_input(Direction::Left, 1);
             } else {
@@ -541,6 +548,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
+                || game.mode == game::GameMode::MassiveMultiplayer
             {
                 game.handle_input(Direction::Right, 1);
             } else {
