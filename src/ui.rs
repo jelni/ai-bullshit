@@ -111,6 +111,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Evolution Mode",
         "Boss Rush Mode",
         "Massive Multiplayer",
+        "Mirror Mode",
         "Load Game",
         "Settings",
         "NFT Shop",

@@ -141,6 +141,7 @@ pub enum GameMode {
     Evolution,
     BossRush,
     MassiveMultiplayer,
+    Mirror,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -1568,7 +1569,8 @@ impl Game {
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
-            | GameMode::MassiveMultiplayer => {
+            | GameMode::MassiveMultiplayer
+            | GameMode::Mirror => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1623,6 +1625,7 @@ impl Game {
                 || self.mode == GameMode::Evolution
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::MassiveMultiplayer
+                || self.mode == GameMode::Mirror
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1649,6 +1652,7 @@ impl Game {
             || self.mode == GameMode::Evolution
             || self.mode == GameMode::BossRush
             || self.mode == GameMode::MassiveMultiplayer
+            || self.mode == GameMode::Mirror
         {
             &self.snake
         } else {
@@ -1813,7 +1817,8 @@ impl Game {
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
-            | GameMode::MassiveMultiplayer => {
+            | GameMode::MassiveMultiplayer
+            | GameMode::Mirror => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
