@@ -102,6 +102,7 @@ pub enum PowerUpType {
     Teleport,
     Magnet,
     TimeFreeze,
+    Reverse,
 }
 
 #[serde_as]
@@ -452,6 +453,21 @@ impl Game {
     #[must_use]
     pub fn powerup_duration(&self) -> u64 {
         5 + u64::from(self.stats.upgrade_powerup_duration)
+    }
+
+    #[must_use]
+    pub fn is_reverse_active(&self) -> bool {
+        self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Reverse
+                && p.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < self.powerup_duration()
+                })
+        })
     }
 
     /// # Panics
@@ -3771,7 +3787,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..11) {
+                let p_type = match self.rng.gen_range(0..12) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -3782,6 +3798,7 @@ impl Game {
                     7 => PowerUpType::Teleport,
                     8 => PowerUpType::Magnet,
                     9 => PowerUpType::TimeFreeze,
+                    10 => PowerUpType::Reverse,
                     _ => PowerUpType::ExtraLife,
                 };
 
