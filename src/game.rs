@@ -4243,14 +4243,6 @@ impl Game {
                 }
             }
 
-            // Entity avoidance: add penalty for being close to mines
-            for m in &self.mines {
-                let d = calc_dist(p, *m);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 5);
-                }
-            }
-
             targets
                 .iter()
                 .map(|t| {
