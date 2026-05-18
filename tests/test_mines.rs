@@ -78,3 +78,40 @@ fn test_mine_explosion() {
     // Safe obstacle should still be there
     assert!(game.obstacles.contains(&safe_obs));
 }
+
+#[test]
+fn test_bot_avoids_mines() {
+    let mut game = Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+
+    // Set up snake
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = snake_game::snake::Direction::Right;
+
+    // Set normal food far away
+    game.food = Point {
+        x: 15,
+        y: 5,
+    };
+
+    // Put mine exactly where the bot would normally go (Right)
+    game.mines.insert(Point {
+        x: 6,
+        y: 5,
+    });
+
+    // Request a move
+    let next_move = game.calculate_autopilot_move();
+
+    // It should avoid moving right
+    assert!(next_move == Some(snake_game::snake::Direction::Up) || next_move == Some(snake_game::snake::Direction::Down));
+}
