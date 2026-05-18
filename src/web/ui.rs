@@ -83,6 +83,19 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Black Hole
+    if let Some(bh) = game.black_hole {
+        ctx.set_fill_style_str("#1A1A1A"); // DarkGrey/Blackish
+        if bh.x < game.width && bh.y < game.height {
+            ctx.fill_rect(
+                f64::from(bh.x) * cell_size,
+                f64::from(bh.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food {
         ctx.set_fill_style_str("#800080"); // DarkMagenta
