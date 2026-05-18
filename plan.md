@@ -1,10 +1,12 @@
-1. **Understand the Goal**: The issue mentions a new "Mines" feature was added recently (`mines: HashSet<Point>`). Currently, the pathfinding logic (`astar_search`) has penalties for `boss` and `lasers` but *not* for `mines`. I need to make the AI bot actively avoid `mines` by adding a similar penalty in the `heuristic` function of `astar_search`.
-2. **Add Mine Avoidance to A* Heuristic**:
-   - In `src/game.rs`, inside `fn astar_search`, locate the `heuristic` closure.
-   - Add a check for being close to any mine in `self.mines`.
-   - Calculate a penalty if the distance `d` is less than some threshold (e.g., 3 or 4) to discourage the bot from walking near mines. Note that direct collisions with mines are already prevented by `is_safe_final_p`, but adding a penalty makes the bot path *around* them gracefully. Wait, let's look at `is_safe_final_p` - it already returns `false` if `self.mines.contains(&final_p)`. Adding a penalty in `heuristic` for mines that are nearby will help it avoid getting boxed in. Let's add a penalty for distance `< 4`.
-3. **Pre-commit Instructions**:
-   - Run tests to verify the `test_bot_avoids_mines` or similar passes.
-   - Run `./clippy.sh` and make sure it succeeds.
+1. **Understand the Goal**: Add poison food avoidance to the pathfinding logic. The test `test_bot_avoids_poison_food` ensures the bot doesn't eat poison food. In `src/game.rs`, inside `fn astar_search`, there is already entity avoidance code for bosses, lasers, mines, black holes, and meteors. We need to add a penalty for being close to poison food so the bot avoids it during pathfinding.
+2. **Add Poison Food Avoidance to A* Heuristic**:
+   - Open `src/game.rs`.
+   - Locate `fn astar_search` and its inner `heuristic` closure.
+   - Below the other entity avoidances (e.g., around line 4647), add a check for `self.poison_food`.
+   - If `self.poison_food` is `Some((pf_p, _))`, calculate the distance `d` between `p` and `pf_p`.
+   - If `d < 4`, add a penalty: `penalty = penalty.saturating_add((4 - d) * 10);`. This ensures the bot will prioritize paths that don't pass adjacent to poison food.
+3. **Pre commit instructions**:
+   - Run `cargo test` to ensure `test_bot_avoids_poison_food` and all other tests pass.
+   - Run `./clippy.sh`
 4. **Submit**:
-   - Submit the changes with an appropriate message.
+   - Use `submit` to push the changes.
