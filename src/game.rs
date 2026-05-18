@@ -225,6 +225,7 @@ pub struct HistoryState {
     pub weather: Weather,
     pub lightning_column: Option<u16>,
     pub mines: HashSet<Point>,
+    pub black_hole: Option<Point>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -279,6 +280,8 @@ pub struct SaveState {
     pub lightning_column: Option<u16>,
     #[serde(default)]
     pub mines: HashSet<Point>,
+    #[serde(default)]
+    pub black_hole: Option<Point>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -447,6 +450,7 @@ pub struct Game {
     pub weather: Weather,
     pub lightning_column: Option<u16>,
     pub mines: HashSet<Point>,
+    pub black_hole: Option<Point>,
 }
 
 impl Game {
@@ -598,6 +602,7 @@ impl Game {
             weather: Weather::Clear,
             lightning_column: None,
             mines: HashSet::new(),
+            black_hole: None,
         }
     }
 
@@ -813,6 +818,7 @@ impl Game {
             weather: self.weather,
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
+            black_hole: self.black_hole,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -907,6 +913,7 @@ impl Game {
                 self.weather = state.weather;
                 self.lightning_column = state.lightning_column;
                 self.mines = state.mines;
+                self.black_hole = state.black_hole;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -964,6 +971,130 @@ impl Game {
                 }
                 // Fallback if the board is completely full
                 return None;
+            }
+        }
+    }
+
+    fn manage_black_hole(&mut self) {
+        let spawn_chance = 0.002;
+
+        if self.black_hole.is_none() && self.rng.gen_bool(spawn_chance) {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || (self.portals.is_some()
+                        && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+            };
+            if let Some(bh) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin + 2,
+            ) {
+                self.black_hole = Some(bh);
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        } else if self.black_hole.is_some() && self.rng.gen_bool(0.01) {
+            // Despawn black hole occasionally
+            self.black_hole = None;
+        }
+
+        // Handle gravitational pull of food towards black hole
+        if let Some(bh) = self.black_hole {
+            if self.rng.gen_bool(0.2) {
+                let mut p = self.food;
+                self.pull_point_towards_black_hole(&mut p, bh);
+                self.food = p;
+            }
+            if let Some((mut bp, time)) = self.bonus_food {
+                if self.rng.gen_bool(0.2) {
+                    self.pull_point_towards_black_hole(&mut bp, bh);
+                }
+                self.bonus_food = Some((bp, time));
+            }
+            if let Some((mut pp, time)) = self.poison_food {
+                if self.rng.gen_bool(0.2) {
+                    self.pull_point_towards_black_hole(&mut pp, bh);
+                }
+                self.poison_food = Some((pp, time));
+            }
+            if let Some(mut pu) = self.power_up.clone()
+                && self.rng.gen_bool(0.2) {
+                    self.pull_point_towards_black_hole(&mut pu.location, bh);
+                    self.power_up = Some(pu);
+                }
+
+            // Destroy obstacles near black hole
+            let mut to_remove = Vec::new();
+            for obs in &self.obstacles {
+                let dist = bh.x.abs_diff(obs.x).saturating_add(bh.y.abs_diff(obs.y));
+                if dist <= 1 {
+                    to_remove.push(*obs);
+                }
+            }
+            for obs in to_remove {
+                self.obstacles.remove(&obs);
+            }
+
+            // Also destroy mines near black hole
+            let mut mines_to_remove = Vec::new();
+            for mine in &self.mines {
+                let dist = bh.x.abs_diff(mine.x).saturating_add(bh.y.abs_diff(mine.y));
+                if dist <= 1 {
+                    mines_to_remove.push(*mine);
+                }
+            }
+            for mine in mines_to_remove {
+                self.mines.remove(&mine);
+            }
+        }
+    }
+
+    fn pull_point_towards_black_hole(&self, point: &mut Point, bh: Point) {
+        let dx = i32::from(bh.x) - i32::from(point.x);
+        let dy = i32::from(bh.y) - i32::from(point.y);
+
+        if dx == 0 && dy == 0 {
+            return; // Point is already in the black hole
+        }
+
+        let mut next_p = *point;
+
+        if dx.abs() > dy.abs() {
+            if dx > 0 {
+                next_p.x += 1;
+            } else {
+                next_p.x -= 1;
+            }
+        } else {
+            if dy > 0 {
+                next_p.y += 1;
+            } else {
+                next_p.y -= 1;
+            }
+        }
+
+        // Ensure next_p is within bounds
+        if next_p.x > 0 && next_p.x < self.width - 1 && next_p.y > 0 && next_p.y < self.height - 1 {
+            // Check if it's hitting a snake body. If so, do not pull.
+            if !self.snake.body_map.contains_key(&next_p)
+                && !self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&next_p))
+            {
+                *point = next_p;
             }
         }
     }
@@ -1845,6 +1976,7 @@ impl Game {
         self.weather = Weather::Clear;
         self.lightning_column = None;
         self.mines = HashSet::new();
+        self.black_hole = None;
     }
 
     fn respawn(&mut self) {
@@ -2205,6 +2337,7 @@ impl Game {
             self.weather = state.weather;
             self.lightning_column = state.lightning_column;
             self.mines = state.mines;
+            self.black_hole = state.black_hole;
         }
     }
 
@@ -2232,6 +2365,7 @@ impl Game {
             weather: self.weather,
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
+            black_hole: self.black_hole,
         };
 
         self.history.push_back(state);
@@ -3016,6 +3150,7 @@ impl Game {
         self.manage_power_ups();
         self.manage_portals();
         self.manage_mines();
+        self.manage_black_hole();
         self.apply_magnet();
 
         // --- Calculate Next Heads ---
@@ -3127,6 +3262,35 @@ impl Game {
                 exploded_mines.push(fh2);
             }
             p2_dead = true;
+        }
+
+        let hit_black_hole1 = self.black_hole.is_some_and(|bh| final_head1 == bh);
+        let hit_black_hole2 = final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
+
+        if hit_black_hole1 && !is_invincible {
+            p1_dead = true;
+            if let Some(bh) = self.black_hole {
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        }
+
+        if hit_black_hole2 && !is_invincible {
+            p2_dead = true;
+            if let Some(bh) = self.black_hole {
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
         }
 
         // --- Process Mine Explosions ---
@@ -4027,6 +4191,10 @@ impl Game {
                 return false;
             }
 
+            if self.black_hole.is_some_and(|bh| bh == final_p) {
+                return false;
+            }
+
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
@@ -4303,6 +4471,14 @@ impl Game {
                 let d = calc_dist(p, *m);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+
+            // Entity avoidance: add penalty for being close to black hole
+            if let Some(bh) = self.black_hole {
+                let d = calc_dist(p, bh);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
                 }
             }
 
