@@ -1003,7 +1003,10 @@ impl Game {
             if max_x > min_x {
                 let spawn_x = self.rng.gen_range(min_x..max_x);
                 self.meteors.push(Meteor {
-                    position: Point { x: spawn_x, y: margin + 1 },
+                    position: Point {
+                        x: spawn_x,
+                        y: margin + 1,
+                    },
                     timer: 0,
                 });
             }
@@ -1123,10 +1126,11 @@ impl Game {
                 self.poison_food = Some((pp, time));
             }
             if let Some(mut pu) = self.power_up.clone()
-                && self.rng.gen_bool(0.2) {
-                    self.pull_point_towards_black_hole(&mut pu.location, bh);
-                    self.power_up = Some(pu);
-                }
+                && self.rng.gen_bool(0.2)
+            {
+                self.pull_point_towards_black_hole(&mut pu.location, bh);
+                self.power_up = Some(pu);
+            }
 
             // Destroy obstacles near black hole
             let mut to_remove = Vec::new();
@@ -1533,7 +1537,10 @@ impl Game {
         for y in (0..self.height).rev() {
             let mut fully_flooded = true;
             for x in 0..self.width {
-                if !self.obstacles.contains(&Point { x, y }) {
+                if !self.obstacles.contains(&Point {
+                    x,
+                    y,
+                }) {
                     fully_flooded = false;
                     break;
                 }
@@ -1548,7 +1555,10 @@ impl Game {
         let new_flood_y = highest_flood_y.saturating_sub(1);
         if new_flood_y > 0 {
             for x in 0..self.width {
-                self.obstacles.insert(Point { x, y: new_flood_y });
+                self.obstacles.insert(Point {
+                    x,
+                    y: new_flood_y,
+                });
             }
         }
     }
@@ -3359,11 +3369,20 @@ impl Game {
         }
 
         let hit_black_hole1 = self.black_hole.is_some_and(|bh| final_head1 == bh);
-        let hit_black_hole2 = final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
+        let hit_black_hole2 =
+            final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
 
         // --- Process Meteor Collisions ---
-        let hit_meteor1 = self.meteors.iter().any(|m| m.position == final_head1 || self.snake.body_map.contains_key(&m.position));
-        let hit_meteor2 = final_head2_opt.is_some_and(|fh2| self.meteors.iter().any(|m| m.position == fh2 || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&m.position))));
+        let hit_meteor1 = self
+            .meteors
+            .iter()
+            .any(|m| m.position == final_head1 || self.snake.body_map.contains_key(&m.position));
+        let hit_meteor2 = final_head2_opt.is_some_and(|fh2| {
+            self.meteors.iter().any(|m| {
+                m.position == fh2
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&m.position))
+            })
+        });
 
         if hit_meteor1 && !is_invincible {
             p1_dead = true;
@@ -4319,7 +4338,11 @@ impl Game {
 
             for meteor in &self.meteors {
                 // Predictive: meteor falls 1 tile per 2 ticks. For simplicity, just avoid its current column below it and its current spot
-                if meteor.position == final_p || (meteor.position.x == final_p.x && meteor.position.y <= final_p.y && meteor.position.y + steps >= final_p.y) {
+                if meteor.position == final_p
+                    || (meteor.position.x == final_p.x
+                        && meteor.position.y <= final_p.y
+                        && meteor.position.y + steps >= final_p.y)
+                {
                     return false;
                 }
             }
@@ -4617,7 +4640,7 @@ impl Game {
                 if dx < 2 && p.y >= m.position.y {
                     let dy = p.y.abs_diff(m.position.y);
                     if dy < 10 {
-                         penalty = penalty.saturating_add((10 - dy) * 5);
+                        penalty = penalty.saturating_add((10 - dy) * 5);
                     }
                 }
             }

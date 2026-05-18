@@ -16,7 +16,10 @@ fn test_meteor_spawning_and_falling() {
 
     // Force a meteor to spawn
     game.meteors.push(Meteor {
-        position: Point { x: 10, y: 5 },
+        position: Point {
+            x: 10,
+            y: 5,
+        },
         timer: 0,
     });
 
@@ -47,13 +50,19 @@ fn test_meteor_kills_snake() {
     );
 
     // Place snake
-    game.snake = snake_game::snake::Snake::new(Point { x: 10, y: 10 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 10,
+    });
     game.snake.direction = snake_game::snake::Direction::Right; // moving to (11,10)
     game.obstacles.clear();
 
     // Place meteor that will hit the snake's next head position
     game.meteors.push(Meteor {
-        position: Point { x: 11, y: 10 },
+        position: Point {
+            x: 11,
+            y: 10,
+        },
         timer: 0,
     });
 
@@ -77,12 +86,18 @@ fn test_meteor_destroys_obstacle() {
     );
 
     game.obstacles.clear();
-    let obs_pos = Point { x: 5, y: 5 };
+    let obs_pos = Point {
+        x: 5,
+        y: 5,
+    };
     game.obstacles.insert(obs_pos);
 
     // Meteor falls exactly on the obstacle next tick
     game.meteors.push(Meteor {
-        position: Point { x: 5, y: 4 },
+        position: Point {
+            x: 5,
+            y: 4,
+        },
         timer: 1, // Ready to move down on next update
     });
 

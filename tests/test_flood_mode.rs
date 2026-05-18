@@ -17,7 +17,10 @@ fn test_flood_mode() {
     // Check if the bottom row (y = 19) is filled with obstacles
     for x in 0..game.width {
         assert!(
-            game.obstacles.contains(&Point { x, y: 19 }),
+            game.obstacles.contains(&Point {
+                x,
+                y: 19
+            }),
             "Bottom row should be flooded"
         );
     }
@@ -28,7 +31,10 @@ fn test_flood_mode() {
     // Check if the next row (y = 18) is filled
     for x in 0..game.width {
         assert!(
-            game.obstacles.contains(&Point { x, y: 18 }),
+            game.obstacles.contains(&Point {
+                x,
+                y: 18
+            }),
             "Second row from bottom should be flooded"
         );
     }
@@ -37,7 +43,10 @@ fn test_flood_mode() {
     for y in 0..18 {
         for x in 0..game.width {
             assert!(
-                !game.obstacles.contains(&Point { x, y }),
+                !game.obstacles.contains(&Point {
+                    x,
+                    y
+                }),
                 "Upper rows should remain clear"
             );
         }

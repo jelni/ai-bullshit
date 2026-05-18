@@ -1043,11 +1043,12 @@ fn draw_entities<W: Write>(
 
     // Draw Black Hole
     if let Some(bh) = game.black_hole
-        && is_visible(bh.x, bh.y) {
-            stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
-            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-            write!(stdout, "O")?;
-        }
+        && is_visible(bh.x, bh.y)
+    {
+        stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        write!(stdout, "O")?;
+    }
 
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
