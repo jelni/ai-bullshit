@@ -1043,11 +1043,12 @@ fn draw_entities<W: Write>(
 
     // Draw Black Hole
     if let Some(bh) = game.black_hole
-        && is_visible(bh.x, bh.y) {
-            stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
-            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-            write!(stdout, "O")?;
-        }
+        && is_visible(bh.x, bh.y)
+    {
+        stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        write!(stdout, "O")?;
+    }
 
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
@@ -1061,6 +1062,15 @@ fn draw_entities<W: Write>(
             stdout.queue(cursor::MoveTo(p2.x, p2.y))?;
             stdout.queue(SetForegroundColor(Color::Magenta))?;
             write!(stdout, "O")?;
+        }
+    }
+
+    // Draw Meteors
+    for meteor in &game.meteors {
+        if is_visible(meteor.position.x, meteor.position.y) {
+            stdout.queue(cursor::MoveTo(meteor.position.x, meteor.position.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+            write!(stdout, "*")?;
         }
     }
 

@@ -83,6 +83,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Meteors
+    ctx.set_fill_style_str("#FF8C00"); // DarkOrange
+    for meteor in &game.meteors {
+        if meteor.position.x < game.width
+            && meteor.position.y < game.height
+            && is_visible(f64::from(meteor.position.x), f64::from(meteor.position.y))
+        {
+            ctx.fill_rect(
+                f64::from(meteor.position.x) * cell_size,
+                f64::from(meteor.position.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw Black Hole
     if let Some(bh) = game.black_hole {
         ctx.set_fill_style_str("#1A1A1A"); // DarkGrey/Blackish
