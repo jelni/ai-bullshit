@@ -385,19 +385,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             21 => {
+                game.mode = game::GameMode::Flood;
+                game.reset();
+            },
+            22 => {
                 let _ = game.load_game();
             },
-            22 => game.state = GameState::Settings,
-            23 => game.state = GameState::NftShop,
-            24 => game.state = GameState::SkillTree,
-            25 => game.state = GameState::Stats,
-            26 => game.state = GameState::Achievements,
-            27 => game.state = GameState::Help,
-            28 => {
+            23 => game.state = GameState::Settings,
+            24 => game.state = GameState::NftShop,
+            25 => game.state = GameState::SkillTree,
+            26 => game.state = GameState::Stats,
+            27 => game.state = GameState::Achievements,
+            28 => game.state = GameState::Help,
+            29 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            29 => {
+            30 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -405,7 +409,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            30 => {
+            31 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -541,6 +545,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
                 || game.mode == game::GameMode::MassiveMultiplayer
+                || game.mode == game::GameMode::Flood
             {
                 game.handle_input(Direction::Up, 1);
             } else {
@@ -558,6 +563,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
                 || game.mode == game::GameMode::MassiveMultiplayer
+                || game.mode == game::GameMode::Flood
             {
                 game.handle_input(Direction::Down, 1);
             } else {
@@ -575,6 +581,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
                 || game.mode == game::GameMode::MassiveMultiplayer
+                || game.mode == game::GameMode::Flood
             {
                 game.handle_input(Direction::Left, 1);
             } else {
@@ -592,6 +599,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
                 || game.mode == game::GameMode::MassiveMultiplayer
+                || game.mode == game::GameMode::Flood
             {
                 game.handle_input(Direction::Right, 1);
             } else {
