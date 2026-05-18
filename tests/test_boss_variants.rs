@@ -4,12 +4,18 @@ use snake_game::snake::{Direction, Point, Snake};
 #[test]
 fn test_charger_moves_faster() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Charger Boss
     game.boss = Some(Boss {
-        position: Point { x: 9, y: 5 },
+        position: Point {
+            x: 9,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -24,18 +30,31 @@ fn test_charger_moves_faster() {
     // Move timer for charger increments by 1. Threshold is (2/2) = 1.
     // So it should move in 1 update call.
     let current_pos = game.boss.unwrap().position;
-    assert_ne!(current_pos, Point { x: 9, y: 5 }, "Charger boss should have moved");
+    assert_ne!(
+        current_pos,
+        Point {
+            x: 9,
+            y: 5
+        },
+        "Charger boss should have moved"
+    );
 }
 
 #[test]
 fn test_spawner_drops_mines() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Spawner Boss
     game.boss = Some(Boss {
-        position: Point { x: 9, y: 5 },
+        position: Point {
+            x: 9,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -49,5 +68,11 @@ fn test_spawner_drops_mines() {
     game.update();
 
     assert_eq!(game.mines.len(), 1, "Spawner boss should drop a mine");
-    assert!(game.mines.contains(&Point { x: 9, y: 5 }), "Mine should be dropped at boss position");
+    assert!(
+        game.mines.contains(&Point {
+            x: 9,
+            y: 5
+        }),
+        "Mine should be dropped at boss position"
+    );
 }

@@ -24,8 +24,8 @@ fn test_bot_predicts_boss_laser() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 14,
-kind: snake_game::game::BossType::Shooter,
-state_timer: 0, // Normal threshold is 15. So it will shoot next tick!
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0, // Normal threshold is 15. So it will shoot next tick!
     });
 
     let next_move = game.calculate_autopilot_move();

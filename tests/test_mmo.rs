@@ -1,4 +1,4 @@
-use snake_game::game::{Game, GameMode, Difficulty, Theme};
+use snake_game::game::{Difficulty, Game, GameMode, Theme};
 
 #[test]
 fn test_massive_multiplayer_mode() {

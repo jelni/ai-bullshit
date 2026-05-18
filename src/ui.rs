@@ -175,7 +175,10 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         (crate::game::Achievement::Rich, "Rich (Accumulate 1000+ coins)"),
         (crate::game::Achievement::BotUser, "Bot User (Use the bot)"),
         (crate::game::Achievement::BossSlayer, "Boss Slayer (Defeat a Boss)"),
-        (crate::game::Achievement::MassiveMultiplayerEnthusiast, "MMO Enthusiast (Play Massive Multiplayer)"),
+        (
+            crate::game::Achievement::MassiveMultiplayerEnthusiast,
+            "MMO Enthusiast (Play Massive Multiplayer)",
+        ),
     ];
 
     for (i, (ach, desc)) in all_achievements.iter().enumerate() {

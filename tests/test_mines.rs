@@ -44,16 +44,31 @@ fn test_mine_explosion() {
     game.obstacles.clear();
     game.mines.clear();
 
-    let mine_pos = Point { x: 10, y: 10 };
+    let mine_pos = Point {
+        x: 10,
+        y: 10,
+    };
     game.mines.insert(mine_pos);
 
     // Add obstacles in 1-tile radius
-    let obs1 = Point { x: 9, y: 9 };
-    let obs2 = Point { x: 10, y: 11 };
-    let obs3 = Point { x: 11, y: 10 };
+    let obs1 = Point {
+        x: 9,
+        y: 9,
+    };
+    let obs2 = Point {
+        x: 10,
+        y: 11,
+    };
+    let obs3 = Point {
+        x: 11,
+        y: 10,
+    };
 
     // Add an obstacle far away that shouldn't be destroyed
-    let safe_obs = Point { x: 2, y: 2 };
+    let safe_obs = Point {
+        x: 2,
+        y: 2,
+    };
 
     game.obstacles.insert(obs1);
     game.obstacles.insert(obs2);
@@ -61,7 +76,10 @@ fn test_mine_explosion() {
     game.obstacles.insert(safe_obs);
 
     // Trigger explosion by moving snake into it
-    game.snake = snake_game::snake::Snake::new(Point { x: 10, y: 9 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 9,
+    });
     game.snake.direction = snake_game::snake::Direction::Down;
     game.state = snake_game::game::GameState::Playing;
 
@@ -113,5 +131,8 @@ fn test_bot_avoids_mines() {
     let next_move = game.calculate_autopilot_move();
 
     // It should avoid moving right
-    assert!(next_move == Some(snake_game::snake::Direction::Up) || next_move == Some(snake_game::snake::Direction::Down));
+    assert!(
+        next_move == Some(snake_game::snake::Direction::Up)
+            || next_move == Some(snake_game::snake::Direction::Down)
+    );
 }

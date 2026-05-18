@@ -19,8 +19,8 @@ fn test_boss_rage_phase() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
-kind: snake_game::game::BossType::Shooter,
-state_timer: 0,
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0,
     });
 
     // At full health (10/10), thresholds are normal
@@ -71,8 +71,8 @@ fn test_boss_death_nova() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
-kind: snake_game::game::BossType::Shooter,
-state_timer: 0,
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0,
     });
 
     // Spawn a laser that will hit the boss next tick

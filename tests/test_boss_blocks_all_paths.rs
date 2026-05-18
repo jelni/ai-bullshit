@@ -24,8 +24,8 @@ fn test_boss_blocks_all_paths() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
-kind: snake_game::game::BossType::Shooter,
-state_timer: 0,
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0,
     });
 
     let next_move = game.calculate_autopilot_move();
