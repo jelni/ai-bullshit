@@ -1056,8 +1056,20 @@ fn draw_entities<W: Write>(
         && is_visible(boss.position.x, boss.position.y)
     {
         stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
-        stdout.queue(SetForegroundColor(Color::Magenta))?;
-        write!(stdout, "B")?;
+        match boss.kind {
+            crate::game::BossType::Shooter => {
+                stdout.queue(SetForegroundColor(Color::Magenta))?;
+                write!(stdout, "B")?;
+            },
+            crate::game::BossType::Charger => {
+                stdout.queue(SetForegroundColor(Color::Red))?;
+                write!(stdout, "C")?;
+            },
+            crate::game::BossType::Spawner => {
+                stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+                write!(stdout, "S")?;
+            },
+        }
     }
 
     // Draw bonus food

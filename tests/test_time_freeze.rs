@@ -30,6 +30,8 @@ fn test_time_freeze_pauses_boss_and_lasers() {
         max_health: 10,
         move_timer: 100,  // Should move immediately if time wasn't frozen
         shoot_timer: 100, // Should shoot immediately if time wasn't frozen
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0,
     });
 
     let laser_initial_pos = snake::Point {
@@ -105,6 +107,8 @@ fn test_bot_avoids_frozen_boss() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
+kind: snake_game::game::BossType::Shooter,
+state_timer: 0,
     });
 
     // Since the direct path (Right) is blocked by the frozen boss, it should choose Up or Down.

@@ -25,6 +25,8 @@ fn test_bot_predicts_boss() {
         max_health: 10,
         move_timer: 1, // Will move this turn
         shoot_timer: 0,
+kind: snake_game::game::BossType::Shooter,
+state_timer: 0,
     });
 
     // In a real scenario, the A* needs to simulate the boss moving towards the snake.

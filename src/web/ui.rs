@@ -123,7 +123,11 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     // Draw boss
     if let Some(boss) = &game.boss {
-        ctx.set_fill_style_str("#FF00FF");
+        match boss.kind {
+            crate::game::BossType::Shooter => ctx.set_fill_style_str("#FF00FF"),
+            crate::game::BossType::Charger => ctx.set_fill_style_str("#FF0000"),
+            crate::game::BossType::Spawner => ctx.set_fill_style_str("#006400"),
+        }
         if boss.position.x < game.width
             && boss.position.y < game.height
             && is_visible(f64::from(boss.position.x), f64::from(boss.position.y))
