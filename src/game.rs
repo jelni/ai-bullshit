@@ -4482,6 +4482,22 @@ impl Game {
                 }
             }
 
+            // Entity avoidance: add penalty for being close to poison food
+            if let Some((pp, _)) = self.poison_food {
+                let d = calc_dist(p, pp);
+                if d < 3 {
+                    penalty = penalty.saturating_add((3 - d) * 5);
+                }
+            }
+
+            // Entity avoidance: add penalty for being in or near lightning column
+            if let Some(col) = self.lightning_column {
+                let dx = p.x.abs_diff(col);
+                if dx < 2 {
+                    penalty = penalty.saturating_add((2 - dx) * 15);
+                }
+            }
+
             targets
                 .iter()
                 .map(|t| {
