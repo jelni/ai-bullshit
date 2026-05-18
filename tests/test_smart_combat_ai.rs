@@ -20,6 +20,8 @@ fn test_bot_shoots_boss_in_line_of_sight() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
+kind: snake_game::game::BossType::Shooter,
+state_timer: 0,
     });
 
     assert!(game.should_bot_shoot(1));

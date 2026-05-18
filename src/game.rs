@@ -356,6 +356,16 @@ pub struct Laser {
     pub player: u8,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
+pub enum BossType {
+    #[default]
+    Shooter,
+    Charger,
+    Spawner,
+}
+
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Boss {
     pub position: Point,
@@ -364,6 +374,10 @@ pub struct Boss {
     pub move_timer: u8,
     #[serde(default)]
     pub shoot_timer: u8,
+    #[serde(default)]
+    pub kind: BossType,
+    #[serde(default)]
+    pub state_timer: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2296,12 +2310,19 @@ impl Game {
                 } else {
                     10
                 };
+                let kind = match self.rng.gen_range(0..3) {
+                    0 => BossType::Shooter,
+                    1 => BossType::Charger,
+                    _ => BossType::Spawner,
+                };
                 self.boss = Some(Boss {
                     position: pos,
                     health: boss_health,
                     max_health: boss_health,
                     move_timer: 0,
                     shoot_timer: 0,
+                    kind,
+                    state_timer: 0,
                 });
                 self.spawn_particles(
                     f32::from(pos.x),
@@ -2315,93 +2336,159 @@ impl Game {
 
         if let Some(mut boss) = self.boss.take() {
             if !is_time_frozen {
-                let mut move_threshold = if self.mode == GameMode::BossRush {
-                    std::cmp::max(
-                        1,
-                        3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5),
-                    )
+                if boss.state_timer > 0 {
+                    boss.state_timer -= 1;
                 } else {
-                    2
-                };
+                    let mut move_threshold = if self.mode == GameMode::BossRush {
+                        std::cmp::max(
+                            1,
+                            3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5),
+                        )
+                    } else {
+                        2
+                    };
 
-                if boss.health <= boss.max_health / 2 {
-                    move_threshold = std::cmp::max(1, move_threshold / 2);
-                }
+                    if boss.kind == BossType::Charger {
+                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                    }
 
-                boss.move_timer += 1;
-                if boss.move_timer >= move_threshold {
-                    boss.move_timer = 0;
-                    let head = self.snake.head();
+                    if boss.health <= boss.max_health / 2 {
+                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                    }
 
-                    if let Some(dir) = self.bfs_pathfind(boss.position, head) {
-                        let next_pos = Self::calculate_next_head_dir(boss.position, dir);
-                        let margin = if self.mode == GameMode::BattleRoyale {
-                            self.safe_zone_margin
+                    boss.move_timer += 1;
+                    if boss.move_timer >= move_threshold {
+                        boss.move_timer = 0;
+                        let head = self.snake.head();
+
+                        // Charger uses A* for smarter pathfinding to ram the player
+                        let dir_opt = if boss.kind == BossType::Charger {
+                            let targets = vec![head];
+                            // Using a dummy direction that will be checked against, but we don't have a true current direction for the boss yet.
+                            // We can use the direction opposite to the snake head from the boss to allow all forward movement towards the player.
+                            let dx = i32::from(head.x) - i32::from(boss.position.x);
+                            let dy = i32::from(head.y) - i32::from(boss.position.y);
+
+                            let fake_dir = if dx.abs() > dy.abs() {
+                                if dx > 0 { Direction::Right } else { Direction::Left }
+                            } else {
+                                if dy > 0 { Direction::Down } else { Direction::Up }
+                            };
+                            self.astar_search(boss.position, fake_dir, &targets, 3).map(|(d, _)| d).or_else(|| self.bfs_pathfind(boss.position, head))
                         } else {
-                            0
+                            self.bfs_pathfind(boss.position, head)
                         };
-                        if next_pos.x > margin
-                            && next_pos.x < self.width - 1 - margin
-                            && next_pos.y > margin
-                            && next_pos.y < self.height - 1 - margin
-                            && !self.obstacles.contains(&next_pos)
-                        {
-                            boss.position = next_pos;
+
+                        if let Some(dir) = dir_opt {
+                            let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+
+                            if next_pos.x > margin
+                                && next_pos.x < self.width - 1 - margin
+                                && next_pos.y > margin
+                                && next_pos.y < self.height - 1 - margin
+                            {
+                                if self.obstacles.contains(&next_pos) {
+                                    if boss.kind == BossType::Charger {
+                                        // Charger destroys obstacle but gets stunned
+                                        self.obstacles.remove(&next_pos);
+                                        boss.position = next_pos;
+                                        boss.state_timer = 15;
+                                        self.spawn_particles(
+                                            f32::from(next_pos.x),
+                                            f32::from(next_pos.y),
+                                            20,
+                                            crate::color::Color::Red,
+                                            'X',
+                                        );
+                                        beep();
+                                    }
+                                } else {
+                                    boss.position = next_pos;
+                                }
+                            }
                         }
                     }
-                }
 
-                let mut shoot_threshold = if self.mode == GameMode::BossRush {
-                    std::cmp::max(
-                        5,
-                        15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
-                    )
-                } else {
-                    15
-                };
-
-                if boss.health <= boss.max_health / 2 {
-                    shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
-                }
-
-                boss.shoot_timer += 1;
-                if boss.shoot_timer >= shoot_threshold {
-                    boss.shoot_timer = 0;
-                    let head = self.snake.head();
-                    let dx = i32::from(head.x) - i32::from(boss.position.x);
-                    let dy = i32::from(head.y) - i32::from(boss.position.y);
-
-                    let dir = if dx.abs() > dy.abs() {
-                        if dx > 0 {
-                            crate::snake::Direction::Right
+                    if boss.kind == BossType::Shooter {
+                        let mut shoot_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                5,
+                                15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                            )
                         } else {
-                            crate::snake::Direction::Left
-                        }
-                    } else {
-                        if dy > 0 {
-                            crate::snake::Direction::Down
-                        } else {
-                            crate::snake::Direction::Up
-                        }
-                    };
+                            15
+                        };
 
-                    let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
-                    let margin = if self.mode == GameMode::BattleRoyale {
-                        self.safe_zone_margin
-                    } else {
-                        0
-                    };
-                    if laser_pos.x > margin
-                        && laser_pos.x < self.width - 1 - margin
-                        && laser_pos.y > margin
-                        && laser_pos.y < self.height - 1 - margin
-                    {
-                        self.lasers.push(Laser {
-                            position: laser_pos,
-                            direction: dir,
-                            player: 3, // 3 represents Boss
-                        });
-                        beep();
+                        if boss.health <= boss.max_health / 2 {
+                            shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
+                        }
+
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= shoot_threshold {
+                            boss.shoot_timer = 0;
+                            let head = self.snake.head();
+                            let dx = i32::from(head.x) - i32::from(boss.position.x);
+                            let dy = i32::from(head.y) - i32::from(boss.position.y);
+
+                            let dir = if dx.abs() > dy.abs() {
+                                if dx > 0 {
+                                    crate::snake::Direction::Right
+                                } else {
+                                    crate::snake::Direction::Left
+                                }
+                            } else {
+                                if dy > 0 {
+                                    crate::snake::Direction::Down
+                                } else {
+                                    crate::snake::Direction::Up
+                                }
+                            };
+
+                            let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+                            if laser_pos.x > margin
+                                && laser_pos.x < self.width - 1 - margin
+                                && laser_pos.y > margin
+                                && laser_pos.y < self.height - 1 - margin
+                            {
+                                self.lasers.push(Laser {
+                                    position: laser_pos,
+                                    direction: dir,
+                                    player: 3, // 3 represents Boss
+                                });
+                                beep();
+                            }
+                        }
+                    } else if boss.kind == BossType::Spawner {
+                        let mut spawn_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                10,
+                                30_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                            )
+                        } else {
+                            30
+                        };
+
+                        if boss.health <= boss.max_health / 2 {
+                            spawn_threshold = std::cmp::max(5, spawn_threshold / 2);
+                        }
+
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= spawn_threshold {
+                            boss.shoot_timer = 0;
+                            if self.mines.len() < 10 {
+                                self.mines.insert(boss.position);
+                            }
+                        }
                     }
                 }
             }
@@ -3876,49 +3963,57 @@ impl Game {
                     if final_p == boss.position {
                         return false;
                     }
-                } else if checking_player != 3 {
-                    let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
-                        std::cmp::max(
-                            1,
-                            3_u8.saturating_sub(
-                                u8::try_from(self.campaign_level).unwrap_or(255) / 5,
-                            ),
-                        )
-                    } else {
-                        2
-                    });
+                } else if checking_player != 3
+                    && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX) {
+                        let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            2
+                        });
 
-                    if boss.health <= boss.max_health / 2 {
-                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                        if boss.kind == BossType::Charger {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+
+                        let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                            + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                        if dist <= moves {
+                            return false;
+                        }
+
+                        if boss.kind == BossType::Shooter {
+                            let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
+                                std::cmp::max(
+                                    5,
+                                    15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                                )
+                            } else {
+                                15
+                            });
+
+                            if boss.health <= boss.max_health / 2 {
+                                shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
+                            }
+
+                            let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
+                            if shoots > 0 && (final_p.x == boss.position.x || final_p.y == boss.position.y)
+                            {
+                                return false;
+                            }
+                        }
                     }
-
-                    let moves = (u32::from(steps) + u32::from(boss.move_timer)) / move_threshold;
-                    let dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                        + u32::from(final_p.y.abs_diff(boss.position.y));
-
-                    if dist <= moves {
-                        return false;
-                    }
-
-                    let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
-                        std::cmp::max(
-                            5,
-                            15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
-                        )
-                    } else {
-                        15
-                    });
-
-                    if boss.health <= boss.max_health / 2 {
-                        shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
-                    }
-
-                    let shoots = (u32::from(steps) + u32::from(boss.shoot_timer)) / shoot_threshold;
-                    if shoots > 0 && (final_p.x == boss.position.x || final_p.y == boss.position.y)
-                    {
-                        return false;
-                    }
-                }
             }
 
             for l in &self.lasers {
@@ -4929,6 +5024,8 @@ mod tests {
             max_health: 10,
             move_timer: 0,
             shoot_timer: 0,
+            kind: BossType::Shooter,
+            state_timer: 0,
         });
 
         // Since the direct path (Right) is blocked by the boss, it should choose Up or Down.

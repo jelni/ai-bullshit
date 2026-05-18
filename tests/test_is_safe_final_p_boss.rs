@@ -19,6 +19,8 @@ fn test_is_safe_final_p_boss() {
         max_health: 10,
         move_timer: 1, // Will move in 1 step! (threshold 2)
         shoot_timer: 0,
+kind: snake_game::game::BossType::Shooter,
+state_timer: 0,
     });
 
     // is_safe_final_p is called by A* to evaluate a position `steps` ahead.
