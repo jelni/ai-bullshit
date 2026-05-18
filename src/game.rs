@@ -142,6 +142,7 @@ pub enum GameMode {
     BossRush,
     MassiveMultiplayer,
     Mirror,
+    Flood,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -1286,6 +1287,35 @@ impl Game {
         obstacles
     }
 
+    pub fn rise_flood(&mut self) {
+        if self.mode != GameMode::Flood {
+            return;
+        }
+
+        let mut highest_flood_y = self.height;
+        for y in (0..self.height).rev() {
+            let mut fully_flooded = true;
+            for x in 0..self.width {
+                if !self.obstacles.contains(&Point { x, y }) {
+                    fully_flooded = false;
+                    break;
+                }
+            }
+            if fully_flooded {
+                highest_flood_y = y;
+            } else {
+                break;
+            }
+        }
+
+        let new_flood_y = highest_flood_y.saturating_sub(1);
+        if new_flood_y > 0 {
+            for x in 0..self.width {
+                self.obstacles.insert(Point { x, y: new_flood_y });
+            }
+        }
+    }
+
     pub fn evolve_game_of_life(&mut self) {
         if self.mode != GameMode::Evolution {
             return;
@@ -1570,7 +1600,8 @@ impl Game {
             | GameMode::Evolution
             | GameMode::BossRush
             | GameMode::MassiveMultiplayer
-            | GameMode::Mirror => {
+            | GameMode::Mirror
+            | GameMode::Flood => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1626,6 +1657,7 @@ impl Game {
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::MassiveMultiplayer
                 || self.mode == GameMode::Mirror
+                || self.mode == GameMode::Flood
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -1653,6 +1685,7 @@ impl Game {
             || self.mode == GameMode::BossRush
             || self.mode == GameMode::MassiveMultiplayer
             || self.mode == GameMode::Mirror
+            || self.mode == GameMode::Flood
         {
             &self.snake
         } else {
@@ -1818,7 +1851,8 @@ impl Game {
             | GameMode::Evolution
             | GameMode::BossRush
             | GameMode::MassiveMultiplayer
-            | GameMode::Mirror => {
+            | GameMode::Mirror
+            | GameMode::Flood => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2939,6 +2973,13 @@ impl Game {
         {
             self.last_obstacle_spawn_time = web_time::Instant::now();
             self.evolve_game_of_life();
+        }
+
+        if self.mode == GameMode::Flood
+            && self.last_obstacle_spawn_time.elapsed() >= Duration::from_secs(5)
+        {
+            self.last_obstacle_spawn_time = web_time::Instant::now();
+            self.rise_flood();
         }
 
         self.handle_autopilot_moves();
