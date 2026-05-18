@@ -107,8 +107,8 @@ fn test_bot_avoids_frozen_boss() {
         max_health: 10,
         move_timer: 0,
         shoot_timer: 0,
-kind: snake_game::game::BossType::Shooter,
-state_timer: 0,
+        kind: snake_game::game::BossType::Shooter,
+        state_timer: 0,
     });
 
     // Since the direct path (Right) is blocked by the frozen boss, it should choose Up or Down.

@@ -356,15 +356,13 @@ pub struct Laser {
     pub player: u8,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum BossType {
     #[default]
     Shooter,
     Charger,
     Spawner,
 }
-
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Boss {
@@ -456,6 +454,10 @@ impl Game {
 
     /// # Panics
     ///
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Game struct naturally requires many lines for initialization"
+    )]
     /// Panics if the board is completely full and there's no room for food.
     #[must_use]
     pub fn new(
@@ -510,7 +512,10 @@ impl Game {
         let initial_power_up = if skin == '🚀' {
             Some(PowerUp {
                 p_type: PowerUpType::SpeedBoost,
-                location: Point { x: 0, y: 0 }, // Location doesn't matter since it's instantly active
+                location: Point {
+                    x: 0,
+                    y: 0,
+                }, // Location doesn't matter since it's instantly active
                 activation_time: Some(
                     web_time::SystemTime::now()
                         .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -1740,7 +1745,10 @@ impl Game {
         if self.skin == '🚀' {
             self.power_up = Some(PowerUp {
                 p_type: PowerUpType::SpeedBoost,
-                location: Point { x: 0, y: 0 },
+                location: Point {
+                    x: 0,
+                    y: 0,
+                },
                 activation_time: Some(
                     web_time::SystemTime::now()
                         .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -2342,7 +2350,9 @@ impl Game {
                     let mut move_threshold = if self.mode == GameMode::BossRush {
                         std::cmp::max(
                             1,
-                            3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5),
+                            3_u8.saturating_sub(
+                                u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                            ),
                         )
                     } else {
                         2
@@ -2370,11 +2380,21 @@ impl Game {
                             let dy = i32::from(head.y) - i32::from(boss.position.y);
 
                             let fake_dir = if dx.abs() > dy.abs() {
-                                if dx > 0 { Direction::Right } else { Direction::Left }
+                                if dx > 0 {
+                                    Direction::Right
+                                } else {
+                                    Direction::Left
+                                }
                             } else {
-                                if dy > 0 { Direction::Down } else { Direction::Up }
+                                if dy > 0 {
+                                    Direction::Down
+                                } else {
+                                    Direction::Up
+                                }
                             };
-                            self.astar_search(boss.position, fake_dir, &targets, 3).map(|(d, _)| d).or_else(|| self.bfs_pathfind(boss.position, head))
+                            self.astar_search(boss.position, fake_dir, &targets, 3)
+                                .map(|(d, _)| d)
+                                .or_else(|| self.bfs_pathfind(boss.position, head))
                         } else {
                             self.bfs_pathfind(boss.position, head)
                         };
@@ -2418,7 +2438,9 @@ impl Game {
                         let mut shoot_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 5,
-                                15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                                15_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
                             )
                         } else {
                             15
@@ -2472,7 +2494,9 @@ impl Game {
                         let mut spawn_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 10,
-                                30_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
+                                30_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
                             )
                         } else {
                             30
@@ -3451,7 +3475,8 @@ impl Game {
             };
             added_score *= std::cmp::max(1, self.combo);
 
-            let mut coin_multiplier = f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
+            let mut coin_multiplier =
+                f64::from(self.stats.upgrade_coin_multiplier).mul_add(0.20, 1.0);
             if self.skin == '₿' {
                 coin_multiplier *= 2.0;
             }
@@ -3648,7 +3673,11 @@ impl Game {
     }
 
     fn manage_portals(&mut self) {
-        let spawn_chance = if self.skin == 'Ξ' { 0.02 } else { 0.005 };
+        let spawn_chance = if self.skin == 'Ξ' {
+            0.02
+        } else {
+            0.005
+        };
         if self.portals.is_none() && self.rng.gen_bool(spawn_chance) {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
@@ -3721,9 +3750,17 @@ impl Game {
 
     fn manage_bonus_food(&mut self) {
         let spawn_chance = if self.skin == 'Ð' {
-            if self.weather == Weather::Rain { 0.12 } else { 0.04 }
+            if self.weather == Weather::Rain {
+                0.12
+            } else {
+                0.04
+            }
         } else {
-            if self.weather == Weather::Rain { 0.03 } else { 0.01 }
+            if self.weather == Weather::Rain {
+                0.03
+            } else {
+                0.01
+            }
         };
 
         if let Some((_, spawn_time)) = self.bonus_food {
@@ -3964,56 +4001,60 @@ impl Game {
                         return false;
                     }
                 } else if checking_player != 3
-                    && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX) {
-                        let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                    && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX)
+                {
+                    let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                        std::cmp::max(
+                            1,
+                            3_u8.saturating_sub(
+                                u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                            ),
+                        )
+                    } else {
+                        2
+                    });
+
+                    if boss.kind == BossType::Charger {
+                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                    }
+
+                    if boss.health <= boss.max_health / 2 {
+                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                    }
+
+                    let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                    let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                    let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                        + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                    if dist <= moves {
+                        return false;
+                    }
+
+                    if boss.kind == BossType::Shooter {
+                        let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
-                                1,
-                                3_u8.saturating_sub(
-                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                5,
+                                15_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
                                 ),
                             )
                         } else {
-                            2
+                            15
                         });
 
-                        if boss.kind == BossType::Charger {
-                            move_threshold = std::cmp::max(1, move_threshold / 2);
-                        }
-
                         if boss.health <= boss.max_health / 2 {
-                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                            shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
                         }
 
-                        let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                            + u32::from(final_p.y.abs_diff(boss.position.y));
-
-                        if dist <= moves {
+                        let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
+                        if shoots > 0
+                            && (final_p.x == boss.position.x || final_p.y == boss.position.y)
+                        {
                             return false;
                         }
-
-                        if boss.kind == BossType::Shooter {
-                            let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
-                                std::cmp::max(
-                                    5,
-                                    15_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
-                                )
-                            } else {
-                                15
-                            });
-
-                            if boss.health <= boss.max_health / 2 {
-                                shoot_threshold = std::cmp::max(1, shoot_threshold / 2);
-                            }
-
-                            let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
-                            if shoots > 0 && (final_p.x == boss.position.x || final_p.y == boss.position.y)
-                            {
-                                return false;
-                            }
-                        }
                     }
+                }
             }
 
             for l in &self.lasers {
@@ -4189,6 +4230,14 @@ impl Game {
             // Entity avoidance: add penalty for being close to lasers
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+
+            // Entity avoidance: add penalty for being close to mines
+            for m in &self.mines {
+                let d = calc_dist(p, *m);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 5);
                 }
@@ -5146,7 +5195,13 @@ mod tests {
         let initial_coins = game.stats.coins;
 
         // Base added score for Normal difficulty without multiplier is 2
-        game.process_food_collision(Point { x: 5, y: 5 }, false);
+        game.process_food_collision(
+            Point {
+                x: 5,
+                y: 5,
+            },
+            false,
+        );
         // Base multiplier is 1.0, so 2 * 1.0 = 2
         assert_eq!(game.stats.coins - initial_coins, 2);
 
@@ -5155,7 +5210,13 @@ mod tests {
         // Test same collision, but we need to account for the combo multiplier since we just ate food
         // game.combo will be 2 on the second eat.
         // Base score = 2 * combo 2 = 4. BTC doubles coin to 8.
-        game.process_food_collision(Point { x: 5, y: 5 }, false);
+        game.process_food_collision(
+            Point {
+                x: 5,
+                y: 5,
+            },
+            false,
+        );
         assert_eq!(game.stats.coins - initial_coins_btc, 8);
     }
 
@@ -5170,9 +5231,15 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game.obstacles.clear();
-        let target = Point { x: 5, y: 5 };
+        let target = Point {
+            x: 5,
+            y: 5,
+        };
         game.obstacles.insert(target);
-        game.snake = crate::snake::Snake::new(Point { x: 5, y: 6 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 5,
+            y: 6,
+        });
         game.snake.direction = crate::snake::Direction::Up; // Facing up towards 5, 5
         game.state = GameState::Playing;
 
@@ -5192,7 +5259,10 @@ mod tests {
         );
         game_normal.obstacles.clear();
         game_normal.obstacles.insert(target);
-        game_normal.snake = crate::snake::Snake::new(Point { x: 5, y: 6 });
+        game_normal.snake = crate::snake::Snake::new(Point {
+            x: 5,
+            y: 6,
+        });
         game_normal.snake.direction = crate::snake::Direction::Up;
         game_normal.state = GameState::Playing;
 
