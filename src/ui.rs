@@ -1125,6 +1125,10 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::Blue))?;
                 write!(stdout, "T")?;
             },
+            crate::game::PowerUpType::Reverse => {
+                stdout.queue(SetForegroundColor(Color::White))?;
+                write!(stdout, "R")?;
+            },
             _ => {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
@@ -1284,6 +1288,7 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 crate::game::PowerUpType::Teleport => "Teleport",
                 crate::game::PowerUpType::Magnet => "Magnet",
                 crate::game::PowerUpType::TimeFreeze => "Time Freeze",
+                crate::game::PowerUpType::Reverse => "Reverse",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;

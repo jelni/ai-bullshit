@@ -185,7 +185,8 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                     | game::PowerUpType::ScoreMultiplier
                     | game::PowerUpType::Teleport
                     | game::PowerUpType::Magnet
-                    | game::PowerUpType::TimeFreeze => {}, // Tick rate unaffected
+                    | game::PowerUpType::TimeFreeze
+                    | game::PowerUpType::Reverse => {}, // Tick rate unaffected
                 }
             } else {
                 game.power_up = None; // Power-up expired
@@ -507,37 +508,36 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Char('w' | 'W') => {
-            if game.mode == game::GameMode::Mirror {
+            if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
                 game.handle_input(Direction::Down, 1);
             } else {
                 game.handle_input(Direction::Up, 1);
             }
         },
         KeyCode::Char('s' | 'S') => {
-            if game.mode == game::GameMode::Mirror {
+            if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
                 game.handle_input(Direction::Up, 1);
             } else {
                 game.handle_input(Direction::Down, 1);
             }
         },
         KeyCode::Char('a' | 'A') => {
-            if game.mode == game::GameMode::Mirror {
+            if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
                 game.handle_input(Direction::Right, 1);
             } else {
                 game.handle_input(Direction::Left, 1);
             }
         },
         KeyCode::Char('d' | 'D') => {
-            if game.mode == game::GameMode::Mirror {
+            if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
                 game.handle_input(Direction::Left, 1);
             } else {
                 game.handle_input(Direction::Right, 1);
             }
         },
         KeyCode::Up => {
-            if game.mode == game::GameMode::Mirror {
-                game.handle_input(Direction::Down, 1);
-            } else if game.mode == game::GameMode::SinglePlayer
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
@@ -547,15 +547,22 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MassiveMultiplayer
                 || game.mode == game::GameMode::Flood
             {
-                game.handle_input(Direction::Up, 1);
+                if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
+                    game.handle_input(Direction::Down, 1);
+                } else {
+                    game.handle_input(Direction::Up, 1);
+                }
             } else {
-                game.handle_input(Direction::Up, 2);
+                if game.is_reverse_active() {
+                    game.handle_input(Direction::Down, 2);
+                } else {
+                    game.handle_input(Direction::Up, 2);
+                }
             }
         },
         KeyCode::Down => {
-            if game.mode == game::GameMode::Mirror {
-                game.handle_input(Direction::Up, 1);
-            } else if game.mode == game::GameMode::SinglePlayer
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
@@ -565,15 +572,22 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MassiveMultiplayer
                 || game.mode == game::GameMode::Flood
             {
-                game.handle_input(Direction::Down, 1);
+                if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
+                    game.handle_input(Direction::Up, 1);
+                } else {
+                    game.handle_input(Direction::Down, 1);
+                }
             } else {
-                game.handle_input(Direction::Down, 2);
+                if game.is_reverse_active() {
+                    game.handle_input(Direction::Up, 2);
+                } else {
+                    game.handle_input(Direction::Down, 2);
+                }
             }
         },
         KeyCode::Left => {
-            if game.mode == game::GameMode::Mirror {
-                game.handle_input(Direction::Right, 1);
-            } else if game.mode == game::GameMode::SinglePlayer
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
@@ -583,15 +597,22 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MassiveMultiplayer
                 || game.mode == game::GameMode::Flood
             {
-                game.handle_input(Direction::Left, 1);
+                if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
+                    game.handle_input(Direction::Right, 1);
+                } else {
+                    game.handle_input(Direction::Left, 1);
+                }
             } else {
-                game.handle_input(Direction::Left, 2);
+                if game.is_reverse_active() {
+                    game.handle_input(Direction::Right, 2);
+                } else {
+                    game.handle_input(Direction::Left, 2);
+                }
             }
         },
         KeyCode::Right => {
-            if game.mode == game::GameMode::Mirror {
-                game.handle_input(Direction::Left, 1);
-            } else if game.mode == game::GameMode::SinglePlayer
+            if game.mode == game::GameMode::SinglePlayer
+                || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
@@ -601,9 +622,17 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MassiveMultiplayer
                 || game.mode == game::GameMode::Flood
             {
-                game.handle_input(Direction::Right, 1);
+                if (game.mode == game::GameMode::Mirror) ^ game.is_reverse_active() {
+                    game.handle_input(Direction::Left, 1);
+                } else {
+                    game.handle_input(Direction::Right, 1);
+                }
             } else {
-                game.handle_input(Direction::Right, 2);
+                if game.is_reverse_active() {
+                    game.handle_input(Direction::Left, 2);
+                } else {
+                    game.handle_input(Direction::Right, 2);
+                }
             }
         },
         KeyCode::Char('z' | 'Z') => {
