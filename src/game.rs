@@ -4642,6 +4642,14 @@ impl Game {
                 }
             }
 
+            // Entity avoidance: add penalty for being in the lightning column
+            if let Some(col) = self.lightning_column {
+                let dx = p.x.abs_diff(col);
+                if dx < 3 {
+                    penalty = penalty.saturating_add((3 - dx) * 15);
+                }
+            }
+
             // Entity avoidance: add penalty for being in the path of a falling meteor
             for m in &self.meteors {
                 let dx = p.x.abs_diff(m.position.x);
