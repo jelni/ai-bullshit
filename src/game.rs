@@ -226,6 +226,7 @@ pub struct HistoryState {
     pub lightning_column: Option<u16>,
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
+    pub meteors: Vec<Meteor>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -282,6 +283,8 @@ pub struct SaveState {
     pub mines: HashSet<Point>,
     #[serde(default)]
     pub black_hole: Option<Point>,
+    #[serde(default)]
+    pub meteors: Vec<Meteor>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -384,6 +387,12 @@ pub struct Boss {
     pub state_timer: u8,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Meteor {
+    pub position: Point,
+    pub timer: u8,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Particle {
     pub x: f32,
@@ -451,6 +460,7 @@ pub struct Game {
     pub lightning_column: Option<u16>,
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
+    pub meteors: Vec<Meteor>,
 }
 
 impl Game {
@@ -603,6 +613,7 @@ impl Game {
             lightning_column: None,
             mines: HashSet::new(),
             black_hole: None,
+            meteors: Vec::new(),
         }
     }
 
@@ -819,6 +830,7 @@ impl Game {
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
             black_hole: self.black_hole,
+            meteors: self.meteors.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -914,6 +926,7 @@ impl Game {
                 self.lightning_column = state.lightning_column;
                 self.mines = state.mines;
                 self.black_hole = state.black_hole;
+                self.meteors = state.meteors;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -973,6 +986,83 @@ impl Game {
                 return None;
             }
         }
+    }
+
+    fn manage_meteors(&mut self) {
+        // Spawn meteors occasionally
+        if self.rng.gen_bool(0.01) {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+
+            let min_x = margin + 1;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+
+            if max_x > min_x {
+                let spawn_x = self.rng.gen_range(min_x..max_x);
+                self.meteors.push(Meteor {
+                    position: Point { x: spawn_x, y: margin + 1 },
+                    timer: 0,
+                });
+            }
+        }
+
+        let mut meteors_to_keep = Vec::new();
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+
+        for mut meteor in std::mem::take(&mut self.meteors) {
+            meteor.timer += 1;
+            if meteor.timer >= 2 {
+                meteor.timer = 0;
+                meteor.position.y += 1;
+            }
+
+            if meteor.position.y >= self.height - 1 - margin {
+                self.spawn_particles(
+                    f32::from(meteor.position.x),
+                    f32::from(meteor.position.y),
+                    10,
+                    crate::color::Color::Red,
+                    '*',
+                );
+                continue; // Meteor hit bottom
+            }
+
+            if self.obstacles.contains(&meteor.position) {
+                self.obstacles.remove(&meteor.position);
+                self.spawn_particles(
+                    f32::from(meteor.position.x),
+                    f32::from(meteor.position.y),
+                    20,
+                    crate::color::Color::Red,
+                    'X',
+                );
+                beep();
+                continue;
+            }
+
+            if self.mines.contains(&meteor.position) {
+                self.mines.remove(&meteor.position);
+                self.spawn_particles(
+                    f32::from(meteor.position.x),
+                    f32::from(meteor.position.y),
+                    40,
+                    crate::color::Color::Red,
+                    'X',
+                );
+                beep();
+                continue;
+            }
+
+            meteors_to_keep.push(meteor);
+        }
+        self.meteors = meteors_to_keep;
     }
 
     fn manage_black_hole(&mut self) {
@@ -1977,6 +2067,7 @@ impl Game {
         self.lightning_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
+        self.meteors.clear();
     }
 
     fn respawn(&mut self) {
@@ -2338,6 +2429,7 @@ impl Game {
             self.lightning_column = state.lightning_column;
             self.mines = state.mines;
             self.black_hole = state.black_hole;
+            self.meteors = state.meteors;
         }
     }
 
@@ -2366,6 +2458,7 @@ impl Game {
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
             black_hole: self.black_hole,
+            meteors: self.meteors.clone(),
         };
 
         self.history.push_back(state);
@@ -3151,6 +3244,7 @@ impl Game {
         self.manage_portals();
         self.manage_mines();
         self.manage_black_hole();
+        self.manage_meteors();
         self.apply_magnet();
 
         // --- Calculate Next Heads ---
@@ -3266,6 +3360,34 @@ impl Game {
 
         let hit_black_hole1 = self.black_hole.is_some_and(|bh| final_head1 == bh);
         let hit_black_hole2 = final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
+
+        // --- Process Meteor Collisions ---
+        let hit_meteor1 = self.meteors.iter().any(|m| m.position == final_head1 || self.snake.body_map.contains_key(&m.position));
+        let hit_meteor2 = final_head2_opt.is_some_and(|fh2| self.meteors.iter().any(|m| m.position == fh2 || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&m.position))));
+
+        if hit_meteor1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                30,
+                crate::color::Color::DarkYellow,
+                '*',
+            );
+        }
+
+        if hit_meteor2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    30,
+                    crate::color::Color::DarkYellow,
+                    '*',
+                );
+            }
+        }
 
         if hit_black_hole1 && !is_invincible {
             p1_dead = true;
@@ -4195,6 +4317,13 @@ impl Game {
                 return false;
             }
 
+            for meteor in &self.meteors {
+                // Predictive: meteor falls 1 tile per 2 ticks. For simplicity, just avoid its current column below it and its current spot
+                if meteor.position == final_p || (meteor.position.x == final_p.x && meteor.position.y <= final_p.y && meteor.position.y + steps >= final_p.y) {
+                    return false;
+                }
+            }
+
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
@@ -4470,7 +4599,7 @@ impl Game {
             for m in &self.mines {
                 let d = calc_dist(p, *m);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 5);
+                    penalty = penalty.saturating_add((4 - d) * 10); // Increased penalty to ensure bot actively avoids mines
                 }
             }
 
@@ -4479,6 +4608,17 @@ impl Game {
                 let d = calc_dist(p, bh);
                 if d < 5 {
                     penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+
+            // Entity avoidance: add penalty for being in the path of a falling meteor
+            for m in &self.meteors {
+                let dx = p.x.abs_diff(m.position.x);
+                if dx < 2 && p.y >= m.position.y {
+                    let dy = p.y.abs_diff(m.position.y);
+                    if dy < 10 {
+                         penalty = penalty.saturating_add((10 - dy) * 5);
+                    }
                 }
             }
 

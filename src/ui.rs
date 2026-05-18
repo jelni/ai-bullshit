@@ -1064,6 +1064,15 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Meteors
+    for meteor in &game.meteors {
+        if is_visible(meteor.position.x, meteor.position.y) {
+            stdout.queue(cursor::MoveTo(meteor.position.x, meteor.position.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+            write!(stdout, "*")?;
+        }
+    }
+
     // Draw Boss
     if let Some(boss) = &game.boss
         && is_visible(boss.position.x, boss.position.y)
