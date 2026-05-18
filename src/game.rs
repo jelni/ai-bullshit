@@ -4830,7 +4830,7 @@ impl Game {
             'X',
         );
 
-        self.lives -= 1;
+        self.lives = self.lives.saturating_sub(1);
         self.just_died = true;
         beep();
 
