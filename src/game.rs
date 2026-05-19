@@ -3810,7 +3810,8 @@ impl Game {
                 || p.p_type == PowerUpType::Shrink
                 || p.p_type == PowerUpType::ClearObstacles
                 || p.p_type == PowerUpType::Teleport
-                || p.p_type == PowerUpType::Decoy)
+                || p.p_type == PowerUpType::Decoy
+                || p.p_type == PowerUpType::Emp)
             && p.activation_time.is_none()
             && final_head == p.location
         {
