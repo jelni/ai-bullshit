@@ -183,6 +183,7 @@ pub enum Achievement {
     BotUser,
     BossSlayer,
     MassiveMultiplayerEnthusiast,
+    PoisonEater,
 }
 
 #[must_use]
@@ -3819,6 +3820,11 @@ impl Game {
 
     fn check_poison_food_collision(&mut self, final_head: Point, player: u8) {
         if self.poison_food.is_some_and(|(poison_p, _)| final_head == poison_p) {
+            if !self.stats.unlocked_achievements.contains(&Achievement::PoisonEater) {
+                self.stats.unlocked_achievements.push(Achievement::PoisonEater);
+                self.save_stats();
+            }
+
             self.spawn_particles(
                 f32::from(final_head.x),
                 f32::from(final_head.y),
