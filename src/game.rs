@@ -103,6 +103,7 @@ pub enum PowerUpType {
     Magnet,
     TimeFreeze,
     Reverse,
+    Decoy,
 }
 
 #[serde_as]
@@ -415,6 +416,7 @@ pub struct Game {
     pub bonus_food: Option<(Point, Instant)>,
     pub poison_food: Option<(Point, Instant)>,
     pub power_up: Option<PowerUp>,
+    pub decoy: Option<(Point, u64)>,
     pub obstacles: HashSet<Point>,
     pub score: u32,
     pub high_score: u32,
@@ -568,6 +570,7 @@ impl Game {
             bonus_food: None,
             poison_food: None,
             power_up: initial_power_up,
+            decoy: None,
             obstacles,
             score: 0,
             high_score,
@@ -2043,6 +2046,7 @@ impl Game {
         } else {
             self.power_up = None;
         }
+        self.decoy = None;
         self.score = 0;
         self.lives = if self.skin == '💎' {
             3 + u32::from(self.stats.upgrade_extra_lives) + 1
@@ -2585,6 +2589,17 @@ impl Game {
                 })
         });
 
+        if let Some((_, activation_time)) = self.decoy {
+            let elapsed = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                .saturating_sub(activation_time);
+            if elapsed >= self.powerup_duration() {
+                self.decoy = None;
+            }
+        }
+
         // Boss Logic
         let should_spawn_boss = if self.mode == GameMode::BossRush {
             true
@@ -2661,15 +2676,19 @@ impl Game {
                     boss.move_timer += 1;
                     if boss.move_timer >= move_threshold {
                         boss.move_timer = 0;
-                        let head = self.snake.head();
+                        let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                            decoy_pos
+                        } else {
+                            self.snake.head()
+                        };
 
                         // Charger uses A* for smarter pathfinding to ram the player
                         let dir_opt = if boss.kind == BossType::Charger {
-                            let targets = vec![head];
+                            let targets = vec![target_pos];
                             // Using a dummy direction that will be checked against, but we don't have a true current direction for the boss yet.
                             // We can use the direction opposite to the snake head from the boss to allow all forward movement towards the player.
-                            let dx = i32::from(head.x) - i32::from(boss.position.x);
-                            let dy = i32::from(head.y) - i32::from(boss.position.y);
+                            let dx = i32::from(target_pos.x) - i32::from(boss.position.x);
+                            let dy = i32::from(target_pos.y) - i32::from(boss.position.y);
 
                             let fake_dir = if dx.abs() > dy.abs() {
                                 if dx > 0 {
@@ -2686,9 +2705,9 @@ impl Game {
                             };
                             self.astar_search(boss.position, fake_dir, &targets, 3)
                                 .map(|(d, _)| d)
-                                .or_else(|| self.bfs_pathfind(boss.position, head))
+                                .or_else(|| self.bfs_pathfind(boss.position, target_pos))
                         } else {
-                            self.bfs_pathfind(boss.position, head)
+                            self.bfs_pathfind(boss.position, target_pos)
                         };
 
                         if let Some(dir) = dir_opt {
@@ -3716,6 +3735,14 @@ impl Game {
                 self.snake.shrink_tail();
             } else if p.p_type == PowerUpType::ClearObstacles {
                 self.obstacles.clear();
+            } else if p.p_type == PowerUpType::Decoy {
+                self.decoy = Some((
+                    self.snake.head(),
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                ));
             } else if p.p_type == PowerUpType::Teleport {
                 let avoid = |pt: &Point| {
                     self.obstacles.contains(pt)
@@ -3774,7 +3801,8 @@ impl Game {
             && (p.p_type == PowerUpType::ExtraLife
                 || p.p_type == PowerUpType::Shrink
                 || p.p_type == PowerUpType::ClearObstacles
-                || p.p_type == PowerUpType::Teleport)
+                || p.p_type == PowerUpType::Teleport
+                || p.p_type == PowerUpType::Decoy)
             && p.activation_time.is_none()
             && final_head == p.location
         {
@@ -4092,7 +4120,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..12) {
+                let p_type = match self.rng.gen_range(0..13) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -4104,6 +4132,7 @@ impl Game {
                     8 => PowerUpType::Magnet,
                     9 => PowerUpType::TimeFreeze,
                     10 => PowerUpType::Reverse,
+                    11 => PowerUpType::Decoy,
                     _ => PowerUpType::ExtraLife,
                 };
 

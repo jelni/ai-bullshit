@@ -1065,6 +1065,15 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Decoy
+    if let Some((decoy_pos, _)) = game.decoy
+        && is_visible(decoy_pos.x, decoy_pos.y)
+    {
+        stdout.queue(cursor::MoveTo(decoy_pos.x, decoy_pos.y))?;
+        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        write!(stdout, "D")?;
+    }
+
     // Draw Meteors
     for meteor in &game.meteors {
         if is_visible(meteor.position.x, meteor.position.y) {
@@ -1307,6 +1316,7 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 crate::game::PowerUpType::Magnet => "Magnet",
                 crate::game::PowerUpType::TimeFreeze => "Time Freeze",
                 crate::game::PowerUpType::Reverse => "Reverse",
+                crate::game::PowerUpType::Decoy => "Decoy",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;
