@@ -104,6 +104,7 @@ pub enum PowerUpType {
     TimeFreeze,
     Reverse,
     Decoy,
+    Emp,
 }
 
 #[serde_as]
@@ -3743,6 +3744,12 @@ impl Game {
                         .unwrap_or_default()
                         .as_secs(),
                 ));
+            } else if p.p_type == PowerUpType::Emp {
+                self.mines.clear();
+                self.lasers.clear();
+                if let Some(boss) = &mut self.boss {
+                    boss.state_timer = 30; // Stun the boss for 30 ticks
+                }
             } else if p.p_type == PowerUpType::Teleport {
                 let avoid = |pt: &Point| {
                     self.obstacles.contains(pt)
@@ -4120,7 +4127,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..13) {
+                let p_type = match self.rng.gen_range(0..14) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -4133,6 +4140,7 @@ impl Game {
                     9 => PowerUpType::TimeFreeze,
                     10 => PowerUpType::Reverse,
                     11 => PowerUpType::Decoy,
+                    12 => PowerUpType::Emp,
                     _ => PowerUpType::ExtraLife,
                 };
 
