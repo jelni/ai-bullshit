@@ -13,19 +13,28 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     );
 
     // Set up the snake
-    game.snake = Snake::new(Point { x: 10, y: 10 });
+    game.snake = Snake::new(Point {
+        x: 10,
+        y: 10,
+    });
     game.snake.direction = Direction::Right;
 
     // Place an Emp right in front of the snake
     game.power_up = Some(PowerUp {
         p_type: PowerUpType::Emp,
-        location: Point { x: 11, y: 10 },
+        location: Point {
+            x: 11,
+            y: 10,
+        },
         activation_time: None,
     });
 
     // Add a boss, a laser, and a mine
     game.boss = Some(Boss {
-        position: Point { x: 5, y: 5 },
+        position: Point {
+            x: 5,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -35,12 +44,18 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     });
 
     game.lasers.push(Laser {
-        position: Point { x: 2, y: 2 },
+        position: Point {
+            x: 2,
+            y: 2,
+        },
         direction: Direction::Down,
         player: 3, // Boss laser
     });
 
-    game.mines.insert(Point { x: 15, y: 15 });
+    game.mines.insert(Point {
+        x: 15,
+        y: 15,
+    });
 
     // Ensure they exist
     assert!(!game.lasers.is_empty());

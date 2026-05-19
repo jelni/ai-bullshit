@@ -181,10 +181,7 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             crate::game::Achievement::MassiveMultiplayerEnthusiast,
             "MMO Enthusiast (Play Massive Multiplayer)",
         ),
-        (
-            crate::game::Achievement::PoisonEater,
-            "Poison Eater (Eat Poison Food)",
-        ),
+        (crate::game::Achievement::PoisonEater, "Poison Eater (Eat Poison Food)"),
     ];
 
     for (i, (ach, desc)) in all_achievements.iter().enumerate() {
