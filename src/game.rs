@@ -4661,14 +4661,6 @@ impl Game {
                 }
             }
 
-            // Entity avoidance: add penalty for being close to poison food
-            if let Some((pf, _)) = self.poison_food {
-                let d = calc_dist(p, pf);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
-                }
-            }
-
             // Entity avoidance: add penalty for being close to lasers
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
