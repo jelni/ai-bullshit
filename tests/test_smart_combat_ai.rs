@@ -11,7 +11,7 @@ fn test_bot_shoots_boss_in_line_of_sight() {
     game.snake.direction = Direction::Right;
 
     // Boss right in front
-    game.boss = Some(Boss {
+    game.bosses.push(Boss {
         position: Point {
             x: 9,
             y: 5,
@@ -105,7 +105,7 @@ fn test_bot_does_not_shoot_empty_space() {
     game.snake.direction = Direction::Right;
 
     game.obstacles.clear();
-    game.boss = None;
+    game.bosses.clear();
     game.player2 = None;
 
     assert!(!game.should_bot_shoot(1));

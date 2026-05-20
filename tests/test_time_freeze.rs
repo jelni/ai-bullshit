@@ -24,7 +24,7 @@ fn test_time_freeze_pauses_boss_and_lasers() {
         x: 10,
         y: 10,
     };
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: boss_initial_pos,
         health: 10,
         max_health: 10,
@@ -57,7 +57,7 @@ fn test_time_freeze_pauses_boss_and_lasers() {
     }
 
     // Assert boss hasn't moved
-    let boss = game.boss.as_ref().unwrap();
+    let boss = &game.bosses[0];
     assert_eq!(boss.position, boss_initial_pos, "Boss should not move while time is frozen");
 
     // Assert laser hasn't moved
@@ -98,7 +98,7 @@ fn test_bot_avoids_frozen_boss() {
     };
 
     // Placing boss right in front of the snake
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: snake::Point {
             x: 6,
             y: 5,

@@ -32,10 +32,14 @@ fn test_meteor_spawning_and_falling() {
     assert_eq!(game.meteors[0].position.y, 5);
 
     // After 2 ticks, timer resets to 0, y should be 6
+    // Note: Due to random chance, a new meteor might spawn during update.
+    // We only care that the first one we pushed updated correctly.
     game.update();
-    assert_eq!(game.meteors.len(), 1);
-    assert_eq!(game.meteors[0].timer, 0);
-    assert_eq!(game.meteors[0].position.y, 6);
+
+    // Find the meteor we inserted (started at x=10)
+    let m = game.meteors.iter().find(|m| m.position.x == 10).unwrap();
+    assert_eq!(m.timer, 0);
+    assert_eq!(m.position.y, 6);
 }
 
 #[test]
