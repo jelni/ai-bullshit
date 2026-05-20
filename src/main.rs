@@ -316,99 +316,103 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             3 => {
-                game.mode = game::GameMode::Campaign;
+                game.mode = game::GameMode::MonthlyChallenge;
                 game.reset();
             },
             4 => {
-                game.mode = game::GameMode::LocalMultiplayer;
+                game.mode = game::GameMode::Campaign;
                 game.reset();
             },
             5 => {
-                game.mode = game::GameMode::OnlineMultiplayer;
+                game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
             6 => {
-                game.mode = game::GameMode::Tournament;
+                game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
             7 => {
-                game.mode = game::GameMode::PlayerVsBot;
+                game.mode = game::GameMode::Tournament;
                 game.reset();
             },
             8 => {
-                game.mode = game::GameMode::BotVsBot;
+                game.mode = game::GameMode::PlayerVsBot;
                 game.reset();
             },
             9 => {
-                game.mode = game::GameMode::BattleRoyale;
+                game.mode = game::GameMode::BotVsBot;
                 game.reset();
             },
             10 => {
-                game.mode = game::GameMode::TimeAttack;
+                game.mode = game::GameMode::BattleRoyale;
                 game.reset();
             },
             11 => {
-                game.mode = game::GameMode::Survival;
+                game.mode = game::GameMode::TimeAttack;
                 game.reset();
             },
             12 => {
-                game.mode = game::GameMode::Zen;
+                game.mode = game::GameMode::Survival;
                 game.reset();
             },
             13 => {
-                game.mode = game::GameMode::Maze;
+                game.mode = game::GameMode::Zen;
                 game.reset();
             },
             14 => {
-                game.mode = game::GameMode::Cave;
+                game.mode = game::GameMode::Maze;
                 game.reset();
             },
             15 => {
-                game.mode = game::GameMode::Dungeon;
+                game.mode = game::GameMode::Cave;
                 game.reset();
             },
             16 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
             17 => {
-                game.mode = game::GameMode::FogOfWar;
+                game.mode = game::GameMode::Speedrun;
                 game.reset();
             },
             18 => {
-                game.mode = game::GameMode::Evolution;
+                game.mode = game::GameMode::FogOfWar;
                 game.reset();
             },
             19 => {
-                game.mode = game::GameMode::BossRush;
+                game.mode = game::GameMode::Evolution;
                 game.reset();
             },
             20 => {
-                game.mode = game::GameMode::MassiveMultiplayer;
+                game.mode = game::GameMode::BossRush;
                 game.reset();
             },
             21 => {
-                game.mode = game::GameMode::Mirror;
+                game.mode = game::GameMode::MassiveMultiplayer;
                 game.reset();
             },
             22 => {
-                game.mode = game::GameMode::Flood;
+                game.mode = game::GameMode::Mirror;
                 game.reset();
             },
             23 => {
+                game.mode = game::GameMode::Flood;
+                game.reset();
+            },
+            24 => {
                 let _ = game.load_game();
             },
-            24 => game.state = GameState::Settings,
-            25 => game.state = GameState::NftShop,
-            26 => game.state = GameState::SkillTree,
-            27 => game.state = GameState::Stats,
-            28 => game.state = GameState::Achievements,
-            29 => game.state = GameState::Help,
-            30 => {
+            25 => game.state = GameState::Settings,
+            26 => game.state = GameState::NftShop,
+            27 => game.state = GameState::SkillTree,
+            28 => game.state = GameState::Stats,
+            29 => game.state = GameState::Achievements,
+            30 => game.state = GameState::Help,
+            31 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            31 => {
+            32 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -416,7 +420,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            32 => {
+            33 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -426,11 +430,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 31;
+                game.menu_selection = 33;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 31 {
+            if game.menu_selection < 33 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -548,6 +552,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -574,6 +579,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -600,6 +606,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -626,6 +633,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Speedrun
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush

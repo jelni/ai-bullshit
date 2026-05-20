@@ -141,6 +141,7 @@ pub enum GameMode {
     Speedrun,
     DailyChallenge,
     WeeklyChallenge,
+    MonthlyChallenge,
     FogOfWar,
     Evolution,
     BossRush,
@@ -631,6 +632,8 @@ impl Game {
             "highscore_daily.txt".to_string()
         } else if mode == GameMode::WeeklyChallenge {
             "highscore_weekly.txt".to_string()
+        } else if mode == GameMode::MonthlyChallenge {
+            "highscore_monthly.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1854,6 +1857,7 @@ impl Game {
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
+            | GameMode::MonthlyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1964,6 +1968,13 @@ impl Game {
                 .as_secs()
                 / (86400 * 7);
             self.rng = rand::rngs::StdRng::seed_from_u64(weeks_since_epoch);
+        } else if self.mode == GameMode::MonthlyChallenge {
+            let months_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 30);
+            self.rng = rand::rngs::StdRng::seed_from_u64(months_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2116,6 +2127,7 @@ impl Game {
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
+            | GameMode::MonthlyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -2622,7 +2634,8 @@ impl Game {
         } else {
             (self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::WeeklyChallenge)
+                || self.mode == GameMode::WeeklyChallenge
+                || self.mode == GameMode::MonthlyChallenge)
                 && self.rng.gen_bool(0.005)
         };
 
@@ -3047,6 +3060,7 @@ impl Game {
             if self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
+                || self.mode == GameMode::MonthlyChallenge
             {
                 Duration::from_secs(3)
             } else {
