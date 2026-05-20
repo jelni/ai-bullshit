@@ -96,6 +96,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Weekly Challenge",
         "Monthly Challenge",
         "Yearly Challenge",
+        "Decade Challenge",
         "Campaign Mode",
         "Local Multiplayer",
         "Online Multiplayer",

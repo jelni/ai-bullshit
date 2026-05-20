@@ -143,6 +143,7 @@ pub enum GameMode {
     WeeklyChallenge,
     MonthlyChallenge,
     YearlyChallenge,
+    DecadeChallenge,
     FogOfWar,
     Evolution,
     BossRush,
@@ -637,6 +638,8 @@ impl Game {
             "highscore_monthly.txt".to_string()
         } else if mode == GameMode::YearlyChallenge {
             "highscore_yearly.txt".to_string()
+        } else if mode == GameMode::DecadeChallenge {
+            "highscore_decade.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1862,6 +1865,7 @@ impl Game {
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge
             | GameMode::YearlyChallenge
+            | GameMode::DecadeChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1986,6 +1990,13 @@ impl Game {
                 .as_secs()
                 / (86400 * 365);
             self.rng = rand::rngs::StdRng::seed_from_u64(years_since_epoch);
+        } else if self.mode == GameMode::DecadeChallenge {
+            let decades_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 3650);
+            self.rng = rand::rngs::StdRng::seed_from_u64(decades_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2140,6 +2151,7 @@ impl Game {
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge
             | GameMode::YearlyChallenge
+            | GameMode::DecadeChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -2648,7 +2660,8 @@ impl Game {
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge)
+                || self.mode == GameMode::YearlyChallenge
+                || self.mode == GameMode::DecadeChallenge)
                 && self.rng.gen_bool(0.005)
         };
 
@@ -3075,6 +3088,7 @@ impl Game {
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::MonthlyChallenge
                 || self.mode == GameMode::YearlyChallenge
+                || self.mode == GameMode::DecadeChallenge
             {
                 Duration::from_secs(3)
             } else {
@@ -5128,6 +5142,35 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn test_decade_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::DecadeChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::DecadeChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch decade
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+    }
 
     #[test]
     fn test_yearly_challenge_determinism() {
