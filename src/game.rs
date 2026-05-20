@@ -142,6 +142,7 @@ pub enum GameMode {
     DailyChallenge,
     WeeklyChallenge,
     MonthlyChallenge,
+    YearlyChallenge,
     FogOfWar,
     Evolution,
     BossRush,
@@ -634,6 +635,8 @@ impl Game {
             "highscore_weekly.txt".to_string()
         } else if mode == GameMode::MonthlyChallenge {
             "highscore_monthly.txt".to_string()
+        } else if mode == GameMode::YearlyChallenge {
+            "highscore_yearly.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1858,6 +1861,7 @@ impl Game {
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge
+            | GameMode::YearlyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1975,6 +1979,13 @@ impl Game {
                 .as_secs()
                 / (86400 * 30);
             self.rng = rand::rngs::StdRng::seed_from_u64(months_since_epoch);
+        } else if self.mode == GameMode::YearlyChallenge {
+            let years_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 365);
+            self.rng = rand::rngs::StdRng::seed_from_u64(years_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2128,6 +2139,7 @@ impl Game {
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge
+            | GameMode::YearlyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -2635,7 +2647,8 @@ impl Game {
             (self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge)
+                || self.mode == GameMode::MonthlyChallenge
+                || self.mode == GameMode::YearlyChallenge)
                 && self.rng.gen_bool(0.005)
         };
 
@@ -3061,6 +3074,7 @@ impl Game {
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::MonthlyChallenge
+                || self.mode == GameMode::YearlyChallenge
             {
                 Duration::from_secs(3)
             } else {
@@ -5111,6 +5125,50 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+
+    #[test]
+    fn test_yearly_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::YearlyChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::YearlyChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch year
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+
+        // Run some deterministic steps by eating a few pieces of food and check if next foods match
+        for _ in 0..5 {
+            let next_food = game1.food;
+            // teleport snake to eat food directly
+            game1.snake.move_to(next_food, true);
+            game1.process_food_collision(next_food, false);
+
+            game2.snake.move_to(next_food, true);
+            game2.process_food_collision(next_food, false);
+
+            assert_eq!(game1.food, game2.food, "Food generation drifted");
+            assert_eq!(game1.obstacles, game2.obstacles, "Obstacles generation drifted");
         }
     }
 
