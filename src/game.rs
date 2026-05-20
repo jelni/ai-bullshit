@@ -5225,6 +5225,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
 
         // Setup snake at (10, 10) facing Up
         game.snake = crate::snake::Snake::new(crate::snake::Point {
@@ -5542,6 +5543,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
         game.mode = GameMode::BotVsBot; // or PlayerVsBot, but bot vs bot is fine.
         game.snake = crate::snake::Snake::new(crate::snake::Point {
             x: 5,
@@ -5580,6 +5582,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
         game.snake = crate::snake::Snake::new(crate::snake::Point {
             x: 5,
             y: 5,
@@ -5623,6 +5626,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
         game.snake = crate::snake::Snake::new(crate::snake::Point {
             x: 5,
             y: 5,
@@ -5801,6 +5805,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
 
         // Setup snake at (2, 2)
         game.snake = crate::snake::Snake::new(crate::snake::Point {
