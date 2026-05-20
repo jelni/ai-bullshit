@@ -155,6 +155,7 @@ pub enum Weather {
     Rain,
     Snow,
     Storm,
+    Tornado,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -2833,13 +2834,48 @@ impl Game {
         }
 
         self.lightning_column = None;
+
+        // Tornado effect
+        if self.weather == Weather::Tornado && self.rng.gen_bool(0.05) {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+
+            // Occasionally shift food
+            if self.rng.gen_bool(0.5) {
+                let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+                let dir = dirs[self.rng.gen_range(0..4)];
+                let next_p = Self::calculate_next_head_dir(self.food, dir);
+
+                if next_p.x > margin
+                    && next_p.x < self.width - 1 - margin
+                    && next_p.y > margin
+                    && next_p.y < self.height - 1 - margin
+                {
+                    let avoid = |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                            || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    };
+                    if !avoid(&next_p) {
+                        self.food = next_p;
+                    }
+                }
+            }
+        }
+
         // Weather transition
         if self.rng.gen_bool(0.002) {
-            self.weather = match self.rng.gen_range(0..4) {
+            self.weather = match self.rng.gen_range(0..5) {
                 0 => Weather::Clear,
                 1 => Weather::Rain,
                 2 => Weather::Snow,
-                _ => Weather::Storm,
+                3 => Weather::Storm,
+                _ => Weather::Tornado,
             };
         }
 
@@ -5466,6 +5502,42 @@ mod tests {
         game.process_food_collision(p, false); // Base added score for normal difficulty is 2, combo is 1
         // Coin multiplier should make coins earned 4
         assert_eq!(game.stats.coins - initial_coins, 4);
+    }
+
+    #[test]
+    fn test_weather_tornado_shifts_food() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        game.state = GameState::Playing;
+        game.weather = Weather::Tornado;
+
+        let initial_food = game.food;
+
+        // Give snake a dummy direction to avoid auto pilot
+        game.snake.direction_queue.push_back(crate::snake::Direction::Down);
+
+        // Run update many times to ensure the tornado shifts the food at least once
+        let mut shifted = false;
+        for _ in 0..1000 {
+            game.weather = Weather::Tornado; // force Tornado
+            let _ = game.snake.direction_queue.push_back(crate::snake::Direction::Down); // Keep filling to avoid out-of-bounds/death logic taking over
+            // Prevent snake from dying from hitting borders by resetting position
+            game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+            game.update();
+            if game.food != initial_food {
+                shifted = true;
+                break;
+            }
+        }
+
+        assert!(shifted, "Food should have shifted due to Tornado effect");
     }
 
     #[test]

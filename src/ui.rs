@@ -963,6 +963,21 @@ fn draw_entities<W: Write>(
                 }
             }
         },
+        Weather::Tornado => {
+            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y) {
+                    let chars = ['@', 'S', '~', '°'];
+                    let c = chars[rng.gen_range(0..chars.len())];
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "{c}")?;
+                }
+            }
+        },
         _ => {},
     }
 
@@ -1344,6 +1359,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Rain => " | Weather: Rain",
         crate::game::Weather::Snow => " | Weather: Snow",
         crate::game::Weather::Storm => " | Weather: Storm",
+        crate::game::Weather::Tornado => " | Weather: Tornado",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
