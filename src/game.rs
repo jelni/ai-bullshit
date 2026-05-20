@@ -5762,6 +5762,7 @@ mod tests {
         game.state = GameState::Playing;
         game.weather = Weather::Tornado;
 
+        game.food = crate::snake::Point { x: 5, y: 5 }; // Place food away from boundaries to ensure it can be shifted
         let initial_food = game.food;
 
         // Give snake a dummy direction to avoid auto pilot
@@ -5775,7 +5776,7 @@ mod tests {
             // Prevent snake from dying from hitting borders by resetting position
             game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
             game.update();
-            if game.food != initial_food {
+            if game.food != initial_food && game.food != (crate::snake::Point { x: 0, y: 0 }) {
                 shifted = true;
                 break;
             }
