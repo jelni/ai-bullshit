@@ -67,7 +67,8 @@ fn test_poison_food_collision() {
     game.handle_input(Direction::Right, 1);
     game.update();
 
-    // Snake should have shrunk from 6 to 3
+    // Snake should have shrunk by tail logic. For len=6, target=3.
+    // When moving, length is maintained, so it's 6, then shrinks to 3.
     assert_eq!(game.snake.body.len(), 3);
 
     // Score should have decreased by 10

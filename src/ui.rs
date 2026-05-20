@@ -1117,6 +1117,10 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::DarkGreen))?;
                 write!(stdout, "S")?;
             },
+            crate::game::BossType::Teleporter => {
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "T")?;
+            },
         }
     }
 
