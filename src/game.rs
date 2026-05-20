@@ -230,7 +230,7 @@ pub struct HistoryState {
     pub combo: u32,
     pub last_food_time: Option<Instant>,
     pub lasers: Vec<Laser>,
-    pub boss: Option<Boss>,
+    pub bosses: Vec<Boss>,
     pub portals: Option<(Point, Point)>,
     pub weather: Weather,
     pub lightning_column: Option<u16>,
@@ -283,6 +283,8 @@ pub struct SaveState {
     pub lasers: Vec<Laser>,
     #[serde(default)]
     pub boss: Option<Boss>,
+    #[serde(default)]
+    pub bosses: Vec<Boss>,
     #[serde(default)]
     pub portals: Option<(Point, Point)>,
     #[serde(default)]
@@ -466,7 +468,7 @@ pub struct Game {
     pub chat_log: std::collections::VecDeque<(String, crate::color::Color)>,
     pub last_chat_time: Option<Instant>,
     pub lasers: Vec<Laser>,
-    pub boss: Option<Boss>,
+    pub bosses: Vec<Boss>,
     pub portals: Option<(Point, Point)>,
     pub weather: Weather,
     pub lightning_column: Option<u16>,
@@ -620,7 +622,7 @@ impl Game {
             chat_log: std::collections::VecDeque::new(),
             last_chat_time: None,
             lasers: Vec::new(),
-            boss: None,
+            bosses: Vec::new(),
             portals: None,
             weather: Weather::Clear,
             lightning_column: None,
@@ -849,7 +851,8 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time.map(|t| t.elapsed().as_secs()),
             lasers: self.lasers.clone(),
-            boss: self.boss,
+            boss: None, // Legacy compatibility
+            bosses: self.bosses.clone(),
             portals: self.portals,
             weather: self.weather,
             lightning_column: self.lightning_column,
@@ -945,7 +948,11 @@ impl Game {
                     web_time::Instant::now().checked_sub(Duration::from_secs(elapsed))
                 });
                 self.lasers = state.lasers;
-                self.boss = state.boss;
+                if let Some(boss) = state.boss {
+                    self.bosses = vec![boss];
+                } else {
+                    self.bosses = state.bosses;
+                }
                 self.portals = state.portals;
                 self.weather = state.weather;
                 self.lightning_column = state.lightning_column;
@@ -2145,7 +2152,7 @@ impl Game {
             ));
         }
         self.last_chat_time = None;
-        self.boss = None;
+        self.bosses.clear();
         self.portals = None;
         self.weather = Weather::Clear;
         self.lightning_column = None;
@@ -2340,11 +2347,11 @@ impl Game {
             && current_pos.y < self.height - 1 - margin
         {
             steps += 1;
-            // Shoot if we hit a Boss
-            if let Some(boss) = &self.boss
-                && boss.position == current_pos
-            {
-                return true;
+            // Shoot if we hit any Boss
+            for boss in &self.bosses {
+                if boss.position == current_pos {
+                    return true;
+                }
             }
 
             // Shoot if we hit the other player
@@ -2513,7 +2520,7 @@ impl Game {
             self.combo = state.combo;
             self.last_food_time = state.last_food_time;
             self.lasers = state.lasers;
-            self.boss = state.boss;
+            self.bosses = state.bosses;
             self.portals = state.portals;
             self.weather = state.weather;
             self.lightning_column = state.lightning_column;
@@ -2542,7 +2549,7 @@ impl Game {
             combo: self.combo,
             last_food_time: self.last_food_time,
             lasers: self.lasers.clone(),
-            boss: self.boss,
+            bosses: self.bosses.clone(),
             portals: self.portals,
             weather: self.weather,
             lightning_column: self.lightning_column,
@@ -2677,8 +2684,14 @@ impl Game {
         }
 
         // Boss Logic
+        let max_bosses = if self.mode == GameMode::BossRush {
+            1 + (self.campaign_level / 3)
+        } else {
+            1
+        };
+
         let should_spawn_boss = if self.mode == GameMode::BossRush {
-            true
+            self.bosses.len() < usize::try_from(max_bosses).unwrap_or(1)
         } else {
             (self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::DailyChallenge
@@ -2688,10 +2701,11 @@ impl Game {
                 || self.mode == GameMode::DecadeChallenge
                 || self.mode == GameMode::CenturyChallenge
                 || self.mode == GameMode::MillenniumChallenge)
+                && self.bosses.is_empty()
                 && self.rng.gen_bool(0.005)
         };
 
-        if self.boss.is_none() && should_spawn_boss {
+        if should_spawn_boss {
             let margin = self.safe_zone_margin + 5;
             let avoid =
                 |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
@@ -2714,7 +2728,7 @@ impl Game {
                     2 => BossType::Spawner,
                     _ => BossType::Teleporter,
                 };
-                self.boss = Some(Boss {
+                self.bosses.push(Boss {
                     position: pos,
                     health: boss_health,
                     max_health: boss_health,
@@ -2733,7 +2747,9 @@ impl Game {
             }
         }
 
-        if let Some(mut boss) = self.boss.take() {
+        let mut next_bosses = Vec::new();
+        let mut new_lasers = Vec::new();
+        for mut boss in std::mem::take(&mut self.bosses) {
             if !is_time_frozen {
                 if boss.state_timer > 0 {
                     boss.state_timer -= 1;
@@ -2877,7 +2893,7 @@ impl Game {
                                 && laser_pos.y > margin
                                 && laser_pos.y < self.height - 1 - margin
                             {
-                                self.lasers.push(Laser {
+                                new_lasers.push(Laser {
                                     position: laser_pos,
                                     direction: dir,
                                     player: 3, // 3 represents Boss
@@ -2966,8 +2982,10 @@ impl Game {
                     }
                 }
             }
-            self.boss = Some(boss);
+            next_bosses.push(boss);
         }
+        self.bosses = next_bosses;
+        self.lasers.extend(new_lasers);
 
         self.lightning_column = None;
 
@@ -3031,12 +3049,10 @@ impl Game {
                 // Destroy obstacles in column
                 self.obstacles.retain(|p| p.x != strike_x);
 
-                // Damage boss
-                #[expect(
-                    clippy::collapsible_if,
-                    reason = "Using let_chains requires unstable feature"
-                )]
-                if let Some(mut boss) = self.boss {
+                // Damage bosses
+                let mut next_bosses = Vec::new();
+                let mut new_lasers = Vec::new();
+                for mut boss in std::mem::take(&mut self.bosses) {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
@@ -3055,7 +3071,6 @@ impl Game {
                             );
 
                             let boss_pos = boss.position;
-                            self.boss = None;
 
                             let margin = if self.mode == GameMode::BattleRoyale {
                                 self.safe_zone_margin
@@ -3071,7 +3086,7 @@ impl Game {
                                     && laser_pos.y > margin
                                     && laser_pos.y < self.height - 1 - margin
                                 {
-                                    self.lasers.push(Laser {
+                                    new_lasers.push(Laser {
                                         position: laser_pos,
                                         direction: dir,
                                         player: 3, // 3 represents Boss
@@ -3079,7 +3094,6 @@ impl Game {
                                 }
                             }
                         } else {
-                            self.boss = Some(boss);
                             self.spawn_particles(
                                 f32::from(strike_x),
                                 f32::from(boss.position.y),
@@ -3087,9 +3101,14 @@ impl Game {
                                 crate::color::Color::Yellow,
                                 '*',
                             );
+                            next_bosses.push(boss);
                         }
+                    } else {
+                        next_bosses.push(boss);
                     }
                 }
+                self.bosses = next_bosses;
+                self.lasers.extend(new_lasers);
 
                 // Spawn particles down the column
                 for y in (margin + 1)..self.height.saturating_sub(margin).saturating_sub(1) {
@@ -3242,17 +3261,21 @@ impl Game {
                     );
                     break;
                 }
-                if let Some(boss) = &mut self.boss
-                    && boss.position == laser.position
-                {
-                    boss.health = boss.health.saturating_sub(1);
-                    destroyed = true;
-
-                    let boss_pos = boss.position;
-                    let boss_health = boss.health;
+                let mut hit_boss_idx = None;
+                for (i, boss) in self.bosses.iter_mut().enumerate() {
+                    if boss.position == laser.position {
+                        boss.health = boss.health.saturating_sub(1);
+                        destroyed = true;
+                        hit_boss_idx = Some(i);
+                        break;
+                    }
+                }
+                if let Some(i) = hit_boss_idx {
+                    let boss_pos = self.bosses[i].position;
+                    let boss_health = self.bosses[i].health;
 
                     if boss_health == 0 {
-                        self.boss = None;
+                        self.bosses.remove(i);
                         if self.mode == GameMode::BossRush {
                             self.score += 1000 * self.campaign_level;
                             self.campaign_level += 1;
@@ -3485,7 +3508,7 @@ impl Game {
         };
 
         // --- Resolution ---
-        let hit_boss1 = self.boss.as_ref().is_some_and(|b| {
+        let hit_boss1 = self.bosses.iter().any(|b| {
             b.position == final_head1 || self.snake.body_map.contains_key(&b.position)
         });
 
@@ -3665,11 +3688,9 @@ impl Game {
                         self.obstacles.remove(&p);
                         self.mines.remove(&p);
 
-                        #[expect(
-                            clippy::collapsible_if,
-                            reason = "Using let_chains requires unstable feature"
-                        )]
-                        if let Some(boss) = &mut self.boss {
+                        let mut next_bosses = Vec::new();
+                        let mut new_lasers = Vec::new();
+                        for mut boss in std::mem::take(&mut self.bosses) {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
@@ -3680,7 +3701,6 @@ impl Game {
                                         self.score += 100;
                                     }
                                     let boss_pos = boss.position;
-                                    self.boss = None;
                                     let margin = if self.mode == GameMode::BattleRoyale {
                                         self.safe_zone_margin
                                     } else {
@@ -3699,16 +3719,22 @@ impl Game {
                                             && laser_pos.y > margin
                                             && laser_pos.y < self.height - 1 - margin
                                         {
-                                            self.lasers.push(Laser {
+                                            new_lasers.push(Laser {
                                                 position: laser_pos,
                                                 direction: dir,
                                                 player: 3,
                                             });
                                         }
                                     }
+                                } else {
+                                    next_bosses.push(boss);
                                 }
+                            } else {
+                                next_bosses.push(boss);
                             }
                         }
+                        self.bosses = next_bosses;
+                        self.lasers.extend(new_lasers);
                     }
                 }
             }
@@ -3929,7 +3955,7 @@ impl Game {
             } else if p.p_type == PowerUpType::Emp {
                 self.mines.clear();
                 self.lasers.clear();
-                if let Some(boss) = &mut self.boss {
+                for boss in &mut self.bosses {
                     boss.state_timer = 30; // Stun the boss for 30 ticks
                 }
             } else if p.p_type == PowerUpType::Teleport {
@@ -4604,7 +4630,7 @@ impl Game {
                     }
                 }
             }
-            if let Some(boss) = &self.boss {
+            for boss in &self.bosses {
                 if is_time_frozen {
                     if final_p == boss.position {
                         return false;
@@ -4858,7 +4884,7 @@ impl Game {
             }
 
             // Entity avoidance: add penalty for being close to a boss
-            if let Some(boss) = &self.boss {
+            for boss in &self.bosses {
                 let d = calc_dist(p, boss.position);
                 if d < 5 {
                     penalty = penalty.saturating_add((5 - d) * 10);
@@ -5998,7 +6024,7 @@ mod tests {
         };
 
         // Placing boss right in front of the snake
-        game.boss = Some(Boss {
+        game.bosses.push(Boss {
             position: crate::snake::Point {
                 x: 6,
                 y: 5,

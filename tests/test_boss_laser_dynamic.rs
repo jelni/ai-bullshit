@@ -15,7 +15,7 @@ fn test_bot_predicts_boss_laser() {
     };
 
     // Boss at x=5, y=7
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: snake::Point {
             x: 5,
             y: 7,

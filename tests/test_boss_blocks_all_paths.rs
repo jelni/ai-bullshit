@@ -15,7 +15,7 @@ fn test_boss_blocks_all_paths() {
     }; // Food is far away
 
     // Boss is at x=10, y=10
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: snake::Point {
             x: 10,
             y: 10,

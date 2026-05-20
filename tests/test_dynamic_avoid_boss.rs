@@ -16,7 +16,7 @@ fn test_bot_predicts_boss() {
 
     // Boss at x=5, y=7
     // Next turn we move Down to 5,6. Boss moves closer to us. Will it hit us?
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: snake::Point {
             x: 5,
             y: 7,

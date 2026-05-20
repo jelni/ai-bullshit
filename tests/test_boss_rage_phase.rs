@@ -13,7 +13,7 @@ fn test_boss_rage_phase() {
         x: 5,
         y: 15,
     };
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: boss_pos,
         health: 10,
         max_health: 10,
@@ -30,28 +30,28 @@ fn test_boss_rage_phase() {
     // move_threshold is usually 2. So in 1 update, move_timer becomes 1, no move.
     game.update();
 
-    let boss = game.boss.as_ref().unwrap();
+    let boss = &game.bosses[0];
     assert_eq!(boss.move_timer, 1, "Boss should not have moved yet");
     assert_eq!(boss.position, boss_pos, "Boss position should be unchanged");
 
     // After 2nd update, move_timer reaches 2 (threshold) and resets to 0, Boss moves
     game.update();
-    let boss = game.boss.as_ref().unwrap();
+    let boss = &game.bosses[0];
     assert_eq!(boss.move_timer, 0, "Boss move_timer should reset");
     assert_ne!(boss.position, boss_pos, "Boss should have moved towards player");
 
     let new_pos = boss.position;
 
     // Now trigger rage phase: health <= 5 (50%)
-    let mut boss_mut = game.boss.take().unwrap();
+    let mut boss_mut = game.bosses.pop().unwrap();
     boss_mut.health = 5;
     boss_mut.move_timer = 0;
-    game.boss = Some(boss_mut);
+    game.bosses.push(boss_mut);
 
     // In rage phase, move_threshold halves from 2 to 1.
     // This means every update should cause the boss to move!
     game.update();
-    let boss = game.boss.as_ref().unwrap();
+    let boss = &game.bosses[0];
     assert_eq!(boss.move_timer, 0, "Boss move_timer should reset immediately in rage phase");
     assert_ne!(boss.position, new_pos, "Boss should have moved immediately in rage phase");
 }
@@ -65,7 +65,7 @@ fn test_boss_death_nova() {
         x: 10,
         y: 10,
     };
-    game.boss = Some(game::Boss {
+    game.bosses.push(game::Boss {
         position: boss_pos,
         health: 1, // 1 HP left
         max_health: 10,
@@ -93,7 +93,7 @@ fn test_boss_death_nova() {
     game.update();
 
     // Boss should be dead
-    assert!(game.boss.is_none(), "Boss should be defeated");
+    assert!(game.bosses.is_empty(), "Boss should be defeated");
 
     // The laser that hit the boss is destroyed.
     // Death nova spawns 4 new lasers.

@@ -1105,28 +1105,28 @@ fn draw_entities<W: Write>(
         }
     }
 
-    // Draw Boss
-    if let Some(boss) = &game.boss
-        && is_visible(boss.position.x, boss.position.y)
-    {
-        stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
-        match boss.kind {
-            crate::game::BossType::Shooter => {
-                stdout.queue(SetForegroundColor(Color::Magenta))?;
-                write!(stdout, "B")?;
-            },
-            crate::game::BossType::Charger => {
-                stdout.queue(SetForegroundColor(Color::Red))?;
-                write!(stdout, "C")?;
-            },
-            crate::game::BossType::Spawner => {
-                stdout.queue(SetForegroundColor(Color::DarkGreen))?;
-                write!(stdout, "S")?;
-            },
-            crate::game::BossType::Teleporter => {
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
-                write!(stdout, "T")?;
-            },
+    // Draw Bosses
+    for boss in &game.bosses {
+        if is_visible(boss.position.x, boss.position.y) {
+            stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
+            match boss.kind {
+                crate::game::BossType::Shooter => {
+                    stdout.queue(SetForegroundColor(Color::Magenta))?;
+                    write!(stdout, "B")?;
+                },
+                crate::game::BossType::Charger => {
+                    stdout.queue(SetForegroundColor(Color::Red))?;
+                    write!(stdout, "C")?;
+                },
+                crate::game::BossType::Spawner => {
+                    stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+                    write!(stdout, "S")?;
+                },
+                crate::game::BossType::Teleporter => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "T")?;
+                },
+            }
         }
     }
 
@@ -1382,8 +1382,10 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(stdout, "{weather_str}")?;
 
-    if let Some(boss) = &game.boss {
-        let boss_msg = format!(" | Boss HP: {}/{}", boss.health, boss.max_health);
+    if !game.bosses.is_empty() {
+        let total_health: u32 = game.bosses.iter().map(|b| b.health).sum();
+        let total_max_health: u32 = game.bosses.iter().map(|b| b.max_health).sum();
+        let boss_msg = format!(" | Bosses HP: {total_health}/{total_max_health}");
         write!(stdout, "{boss_msg}")?;
     }
 

@@ -30,7 +30,7 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     });
 
     // Add a boss, a laser, and a mine
-    game.boss = Some(Boss {
+    game.bosses.push(Boss {
         position: Point {
             x: 5,
             y: 5,
@@ -60,7 +60,7 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     // Ensure they exist
     assert!(!game.lasers.is_empty());
     assert!(!game.mines.is_empty());
-    assert_eq!(game.boss.unwrap().state_timer, 0);
+    assert_eq!(game.bosses[0].state_timer, 0);
 
     // Move the snake into the Emp
     game.state = snake_game::game::GameState::Playing;
@@ -71,6 +71,6 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     assert!(game.lasers.is_empty(), "Emp should destroy all lasers");
     assert!(game.mines.is_empty(), "Emp should destroy all mines");
 
-    let boss = game.boss.expect("Boss should still exist");
+    let boss = game.bosses[0];
     assert_eq!(boss.state_timer, 30, "Emp should stun boss for 30 ticks");
 }
