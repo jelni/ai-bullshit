@@ -4543,12 +4543,22 @@ impl Game {
                     }
 
                     let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                    let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                    let dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                        + u32::from(final_p.y.abs_diff(boss.position.y));
+                    if boss.kind == BossType::Teleporter {
+                        // For teleporter boss, we cannot predict its exact jump location
+                        // but we must avoid its current position. Since it can jump anywhere,
+                        // predicting it as a danger across the board would freeze the snake.
+                        // So we only fail if final_p is its exact current position.
+                        if final_p == boss.position {
+                            return false;
+                        }
+                    } else {
+                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                            + u32::from(final_p.y.abs_diff(boss.position.y));
 
-                    if dist <= moves {
-                        return false;
+                        if dist <= moves {
+                            return false;
+                        }
                     }
 
                     if boss.kind == BossType::Shooter {
