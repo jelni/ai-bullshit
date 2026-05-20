@@ -140,6 +140,7 @@ pub enum GameMode {
     CustomLevel,
     Speedrun,
     DailyChallenge,
+    WeeklyChallenge,
     FogOfWar,
     Evolution,
     BossRush,
@@ -628,6 +629,8 @@ impl Game {
     pub fn get_high_score_filename(difficulty: Difficulty, mode: GameMode) -> String {
         if mode == GameMode::DailyChallenge {
             "highscore_daily.txt".to_string()
+        } else if mode == GameMode::WeeklyChallenge {
+            "highscore_weekly.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1850,6 +1853,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
+            | GameMode::WeeklyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1953,6 +1957,13 @@ impl Game {
                 .as_secs()
                 / 86400;
             self.rng = rand::rngs::StdRng::seed_from_u64(days_since_epoch);
+        } else if self.mode == GameMode::WeeklyChallenge {
+            let weeks_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 7);
+            self.rng = rand::rngs::StdRng::seed_from_u64(weeks_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2104,6 +2115,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::DailyChallenge
+            | GameMode::WeeklyChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -2608,7 +2620,9 @@ impl Game {
         let should_spawn_boss = if self.mode == GameMode::BossRush {
             true
         } else {
-            (self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge)
+            (self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::WeeklyChallenge)
                 && self.rng.gen_bool(0.005)
         };
 
@@ -3030,7 +3044,10 @@ impl Game {
 
         // Chat simulation logic
         let chat_interval =
-            if self.mode == GameMode::SinglePlayer || self.mode == GameMode::DailyChallenge {
+            if self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::WeeklyChallenge
+            {
                 Duration::from_secs(3)
             } else {
                 Duration::from_millis(500)
@@ -3699,6 +3716,7 @@ impl Game {
                 || self.mode == GameMode::Speedrun
                 || self.mode == GameMode::Survival
                 || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::BossRush
             {
                 self.handle_death("You Died!");
@@ -4081,6 +4099,7 @@ impl Game {
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::WeeklyChallenge
         {
             return;
         }
@@ -5513,6 +5532,49 @@ mod tests {
         game2.reset();
 
         // Assert identical initial state seeded by the current epoch day
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+
+        // Run some deterministic steps by eating a few pieces of food and check if next foods match
+        for _ in 0..5 {
+            let next_food = game1.food;
+            // teleport snake to eat food directly
+            game1.snake.move_to(next_food, true);
+            game1.process_food_collision(next_food, false);
+
+            game2.snake.move_to(next_food, true);
+            game2.process_food_collision(next_food, false);
+
+            assert_eq!(game1.food, game2.food, "Food generation drifted");
+            assert_eq!(game1.obstacles, game2.obstacles, "Obstacles generation drifted");
+        }
+    }
+
+    #[test]
+    fn test_weekly_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::WeeklyChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::WeeklyChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch week
         assert_eq!(game1.food, game2.food);
         assert_eq!(game1.obstacles, game2.obstacles);
 
