@@ -4646,6 +4646,25 @@ impl Game {
 
             let mut penalty = 0_u16;
 
+            // Entity avoidance: add penalty for being close to opponent snake
+            if checking_player == 1 {
+                if let Some(p2) = &self.player2 {
+                    for part in &p2.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            } else if checking_player == 2 {
+                for part in &self.snake.body {
+                    let d = calc_dist(p, *part);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+            }
+
             // Entity avoidance: add penalty for being close to a boss
             if let Some(boss) = &self.boss {
                 let d = calc_dist(p, boss.position);
@@ -5511,6 +5530,44 @@ mod tests {
         }
 
         assert!(struck, "Lightning should strike during a storm");
+    }
+
+    #[test]
+    fn test_calculate_autopilot_avoids_opponent() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.mode = GameMode::BotVsBot; // or PlayerVsBot, but bot vs bot is fine.
+        game.snake = crate::snake::Snake::new(crate::snake::Point {
+            x: 5,
+            y: 5,
+        });
+        game.snake.direction = crate::snake::Direction::Right;
+        game.food = crate::snake::Point {
+            x: 9,
+            y: 5,
+        };
+
+        // Placing opponent right in front of the snake
+        let mut p2 = crate::snake::Snake::new(crate::snake::Point {
+            x: 6,
+            y: 5,
+        });
+        p2.direction = crate::snake::Direction::Down;
+        game.player2 = Some(p2);
+
+        // Since the direct path (Right) is blocked by the opponent, it should choose Up or Down.
+        // Assuming no obstacles, it should not be Right.
+        let next_move = game.calculate_autopilot_move();
+        assert!(
+            next_move == Some(crate::snake::Direction::Up)
+                || next_move == Some(crate::snake::Direction::Down)
+        );
     }
 
     #[test]
