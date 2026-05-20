@@ -76,3 +76,38 @@ fn test_spawner_drops_mines() {
         "Mine should be dropped at boss position"
     );
 }
+
+#[test]
+fn test_teleporter_boss_moves() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = Direction::Right;
+
+    let initial_pos = Point {
+        x: 9,
+        y: 5,
+    };
+    // Teleporter Boss
+    game.boss = Some(Boss {
+        position: initial_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 29, // Threshold is 30, so next update it should teleport
+        shoot_timer: 0,
+        kind: BossType::Teleporter,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+    // Move timer hits threshold, boss should teleport to a random empty point.
+    let current_pos = game.boss.unwrap().position;
+    assert_ne!(
+        current_pos, initial_pos,
+        "Teleporter boss should have changed position"
+    );
+}

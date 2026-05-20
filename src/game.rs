@@ -375,6 +375,7 @@ pub enum BossType {
     Shooter,
     Charger,
     Spawner,
+    Teleporter,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -2628,10 +2629,11 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..3) {
+                let kind = match self.rng.gen_range(0..4) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
-                    _ => BossType::Spawner,
+                    2 => BossType::Spawner,
+                    _ => BossType::Teleporter,
                 };
                 self.boss = Some(Boss {
                     position: pos,
@@ -2825,6 +2827,61 @@ impl Game {
                             boss.shoot_timer = 0;
                             if self.mines.len() < 10 {
                                 self.mines.insert(boss.position);
+                            }
+                        }
+                    } else if boss.kind == BossType::Teleporter {
+                        let mut teleport_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                10,
+                                30_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            30
+                        };
+
+                        if boss.health <= boss.max_health / 2 {
+                            teleport_threshold = std::cmp::max(5, teleport_threshold / 2);
+                        }
+
+                        boss.move_timer += 1;
+                        if boss.move_timer >= teleport_threshold {
+                            boss.move_timer = 0;
+
+                            let margin = self.safe_zone_margin + 5;
+                            let avoid = |p: &Point| {
+                                self.obstacles.contains(p) || self.snake.body_map.contains_key(p)
+                            };
+                            if let Some(pos) = Self::get_random_empty_point(
+                                self.width,
+                                self.height,
+                                &self.snake,
+                                avoid,
+                                &mut self.rng,
+                                margin,
+                            ) {
+                                // Add particle effect at old location
+                                self.spawn_particles(
+                                    f32::from(boss.position.x),
+                                    f32::from(boss.position.y),
+                                    20,
+                                    crate::color::Color::Magenta,
+                                    '*',
+                                );
+
+                                boss.position = pos;
+                                boss.state_timer = 15; // stun momentarily after teleport
+
+                                // Add particle effect at new location
+                                self.spawn_particles(
+                                    f32::from(boss.position.x),
+                                    f32::from(boss.position.y),
+                                    30,
+                                    crate::color::Color::Magenta,
+                                    'B',
+                                );
+                                beep();
                             }
                         }
                     }
