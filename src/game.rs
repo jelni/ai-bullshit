@@ -144,6 +144,8 @@ pub enum GameMode {
     MonthlyChallenge,
     YearlyChallenge,
     DecadeChallenge,
+    CenturyChallenge,
+    MillenniumChallenge,
     FogOfWar,
     Evolution,
     BossRush,
@@ -640,6 +642,10 @@ impl Game {
             "highscore_yearly.txt".to_string()
         } else if mode == GameMode::DecadeChallenge {
             "highscore_decade.txt".to_string()
+        } else if mode == GameMode::CenturyChallenge {
+            "highscore_century.txt".to_string()
+        } else if mode == GameMode::MillenniumChallenge {
+            "highscore_millennium.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1866,6 +1872,8 @@ impl Game {
             | GameMode::MonthlyChallenge
             | GameMode::YearlyChallenge
             | GameMode::DecadeChallenge
+            | GameMode::CenturyChallenge
+            | GameMode::MillenniumChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1997,6 +2005,20 @@ impl Game {
                 .as_secs()
                 / (86400 * 3650);
             self.rng = rand::rngs::StdRng::seed_from_u64(decades_since_epoch);
+        } else if self.mode == GameMode::CenturyChallenge {
+            let centuries_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 36500);
+            self.rng = rand::rngs::StdRng::seed_from_u64(centuries_since_epoch);
+        } else if self.mode == GameMode::MillenniumChallenge {
+            let millennia_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 365_000);
+            self.rng = rand::rngs::StdRng::seed_from_u64(millennia_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2152,6 +2174,8 @@ impl Game {
             | GameMode::MonthlyChallenge
             | GameMode::YearlyChallenge
             | GameMode::DecadeChallenge
+            | GameMode::CenturyChallenge
+            | GameMode::MillenniumChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -2661,7 +2685,9 @@ impl Game {
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::MonthlyChallenge
                 || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge)
+                || self.mode == GameMode::DecadeChallenge
+                || self.mode == GameMode::CenturyChallenge
+                || self.mode == GameMode::MillenniumChallenge)
                 && self.rng.gen_bool(0.005)
         };
 
@@ -3089,6 +3115,8 @@ impl Game {
                 || self.mode == GameMode::MonthlyChallenge
                 || self.mode == GameMode::YearlyChallenge
                 || self.mode == GameMode::DecadeChallenge
+                || self.mode == GameMode::CenturyChallenge
+                || self.mode == GameMode::MillenniumChallenge
             {
                 Duration::from_secs(3)
             } else {
@@ -5168,6 +5196,65 @@ mod tests {
         game2.reset();
 
         // Assert identical initial state seeded by the current epoch decade
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+    }
+
+
+    #[test]
+    fn test_century_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::CenturyChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::CenturyChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch century
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+    }
+
+    #[test]
+    fn test_millennium_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::MillenniumChallenge;
+        game1.reset();
+
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::MillenniumChallenge;
+        game2.reset();
+
+        // Assert identical initial state seeded by the current epoch millennium
         assert_eq!(game1.food, game2.food);
         assert_eq!(game1.obstacles, game2.obstacles);
     }
