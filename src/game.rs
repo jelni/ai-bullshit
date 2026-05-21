@@ -1035,7 +1035,10 @@ impl Game {
         }
     }
 
-    #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Game loop inherently requires handling multiple states and events"
+    )]
     fn manage_goblin(&mut self) {
         if self.goblin.is_none() && self.rng.gen_bool(0.005) && self.bosses.is_empty() {
             let margin = if self.mode == GameMode::BattleRoyale {
@@ -3207,8 +3210,14 @@ impl Game {
                         if boss.health == 0 {
                             if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                 let half_max = boss.max_health / 2;
-                                let child1_pos = Point { x: boss.position.x.saturating_sub(1).max(1), y: boss.position.y };
-                                let child2_pos = Point { x: (boss.position.x + 1).min(self.width - 2), y: boss.position.y };
+                                let child1_pos = Point {
+                                    x: boss.position.x.saturating_sub(1).max(1),
+                                    y: boss.position.y,
+                                };
+                                let child2_pos = Point {
+                                    x: (boss.position.x + 1).min(self.width - 2),
+                                    y: boss.position.y,
+                                };
 
                                 next_bosses.push(Boss {
                                     position: child1_pos,
@@ -3257,9 +3266,12 @@ impl Game {
                                 } else {
                                     0
                                 };
-                                for &dir in
-                                    &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
-                                {
+                                for &dir in &[
+                                    Direction::Up,
+                                    Direction::Down,
+                                    Direction::Left,
+                                    Direction::Right,
+                                ] {
                                     let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
                                     if laser_pos.x > margin
                                         && laser_pos.x < self.width - 1 - margin
@@ -3451,13 +3463,20 @@ impl Game {
                     }
                 }
 
-                #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+                #[expect(
+                    clippy::collapsible_if,
+                    reason = "Using let_chains requires unstable feature"
+                )]
                 if let Some(goblin) = self.goblin {
                     if laser.position == goblin.position {
                         self.goblin = None;
                         destroyed = true;
 
-                        let multiplier = if self.skin == '₿' { 2 } else { 1 };
+                        let multiplier = if self.skin == '₿' {
+                            2
+                        } else {
+                            1
+                        };
                         self.score += 500;
                         self.stats.total_score += 500;
                         self.stats.coins += 500 * multiplier;
@@ -3482,8 +3501,14 @@ impl Game {
                         let dead_boss = self.bosses.remove(i);
                         if dead_boss.kind == BossType::Splitter && dead_boss.max_health > 5 {
                             let half_max = dead_boss.max_health / 2;
-                            let child1_pos = Point { x: dead_boss.position.x.saturating_sub(1).max(1), y: dead_boss.position.y };
-                            let child2_pos = Point { x: (dead_boss.position.x + 1).min(self.width - 2), y: dead_boss.position.y };
+                            let child1_pos = Point {
+                                x: dead_boss.position.x.saturating_sub(1).max(1),
+                                y: dead_boss.position.y,
+                            };
+                            let child2_pos = Point {
+                                x: (dead_boss.position.x + 1).min(self.width - 2),
+                                y: dead_boss.position.y,
+                            };
 
                             self.bosses.push(Boss {
                                 position: child1_pos,
@@ -3816,23 +3841,30 @@ impl Game {
         let mut exploded_mines = Vec::new();
 
         let hit_goblin1 = self.goblin.is_some_and(|g| final_head1 == g.position);
-        let hit_goblin2 = final_head2_opt.is_some_and(|fh2| self.goblin.is_some_and(|g| fh2 == g.position));
+        let hit_goblin2 =
+            final_head2_opt.is_some_and(|fh2| self.goblin.is_some_and(|g| fh2 == g.position));
 
         if hit_goblin1 || hit_goblin2 {
             self.goblin = None;
-            let multiplier = if self.skin == '₿' { 2 } else { 1 };
+            let multiplier = if self.skin == '₿' {
+                2
+            } else {
+                1
+            };
             self.score += 500;
             self.stats.total_score += 500;
             self.stats.coins += 500 * multiplier;
-            let spawn_x = if hit_goblin1 { f32::from(final_head1.x) } else { final_head2_opt.map_or(0.0, |fh| f32::from(fh.x)) };
-            let spawn_y = if hit_goblin1 { f32::from(final_head1.y) } else { final_head2_opt.map_or(0.0, |fh| f32::from(fh.y)) };
-            self.spawn_particles(
-                spawn_x,
-                spawn_y,
-                50,
-                crate::color::Color::Yellow,
-                '$',
-            );
+            let spawn_x = if hit_goblin1 {
+                f32::from(final_head1.x)
+            } else {
+                final_head2_opt.map_or(0.0, |fh| f32::from(fh.x))
+            };
+            let spawn_y = if hit_goblin1 {
+                f32::from(final_head1.y)
+            } else {
+                final_head2_opt.map_or(0.0, |fh| f32::from(fh.y))
+            };
+            self.spawn_particles(spawn_x, spawn_y, 50, crate::color::Color::Yellow, '$');
             beep();
         }
 
@@ -3955,8 +3987,14 @@ impl Game {
                                 if boss.health == 0 {
                                     if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                         let half_max = boss.max_health / 2;
-                                        let child1_pos = Point { x: boss.position.x.saturating_sub(1).max(1), y: boss.position.y };
-                                        let child2_pos = Point { x: (boss.position.x + 1).min(self.width - 2), y: boss.position.y };
+                                        let child1_pos = Point {
+                                            x: boss.position.x.saturating_sub(1).max(1),
+                                            y: boss.position.y,
+                                        };
+                                        let child2_pos = Point {
+                                            x: (boss.position.x + 1).min(self.width - 2),
+                                            y: boss.position.y,
+                                        };
 
                                         next_bosses.push(Boss {
                                             position: child1_pos,
@@ -4872,10 +4910,6 @@ impl Game {
                 return false;
             }
 
-            if self.goblin.is_some_and(|g| g.position == final_p) {
-                return false;
-            }
-
             for meteor in &self.meteors {
                 // Predictive: meteor falls 1 tile per 2 ticks. For simplicity, just avoid its current column below it and its current spot
                 if meteor.position == final_p
@@ -5239,14 +5273,6 @@ impl Game {
             // Avoid poison food
             if let Some((pf_p, _)) = self.poison_food {
                 let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
-                }
-            }
-
-            // Entity avoidance: add penalty for being close to goblin
-            if let Some(goblin) = self.goblin {
-                let d = calc_dist(p, goblin.position);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 10);
                 }
@@ -6593,16 +6619,25 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game.obstacles.clear();
-        game.food = Point { x: 10, y: 10 };
+        game.food = Point {
+            x: 10,
+            y: 10,
+        };
         game.goblin = Some(Goblin {
-            position: Point { x: 9, y: 10 },
+            position: Point {
+                x: 9,
+                y: 10,
+            },
             move_timer: 1, // Ready to move on next update
             food_eaten: 2, // Will hit 3 and despawn
         });
 
         game.state = GameState::Playing;
         // Make the snake safe
-        game.snake = crate::snake::Snake::new(Point { x: 1, y: 1 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 1,
+            y: 1,
+        });
 
         game.update();
 
@@ -6624,14 +6659,20 @@ mod tests {
         let initial_score = game.score;
         let initial_coins = game.stats.coins;
 
-        let goblin_pos = Point { x: 10, y: 10 };
+        let goblin_pos = Point {
+            x: 10,
+            y: 10,
+        };
         game.goblin = Some(Goblin {
             position: goblin_pos,
             move_timer: 0,
             food_eaten: 0,
         });
 
-        game.snake = crate::snake::Snake::new(Point { x: 10, y: 9 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 10,
+            y: 9,
+        });
         game.snake.direction = crate::snake::Direction::Down;
         game.state = GameState::Playing;
 
@@ -6639,7 +6680,11 @@ mod tests {
 
         assert!(game.goblin.is_none(), "Goblin should be caught and despawned");
         assert_eq!(game.score, initial_score + 500, "Should get 500 score for catching goblin");
-        assert_eq!(game.stats.coins, initial_coins + 500, "Should get 500 coins for catching goblin");
+        assert_eq!(
+            game.stats.coins,
+            initial_coins + 500,
+            "Should get 500 coins for catching goblin"
+        );
     }
 
     #[test]
@@ -6654,7 +6699,10 @@ mod tests {
         );
 
         let initial_score = game.score;
-        let goblin_pos = Point { x: 10, y: 10 };
+        let goblin_pos = Point {
+            x: 10,
+            y: 10,
+        };
         game.goblin = Some(Goblin {
             position: goblin_pos,
             move_timer: 0,
@@ -6662,14 +6710,20 @@ mod tests {
         });
 
         game.lasers.push(Laser {
-            position: Point { x: 9, y: 10 },
+            position: Point {
+                x: 9,
+                y: 10,
+            },
             direction: crate::snake::Direction::Right,
             player: 1,
         });
 
         game.state = GameState::Playing;
         // Make the snake safe
-        game.snake = crate::snake::Snake::new(Point { x: 1, y: 1 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 1,
+            y: 1,
+        });
 
         game.update(); // Laser moves onto Goblin
 

@@ -136,7 +136,10 @@ fn test_splitter_boss_splits_on_death() {
     // Freeze time so the boss doesn't move and laser moves 1 step
     game.power_up = Some(snake_game::game::PowerUp {
         p_type: snake_game::game::PowerUpType::TimeFreeze,
-        location: Point { x: 1, y: 1 },
+        location: Point {
+            x: 1,
+            y: 1,
+        },
         activation_time: Some(
             web_time::SystemTime::now()
                 .duration_since(web_time::SystemTime::UNIX_EPOCH)
