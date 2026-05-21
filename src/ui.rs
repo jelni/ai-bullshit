@@ -1105,6 +1105,16 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw Goblin
+    #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+    if let Some(goblin) = game.goblin {
+        if is_visible(goblin.position.x, goblin.position.y) {
+            stdout.queue(cursor::MoveTo(goblin.position.x, goblin.position.y))?;
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            write!(stdout, "G")?;
+        }
+    }
+
     // Draw Bosses
     for boss in &game.bosses {
         if is_visible(boss.position.x, boss.position.y) {

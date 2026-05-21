@@ -99,6 +99,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Goblin
+    if let Some(goblin) = game.goblin {
+        ctx.set_fill_style_str("#FFD700"); // Gold
+        if goblin.position.x < game.width
+            && goblin.position.y < game.height
+            && is_visible(f64::from(goblin.position.x), f64::from(goblin.position.y))
+        {
+            ctx.fill_rect(
+                f64::from(goblin.position.x) * cell_size,
+                f64::from(goblin.position.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw Black Hole
     if let Some(bh) = game.black_hole {
         ctx.set_fill_style_str("#1A1A1A"); // DarkGrey/Blackish
