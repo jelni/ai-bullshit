@@ -5074,9 +5074,6 @@ impl Game {
         {
             targets.push(pu.location);
         }
-        if let Some(goblin) = self.goblin {
-            targets.push(goblin.position);
-        }
 
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
@@ -5100,9 +5097,6 @@ impl Game {
                 && pu.activation_time.is_none()
             {
                 targets.push(pu.location);
-            }
-            if let Some(goblin) = self.goblin {
-                targets.push(goblin.position);
             }
 
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
