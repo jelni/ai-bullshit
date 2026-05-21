@@ -387,6 +387,7 @@ pub enum BossType {
     Charger,
     Spawner,
     Teleporter,
+    Splitter,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -2869,11 +2870,12 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..4) {
+                let kind = match self.rng.gen_range(0..5) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
-                    _ => BossType::Teleporter,
+                    3 => BossType::Teleporter,
+                    _ => BossType::Splitter,
                 };
                 self.bosses.push(Boss {
                     position: pos,
@@ -3203,41 +3205,73 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
-                            if self.mode == GameMode::BossRush {
-                                self.score += 1000 * self.campaign_level;
-                                self.campaign_level += 1;
-                            } else {
-                                self.score += 100;
-                            }
-                            self.spawn_particles(
-                                f32::from(strike_x),
-                                f32::from(boss.position.y),
-                                30,
-                                crate::color::Color::Magenta,
-                                'B',
-                            );
+                            if boss.kind == BossType::Splitter && boss.max_health > 5 {
+                                let half_max = boss.max_health / 2;
+                                let child1_pos = Point { x: boss.position.x.saturating_sub(1).max(1), y: boss.position.y };
+                                let child2_pos = Point { x: (boss.position.x + 1).min(self.width - 2), y: boss.position.y };
 
-                            let boss_pos = boss.position;
-
-                            let margin = if self.mode == GameMode::BattleRoyale {
-                                self.safe_zone_margin
+                                next_bosses.push(Boss {
+                                    position: child1_pos,
+                                    health: half_max,
+                                    max_health: half_max,
+                                    move_timer: 0,
+                                    shoot_timer: 0,
+                                    kind: BossType::Splitter,
+                                    state_timer: 0,
+                                });
+                                next_bosses.push(Boss {
+                                    position: child2_pos,
+                                    health: half_max,
+                                    max_health: half_max,
+                                    move_timer: 0,
+                                    shoot_timer: 0,
+                                    kind: BossType::Splitter,
+                                    state_timer: 0,
+                                });
+                                self.spawn_particles(
+                                    f32::from(strike_x),
+                                    f32::from(boss.position.y),
+                                    30,
+                                    crate::color::Color::Magenta,
+                                    's',
+                                );
                             } else {
-                                0
-                            };
-                            for &dir in
-                                &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
-                            {
-                                let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
-                                if laser_pos.x > margin
-                                    && laser_pos.x < self.width - 1 - margin
-                                    && laser_pos.y > margin
-                                    && laser_pos.y < self.height - 1 - margin
+                                if self.mode == GameMode::BossRush {
+                                    self.score += 1000 * self.campaign_level;
+                                    self.campaign_level += 1;
+                                } else {
+                                    self.score += 100;
+                                }
+                                self.spawn_particles(
+                                    f32::from(strike_x),
+                                    f32::from(boss.position.y),
+                                    30,
+                                    crate::color::Color::Magenta,
+                                    'B',
+                                );
+
+                                let boss_pos = boss.position;
+
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                for &dir in
+                                    &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
                                 {
-                                    new_lasers.push(Laser {
-                                        position: laser_pos,
-                                        direction: dir,
-                                        player: 3, // 3 represents Boss
-                                    });
+                                    let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                                    if laser_pos.x > margin
+                                        && laser_pos.x < self.width - 1 - margin
+                                        && laser_pos.y > margin
+                                        && laser_pos.y < self.height - 1 - margin
+                                    {
+                                        new_lasers.push(Laser {
+                                            position: laser_pos,
+                                            direction: dir,
+                                            player: 3, // 3 represents Boss
+                                        });
+                                    }
                                 }
                             }
                         } else {
@@ -3445,40 +3479,72 @@ impl Game {
                     let boss_health = self.bosses[i].health;
 
                     if boss_health == 0 {
-                        self.bosses.remove(i);
-                        if self.mode == GameMode::BossRush {
-                            self.score += 1000 * self.campaign_level;
-                            self.campaign_level += 1;
-                        } else {
-                            self.score += 100;
-                        }
-                        self.spawn_particles(
-                            f32::from(laser.position.x),
-                            f32::from(laser.position.y),
-                            30,
-                            crate::color::Color::Magenta,
-                            'B',
-                        );
+                        let dead_boss = self.bosses.remove(i);
+                        if dead_boss.kind == BossType::Splitter && dead_boss.max_health > 5 {
+                            let half_max = dead_boss.max_health / 2;
+                            let child1_pos = Point { x: dead_boss.position.x.saturating_sub(1).max(1), y: dead_boss.position.y };
+                            let child2_pos = Point { x: (dead_boss.position.x + 1).min(self.width - 2), y: dead_boss.position.y };
 
-                        let margin = if self.mode == GameMode::BattleRoyale {
-                            self.safe_zone_margin
+                            self.bosses.push(Boss {
+                                position: child1_pos,
+                                health: half_max,
+                                max_health: half_max,
+                                move_timer: 0,
+                                shoot_timer: 0,
+                                kind: BossType::Splitter,
+                                state_timer: 0,
+                            });
+                            self.bosses.push(Boss {
+                                position: child2_pos,
+                                health: half_max,
+                                max_health: half_max,
+                                move_timer: 0,
+                                shoot_timer: 0,
+                                kind: BossType::Splitter,
+                                state_timer: 0,
+                            });
+                            self.spawn_particles(
+                                f32::from(laser.position.x),
+                                f32::from(laser.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                's',
+                            );
                         } else {
-                            0
-                        };
-                        for &dir in
-                            &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
-                        {
-                            let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
-                            if laser_pos.x > margin
-                                && laser_pos.x < self.width - 1 - margin
-                                && laser_pos.y > margin
-                                && laser_pos.y < self.height - 1 - margin
+                            if self.mode == GameMode::BossRush {
+                                self.score += 1000 * self.campaign_level;
+                                self.campaign_level += 1;
+                            } else {
+                                self.score += 100;
+                            }
+                            self.spawn_particles(
+                                f32::from(laser.position.x),
+                                f32::from(laser.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                'B',
+                            );
+
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+                            for &dir in
+                                &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
                             {
-                                lasers_to_keep.push(Laser {
-                                    position: laser_pos,
-                                    direction: dir,
-                                    player: 3, // 3 represents Boss
-                                });
+                                let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                                if laser_pos.x > margin
+                                    && laser_pos.x < self.width - 1 - margin
+                                    && laser_pos.y > margin
+                                    && laser_pos.y < self.height - 1 - margin
+                                {
+                                    lasers_to_keep.push(Laser {
+                                        position: laser_pos,
+                                        direction: dir,
+                                        player: 3, // 3 represents Boss
+                                    });
+                                }
                             }
                         }
                     } else {
@@ -3887,36 +3953,61 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
-                                    if self.mode == GameMode::BossRush {
-                                        self.score += 1000 * self.campaign_level;
-                                        self.campaign_level += 1;
+                                    if boss.kind == BossType::Splitter && boss.max_health > 5 {
+                                        let half_max = boss.max_health / 2;
+                                        let child1_pos = Point { x: boss.position.x.saturating_sub(1).max(1), y: boss.position.y };
+                                        let child2_pos = Point { x: (boss.position.x + 1).min(self.width - 2), y: boss.position.y };
+
+                                        next_bosses.push(Boss {
+                                            position: child1_pos,
+                                            health: half_max,
+                                            max_health: half_max,
+                                            move_timer: 0,
+                                            shoot_timer: 0,
+                                            kind: BossType::Splitter,
+                                            state_timer: 0,
+                                        });
+                                        next_bosses.push(Boss {
+                                            position: child2_pos,
+                                            health: half_max,
+                                            max_health: half_max,
+                                            move_timer: 0,
+                                            shoot_timer: 0,
+                                            kind: BossType::Splitter,
+                                            state_timer: 0,
+                                        });
                                     } else {
-                                        self.score += 100;
-                                    }
-                                    let boss_pos = boss.position;
-                                    let margin = if self.mode == GameMode::BattleRoyale {
-                                        self.safe_zone_margin
-                                    } else {
-                                        0
-                                    };
-                                    for &dir in &[
-                                        Direction::Up,
-                                        Direction::Down,
-                                        Direction::Left,
-                                        Direction::Right,
-                                    ] {
-                                        let laser_pos =
-                                            Self::calculate_next_head_dir(boss_pos, dir);
-                                        if laser_pos.x > margin
-                                            && laser_pos.x < self.width - 1 - margin
-                                            && laser_pos.y > margin
-                                            && laser_pos.y < self.height - 1 - margin
-                                        {
-                                            new_lasers.push(Laser {
-                                                position: laser_pos,
-                                                direction: dir,
-                                                player: 3,
-                                            });
+                                        if self.mode == GameMode::BossRush {
+                                            self.score += 1000 * self.campaign_level;
+                                            self.campaign_level += 1;
+                                        } else {
+                                            self.score += 100;
+                                        }
+                                        let boss_pos = boss.position;
+                                        let margin = if self.mode == GameMode::BattleRoyale {
+                                            self.safe_zone_margin
+                                        } else {
+                                            0
+                                        };
+                                        for &dir in &[
+                                            Direction::Up,
+                                            Direction::Down,
+                                            Direction::Left,
+                                            Direction::Right,
+                                        ] {
+                                            let laser_pos =
+                                                Self::calculate_next_head_dir(boss_pos, dir);
+                                            if laser_pos.x > margin
+                                                && laser_pos.x < self.width - 1 - margin
+                                                && laser_pos.y > margin
+                                                && laser_pos.y < self.height - 1 - margin
+                                            {
+                                                new_lasers.push(Laser {
+                                                    position: laser_pos,
+                                                    direction: dir,
+                                                    player: 3,
+                                                });
+                                            }
                                         }
                                     }
                                 } else {

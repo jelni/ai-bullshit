@@ -1136,6 +1136,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Cyan))?;
                     write!(stdout, "T")?;
                 },
+                crate::game::BossType::Splitter => {
+                    stdout.queue(SetForegroundColor(Color::Yellow))?;
+                    write!(stdout, "P")?;
+                },
             }
         }
     }
