@@ -237,6 +237,7 @@ pub struct HistoryState {
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
+    pub goblin: Option<Goblin>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -297,6 +298,8 @@ pub struct SaveState {
     pub black_hole: Option<Point>,
     #[serde(default)]
     pub meteors: Vec<Meteor>,
+    #[serde(default)]
+    pub goblin: Option<Goblin>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -401,6 +404,13 @@ pub struct Boss {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Goblin {
+    pub position: Point,
+    pub move_timer: u8,
+    pub food_eaten: u8,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Meteor {
     pub position: Point,
     pub timer: u8,
@@ -475,6 +485,7 @@ pub struct Game {
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
+    pub goblin: Option<Goblin>,
 }
 
 impl Game {
@@ -629,6 +640,7 @@ impl Game {
             mines: HashSet::new(),
             black_hole: None,
             meteors: Vec::new(),
+            goblin: None,
         }
     }
 
@@ -859,6 +871,7 @@ impl Game {
             mines: self.mines.clone(),
             black_hole: self.black_hole,
             meteors: self.meteors.clone(),
+            goblin: self.goblin,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -959,6 +972,7 @@ impl Game {
                 self.mines = state.mines;
                 self.black_hole = state.black_hole;
                 self.meteors = state.meteors;
+                self.goblin = state.goblin;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -1017,6 +1031,136 @@ impl Game {
                 // Fallback if the board is completely full
                 return None;
             }
+        }
+    }
+
+    #[expect(clippy::too_many_lines, reason = "Game loop inherently requires handling multiple states and events")]
+    fn manage_goblin(&mut self) {
+        if self.goblin.is_none() && self.rng.gen_bool(0.005) && self.bosses.is_empty() {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || (self.portals.is_some()
+                        && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+            };
+            if let Some(spawn_pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                margin,
+            ) {
+                self.goblin = Some(Goblin {
+                    position: spawn_pos,
+                    move_timer: 0,
+                    food_eaten: 0,
+                });
+                self.spawn_particles(
+                    f32::from(spawn_pos.x),
+                    f32::from(spawn_pos.y),
+                    20,
+                    crate::color::Color::Yellow,
+                    'G',
+                );
+            }
+        }
+
+        let mut despawn = false;
+        let mut new_food_needed = false;
+        let mut particle_spawns = Vec::new();
+
+        if let Some(mut goblin) = self.goblin {
+            goblin.move_timer += 1;
+            // Goblin moves every 2 ticks
+            if goblin.move_timer >= 2 {
+                goblin.move_timer = 0;
+
+                let target = self.food;
+                if let Some(dir) = self.bfs_pathfind(goblin.position, target) {
+                    let next_pos = Self::calculate_next_head_dir(goblin.position, dir);
+                    let margin = if self.mode == GameMode::BattleRoyale {
+                        self.safe_zone_margin
+                    } else {
+                        0
+                    };
+
+                    if next_pos.x > margin
+                        && next_pos.x < self.width - 1 - margin
+                        && next_pos.y > margin
+                        && next_pos.y < self.height - 1 - margin
+                        && !self.obstacles.contains(&next_pos)
+                    {
+                        goblin.position = next_pos;
+
+                        if goblin.position == self.food {
+                            goblin.food_eaten += 1;
+                            new_food_needed = true;
+                            particle_spawns.push((
+                                f32::from(goblin.position.x),
+                                f32::from(goblin.position.y),
+                                15,
+                                crate::color::Color::Green,
+                                '-',
+                            ));
+
+                            if goblin.food_eaten >= 3 {
+                                despawn = true;
+                                particle_spawns.push((
+                                    f32::from(goblin.position.x),
+                                    f32::from(goblin.position.y),
+                                    30,
+                                    crate::color::Color::White,
+                                    '\\',
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            self.goblin = Some(goblin);
+        }
+
+        for (x, y, count, color, char) in particle_spawns {
+            self.spawn_particles(x, y, count, color, char);
+        }
+
+        if new_food_needed {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let avoid_food = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+            };
+            if let Some(new_food) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_food,
+                &mut self.rng,
+                margin,
+            ) {
+                self.food = new_food;
+            }
+        }
+
+        if despawn {
+            self.goblin = None;
         }
     }
 
@@ -2159,6 +2303,7 @@ impl Game {
         self.mines = HashSet::new();
         self.black_hole = None;
         self.meteors.clear();
+        self.goblin = None;
     }
 
     fn respawn(&mut self) {
@@ -2527,6 +2672,7 @@ impl Game {
             self.mines = state.mines;
             self.black_hole = state.black_hole;
             self.meteors = state.meteors;
+            self.goblin = state.goblin;
         }
     }
 
@@ -2556,6 +2702,7 @@ impl Game {
             mines: self.mines.clone(),
             black_hole: self.black_hole,
             meteors: self.meteors.clone(),
+            goblin: self.goblin,
         };
 
         self.history.push_back(state);
@@ -3269,6 +3416,30 @@ impl Game {
                         break;
                     }
                 }
+
+                #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+                if let Some(goblin) = self.goblin {
+                    if laser.position == goblin.position {
+                        self.goblin = None;
+                        destroyed = true;
+
+                        let multiplier = if self.skin == '₿' { 2 } else { 1 };
+                        self.score += 500;
+                        self.stats.total_score += 500;
+                        self.stats.coins += 500 * multiplier;
+
+                        self.spawn_particles(
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            50,
+                            crate::color::Color::Yellow,
+                            '$',
+                        );
+                        beep();
+                        break;
+                    }
+                }
+
                 if let Some(i) = hit_boss_idx {
                     let boss_pos = self.bosses[i].position;
                     let boss_health = self.bosses[i].health;
@@ -3478,6 +3649,7 @@ impl Game {
         self.manage_mines();
         self.manage_black_hole();
         self.manage_meteors();
+        self.manage_goblin();
         self.apply_magnet();
 
         // --- Calculate Next Heads ---
@@ -3576,6 +3748,27 @@ impl Game {
 
         // --- Process Mine Collisions ---
         let mut exploded_mines = Vec::new();
+
+        let hit_goblin1 = self.goblin.is_some_and(|g| final_head1 == g.position);
+        let hit_goblin2 = final_head2_opt.is_some_and(|fh2| self.goblin.is_some_and(|g| fh2 == g.position));
+
+        if hit_goblin1 || hit_goblin2 {
+            self.goblin = None;
+            let multiplier = if self.skin == '₿' { 2 } else { 1 };
+            self.score += 500;
+            self.stats.total_score += 500;
+            self.stats.coins += 500 * multiplier;
+            let spawn_x = if hit_goblin1 { f32::from(final_head1.x) } else { final_head2_opt.map_or(0.0, |fh| f32::from(fh.x)) };
+            let spawn_y = if hit_goblin1 { f32::from(final_head1.y) } else { final_head2_opt.map_or(0.0, |fh| f32::from(fh.y)) };
+            self.spawn_particles(
+                spawn_x,
+                spawn_y,
+                50,
+                crate::color::Color::Yellow,
+                '$',
+            );
+            beep();
+        }
 
         let hit_mine1 = self.mines.contains(&final_head1);
         let hit_mine2 = final_head2_opt.is_some_and(|fh2| self.mines.contains(&fh2));
@@ -4588,6 +4781,10 @@ impl Game {
                 return false;
             }
 
+            if self.goblin.is_some_and(|g| g.position == final_p) {
+                return false;
+            }
+
             for meteor in &self.meteors {
                 // Predictive: meteor falls 1 tile per 2 ticks. For simplicity, just avoid its current column below it and its current spot
                 if meteor.position == final_p
@@ -4786,6 +4983,9 @@ impl Game {
         {
             targets.push(pu.location);
         }
+        if let Some(goblin) = self.goblin {
+            targets.push(goblin.position);
+        }
 
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
@@ -4809,6 +5009,9 @@ impl Game {
                 && pu.activation_time.is_none()
             {
                 targets.push(pu.location);
+            }
+            if let Some(goblin) = self.goblin {
+                targets.push(goblin.position);
             }
 
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
@@ -6278,6 +6481,101 @@ mod tests {
         // Without portals, the shortest path would be down/right many times.
         let next_move = game.calculate_autopilot_move();
         assert_eq!(next_move, Some(crate::snake::Direction::Right));
+    }
+
+    #[test]
+    fn test_goblin_steals_food_and_escapes() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.obstacles.clear();
+        game.food = Point { x: 10, y: 10 };
+        game.goblin = Some(Goblin {
+            position: Point { x: 9, y: 10 },
+            move_timer: 1, // Ready to move on next update
+            food_eaten: 2, // Will hit 3 and despawn
+        });
+
+        game.state = GameState::Playing;
+        // Make the snake safe
+        game.snake = crate::snake::Snake::new(Point { x: 1, y: 1 });
+
+        game.update();
+
+        assert!(game.goblin.is_none(), "Goblin should have stolen food and despawned");
+    }
+
+    #[test]
+    fn test_snake_catches_goblin() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.obstacles.clear();
+
+        let initial_score = game.score;
+        let initial_coins = game.stats.coins;
+
+        let goblin_pos = Point { x: 10, y: 10 };
+        game.goblin = Some(Goblin {
+            position: goblin_pos,
+            move_timer: 0,
+            food_eaten: 0,
+        });
+
+        game.snake = crate::snake::Snake::new(Point { x: 10, y: 9 });
+        game.snake.direction = crate::snake::Direction::Down;
+        game.state = GameState::Playing;
+
+        game.update(); // Snake moves onto Goblin
+
+        assert!(game.goblin.is_none(), "Goblin should be caught and despawned");
+        assert_eq!(game.score, initial_score + 500, "Should get 500 score for catching goblin");
+        assert_eq!(game.stats.coins, initial_coins + 500, "Should get 500 coins for catching goblin");
+    }
+
+    #[test]
+    fn test_laser_hits_goblin() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+
+        let initial_score = game.score;
+        let goblin_pos = Point { x: 10, y: 10 };
+        game.goblin = Some(Goblin {
+            position: goblin_pos,
+            move_timer: 0,
+            food_eaten: 0,
+        });
+
+        game.lasers.push(Laser {
+            position: Point { x: 9, y: 10 },
+            direction: crate::snake::Direction::Right,
+            player: 1,
+        });
+
+        game.state = GameState::Playing;
+        // Make the snake safe
+        game.snake = crate::snake::Snake::new(Point { x: 1, y: 1 });
+
+        game.update(); // Laser moves onto Goblin
+
+        assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
+        assert_eq!(game.score, initial_score + 500, "Should get score for shooting goblin");
     }
 }
 
