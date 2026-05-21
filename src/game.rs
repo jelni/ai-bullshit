@@ -105,6 +105,7 @@ pub enum PowerUpType {
     Reverse,
     Decoy,
     Emp,
+    Nuke,
 }
 
 #[serde_as]
@@ -4238,6 +4239,7 @@ impl Game {
         (p1_dead, p2_dead)
     }
 
+    #[expect(clippy::too_many_lines, reason = "Handling many powerup types")]
     fn process_power_up_collision(&mut self, final_head: Point) {
         let hit_power_up = if let Some(p) = self.power_up.as_ref()
             && final_head == p.location
@@ -4280,6 +4282,11 @@ impl Game {
                 for boss in &mut self.bosses {
                     boss.state_timer = 30; // Stun the boss for 30 ticks
                 }
+            } else if p.p_type == PowerUpType::Nuke {
+                self.bosses.clear();
+                self.meteors.clear();
+                self.mines.clear();
+                self.lasers.clear();
             } else if p.p_type == PowerUpType::Teleport {
                 let avoid = |pt: &Point| {
                     self.obstacles.contains(pt)
@@ -4340,7 +4347,8 @@ impl Game {
                 || p.p_type == PowerUpType::ClearObstacles
                 || p.p_type == PowerUpType::Teleport
                 || p.p_type == PowerUpType::Decoy
-                || p.p_type == PowerUpType::Emp)
+                || p.p_type == PowerUpType::Emp
+                || p.p_type == PowerUpType::Nuke)
             && p.activation_time.is_none()
             && final_head == p.location
         {
@@ -4664,7 +4672,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..14) {
+                let p_type = match self.rng.gen_range(0..15) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -4678,6 +4686,7 @@ impl Game {
                     10 => PowerUpType::Reverse,
                     11 => PowerUpType::Decoy,
                     12 => PowerUpType::Emp,
+                    13 => PowerUpType::Nuke,
                     _ => PowerUpType::ExtraLife,
                 };
 
