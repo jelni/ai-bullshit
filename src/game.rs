@@ -5119,6 +5119,10 @@ impl Game {
         }
 
         // Explicitly target the goblin when computing A* paths
+        if let Some(goblin) = &self.goblin {
+            targets.push(goblin.position);
+        }
+
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
@@ -5143,6 +5147,9 @@ impl Game {
                 targets.push(pu.location);
             }
             // Explicitly target the goblin when computing A* paths for Player 2
+            if let Some(goblin) = &self.goblin {
+                targets.push(goblin.position);
+            }
 
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
                 self.p2_autopilot_path = path;
