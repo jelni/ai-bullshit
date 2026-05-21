@@ -5118,6 +5118,7 @@ impl Game {
             targets.push(pu.location);
         }
 
+        // Explicitly target the goblin when computing A* paths
         if let Some(goblin) = self.goblin {
             targets.push(goblin.position);
         }
@@ -5144,6 +5145,7 @@ impl Game {
             {
                 targets.push(pu.location);
             }
+            // Explicitly target the goblin when computing A* paths for Player 2
             if let Some(goblin) = self.goblin {
                 targets.push(goblin.position);
             }
