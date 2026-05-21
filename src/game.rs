@@ -3127,20 +3127,19 @@ impl Game {
         }
 
         // Chat simulation logic
-        let chat_interval =
-            if self.mode == GameMode::SinglePlayer
-                || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-            {
-                Duration::from_secs(3)
-            } else {
-                Duration::from_millis(500)
-            };
+        let chat_interval = if self.mode == GameMode::SinglePlayer
+            || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::WeeklyChallenge
+            || self.mode == GameMode::MonthlyChallenge
+            || self.mode == GameMode::YearlyChallenge
+            || self.mode == GameMode::DecadeChallenge
+            || self.mode == GameMode::CenturyChallenge
+            || self.mode == GameMode::MillenniumChallenge
+        {
+            Duration::from_secs(3)
+        } else {
+            Duration::from_millis(500)
+        };
 
         if self.last_chat_time.is_none_or(|t| t.elapsed() >= chat_interval)
             && self.rng.gen_bool(0.3)
@@ -3508,9 +3507,10 @@ impl Game {
         };
 
         // --- Resolution ---
-        let hit_boss1 = self.bosses.iter().any(|b| {
-            b.position == final_head1 || self.snake.body_map.contains_key(&b.position)
-        });
+        let hit_boss1 = self
+            .bosses
+            .iter()
+            .any(|b| b.position == final_head1 || self.snake.body_map.contains_key(&b.position));
 
         let hit_laser1 = self.lasers.iter().any(|l| l.player != 1 && l.position == final_head1);
         let hit_laser2 = final_head2_opt
@@ -5186,8 +5186,8 @@ mod tests {
                 if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
                     assert!(
                         !obstacles.contains(&Point {
-                            x: cx as u16,
-                            y: cy as u16
+                            x: u16::try_from(cx).unwrap_or(0),
+                            y: u16::try_from(cy).unwrap_or(0)
                         }),
                         "Center area should be free of obstacles in dungeon mode"
                     );
@@ -5195,7 +5195,6 @@ mod tests {
             }
         }
     }
-
 
     #[test]
     fn test_decade_challenge_determinism() {
@@ -5225,7 +5224,6 @@ mod tests {
         assert_eq!(game1.food, game2.food);
         assert_eq!(game1.obstacles, game2.obstacles);
     }
-
 
     #[test]
     fn test_century_challenge_determinism() {
@@ -5344,13 +5342,13 @@ mod tests {
 
         for dy in -3..=3 {
             for dx in -3..=3 {
-                let cx = start_x as i32 + dx;
-                let cy = start_y as i32 + dy;
-                if cx > 0 && cx < (width - 1) as i32 && cy > 0 && cy < (height - 1) as i32 {
+                let cx = i32::from(start_x) + dx;
+                let cy = i32::from(start_y) + dy;
+                if cx > 0 && cx < i32::from(width - 1) && cy > 0 && cy < i32::from(height - 1) {
                     assert!(
                         !obstacles.contains(&Point {
-                            x: cx as u16,
-                            y: cy as u16
+                            x: u16::try_from(cx).unwrap_or(0),
+                            y: u16::try_from(cy).unwrap_or(0)
                         }),
                         "Center area should be free of obstacles"
                     );
@@ -5668,8 +5666,8 @@ mod tests {
                 if cx > 0 && cx <= i32::from(width - 2) && cy > 0 && cy <= i32::from(height - 2) {
                     assert!(
                         !obstacles.contains(&Point {
-                            x: cx as u16,
-                            y: cy as u16
+                            x: u16::try_from(cx).unwrap_or(0),
+                            y: u16::try_from(cy).unwrap_or(0)
                         }),
                         "Center area should be free of obstacles"
                     );
@@ -5875,7 +5873,10 @@ mod tests {
         game.state = GameState::Playing;
         game.weather = Weather::Tornado;
 
-        game.food = crate::snake::Point { x: 5, y: 5 }; // Place food away from boundaries to ensure it can be shifted
+        game.food = crate::snake::Point {
+            x: 5,
+            y: 5,
+        }; // Place food away from boundaries to ensure it can be shifted
         let initial_food = game.food;
 
         // Give snake a dummy direction to avoid auto pilot
@@ -5885,11 +5886,20 @@ mod tests {
         let mut shifted = false;
         for _ in 0..1000 {
             game.weather = Weather::Tornado; // force Tornado
-            let _ = game.snake.direction_queue.push_back(crate::snake::Direction::Down); // Keep filling to avoid out-of-bounds/death logic taking over
+            game.snake.direction_queue.push_back(crate::snake::Direction::Down); // Keep filling to avoid out-of-bounds/death logic taking over
             // Prevent snake from dying from hitting borders by resetting position
-            game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 10 });
+            game.snake = crate::snake::Snake::new(crate::snake::Point {
+                x: 10,
+                y: 10,
+            });
             game.update();
-            if game.food != initial_food && game.food != (crate::snake::Point { x: 0, y: 0 }) {
+            if game.food != initial_food
+                && game.food
+                    != (crate::snake::Point {
+                        x: 0,
+                        y: 0,
+                    })
+            {
                 shifted = true;
                 break;
             }

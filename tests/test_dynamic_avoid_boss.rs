@@ -36,7 +36,7 @@ fn test_bot_predicts_boss() {
     // Right now, the A* in Game::is_safe_final_p only checks `self.boss.position == final_p`, which is the CURRENT position, not where it will be in `steps` steps.
 
     // We should ensure the snake doesn't go straight down if the boss is going to move up to 5,6.
-    println!("next_move: {:?}", next_move);
+    println!("next_move: {next_move:?}");
     assert_ne!(
         next_move,
         Some(snake::Direction::Down),

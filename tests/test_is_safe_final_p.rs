@@ -29,6 +29,6 @@ fn test_is_safe_final_p_laser() {
         1,
         1,
     );
-    println!("safe: {}", safe);
+    println!("safe: {safe}");
     assert!(!safe, "Should NOT be safe!");
 }

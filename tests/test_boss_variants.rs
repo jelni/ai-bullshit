@@ -106,8 +106,5 @@ fn test_teleporter_boss_moves() {
     game.update();
     // Move timer hits threshold, boss should teleport to a random empty point.
     let current_pos = game.bosses[0].position;
-    assert_ne!(
-        current_pos, initial_pos,
-        "Teleporter boss should have changed position"
-    );
+    assert_ne!(current_pos, initial_pos, "Teleporter boss should have changed position");
 }
