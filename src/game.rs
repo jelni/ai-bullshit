@@ -5244,6 +5244,14 @@ impl Game {
                 }
             }
 
+            // Entity avoidance: add penalty for being close to goblin
+            if let Some(goblin) = self.goblin {
+                let d = calc_dist(p, goblin.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+
             targets
                 .iter()
                 .map(|t| {
