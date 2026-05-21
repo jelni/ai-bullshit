@@ -40,9 +40,8 @@ fn test_boss_targets_decoy() {
     game.obstacles.clear();
 
     // Store the distance to decoy before update
-    let initial_dist_to_decoy =
-        game.bosses[0].position.x.abs_diff(game.decoy.unwrap().0.x)
-            + game.bosses[0].position.y.abs_diff(game.decoy.unwrap().0.y);
+    let initial_dist_to_decoy = game.bosses[0].position.x.abs_diff(game.decoy.unwrap().0.x)
+        + game.bosses[0].position.y.abs_diff(game.decoy.unwrap().0.y);
 
     // Play a frame
     game.state = snake_game::game::GameState::Playing;

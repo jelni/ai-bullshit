@@ -29,6 +29,6 @@ fn test_bot_predicts_laser_collision() {
     let next_move = game.calculate_autopilot_move();
 
     // Should avoid Down
-    println!("next_move: {:?}", next_move);
+    println!("next_move: {next_move:?}");
     assert_ne!(next_move, Some(snake::Direction::Down));
 }

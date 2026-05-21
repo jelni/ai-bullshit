@@ -29,6 +29,6 @@ fn test_bot_predicts_boss_laser() {
     });
 
     let next_move = game.calculate_autopilot_move();
-    println!("next_move: {:?}", next_move);
+    println!("next_move: {next_move:?}");
     assert_ne!(next_move, Some(snake::Direction::Down));
 }

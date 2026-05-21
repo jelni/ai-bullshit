@@ -28,7 +28,6 @@ fn test_bot_avoids_lightning() {
     // The shortest path is Right (into x=6). But because of lightning, it should avoid moving Right.
     assert!(
         next_move == Some(snake::Direction::Up) || next_move == Some(snake::Direction::Down),
-        "Bot must avoid moving right into the active lightning column, instead chose {:?}",
-        next_move
+        "Bot must avoid moving right into the active lightning column, instead chose {next_move:?}",
     );
 }

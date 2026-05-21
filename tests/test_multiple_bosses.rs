@@ -10,7 +10,10 @@ fn test_multiple_bosses_can_exist_and_move() {
 
     // Add Boss 1 (Shooter)
     game.bosses.push(Boss {
-        position: Point { x: 5, y: 5 },
+        position: Point {
+            x: 5,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -21,7 +24,10 @@ fn test_multiple_bosses_can_exist_and_move() {
 
     // Add Boss 2 (Charger)
     game.bosses.push(Boss {
-        position: Point { x: 15, y: 15 },
+        position: Point {
+            x: 15,
+            y: 15,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -31,7 +37,10 @@ fn test_multiple_bosses_can_exist_and_move() {
     });
 
     // Snake far away
-    game.snake = snake_game::snake::Snake::new(Point { x: 2, y: 2 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 2,
+        y: 2,
+    });
     game.state = snake_game::game::GameState::Playing;
 
     let initial_b1_pos = game.bosses[0].position;
