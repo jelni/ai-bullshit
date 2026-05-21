@@ -30,8 +30,5 @@ fn test_bot_targets_goblin() {
     let next_move = game.calculate_autopilot_move();
 
     // The bot should target the goblin, so it should move Right towards it
-    assert_eq!(
-        next_move,
-        Some(snake_game::snake::Direction::Right)
-    );
+    assert_eq!(next_move, Some(snake_game::snake::Direction::Right));
 }

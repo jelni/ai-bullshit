@@ -153,6 +153,7 @@ pub enum GameMode {
     MassiveMultiplayer,
     Mirror,
     Flood,
+    Vampire,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -2035,7 +2036,8 @@ impl Game {
             | GameMode::BossRush
             | GameMode::MassiveMultiplayer
             | GameMode::Mirror
-            | GameMode::Flood => {
+            | GameMode::Flood
+            | GameMode::Vampire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2092,6 +2094,7 @@ impl Game {
                 || self.mode == GameMode::MassiveMultiplayer
                 || self.mode == GameMode::Mirror
                 || self.mode == GameMode::Flood
+                || self.mode == GameMode::Vampire
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2120,6 +2123,7 @@ impl Game {
             || self.mode == GameMode::MassiveMultiplayer
             || self.mode == GameMode::Mirror
             || self.mode == GameMode::Flood
+            || self.mode == GameMode::Vampire
         {
             &self.snake
         } else {
@@ -2338,7 +2342,8 @@ impl Game {
             | GameMode::BossRush
             | GameMode::MassiveMultiplayer
             | GameMode::Mirror
-            | GameMode::Flood => {
+            | GameMode::Flood
+            | GameMode::Vampire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2811,6 +2816,20 @@ impl Game {
         }
 
         self.save_history_state();
+
+        if self.mode == GameMode::Vampire {
+            if let Some(last_food) = self.last_food_time {
+                if last_food.elapsed() >= web_time::Duration::from_secs(15) {
+                    self.handle_death("Vampire starvation!");
+                    if self.state == GameState::Playing {
+                        self.last_food_time = Some(web_time::Instant::now());
+                    }
+                    return;
+                }
+            } else {
+                self.last_food_time = Some(web_time::Instant::now());
+            }
+        }
 
         let is_time_frozen = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::TimeFreeze
@@ -4137,6 +4156,7 @@ impl Game {
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::BossRush
+                || self.mode == GameMode::Vampire
             {
                 self.handle_death("You Died!");
             } else {
