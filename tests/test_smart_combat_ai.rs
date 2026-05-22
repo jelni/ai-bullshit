@@ -141,3 +141,24 @@ fn test_bot_does_not_shoot_itself() {
 
     assert!(!game.should_bot_shoot(1));
 }
+
+#[test]
+fn test_bot_shoots_goblin_in_line_of_sight() {
+    use snake_game::game::Goblin;
+
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = Direction::Right;
+
+    // Goblin right in front
+    game.goblin = Some(Goblin {
+        position: Point { x: 9, y: 5 },
+        move_timer: 0,
+        food_eaten: 0,
+    });
+
+    assert!(game.should_bot_shoot(1));
+}
