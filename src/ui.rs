@@ -1230,6 +1230,27 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw ghost snake
+    if let Some(ghost) = &game.ghost_snake {
+        stdout.queue(SetForegroundColor(Color::DarkGrey.into()))?;
+        for (i, part) in ghost.body.iter().enumerate() {
+            if is_visible(part.x, part.y) {
+                stdout.queue(cursor::MoveTo(part.x, part.y))?;
+                if i == 0 {
+                    let head_char = match ghost.direction {
+                        Direction::Up => '^',
+                        Direction::Down => 'v',
+                        Direction::Left => '<',
+                        Direction::Right => '>',
+                    };
+                    write!(stdout, "{head_char}")?;
+                } else {
+                    write!(stdout, "{}", game.skin)?;
+                }
+            }
+        }
+    }
+
     // Draw snake
     stdout.queue(SetForegroundColor(snake_color))?;
     for (i, part) in game.snake.body.iter().enumerate() {
