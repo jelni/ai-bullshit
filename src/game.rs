@@ -391,6 +391,7 @@ pub enum BossType {
     Teleporter,
     Splitter,
     Trapper,
+    Necromancer,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -2894,12 +2895,13 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..6) {
+                let kind = match self.rng.gen_range(0..7) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
                     3 => BossType::Teleporter,
                     4 => BossType::Splitter,
+                    5 => BossType::Necromancer,
                     _ => BossType::Trapper,
                 };
                 self.bosses.push(Boss {
@@ -3100,6 +3102,41 @@ impl Game {
                             boss.shoot_timer = 0;
                             if self.mines.len() < 10 {
                                 self.mines.insert(boss.position);
+                            }
+                        }
+                    } else if boss.kind == BossType::Necromancer {
+                        let mut spawn_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                15,
+                                45_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            45
+                        };
+
+                        if boss.health <= boss.max_health / 2 {
+                            spawn_threshold = std::cmp::max(10, spawn_threshold / 2);
+                        }
+
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= spawn_threshold {
+                            boss.shoot_timer = 0;
+                            if self.goblin.is_none() {
+                                self.goblin = Some(Goblin {
+                                    position: boss.position,
+                                    move_timer: 0,
+                                    food_eaten: 0,
+                                });
+                                self.spawn_particles(
+                                    f32::from(boss.position.x),
+                                    f32::from(boss.position.y),
+                                    20,
+                                    crate::color::Color::Green,
+                                    'G',
+                                );
+                                beep();
                             }
                         }
                     } else if boss.kind == BossType::Teleporter {
@@ -6644,6 +6681,45 @@ mod tests {
         // Without portals, the shortest path would be down/right many times.
         let next_move = game.calculate_autopilot_move();
         assert_eq!(next_move, Some(crate::snake::Direction::Right));
+    }
+
+    #[test]
+    fn test_calculate_autopilot_targets_goblin() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.obstacles.clear();
+        game.food = Point {
+            x: 1,
+            y: 1,
+        }; // Put food far away
+
+        game.snake = crate::snake::Snake::new(Point {
+            x: 10,
+            y: 10,
+        });
+        game.snake.direction = crate::snake::Direction::Right;
+
+        let goblin_pos = Point {
+            x: 10,
+            y: 5,
+        };
+        game.goblin = Some(Goblin {
+            position: goblin_pos,
+            move_timer: 0,
+            food_eaten: 0,
+        });
+
+        // Autopilot should target goblin (which is closer) rather than just food
+        // Without goblin it would try to go up/left for food at (1, 1).
+        // With goblin at (10, 5), it should go straight UP towards goblin.
+        let next_move = game.calculate_autopilot_move();
+        assert_eq!(next_move, Some(crate::snake::Direction::Up));
     }
 
     #[test]
