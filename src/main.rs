@@ -417,19 +417,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             28 => {
+                game.mode = game::GameMode::Vampire;
+                game.reset();
+            },
+            29 => {
                 let _ = game.load_game();
             },
-            29 => game.state = GameState::Settings,
-            30 => game.state = GameState::NftShop,
-            31 => game.state = GameState::SkillTree,
-            32 => game.state = GameState::Stats,
-            33 => game.state = GameState::Achievements,
-            34 => game.state = GameState::Help,
-            35 => {
+            30 => game.state = GameState::Settings,
+            31 => game.state = GameState::NftShop,
+            32 => game.state = GameState::SkillTree,
+            33 => game.state = GameState::Stats,
+            34 => game.state = GameState::Achievements,
+            35 => game.state = GameState::Help,
+            36 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            36 => {
+            37 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -437,7 +441,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            37 => {
+            38 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -447,11 +451,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 36;
+                game.menu_selection = 37;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 36 {
+            if game.menu_selection < 37 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

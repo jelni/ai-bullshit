@@ -119,6 +119,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Massive Multiplayer",
         "Mirror Mode",
         "Flood Mode",
+        "Vampire Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
