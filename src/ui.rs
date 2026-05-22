@@ -1140,6 +1140,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Yellow))?;
                     write!(stdout, "P")?;
                 },
+                crate::game::BossType::Trapper => {
+                    stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+                    write!(stdout, "W")?;
+                },
             }
         }
     }

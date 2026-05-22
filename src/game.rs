@@ -390,6 +390,7 @@ pub enum BossType {
     Spawner,
     Teleporter,
     Splitter,
+    Trapper,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -2893,12 +2894,13 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..5) {
+                let kind = match self.rng.gen_range(0..6) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
                     3 => BossType::Teleporter,
-                    _ => BossType::Splitter,
+                    4 => BossType::Splitter,
+                    _ => BossType::Trapper,
                 };
                 self.bosses.push(Boss {
                     position: pos,
@@ -3011,7 +3013,11 @@ impl Game {
                                         beep();
                                     }
                                 } else {
+                                    let old_pos = boss.position;
                                     boss.position = next_pos;
+                                    if boss.kind == BossType::Trapper {
+                                        self.obstacles.insert(old_pos);
+                                    }
                                 }
                             }
                         }
