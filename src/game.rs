@@ -2516,6 +2516,13 @@ impl Game {
                 }
             }
 
+            // Shoot if we hit a Goblin
+            if let Some(goblin) = &self.goblin
+                && goblin.position == current_pos
+            {
+                return true;
+            }
+
             // Shoot if we hit the other player
             if player == 1 {
                 if let Some(p2) = &self.player2
