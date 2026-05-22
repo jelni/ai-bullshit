@@ -3996,9 +3996,9 @@ impl Game {
                         .player2
                         .as_ref()
                         .is_some_and(|p2| p2.body_map.contains_key(&meteor.position)))
-            {
-                hit_meteor2 = true;
-            }
+                {
+                    hit_meteor2 = true;
+                }
         }
 
         if hit_meteor1 && !is_invincible {

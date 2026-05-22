@@ -891,7 +891,20 @@ fn draw_entities<W: Write>(
             let head = game.snake.head();
             let dx = f32::from(px) - f32::from(head.x);
             let dy = f32::from(py) - f32::from(head.y);
-            f32::hypot(dx, dy) <= 6.0
+            let mut visible = f32::hypot(dx, dy) <= 6.0;
+
+            #[expect(clippy::collapsible_if, reason = "Nested if is easier to read")]
+            if !visible {
+                if let Some(p2) = &game.player2 {
+                    let head2 = p2.head();
+                    let dx2 = f32::from(px) - f32::from(head2.x);
+                    let dy2 = f32::from(py) - f32::from(head2.y);
+                    if f32::hypot(dx2, dy2) <= 6.0 {
+                        visible = true;
+                    }
+                }
+            }
+            visible
         } else {
             true
         }
