@@ -154,6 +154,7 @@ pub enum GameMode {
     Mirror,
     Flood,
     Vampire,
+    Gravity,
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, Default)]
@@ -2039,7 +2040,8 @@ impl Game {
             | GameMode::MassiveMultiplayer
             | GameMode::Mirror
             | GameMode::Flood
-            | GameMode::Vampire => {
+            | GameMode::Vampire
+            | GameMode::Gravity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2097,6 +2099,7 @@ impl Game {
                 || self.mode == GameMode::Mirror
                 || self.mode == GameMode::Flood
                 || self.mode == GameMode::Vampire
+                || self.mode == GameMode::Gravity
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2126,6 +2129,7 @@ impl Game {
             || self.mode == GameMode::Mirror
             || self.mode == GameMode::Flood
             || self.mode == GameMode::Vampire
+            || self.mode == GameMode::Gravity
         {
             &self.snake
         } else {
@@ -2345,7 +2349,8 @@ impl Game {
             | GameMode::MassiveMultiplayer
             | GameMode::Mirror
             | GameMode::Flood
-            | GameMode::Vampire => {
+            | GameMode::Vampire
+            | GameMode::Gravity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2745,6 +2750,31 @@ impl Game {
                 symbol,
                 color,
             });
+        }
+    }
+
+    pub fn apply_gravity(&mut self) {
+        if self.mode != GameMode::Gravity {
+            return;
+        }
+
+        // Apply downward pull every 5 ticks (assuming 1 food eaten session corresponds to tick roughly, wait, let's use elapsed time or just random chance)
+        // Let's use a 20% chance per tick to pull down, or deterministic timer
+        if self.rng.gen_bool(0.2) {
+            let next_p = Self::calculate_next_head_dir(self.snake.head(), Direction::Down);
+            // Check if blocked by walls or self
+            let margin = 0;
+            if next_p.x > margin
+                && next_p.x < self.width - 1 - margin
+                && next_p.y > margin
+                && next_p.y < self.height - 1 - margin
+                && !self.obstacles.contains(&next_p)
+                && !self.snake.body_map.contains_key(&next_p)
+                && self.snake.direction != Direction::Up
+            {
+                // Force a down move
+                self.snake.direction_queue.push_front(Direction::Down);
+            }
         }
     }
 
@@ -3805,6 +3835,7 @@ impl Game {
         self.manage_meteors();
         self.manage_goblin();
         self.apply_magnet();
+        self.apply_gravity();
 
         // --- Calculate Next Heads ---
         let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
@@ -4208,6 +4239,7 @@ impl Game {
                 || self.mode == GameMode::WeeklyChallenge
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Vampire
+                || self.mode == GameMode::Gravity
             {
                 self.handle_death("You Died!");
             } else {
