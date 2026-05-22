@@ -1144,6 +1144,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkGreen))?;
                     write!(stdout, "W")?;
                 },
+                crate::game::BossType::Necromancer => {
+                    stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+                    write!(stdout, "N")?;
+                },
             }
         }
     }
@@ -1228,6 +1232,27 @@ fn draw_entities<W: Write>(
             } else {
                 // Body
                 write!(stdout, "{}", game.skin)?;
+            }
+        }
+    }
+
+    // Draw autopilot paths
+    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot || game.used_bot_this_session {
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for p in &game.autopilot_path {
+            if is_visible(p.x, p.y) {
+                stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                write!(stdout, "·")?;
+            }
+        }
+    }
+
+    if game.mode == crate::game::GameMode::PlayerVsBot || game.mode == crate::game::GameMode::BotVsBot {
+        stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+        for p in &game.p2_autopilot_path {
+            if is_visible(p.x, p.y) {
+                stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                write!(stdout, "·")?;
             }
         }
     }
