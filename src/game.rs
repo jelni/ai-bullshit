@@ -5092,11 +5092,8 @@ impl Game {
                     }
 
                     let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                    if boss.kind == BossType::Teleporter {
-                        // For teleporter boss, we cannot predict its exact jump location
-                        // but we must avoid its current position. Since it can jump anywhere,
-                        // predicting it as a danger across the board would freeze the snake.
-                        // So we only fail if final_p is its exact current position.
+                    if boss.kind == BossType::Teleporter || boss.kind == BossType::Spawner || boss.kind == BossType::Trapper || boss.kind == BossType::Necromancer {
+                        // For non-moving bosses or unpredictable bosses, we only avoid their exact current position.
                         if final_p == boss.position {
                             return false;
                         }

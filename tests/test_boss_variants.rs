@@ -171,3 +171,33 @@ fn test_splitter_boss_splits_on_death() {
     assert_eq!(game.bosses[1].health, 5);
     assert_eq!(game.bosses[1].max_health, 5);
 }
+
+#[test]
+fn test_necromancer_summons_goblin() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+
+    // Necromancer Boss
+    game.bosses.push(Boss {
+        position: Point { x: 9, y: 5 },
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 44, // Default threshold is 45 in Normal mode, so next update spawns goblin
+        kind: BossType::Necromancer,
+        state_timer: 0,
+    });
+
+    game.goblin = None; // Ensure no goblin exists
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+
+    assert!(game.goblin.is_some(), "Necromancer should summon a goblin");
+    assert_eq!(
+        game.goblin.unwrap().position,
+        Point { x: 9, y: 5 },
+        "Goblin should be summoned at boss position"
+    );
+}
