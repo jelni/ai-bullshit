@@ -3959,16 +3959,15 @@ impl Game {
             {
                 hit_meteor1 = true;
             }
-            if let Some(fh2) = final_head2_opt {
-                if meteor.position == fh2
+            if let Some(fh2) = final_head2_opt
+                && (meteor.position == fh2
                     || self
                         .player2
                         .as_ref()
-                        .is_some_and(|p2| p2.body_map.contains_key(&meteor.position))
+                        .is_some_and(|p2| p2.body_map.contains_key(&meteor.position)))
                 {
                     hit_meteor2 = true;
                 }
-            }
         }
 
         if hit_meteor1 && !is_invincible {

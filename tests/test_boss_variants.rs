@@ -18,7 +18,7 @@ fn test_charger_moves_faster() {
         },
         health: 10,
         max_health: 10,
-        move_timer: 0,
+        move_timer: 1,
         shoot_timer: 0,
         kind: BossType::Charger,
         state_timer: 0,
