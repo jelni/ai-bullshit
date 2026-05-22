@@ -1238,7 +1238,8 @@ fn draw_entities<W: Write>(
     }
 
     // Draw autopilot paths
-    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot || game.used_bot_this_session {
+    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot || game.used_bot_this_session
+    {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for p in &game.autopilot_path {
             if is_visible(p.x, p.y) {
@@ -1248,7 +1249,9 @@ fn draw_entities<W: Write>(
         }
     }
 
-    if game.mode == crate::game::GameMode::PlayerVsBot || game.mode == crate::game::GameMode::BotVsBot {
+    if game.mode == crate::game::GameMode::PlayerVsBot
+        || game.mode == crate::game::GameMode::BotVsBot
+    {
         stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
         for p in &game.p2_autopilot_path {
             if is_visible(p.x, p.y) {
