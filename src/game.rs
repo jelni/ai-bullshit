@@ -3951,16 +3951,25 @@ impl Game {
             final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
 
         // --- Process Meteor Collisions ---
-        let hit_meteor1 = self
-            .meteors
-            .iter()
-            .any(|m| m.position == final_head1 || self.snake.body_map.contains_key(&m.position));
-        let hit_meteor2 = final_head2_opt.is_some_and(|fh2| {
-            self.meteors.iter().any(|m| {
-                m.position == fh2
-                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&m.position))
-            })
-        });
+        let mut hit_meteor1 = false;
+        let mut hit_meteor2 = false;
+
+        for meteor in &self.meteors {
+            if meteor.position == final_head1 || self.snake.body_map.contains_key(&meteor.position)
+            {
+                hit_meteor1 = true;
+            }
+            if let Some(fh2) = final_head2_opt {
+                if meteor.position == fh2
+                    || self
+                        .player2
+                        .as_ref()
+                        .is_some_and(|p2| p2.body_map.contains_key(&meteor.position))
+                {
+                    hit_meteor2 = true;
+                }
+            }
+        }
 
         if hit_meteor1 && !is_invincible {
             p1_dead = true;
