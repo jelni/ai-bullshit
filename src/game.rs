@@ -492,6 +492,9 @@ pub struct Game {
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
     pub goblin: Option<Goblin>,
+    pub ghost_moves: std::collections::VecDeque<crate::snake::Direction>,
+    pub current_replay: Vec<crate::snake::Direction>,
+    pub ghost_snake: Option<Snake>,
 }
 
 impl Game {
@@ -647,6 +650,9 @@ impl Game {
             black_hole: None,
             meteors: Vec::new(),
             goblin: None,
+            ghost_moves: std::collections::VecDeque::new(),
+            current_replay: Vec::new(),
+            ghost_snake: None,
         }
     }
 
@@ -979,6 +985,9 @@ impl Game {
                 self.black_hole = state.black_hole;
                 self.meteors = state.meteors;
                 self.goblin = state.goblin;
+                self.ghost_moves = std::collections::VecDeque::new();
+                self.current_replay = Vec::new();
+                self.ghost_snake = None;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -2004,6 +2013,16 @@ impl Game {
         obstacles
     }
 
+    fn load_ghost_replay() -> Option<std::collections::VecDeque<crate::snake::Direction>> {
+        File::open("ghost.json")
+            .ok()
+            .and_then(|f| {
+                let mut content = String::new();
+                f.take(10 * 1024 * 1024).read_to_string(&mut content).ok()?;
+                serde_json::from_str(&content).ok()
+            })
+    }
+
     #[expect(clippy::too_many_lines, reason = "Game reset handles logic for different game modes")]
     /// # Panics
     ///
@@ -2187,6 +2206,17 @@ impl Game {
             self.rng = rand::rngs::StdRng::seed_from_u64(millennia_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
+        }
+
+        self.current_replay.clear();
+        if self.mode == GameMode::Speedrun {
+            if let Some(ghost) = Self::load_ghost_replay() {
+                self.ghost_moves = ghost;
+                self.ghost_snake = Some(Snake::new(Point { x: start_x, y: start_y }));
+            }
+        } else {
+            self.ghost_moves.clear();
+            self.ghost_snake = None;
         }
 
         if self.mode == GameMode::CustomLevel {
@@ -3827,6 +3857,11 @@ impl Game {
             self.snake.direction = dir;
         }
 
+        // Record current replay move
+        if self.mode == GameMode::Speedrun {
+            self.current_replay.push(self.snake.direction);
+        }
+
         if let Some(p2) = &mut self.player2
             && let Some(dir) = p2.direction_queue.pop_front()
         {
@@ -4281,6 +4316,16 @@ impl Game {
         {
             p2.move_to(final_head2, p2_grow);
         }
+
+        // Process ghost snake
+        if let Some(mut ghost) = self.ghost_snake.take() {
+            if let Some(ghost_dir) = self.ghost_moves.pop_front() {
+                ghost.direction = ghost_dir;
+                let next_ghost_head = Self::calculate_next_head_dir(ghost.head(), ghost_dir);
+                ghost.move_to(next_ghost_head, false);
+            }
+            self.ghost_snake = Some(ghost);
+        }
     }
 
     fn check_body_collisions(
@@ -4709,6 +4754,12 @@ impl Game {
         self.stats.total_time_s += self.start_time.elapsed().as_secs();
         self.save_stats();
         self.check_achievements();
+
+        if self.mode == GameMode::Speedrun {
+            if let Ok(json) = serde_json::to_string(&self.current_replay) {
+                let _ = Self::atomic_write("ghost.json", json);
+            }
+        }
 
         let is_high_score = self.high_scores.len() < 5
             || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
