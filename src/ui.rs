@@ -120,6 +120,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Mirror Mode",
         "Flood Mode",
         "Vampire Mode",
+        "Gravity Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
