@@ -495,6 +495,7 @@ pub struct Game {
     pub ghost_moves: std::collections::VecDeque<crate::snake::Direction>,
     pub current_replay: Vec<crate::snake::Direction>,
     pub ghost_snake: Option<Snake>,
+    pub is_sprinting: bool,
 }
 
 impl Game {
@@ -653,6 +654,7 @@ impl Game {
             ghost_moves: std::collections::VecDeque::new(),
             current_replay: Vec::new(),
             ghost_snake: None,
+            is_sprinting: false,
         }
     }
 
@@ -988,6 +990,7 @@ impl Game {
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
+                self.is_sprinting = false;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
                 self.update_high_scores();
@@ -2219,6 +2222,8 @@ impl Game {
             self.ghost_snake = None;
         }
 
+        self.is_sprinting = false;
+
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2875,14 +2880,21 @@ impl Game {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Game loop inherently requires handling multiple states and events"
-    )]
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
         }
+        self.update_tick();
+        if self.is_sprinting && self.state == GameState::Playing {
+            self.update_tick();
+        }
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Game loop inherently requires handling multiple states and events"
+    )]
+    fn update_tick(&mut self) {
 
         self.save_history_state();
 
@@ -6624,6 +6636,33 @@ mod tests {
         // Player should lose more points than they gained because their ELO was higher than the bot's
         assert!(game.stats.player_elo < p_elo_after_win);
         assert!(game.stats.bot_elo > b_elo_after_loss);
+    }
+
+    #[test]
+    fn test_sprint_mechanic() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.state = GameState::Playing;
+        game.snake = crate::snake::Snake::new(Point { x: 5, y: 5 });
+        game.snake.direction = crate::snake::Direction::Right;
+        game.obstacles.clear();
+        game.food = Point { x: 1, y: 1 }; // Far away
+
+        // One tick without sprint
+        game.update();
+        assert_eq!(game.snake.head(), Point { x: 6, y: 5 });
+
+        // Enable sprint
+        game.is_sprinting = true;
+        game.update();
+        // Should move two cells
+        assert_eq!(game.snake.head(), Point { x: 8, y: 5 });
     }
 
     #[test]

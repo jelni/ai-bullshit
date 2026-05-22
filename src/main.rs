@@ -536,6 +536,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::ConfirmQuit;
         },
         KeyCode::Char('p' | 'P') => game.state = GameState::Paused,
+        KeyCode::Char('f' | 'F') => {
+            game.is_sprinting = !game.is_sprinting;
+        },
         KeyCode::Char('t' | 'T') => {
             game.auto_pilot = !game.auto_pilot;
             if game.auto_pilot {
