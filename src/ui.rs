@@ -1167,6 +1167,22 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkGrey))?;
                     write!(stdout, "X")?;
                 },
+                crate::game::BossType::Mimic => {
+                    let target_pos = if let Some((decoy_pos, _)) = game.decoy {
+                        decoy_pos
+                    } else {
+                        game.snake.head()
+                    };
+                    let dist_x = i32::from(target_pos.x).abs_diff(i32::from(boss.position.x));
+                    let dist_y = i32::from(target_pos.y).abs_diff(i32::from(boss.position.y));
+                    if dist_x <= 3 && dist_y <= 3 {
+                        stdout.queue(SetForegroundColor(Color::DarkRed))?;
+                        write!(stdout, "M")?;
+                    } else {
+                        stdout.queue(SetForegroundColor(Color::Yellow))?;
+                        write!(stdout, "★")?;
+                    }
+                },
             }
         }
     }
