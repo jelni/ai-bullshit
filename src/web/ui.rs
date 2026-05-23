@@ -173,6 +173,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::Charger => ctx.set_fill_style_str("#FF0000"),
             crate::game::BossType::Spawner => ctx.set_fill_style_str("#006400"),
             crate::game::BossType::Teleporter => ctx.set_fill_style_str("#800080"),
+            crate::game::BossType::Splitter => ctx.set_fill_style_str("#FF4500"),
+            crate::game::BossType::Trapper => ctx.set_fill_style_str("#8B4513"),
+            crate::game::BossType::Necromancer => ctx.set_fill_style_str("#2F4F4F"),
+            crate::game::BossType::ShadowClone => ctx.set_fill_style_str("#696969"),
         }
         if boss.position.x < game.width
             && boss.position.y < game.height
