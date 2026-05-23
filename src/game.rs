@@ -394,6 +394,7 @@ pub enum BossType {
     Trapper,
     Necromancer,
     ShadowClone,
+    Mimic,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -2975,14 +2976,15 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..7) {
+                let kind = match self.rng.gen_range(0..8) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
                     3 => BossType::Teleporter,
                     4 => BossType::Splitter,
                     5 => BossType::Necromancer,
-                    _ => BossType::Trapper,
+                    6 => BossType::Trapper,
+                    _ => BossType::Mimic,
                 };
                 self.bosses.push(Boss {
                     position: pos,
@@ -3308,6 +3310,58 @@ impl Game {
                                 );
                                 beep();
                             }
+                        }
+                    } else if boss.kind == BossType::Mimic {
+                        let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                            decoy_pos
+                        } else {
+                            self.snake.head()
+                        };
+                        let dist_x = i32::from(target_pos.x).abs_diff(i32::from(boss.position.x));
+                        let dist_y = i32::from(target_pos.y).abs_diff(i32::from(boss.position.y));
+
+                        if dist_x <= 3 && dist_y <= 3 {
+                            // Mimic revealed and charging
+                            let mut move_threshold = if self.mode == GameMode::BossRush {
+                                std::cmp::max(
+                                    1,
+                                    2_u8.saturating_sub(
+                                        u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                    ),
+                                )
+                            } else {
+                                1
+                            };
+
+                            if boss.health <= boss.max_health / 2 {
+                                move_threshold = std::cmp::max(1, move_threshold / 2);
+                            }
+
+                            boss.move_timer += 1;
+                            if boss.move_timer >= move_threshold {
+                                boss.move_timer = 0;
+
+                                if let Some(dir) = self.bfs_pathfind(boss.position, target_pos) {
+                                    let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                    let margin = if self.mode == GameMode::BattleRoyale {
+                                        self.safe_zone_margin
+                                    } else {
+                                        0
+                                    };
+
+                                    if next_pos.x > margin
+                                        && next_pos.x < self.width - 1 - margin
+                                        && next_pos.y > margin
+                                        && next_pos.y < self.height - 1 - margin
+                                        && !self.obstacles.contains(&next_pos)
+                                    {
+                                        boss.position = next_pos;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Reset move timer while disguised to prevent immediate burst of speed if we accumulate
+                            boss.move_timer = 0;
                         }
                     }
                 }

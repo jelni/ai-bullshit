@@ -39,12 +39,11 @@ fn test_trapper_boss_leaves_obstacles() {
     let mut moved = false;
     for _ in 0..10 {
         game.update();
-        if let Some(boss) = game.bosses.first() {
-            if boss.position != initial_pos {
+        if let Some(boss) = game.bosses.first()
+            && boss.position != initial_pos {
                 moved = true;
                 break;
             }
-        }
     }
 
     assert!(moved, "Boss should have moved");
