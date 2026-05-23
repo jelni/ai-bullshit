@@ -4858,8 +4858,8 @@ impl Game {
         self.save_stats();
         self.check_achievements();
 
-        #[cfg(not(target_arch = "wasm32"))]
         #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
+        #[cfg(not(target_arch = "wasm32"))]
         if self.mode == GameMode::Speedrun {
             if let Ok(json) = serde_json::to_string(&self.current_replay) {
                 let _ = Self::atomic_write("ghost.json", json);

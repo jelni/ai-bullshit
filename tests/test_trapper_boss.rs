@@ -39,14 +39,8 @@ fn test_trapper_boss_leaves_obstacles() {
     let mut moved = false;
     for _ in 0..10 {
         game.update();
-<<<<<<< HEAD
         if let Some(boss) = game.bosses.first()
             && boss.position != initial_pos {
-=======
-        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-        if let Some(boss) = game.bosses.first() {
-            if boss.position != initial_pos {
->>>>>>> e378d20 (Fix WebAssembly (wasm32) build issues)
                 moved = true;
                 break;
             }
