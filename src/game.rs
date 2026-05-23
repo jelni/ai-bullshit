@@ -3223,8 +3223,16 @@ impl Game {
                         boss.move_timer += 1;
                         if boss.move_timer >= 1 {
                             boss.move_timer = 0;
-                            let dx = if self.snake.head().x > boss.position.x { 1 } else if self.snake.head().x < boss.position.x { -1 } else { 0 };
-                            let dy = if self.snake.head().y > boss.position.y { 1 } else if self.snake.head().y < boss.position.y { -1 } else { 0 };
+                            let dx = match self.snake.head().x.cmp(&boss.position.x) {
+                                std::cmp::Ordering::Greater => 1,
+                                std::cmp::Ordering::Less => -1,
+                                std::cmp::Ordering::Equal => 0,
+                            };
+                            let dy = match self.snake.head().y.cmp(&boss.position.y) {
+                                std::cmp::Ordering::Greater => 1,
+                                std::cmp::Ordering::Less => -1,
+                                std::cmp::Ordering::Equal => 0,
+                            };
 
                             let mut new_pos = boss.position;
                             if dx != 0 && self.rng.gen_bool(0.5) {
@@ -4788,6 +4796,7 @@ impl Game {
         self.save_stats();
         self.check_achievements();
 
+        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
         if self.mode == GameMode::Speedrun {
             if let Ok(json) = serde_json::to_string(&self.current_replay) {
                 let _ = Self::atomic_write("ghost.json", json);

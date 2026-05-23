@@ -1236,7 +1236,7 @@ fn draw_entities<W: Write>(
 
     // Draw ghost snake
     if let Some(ghost) = &game.ghost_snake {
-        stdout.queue(SetForegroundColor(Color::DarkGrey.into()))?;
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for (i, part) in ghost.body.iter().enumerate() {
             if is_visible(part.x, part.y) {
                 stdout.queue(cursor::MoveTo(part.x, part.y))?;
