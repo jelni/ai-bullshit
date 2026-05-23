@@ -1163,6 +1163,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
                     write!(stdout, "N")?;
                 },
+                crate::game::BossType::ShadowClone => {
+                    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+                    write!(stdout, "X")?;
+                },
             }
         }
     }

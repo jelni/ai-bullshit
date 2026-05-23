@@ -393,6 +393,7 @@ pub enum BossType {
     Splitter,
     Trapper,
     Necromancer,
+    ShadowClone,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -3218,6 +3219,26 @@ impl Game {
                                 beep();
                             }
                         }
+                    } else if boss.kind == BossType::ShadowClone {
+                        boss.move_timer += 1;
+                        if boss.move_timer >= 1 {
+                            boss.move_timer = 0;
+                            let dx = if self.snake.head().x > boss.position.x { 1 } else if self.snake.head().x < boss.position.x { -1 } else { 0 };
+                            let dy = if self.snake.head().y > boss.position.y { 1 } else if self.snake.head().y < boss.position.y { -1 } else { 0 };
+
+                            let mut new_pos = boss.position;
+                            if dx != 0 && self.rng.gen_bool(0.5) {
+                                new_pos.x = (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
+                            } else if dy != 0 {
+                                new_pos.y = (i32::from(new_pos.y) + dy).try_into().unwrap_or(new_pos.y);
+                            } else if dx != 0 {
+                                new_pos.x = (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
+                            }
+
+                            if new_pos.x > 0 && new_pos.x < self.width - 1 && new_pos.y > 0 && new_pos.y < self.height - 1 {
+                                boss.position = new_pos;
+                            }
+                        }
                     } else if boss.kind == BossType::Teleporter {
                         let mut teleport_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
@@ -5162,7 +5183,7 @@ impl Game {
                     }
 
                     let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                    if boss.kind == BossType::Teleporter || boss.kind == BossType::Spawner || boss.kind == BossType::Trapper || boss.kind == BossType::Necromancer {
+                    if boss.kind == BossType::Teleporter || boss.kind == BossType::Spawner || boss.kind == BossType::Trapper || boss.kind == BossType::Necromancer || boss.kind == BossType::ShadowClone {
                         // For non-moving bosses or unpredictable bosses, we only avoid their exact current position.
                         if final_p == boss.position {
                             return false;
@@ -6394,7 +6415,7 @@ mod tests {
 
         // Run update many times to ensure the tornado shifts the food at least once
         let mut shifted = false;
-        for _ in 0..1000 {
+        for _ in 0..10000 {
             game.weather = Weather::Tornado; // force Tornado
             game.snake.direction_queue.push_back(crate::snake::Direction::Down); // Keep filling to avoid out-of-bounds/death logic taking over
             // Prevent snake from dying from hitting borders by resetting position

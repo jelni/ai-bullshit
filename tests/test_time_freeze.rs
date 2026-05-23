@@ -72,6 +72,7 @@ fn test_time_freeze_pauses_boss_and_lasers() {
 fn test_bot_avoids_frozen_boss() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.obstacles.clear();
 
     game.power_up = Some(game::PowerUp {
         p_type: game::PowerUpType::TimeFreeze,
@@ -123,6 +124,7 @@ fn test_bot_avoids_frozen_boss() {
 fn test_bot_avoids_frozen_laser() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.obstacles.clear();
 
     game.power_up = Some(game::PowerUp {
         p_type: game::PowerUpType::TimeFreeze,

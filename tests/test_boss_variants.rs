@@ -201,3 +201,31 @@ fn test_necromancer_summons_goblin() {
         "Goblin should be summoned at boss position"
     );
 }
+
+#[test]
+fn test_shadowclone_moves_towards_snake() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+
+    // ShadowClone Boss
+    game.bosses.push(Boss {
+        position: Point { x: 7, y: 7 },
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 0,
+        kind: BossType::ShadowClone,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+    game.obstacles.clear();
+    game.update();
+
+    let new_pos = game.bosses[0].position;
+    // Expected movement: boss at (7, 7), snake at (5, 5). dx = -1, dy = -1.
+    // So new_pos could be (6, 7) or (7, 6) or (6, 6) depending on rng and axis movement.
+    // But it should move closer to the snake.
+    assert!(new_pos.x < 7 || new_pos.y < 7, "Shadow clone should move towards the snake");
+}
