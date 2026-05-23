@@ -21,17 +21,32 @@ fn test_ghost_replay_recording_and_playback() {
     // Now test ghost playback manually
     game.ghost_moves.push_back(Direction::Left);
     game.ghost_moves.push_back(Direction::Up);
-    game.ghost_snake = Some(snake_game::snake::Snake::new(Point { x: 10, y: 10 }));
+    game.ghost_snake = Some(snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 10,
+    }));
 
     game.update();
 
     // Verify ghost snake moved Left
     let ghost = game.ghost_snake.as_ref().unwrap();
     assert_eq!(ghost.direction, Direction::Left);
-    assert_eq!(ghost.head(), Point { x: 9, y: 10 });
+    assert_eq!(
+        ghost.head(),
+        Point {
+            x: 9,
+            y: 10
+        }
+    );
 
     game.update();
     let ghost = game.ghost_snake.as_ref().unwrap();
     assert_eq!(ghost.direction, Direction::Up);
-    assert_eq!(ghost.head(), Point { x: 9, y: 9 });
+    assert_eq!(
+        ghost.head(),
+        Point {
+            x: 9,
+            y: 9
+        }
+    );
 }

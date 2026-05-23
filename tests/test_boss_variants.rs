@@ -175,12 +175,18 @@ fn test_splitter_boss_splits_on_death() {
 #[test]
 fn test_necromancer_summons_goblin() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Necromancer Boss
     game.bosses.push(Boss {
-        position: Point { x: 9, y: 5 },
+        position: Point {
+            x: 9,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -197,7 +203,10 @@ fn test_necromancer_summons_goblin() {
     assert!(game.goblin.is_some(), "Necromancer should summon a goblin");
     assert_eq!(
         game.goblin.unwrap().position,
-        Point { x: 9, y: 5 },
+        Point {
+            x: 9,
+            y: 5
+        },
         "Goblin should be summoned at boss position"
     );
 }
@@ -205,12 +214,18 @@ fn test_necromancer_summons_goblin() {
 #[test]
 fn test_shadowclone_moves_towards_snake() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // ShadowClone Boss
     game.bosses.push(Boss {
-        position: Point { x: 7, y: 7 },
+        position: Point {
+            x: 7,
+            y: 7,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
