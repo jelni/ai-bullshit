@@ -560,6 +560,7 @@ impl Game {
             .expect("Board cannot be full on start");
 
         // Migration step
+        #[cfg(not(target_arch = "wasm32"))]
         if std::path::Path::new("highscore.txt").exists()
             && !std::path::Path::new("highscore_normal.txt").exists()
         {
@@ -4859,6 +4860,7 @@ impl Game {
 
         #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
         if self.mode == GameMode::Speedrun {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Ok(json) = serde_json::to_string(&self.current_replay) {
                 let _ = Self::atomic_write("ghost.json", json);
             }
