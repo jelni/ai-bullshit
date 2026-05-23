@@ -1,4 +1,6 @@
+pub mod campaign_maps;
 use crate::snake::{Direction, Point, Snake};
+pub use campaign_maps::*;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

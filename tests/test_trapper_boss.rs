@@ -40,10 +40,11 @@ fn test_trapper_boss_leaves_obstacles() {
     for _ in 0..10 {
         game.update();
         if let Some(boss) = game.bosses.first()
-            && boss.position != initial_pos {
-                moved = true;
-                break;
-            }
+            && boss.position != initial_pos
+        {
+            moved = true;
+            break;
+        }
     }
 
     assert!(moved, "Boss should have moved");
