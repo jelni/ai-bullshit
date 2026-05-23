@@ -155,7 +155,10 @@ fn test_bot_shoots_goblin_in_line_of_sight() {
 
     // Goblin right in front
     game.goblin = Some(Goblin {
-        position: Point { x: 9, y: 5 },
+        position: Point {
+            x: 9,
+            y: 5,
+        },
         move_timer: 0,
         food_eaten: 0,
     });

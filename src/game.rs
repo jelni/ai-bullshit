@@ -2018,13 +2018,11 @@ impl Game {
     }
 
     fn load_ghost_replay() -> Option<std::collections::VecDeque<crate::snake::Direction>> {
-        File::open("ghost.json")
-            .ok()
-            .and_then(|f| {
-                let mut content = String::new();
-                f.take(10 * 1024 * 1024).read_to_string(&mut content).ok()?;
-                serde_json::from_str(&content).ok()
-            })
+        File::open("ghost.json").ok().and_then(|f| {
+            let mut content = String::new();
+            f.take(10 * 1024 * 1024).read_to_string(&mut content).ok()?;
+            serde_json::from_str(&content).ok()
+        })
     }
 
     #[expect(clippy::too_many_lines, reason = "Game reset handles logic for different game modes")]
@@ -2216,7 +2214,10 @@ impl Game {
         if self.mode == GameMode::Speedrun {
             if let Some(ghost) = Self::load_ghost_replay() {
                 self.ghost_moves = ghost;
-                self.ghost_snake = Some(Snake::new(Point { x: start_x, y: start_y }));
+                self.ghost_snake = Some(Snake::new(Point {
+                    x: start_x,
+                    y: start_y,
+                }));
             }
         } else {
             self.ghost_moves.clear();
@@ -2896,7 +2897,6 @@ impl Game {
         reason = "Game loop inherently requires handling multiple states and events"
     )]
     fn update_tick(&mut self) {
-
         self.save_history_state();
 
         if self.mode == GameMode::Vampire {
@@ -3236,14 +3236,21 @@ impl Game {
 
                             let mut new_pos = boss.position;
                             if dx != 0 && self.rng.gen_bool(0.5) {
-                                new_pos.x = (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
+                                new_pos.x =
+                                    (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
                             } else if dy != 0 {
-                                new_pos.y = (i32::from(new_pos.y) + dy).try_into().unwrap_or(new_pos.y);
+                                new_pos.y =
+                                    (i32::from(new_pos.y) + dy).try_into().unwrap_or(new_pos.y);
                             } else if dx != 0 {
-                                new_pos.x = (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
+                                new_pos.x =
+                                    (i32::from(new_pos.x) + dx).try_into().unwrap_or(new_pos.x);
                             }
 
-                            if new_pos.x > 0 && new_pos.x < self.width - 1 && new_pos.y > 0 && new_pos.y < self.height - 1 {
+                            if new_pos.x > 0
+                                && new_pos.x < self.width - 1
+                                && new_pos.y > 0
+                                && new_pos.y < self.height - 1
+                            {
                                 boss.position = new_pos;
                             }
                         }
@@ -4079,9 +4086,9 @@ impl Game {
                         .player2
                         .as_ref()
                         .is_some_and(|p2| p2.body_map.contains_key(&meteor.position)))
-                {
-                    hit_meteor2 = true;
-                }
+            {
+                hit_meteor2 = true;
+            }
         }
 
         if hit_meteor1 && !is_invincible {
@@ -5192,7 +5199,12 @@ impl Game {
                     }
 
                     let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                    if boss.kind == BossType::Teleporter || boss.kind == BossType::Spawner || boss.kind == BossType::Trapper || boss.kind == BossType::Necromancer || boss.kind == BossType::ShadowClone {
+                    if boss.kind == BossType::Teleporter
+                        || boss.kind == BossType::Spawner
+                        || boss.kind == BossType::Trapper
+                        || boss.kind == BossType::Necromancer
+                        || boss.kind == BossType::ShadowClone
+                    {
                         // For non-moving bosses or unpredictable bosses, we only avoid their exact current position.
                         if final_p == boss.position {
                             return false;
@@ -6679,20 +6691,38 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game.state = GameState::Playing;
-        game.snake = crate::snake::Snake::new(Point { x: 5, y: 5 });
+        game.snake = crate::snake::Snake::new(Point {
+            x: 5,
+            y: 5,
+        });
         game.snake.direction = crate::snake::Direction::Right;
         game.obstacles.clear();
-        game.food = Point { x: 1, y: 1 }; // Far away
+        game.food = Point {
+            x: 1,
+            y: 1,
+        }; // Far away
 
         // One tick without sprint
         game.update();
-        assert_eq!(game.snake.head(), Point { x: 6, y: 5 });
+        assert_eq!(
+            game.snake.head(),
+            Point {
+                x: 6,
+                y: 5
+            }
+        );
 
         // Enable sprint
         game.is_sprinting = true;
         game.update();
         // Should move two cells
-        assert_eq!(game.snake.head(), Point { x: 8, y: 5 });
+        assert_eq!(
+            game.snake.head(),
+            Point {
+                x: 8,
+                y: 5
+            }
+        );
     }
 
     #[test]
