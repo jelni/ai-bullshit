@@ -1,0 +1,28 @@
+use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes};
+#[derive(Serialize, Deserialize, Default)]
+pub struct Statistics {
+    pub games_played: u32,
+    pub total_score: u32,
+    pub total_food_eaten: u32,
+    pub total_time_s: u64,
+    #[serde(default)]
+    pub coins: u32,
+    #[serde(default)]
+    pub unlocked_skins: Vec<char>,
+    #[serde(default = "default_unlocked_themes")]
+    pub unlocked_themes: Vec<Theme>,
+    #[serde(default)]
+    pub unlocked_achievements: Vec<Achievement>,
+    #[serde(default)]
+    pub upgrade_powerup_duration: u8,
+    #[serde(default)]
+    pub upgrade_extra_lives: u8,
+    #[serde(default)]
+    pub upgrade_laser_capacity: u8,
+    #[serde(default)]
+    pub upgrade_coin_multiplier: u8,
+    #[serde(default = "default_elo")]
+    pub player_elo: u32,
+    #[serde(default = "default_elo")]
+    pub bot_elo: u32,
+}

@@ -1,0 +1,18 @@
+use super::{Deserialize, Serialize};
+#[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+pub enum GameState {
+    Menu,
+    Playing,
+    Paused,
+    GameOver,
+    GameWon,
+    Help,
+    Settings,
+    NftShop,
+    SkillTree,
+    Stats,
+    Achievements,
+    EnterName,
+    ConfirmQuit,
+    LevelEditor,
+}
