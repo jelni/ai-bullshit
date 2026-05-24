@@ -1,5 +1,6 @@
 use super::*;
 #[cfg(test)]
+#[expect(clippy::module_inception, reason="Allowing module inception")]
 mod tests {
     use super::*;
     use std::{fs::File, io::Write};
