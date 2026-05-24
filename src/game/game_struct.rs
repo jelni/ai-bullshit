@@ -4471,7 +4471,7 @@ impl Game {
             if let Some(col) = self.lightning_column {
                 let dx = p.x.abs_diff(col);
                 if dx < 3 {
-                    penalty = penalty.saturating_add((3 - dx) * 15);
+                    penalty = penalty.saturating_add((3 - dx) * 50);
                 }
             }
             for m in &self.meteors {
