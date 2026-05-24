@@ -3872,11 +3872,10 @@ impl Game {
         self.stats.total_time_s += self.start_time.elapsed().as_secs();
         self.save_stats();
         self.check_achievements();
-        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-        if self.mode == GameMode::Speedrun {
-            if let Ok(json) = serde_json::to_string(&self.current_replay) {
-                let _ = Self::atomic_write("ghost.json", json);
-            }
+        if let (GameMode::Speedrun, Ok(json)) =
+            (self.mode, serde_json::to_string(&self.current_replay))
+        {
+            let _ = Self::atomic_write("ghost.json", json);
         }
         let is_high_score = self.high_scores.len() < 5
             || self.score > self.high_scores.last().map_or(0, |(_, s)| *s);
