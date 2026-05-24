@@ -62,7 +62,7 @@ for i, line in enumerate(reversed(lines)):
         end_idx = len(lines) - 1 - i
         break
 
-extra_maps = "\n".join(format_maze(generate_maze(39, 21)) for _ in range(250)) + "\n"
+extra_maps = "\n".join(format_maze(generate_maze(39, 21)) for _ in range(185)) + "\n"
 lines.insert(end_idx, extra_maps)
 
 with open('src/game/campaign_maps.rs', 'w') as f:
