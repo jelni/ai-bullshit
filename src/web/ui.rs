@@ -177,6 +177,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::Trapper => ctx.set_fill_style_str("#8B4513"),
             crate::game::BossType::Necromancer => ctx.set_fill_style_str("#2F4F4F"),
             crate::game::BossType::ShadowClone => ctx.set_fill_style_str("#696969"),
+            crate::game::BossType::Puffer => ctx.set_fill_style_str("#FFA500"),
             crate::game::BossType::Mimic => {
                 let target_pos = if let Some((decoy_pos, _)) = game.decoy {
                     decoy_pos
