@@ -41,6 +41,40 @@ fn test_charger_moves_faster() {
 }
 
 #[test]
+fn test_juggernaut_destroys_obstacles() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = Direction::Right;
+
+    let initial_pos = Point { x: 10, y: 5 };
+    let obstacle_pos = Point { x: 9, y: 5 };
+
+    game.obstacles.insert(obstacle_pos);
+
+    // Juggernaut Boss
+    game.bosses.push(Boss {
+        position: initial_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 0,
+        kind: BossType::Juggernaut,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+
+    let current_pos = game.bosses[0].position;
+    assert_eq!(current_pos, obstacle_pos, "Juggernaut boss should move into the obstacle");
+    assert!(!game.obstacles.contains(&obstacle_pos), "Juggernaut boss should have destroyed the obstacle");
+}
+
+#[test]
 fn test_spawner_drops_mines() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
     game.snake = Snake::new(Point {

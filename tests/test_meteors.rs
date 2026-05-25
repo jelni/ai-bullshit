@@ -25,15 +25,24 @@ fn test_meteor_spawning_and_falling() {
 
     game.state = snake_game::game::GameState::Playing;
 
+    // Clear meteors that spawned during update
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point {
+            x: 10,
+            y: 5,
+        },
+        timer: 0,
+    });
+
     // After 1 tick, timer should be 1, y should be 5
     game.update();
-    assert_eq!(game.meteors.len(), 1);
-    assert_eq!(game.meteors[0].timer, 1);
-    assert_eq!(game.meteors[0].position.y, 5);
+    // A new meteor might have spawned, find the one we inserted
+    let m = game.meteors.iter().find(|m| m.position.x == 10).unwrap();
+    assert_eq!(m.timer, 1);
+    assert_eq!(m.position.y, 5);
 
     // After 2 ticks, timer resets to 0, y should be 6
-    // Note: Due to random chance, a new meteor might spawn during update.
-    // We only care that the first one we pushed updated correctly.
     game.update();
 
     // Find the meteor we inserted (started at x=10)

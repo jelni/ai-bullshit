@@ -2185,7 +2185,7 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..9) {
+                let kind = match self.rng.gen_range(0..10) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
@@ -2194,6 +2194,7 @@ impl Game {
                     5 => BossType::Necromancer,
                     6 => BossType::Trapper,
                     7 => BossType::Puffer,
+                    8 => BossType::Juggernaut,
                     _ => BossType::Mimic,
                 };
                 self.bosses.push(Boss {
@@ -2231,7 +2232,7 @@ impl Game {
                     } else {
                         2
                     };
-                    if boss.kind == BossType::Charger {
+                    if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
                         move_threshold = std::cmp::max(1, move_threshold / 2);
                     }
                     if boss.health <= boss.max_health / 2 {
@@ -2245,7 +2246,25 @@ impl Game {
                         } else {
                             self.snake.head()
                         };
-                        let dir_opt = if boss.kind == BossType::Charger {
+                        let dir_opt = if boss.kind == BossType::Juggernaut {
+                            let dx = i32::from(target_pos.x) - i32::from(boss.position.x);
+                            let dy = i32::from(target_pos.y) - i32::from(boss.position.y);
+                            if dx.abs() > dy.abs() {
+                                if dx > 0 {
+                                    Some(Direction::Right)
+                                } else {
+                                    Some(Direction::Left)
+                                }
+                            } else if dy != 0 {
+                                if dy > 0 {
+                                    Some(Direction::Down)
+                                } else {
+                                    Some(Direction::Up)
+                                }
+                            } else {
+                                None
+                            }
+                        } else if boss.kind == BossType::Charger {
                             let targets = vec![target_pos];
                             let dx = i32::from(target_pos.x) - i32::from(boss.position.x);
                             let dy = i32::from(target_pos.y) - i32::from(boss.position.y);
@@ -2291,6 +2310,17 @@ impl Game {
                                             20,
                                             crate::color::Color::Red,
                                             'X',
+                                        );
+                                        beep();
+                                    } else if boss.kind == BossType::Juggernaut {
+                                        self.obstacles.remove(&next_pos);
+                                        boss.position = next_pos;
+                                        self.spawn_particles(
+                                            f32::from(next_pos.x),
+                                            f32::from(next_pos.y),
+                                            20,
+                                            crate::color::Color::DarkGrey,
+                                            '*',
                                         );
                                         beep();
                                     }
@@ -4234,7 +4264,31 @@ impl Game {
         });
         if !is_invincible {
             if self.obstacles.contains(&final_p) {
-                return false;
+                // Determine if Juggernaut could destroy this obstacle
+                let mut juggernaut_will_destroy = false;
+                for boss in &self.bosses {
+                    if boss.kind == BossType::Juggernaut {
+                        let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                        let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                            std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                        } else {
+                            2
+                        });
+                        move_threshold = std::cmp::max(1, move_threshold / 2);
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                        let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
+                        if dist <= moves {
+                            juggernaut_will_destroy = true;
+                            break;
+                        }
+                    }
+                }
+                if !juggernaut_will_destroy {
+                    return false;
+                }
             }
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
@@ -4301,7 +4355,7 @@ impl Game {
                     } else {
                         2
                     });
-                    if boss.kind == BossType::Charger {
+                    if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
                         move_threshold = std::cmp::max(1, move_threshold / 2);
                     }
                     if boss.health <= boss.max_health / 2 {
@@ -4322,6 +4376,10 @@ impl Game {
                         let dist = u32::from(final_p.x.abs_diff(boss.position.x))
                             + u32::from(final_p.y.abs_diff(boss.position.y));
                         if dist <= moves {
+                            if boss.kind == BossType::Juggernaut {
+                                // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
+                                return false;
+                            }
                             return false;
                         }
                     }
@@ -4333,9 +4391,7 @@ impl Game {
                                     u8::try_from(self.campaign_level).unwrap_or(255),
                                 ),
                             )
-                        } else {
-                            if boss.kind == BossType::Puffer { 30 } else { 15 }
-                        });
+                        } else if boss.kind == BossType::Puffer { 30 } else { 15 });
                         if boss.health <= boss.max_health / 2 {
                             shoot_threshold = std::cmp::max(if boss.kind == BossType::Puffer { 5 } else { 1 }, shoot_threshold / 2);
                         }

@@ -12,4 +12,5 @@ pub enum BossType {
     ShadowClone,
     Mimic,
     Puffer,
+    Juggernaut,
 }
