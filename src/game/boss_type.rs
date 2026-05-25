@@ -11,4 +11,5 @@ pub enum BossType {
     Necromancer,
     ShadowClone,
     Mimic,
+    Puffer,
 }
