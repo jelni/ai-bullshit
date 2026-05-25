@@ -1171,6 +1171,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkYellow))?;
                     write!(stdout, "P")?;
                 },
+                crate::game::BossType::Juggernaut => {
+                    stdout.queue(SetForegroundColor(Color::DarkRed))?;
+                    write!(stdout, "J")?;
+                },
                 crate::game::BossType::Mimic => {
                     let target_pos = if let Some((decoy_pos, _)) = game.decoy {
                         decoy_pos
