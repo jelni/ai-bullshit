@@ -15,4 +15,5 @@ pub enum GameState {
     EnterName,
     ConfirmQuit,
     LevelEditor,
+    LevelUp,
 }

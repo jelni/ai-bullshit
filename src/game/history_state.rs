@@ -1,4 +1,6 @@
-use super::{Boss, Goblin, HashSet, Instant, Laser, Meteor, Point, PowerUp, Snake, Weather};
+use super::{
+    Boss, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake, Weather,
+};
 #[derive(Clone)]
 pub struct HistoryState {
     pub snake: Snake,
@@ -26,4 +28,10 @@ pub struct HistoryState {
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
     pub goblin: Option<Goblin>,
+    pub xp: u32,
+    pub player_level: u32,
+    pub xp_to_next_level: u32,
+    pub in_game_upgrades: std::collections::HashMap<InGameUpgrade, u32>,
+    pub level_up_options: Vec<InGameUpgrade>,
+    pub level_up_selection: usize,
 }

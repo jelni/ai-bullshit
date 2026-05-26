@@ -270,6 +270,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Achievements => handle_achievements_input(code, game),
         GameState::SkillTree => handle_skill_tree_input(code, game),
         GameState::LevelEditor => handle_level_editor_input(code, game),
+        GameState::LevelUp => handle_level_up_input(code, game),
     };
 
     if should_continue {
@@ -779,6 +780,36 @@ const fn handle_confirm_quit_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         _ => {},
+    }
+    true
+}
+
+fn handle_level_up_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.level_up_selection > 0 {
+                game.level_up_selection -= 1;
+            } else if !game.level_up_options.is_empty() {
+                game.level_up_selection = game.level_up_options.len() - 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if !game.level_up_options.is_empty() {
+                if game.level_up_selection < game.level_up_options.len() - 1 {
+                    game.level_up_selection += 1;
+                } else {
+                    game.level_up_selection = 0;
+                }
+            }
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            if !game.level_up_options.is_empty() && game.level_up_selection < game.level_up_options.len() {
+                let chosen_upgrade = game.level_up_options[game.level_up_selection];
+                *game.in_game_upgrades.entry(chosen_upgrade).or_insert(0) += 1;
+            }
+            game.state = GameState::Playing;
+        }
+        _ => {}
     }
     true
 }
