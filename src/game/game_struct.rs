@@ -2653,6 +2653,53 @@ impl Game {
         self.bosses = next_bosses;
         self.lasers.extend(new_lasers);
         self.lightning_column = None;
+        if self.weather == Weather::Sandstorm && self.rng.gen_bool(0.1) {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let mut new_food = self.food;
+            let dir = self.rng.gen_range(0..4);
+            match dir {
+                0 => new_food.y = new_food.y.saturating_sub(1),
+                1 => new_food.y = new_food.y.saturating_add(1),
+                2 => new_food.x = new_food.x.saturating_sub(1),
+                _ => new_food.x = new_food.x.saturating_add(1),
+            }
+            let min_x = margin;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+            let min_y = margin;
+            let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
+
+            if new_food.x > min_x && new_food.x < max_x && new_food.y > min_y && new_food.y < max_y && !self.obstacles.contains(&new_food) {
+                self.food = new_food;
+            }
+        }
+        if self.weather == Weather::Earthquake && self.rng.gen_bool(0.05) {
+            if !self.obstacles.is_empty() && self.rng.gen_bool(0.5) {
+                if let Some(obs) = self.obstacles.iter().next().copied() {
+                    self.obstacles.remove(&obs);
+                }
+            } else {
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                let avoid = |p: &Point| { self.obstacles.contains(p) };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.obstacles.insert(pos);
+                }
+            }
+        }
         if self.weather == Weather::Tornado && self.rng.gen_bool(0.05) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
@@ -2682,12 +2729,14 @@ impl Game {
             }
         }
         if self.rng.gen_bool(0.002) {
-            self.weather = match self.rng.gen_range(0..5) {
+            self.weather = match self.rng.gen_range(0..7) {
                 0 => Weather::Clear,
                 1 => Weather::Rain,
                 2 => Weather::Snow,
                 3 => Weather::Storm,
-                _ => Weather::Tornado,
+                4 => Weather::Tornado,
+                5 => Weather::Sandstorm,
+                _ => Weather::Earthquake,
             };
         }
         if self.weather == Weather::Storm && self.rng.gen_bool(0.02) {

@@ -1476,6 +1476,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Snow => " | Weather: Snow",
         crate::game::Weather::Storm => " | Weather: Storm",
         crate::game::Weather::Tornado => " | Weather: Tornado",
+        crate::game::Weather::Sandstorm => " | Weather: Sandstorm",
+        crate::game::Weather::Earthquake => " | Weather: Earthquake",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {

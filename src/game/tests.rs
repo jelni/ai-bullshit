@@ -1060,9 +1060,57 @@ mod tests {
         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
         assert_eq!(game.score, initial_score + 500, "Should get score for shooting goblin");
     }
+    #[test]
+    fn test_weather_sandstorm_shifts_food() {
+        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
+        game.weather = Weather::Sandstorm;
+        game.food = Point { x: 10, y: 10 };
+        let initial_food = game.food;
+
+        // Run updates to see if Sandstorm moves the food
+        let mut moved = false;
+        for _ in 0..2000 {
+            game.state = GameState::Playing; // Ensure playing state
+            game.update();
+            game.weather = Weather::Sandstorm; // ensure it stays sandstorm
+            if game.food != initial_food {
+                moved = true;
+                break;
+            }
+        }
+
+        assert!(moved, "Sandstorm should randomly shift food");
+    }
+
+    #[test]
+    fn test_weather_earthquake_affects_obstacles() {
+        let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
+        game.weather = Weather::Earthquake;
+
+        // clear and add some specific obstacles
+        game.obstacles.clear();
+        game.obstacles.insert(Point { x: 5, y: 5 });
+        game.obstacles.insert(Point { x: 6, y: 6 });
+        let initial_obs_count = game.obstacles.len();
+
+        // Run updates to see if Earthquake changes obstacles
+        let mut changed = false;
+        for _ in 0..2000 {
+            game.state = GameState::Playing; // Ensure playing state
+            game.update();
+            game.weather = Weather::Earthquake; // ensure it stays earthquake
+            if game.obstacles.len() != initial_obs_count || !game.obstacles.contains(&Point { x: 5, y: 5 }) {
+                changed = true;
+                break;
+            }
+        }
+
+        assert!(changed, "Earthquake should randomly destroy or spawn obstacles");
+    }
+
 }
 #[cfg(test)]
-mod evolution_tests {
+    mod evolution_tests {
     use super::*;
     use crate::game::{Difficulty, GameMode, Theme};
     #[test]

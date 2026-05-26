@@ -317,6 +317,40 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 }
             }
         },
+        crate::game::Weather::Sandstorm => {
+            ctx.set_fill_style_str("#DAA520"); // Goldenrod
+            for _ in 0..20 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(f64::from(x), f64::from(y)) {
+                    ctx.fill_rect(
+                        f64::from(x).mul_add(cell_size, cell_size * 0.2),
+                        f64::from(y).mul_add(cell_size, cell_size * 0.5),
+                        cell_size * 0.3,
+                        cell_size * 0.1,
+                    );
+                }
+            }
+        },
+        crate::game::Weather::Earthquake => {
+            ctx.set_fill_style_str("#8B4513"); // SaddleBrown
+            for _ in 0..10 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(f64::from(x), f64::from(y)) {
+                    ctx.fill_rect(
+                        f64::from(x).mul_add(cell_size, 0.0),
+                        f64::from(y).mul_add(cell_size, cell_size * 0.8),
+                        cell_size,
+                        cell_size * 0.2,
+                    );
+                }
+            }
+        },
         _ => {},
     }
 

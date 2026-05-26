@@ -7,4 +7,6 @@ pub enum Weather {
     Snow,
     Storm,
     Tornado,
+    Sandstorm,
+    Earthquake,
 }
