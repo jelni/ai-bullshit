@@ -33,6 +33,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Achievements => draw_achievements(game, stdout)?,
         GameState::SkillTree => draw_skill_tree(game, stdout)?,
         GameState::LevelEditor => draw_level_editor(game, stdout)?,
+        GameState::LevelUp => draw_level_up(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -795,6 +796,58 @@ fn draw_chat<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
+fn draw_level_up<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    draw_game(game, stdout)?;
+
+    let title = "LEVEL UP!";
+    let title_len = u16::try_from(title.len()).unwrap_or(0);
+
+    // Dim the screen a bit by putting a background color over the game,
+    // or we can just draw a box.
+    let popup_width = 50;
+    let popup_height = 12;
+    let _popup_x = (game.width / 2).saturating_sub(popup_width / 2);
+    let popup_y = (game.height / 2).saturating_sub(popup_height / 2);
+
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), popup_y + 1))?;
+    write!(stdout, "{title}")?;
+
+    let subtitle = "Choose an upgrade:";
+    let subtitle_len = u16::try_from(subtitle.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(subtitle_len / 2), popup_y + 3))?;
+    write!(stdout, "{subtitle}")?;
+
+    for (i, upgrade) in game.level_up_options.iter().enumerate() {
+        let name = upgrade.name();
+        let desc = upgrade.description();
+        let display_text = format!("{name}: {desc}");
+        let text_len = u16::try_from(display_text.len()).unwrap_or(0);
+        let y_pos = popup_y + 5 + u16::try_from(i).unwrap_or(0) * 2;
+
+        if i == game.level_up_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2)
+                    .saturating_sub(text_len / 2)
+                    .saturating_sub(2),
+                y_pos,
+            ))?;
+            write!(stdout, "> {display_text} <")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(text_len / 2),
+                y_pos,
+            ))?;
+            write!(stdout, "{display_text}")?;
+        }
+    }
+
+    Ok(())
+}
+
 fn draw_level_editor<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     draw_borders(game, stdout, Color::Cyan)?;
 
@@ -1354,10 +1407,13 @@ fn draw_base_status<W: Write>(
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Campaign Lvl: {} | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Campaign Lvl: {} | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.player_level,
+            game.xp,
+            game.xp_to_next_level,
             game.campaign_level,
             game.difficulty,
             bot_str,
@@ -1373,10 +1429,13 @@ fn draw_base_status<W: Write>(
         };
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | {:?}{}{}{}",
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | {:?}{}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.player_level,
+            game.xp,
+            game.xp_to_next_level,
             game.difficulty,
             bot_str,
             shrink_str,
@@ -1386,17 +1445,20 @@ fn draw_base_status<W: Write>(
         let time_left = 60u64.saturating_sub(game.start_time.elapsed().as_secs());
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Time: {}s | {:?}{}{}",
-            game.score, game.high_score, game.lives, time_left, game.difficulty, bot_str, combo_str
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Time: {}s | {:?}{}{}",
+            game.score, game.high_score, game.lives, game.player_level, game.xp, game.xp_to_next_level, time_left, game.difficulty, bot_str, combo_str
         )?;
     } else if game.mode == crate::game::GameMode::Speedrun {
         let elapsed = game.start_time.elapsed().as_secs();
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Time: {}s | Food: {}/50 | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Time: {}s | Food: {}/50 | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.player_level,
+            game.xp,
+            game.xp_to_next_level,
             elapsed,
             game.food_eaten_session,
             game.difficulty,
@@ -1406,10 +1468,13 @@ fn draw_base_status<W: Write>(
     } else if game.mode == crate::game::GameMode::BossRush {
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Boss Lvl: {} | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Boss Lvl: {} | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.player_level,
+            game.xp,
+            game.xp_to_next_level,
             game.campaign_level,
             game.difficulty,
             bot_str,
@@ -1419,8 +1484,8 @@ fn draw_base_status<W: Write>(
         let level = game.score / 20 + 1;
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Level: {} | {:?}{}{}",
-            game.score, game.high_score, game.lives, level, game.difficulty, bot_str, combo_str
+            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Stage: {} | {:?}{}{}",
+            game.score, game.high_score, game.lives, game.player_level, game.xp, game.xp_to_next_level, level, game.difficulty, bot_str, combo_str
         )?;
     }
     Ok(())

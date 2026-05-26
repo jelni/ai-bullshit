@@ -1,6 +1,6 @@
 use super::{
-    Boss, Deserialize, Difficulty, GameMode, Goblin, HashSet, Laser, Meteor, Point, PowerUp,
-    Serialize, Snake, Theme, Weather, default_campaign_level, default_lives, default_skin,
+    Boss, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser, Meteor, Point,
+    PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level, default_lives, default_skin,
     default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
@@ -63,4 +63,26 @@ pub struct SaveState {
     pub meteors: Vec<Meteor>,
     #[serde(default)]
     pub goblin: Option<Goblin>,
+    #[serde(default)]
+    pub xp: u32,
+    #[serde(default = "default_player_level")]
+    pub player_level: u32,
+    #[serde(default = "default_xp_to_next_level")]
+    pub xp_to_next_level: u32,
+    #[serde(default)]
+    pub in_game_upgrades: std::collections::HashMap<InGameUpgrade, u32>,
+    #[serde(default)]
+    pub level_up_options: Vec<InGameUpgrade>,
+    #[serde(default)]
+    pub level_up_selection: usize,
+}
+
+#[must_use]
+pub const fn default_player_level() -> u32 {
+    1
+}
+
+#[must_use]
+pub const fn default_xp_to_next_level() -> u32 {
+    5
 }

@@ -1,6 +1,6 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Difficulty, Direction, Duration, File, GameMode,
-    GameState, Goblin, HashSet, HistoryState, Instant, Laser, Meteor, Particle, Point, PowerUp,
+    GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant, Laser, Meteor, Particle, Point, PowerUp,
     PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Weather, Write, beep,
     default_unlocked_themes, fs, io,
 };
@@ -66,6 +66,12 @@ pub struct Game {
     pub current_replay: Vec<crate::snake::Direction>,
     pub ghost_snake: Option<Snake>,
     pub is_sprinting: bool,
+    pub xp: u32,
+    pub player_level: u32,
+    pub xp_to_next_level: u32,
+    pub in_game_upgrades: std::collections::HashMap<InGameUpgrade, u32>,
+    pub level_up_options: Vec<InGameUpgrade>,
+    pub level_up_selection: usize,
 }
 impl Game {
     #[must_use]
@@ -215,6 +221,12 @@ impl Game {
             current_replay: Vec::new(),
             ghost_snake: None,
             is_sprinting: false,
+            xp: 0,
+            player_level: 1,
+            xp_to_next_level: 5,
+            in_game_upgrades: std::collections::HashMap::new(),
+            level_up_options: Vec::new(),
+            level_up_selection: 0,
         }
     }
     #[must_use]
@@ -415,6 +427,12 @@ impl Game {
             black_hole: self.black_hole,
             meteors: self.meteors.clone(),
             goblin: self.goblin,
+            xp: self.xp,
+            player_level: self.player_level,
+            xp_to_next_level: self.xp_to_next_level,
+            in_game_upgrades: self.in_game_upgrades.clone(),
+            level_up_options: self.level_up_options.clone(),
+            level_up_selection: self.level_up_selection,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -509,6 +527,12 @@ impl Game {
                 self.black_hole = state.black_hole;
                 self.meteors = state.meteors;
                 self.goblin = state.goblin;
+                self.xp = state.xp;
+                self.player_level = state.player_level;
+                self.xp_to_next_level = state.xp_to_next_level;
+                self.in_game_upgrades = state.in_game_upgrades;
+                self.level_up_options = state.level_up_options;
+                self.level_up_selection = state.level_up_selection;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -1639,6 +1663,12 @@ impl Game {
         self.black_hole = None;
         self.meteors.clear();
         self.goblin = None;
+        self.xp = 0;
+        self.player_level = 1;
+        self.xp_to_next_level = 5;
+        self.in_game_upgrades.clear();
+        self.level_up_options.clear();
+        self.level_up_selection = 0;
     }
     fn respawn(&mut self) {
         let start_x = self.width / 2;
@@ -1730,17 +1760,52 @@ impl Game {
         } else {
             0
         };
-        if laser_pos.x > margin
-            && laser_pos.x < self.width - 1 - margin
-            && laser_pos.y > margin
-            && laser_pos.y < self.height - 1 - margin
-        {
-            self.lasers.push(Laser {
-                position: laser_pos,
-                direction: dir,
-                player,
-            });
-            beep();
+        let mut spawn_positions = vec![laser_pos];
+
+        if player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::Multishot) {
+            let multishot_level = *self.in_game_upgrades.get(&InGameUpgrade::Multishot).unwrap();
+
+            for i in 1..=(multishot_level as i32) {
+                match dir {
+                    Direction::Up | Direction::Down => {
+                        let mut p1 = laser_pos;
+                        p1.x = (i32::from(p1.x) + i).try_into().unwrap_or(p1.x);
+                        spawn_positions.push(p1);
+
+                        let mut p2 = laser_pos;
+                        p2.x = (i32::from(p2.x) - i).try_into().unwrap_or(p2.x);
+                        spawn_positions.push(p2);
+                    },
+                    Direction::Left | Direction::Right => {
+                        let mut p1 = laser_pos;
+                        p1.y = (i32::from(p1.y) + i).try_into().unwrap_or(p1.y);
+                        spawn_positions.push(p1);
+
+                        let mut p2 = laser_pos;
+                        p2.y = (i32::from(p2.y) - i).try_into().unwrap_or(p2.y);
+                        spawn_positions.push(p2);
+                    }
+                }
+            }
+        }
+
+        let mut played_beep = false;
+        for pos in spawn_positions {
+            if pos.x > margin
+                && pos.x < self.width - 1 - margin
+                && pos.y > margin
+                && pos.y < self.height - 1 - margin
+            {
+                self.lasers.push(Laser {
+                    position: pos,
+                    direction: dir,
+                    player,
+                });
+                if !played_beep {
+                    beep();
+                    played_beep = true;
+                }
+            }
         }
     }
     pub fn handle_input(&mut self, dir: Direction, player: u8) {
@@ -1970,8 +2035,50 @@ impl Game {
             self.black_hole = state.black_hole;
             self.meteors = state.meteors;
             self.goblin = state.goblin;
+            self.xp = state.xp;
+            self.player_level = state.player_level;
+            self.xp_to_next_level = state.xp_to_next_level;
+            self.in_game_upgrades = state.in_game_upgrades;
+            self.level_up_options = state.level_up_options;
+            self.level_up_selection = state.level_up_selection;
         }
     }
+    pub fn gain_xp(&mut self, amount: u32) {
+        self.xp += amount;
+        if self.xp >= self.xp_to_next_level {
+            self.xp -= self.xp_to_next_level;
+            self.player_level += 1;
+
+            self.xp_to_next_level = (self.xp_to_next_level * 3) / 2;
+
+            self.generate_level_up_options();
+            self.level_up_selection = 0;
+            self.state = GameState::LevelUp;
+        }
+    }
+
+    fn generate_level_up_options(&mut self) {
+        let all_options = vec![
+            InGameUpgrade::Multishot,
+            InGameUpgrade::Piercing,
+            InGameUpgrade::ExplosiveLasers,
+            InGameUpgrade::LaserSpeed,
+            InGameUpgrade::HomingLasers,
+            InGameUpgrade::DoubleCoins,
+            InGameUpgrade::Magnet,
+        ];
+
+        self.level_up_options.clear();
+        let mut available = all_options;
+        for _ in 0..3 {
+            if available.is_empty() {
+                break;
+            }
+            let idx = self.rng.gen_range(0..available.len());
+            self.level_up_options.push(available.remove(idx));
+        }
+    }
+
     pub fn save_history_state(&mut self) {
         let state = HistoryState {
             snake: self.snake.clone(),
@@ -1999,6 +2106,12 @@ impl Game {
             black_hole: self.black_hole,
             meteors: self.meteors.clone(),
             goblin: self.goblin,
+            xp: self.xp,
+            player_level: self.player_level,
+            xp_to_next_level: self.xp_to_next_level,
+            in_game_upgrades: self.in_game_upgrades.clone(),
+            level_up_options: self.level_up_options.clone(),
+            level_up_selection: self.level_up_selection,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2049,18 +2162,23 @@ impl Game {
         }
     }
     pub fn apply_magnet(&mut self) {
-        if let Some(pu) = &self.power_up
-            && pu.p_type == PowerUpType::Magnet
-            && pu.activation_time.is_some_and(|t| {
-                web_time::SystemTime::now()
-                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs()
-                    .saturating_sub(t)
-                    < self.powerup_duration()
-            })
-            && self.rng.gen_bool(0.25)
-        {
+        let has_magnet_powerup = if let Some(pu) = &self.power_up {
+            pu.p_type == PowerUpType::Magnet
+                && pu.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < self.powerup_duration()
+                })
+        } else {
+            false
+        };
+
+        let has_passive_magnet = self.in_game_upgrades.contains_key(&InGameUpgrade::Magnet);
+
+        if (has_magnet_powerup || has_passive_magnet) && self.rng.gen_bool(0.25) {
             let head = self.snake.head();
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
@@ -2952,13 +3070,54 @@ impl Game {
         };
         for mut laser in std::mem::take(&mut self.lasers) {
             let mut destroyed = false;
-            let loops = if is_time_frozen {
+            let base_loops = if is_time_frozen {
                 1
             } else {
                 2
             };
+
+            let extra_loops = if laser.player == 1 {
+                self.in_game_upgrades.get(&InGameUpgrade::LaserSpeed).copied().unwrap_or(0)
+            } else {
+                0
+            };
+
+            let loops = base_loops + extra_loops;
+
+            let is_piercing = laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::Piercing);
+
             for _ in 0..loops {
                 if !is_time_frozen {
+                    if laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::HomingLasers) && !self.bosses.is_empty() {
+                        let mut best_dist = u16::MAX;
+                        let mut closest_boss = None;
+                        for boss in &self.bosses {
+                            let dist = laser.position.x.abs_diff(boss.position.x) + laser.position.y.abs_diff(boss.position.y);
+                            if dist < best_dist {
+                                best_dist = dist;
+                                closest_boss = Some(boss.position);
+                            }
+                        }
+
+                        if let Some(target) = closest_boss
+                            && best_dist <= 5 { // Homing range
+                                let dx = i32::from(target.x) - i32::from(laser.position.x);
+                                let dy = i32::from(target.y) - i32::from(laser.position.y);
+                                if dx.abs() > dy.abs() {
+                                    if dx > 0 {
+                                        laser.direction = Direction::Right;
+                                    } else {
+                                        laser.direction = Direction::Left;
+                                    }
+                                } else if dy != 0 {
+                                    if dy > 0 {
+                                        laser.direction = Direction::Down;
+                                    } else {
+                                        laser.direction = Direction::Up;
+                                    }
+                                }
+                            }
+                    }
                     laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
                 }
                 if laser.position.x <= margin
@@ -2971,7 +3130,9 @@ impl Game {
                 }
                 if self.obstacles.contains(&laser.position) {
                     self.obstacles.remove(&laser.position);
-                    destroyed = true;
+                    if !is_piercing {
+                        destroyed = true;
+                    }
                     self.spawn_particles(
                         f32::from(laser.position.x),
                         f32::from(laser.position.y),
@@ -2979,20 +3140,26 @@ impl Game {
                         crate::color::Color::Red,
                         'x',
                     );
-                    break;
+                    if destroyed {
+                        break;
+                    }
                 }
                 let mut hit_boss_idx = None;
                 for (i, boss) in self.bosses.iter_mut().enumerate() {
                     if boss.position == laser.position {
                         boss.health = boss.health.saturating_sub(1);
-                        destroyed = true;
+                        if !is_piercing {
+                            destroyed = true;
+                        }
                         hit_boss_idx = Some(i);
                         break;
                     }
                 }
                 if self.goblin.is_some_and(|goblin| laser.position == goblin.position) {
                     self.goblin = None;
-                    destroyed = true;
+                    if !is_piercing {
+                        destroyed = true;
+                    }
                     let multiplier = if self.skin == '₿' {
                         2
                     } else {
@@ -3009,7 +3176,9 @@ impl Game {
                         '$',
                     );
                     beep();
-                    break;
+                    if destroyed {
+                        break;
+                    }
                 }
                 if let Some(i) = hit_boss_idx {
                     let boss_pos = self.bosses[i].position;
@@ -3096,7 +3265,9 @@ impl Game {
                             '*',
                         );
                     }
-                    break;
+                    if destroyed {
+                        break;
+                    }
                 }
                 if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
                     if !is_invincible {
@@ -3123,6 +3294,65 @@ impl Game {
                     break;
                 }
             }
+            if destroyed && laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::ExplosiveLasers) {
+                // Explosive Lasers AOE effect
+                let radius = 2; // 5x5 area centered on laser.position
+                let mut boss_hits = std::collections::HashSet::new();
+                for dy in -radius..=radius {
+                    for dx in -radius..=radius {
+                        let nx = i32::from(laser.position.x) + dx;
+                        let ny = i32::from(laser.position.y) + dy;
+                        if nx > 0 && nx < i32::from(self.width - 1) && ny > 0 && ny < i32::from(self.height - 1) {
+                            let p = Point {
+                                x: u16::try_from(nx).unwrap_or(0),
+                                y: u16::try_from(ny).unwrap_or(0),
+                            };
+                            if self.obstacles.contains(&p) {
+                                self.obstacles.remove(&p);
+                            }
+                            // We do not want to iterate and remove bosses directly while in this loop if they are already handled,
+                            // but dealing a damage point is easy:
+                            for (b_idx, boss) in self.bosses.iter_mut().enumerate() {
+                                if boss.position == p {
+                                    boss_hits.insert(b_idx);
+                                }
+                            }
+                        }
+                    }
+                }
+                for &b_idx in &boss_hits {
+                    if let Some(b) = self.bosses.get_mut(b_idx) {
+                        b.health = b.health.saturating_sub(2); // AOE deals extra damage
+                    }
+                }
+                // Handle boss deaths from AOE
+                let mut next_bosses = Vec::new();
+                for boss in std::mem::take(&mut self.bosses) {
+                    if boss.health == 0 {
+                         self.score += 100;
+                         self.spawn_particles(
+                            f32::from(boss.position.x),
+                            f32::from(boss.position.y),
+                            30,
+                            crate::color::Color::Magenta,
+                            'B',
+                        );
+                    } else {
+                        next_bosses.push(boss);
+                    }
+                }
+                self.bosses = next_bosses;
+
+                self.spawn_particles(
+                    f32::from(laser.position.x),
+                    f32::from(laser.position.y),
+                    40,
+                    crate::color::Color::Red,
+                    '*',
+                );
+                beep();
+            }
+
             if !destroyed {
                 lasers_to_keep.push(laser);
             }
@@ -3852,8 +4082,11 @@ impl Game {
             if self.skin == '₿' {
                 coin_multiplier *= 2.0;
             }
-            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+            let mut coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+            if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
+                coins_earned *= 1 + double_coins_level;
+                added_score *= 1 + double_coins_level;
+            }
             self.score += added_score;
             self.food_eaten_session += 1;
             self.stats.total_score += added_score;
@@ -3861,6 +4094,7 @@ impl Game {
             self.stats.coins += coins_earned;
             self.bonus_food = None;
             beep();
+            self.gain_xp(1);
             true
         } else {
             false
@@ -3905,8 +4139,11 @@ impl Game {
         if self.skin == '₿' {
             coin_multiplier *= 2.0;
         }
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+        let mut coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
+        if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
+            coins_earned *= 1 + double_coins_level;
+            added_score *= 1 + double_coins_level;
+        }
         self.score += added_score;
         self.food_eaten_session += 1;
         self.stats.total_score += added_score;
@@ -3935,8 +4172,10 @@ impl Game {
             self.safe_zone_margin,
         ) {
             self.food = new_food;
+            self.gain_xp(1);
             true
         } else {
+            self.gain_xp(1);
             false
         }
     }
