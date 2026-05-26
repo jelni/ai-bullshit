@@ -224,21 +224,20 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     }
 
     // Draw power_up
-    #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-    if let Some(power_up) = &game.power_up {
-        if power_up.activation_time.is_none()
+    if game.power_up.as_ref().is_some_and(|power_up| {
+        power_up.activation_time.is_none()
             && power_up.location.x < game.width
             && power_up.location.y < game.height
             && is_visible(f64::from(power_up.location.x), f64::from(power_up.location.y))
-        {
-            ctx.set_fill_style_str("#00FFFF");
-            ctx.fill_rect(
-                f64::from(power_up.location.x) * cell_size,
-                f64::from(power_up.location.y) * cell_size,
-                cell_size,
-                cell_size,
-            );
-        }
+    }) {
+        let power_up = game.power_up.as_ref().unwrap();
+        ctx.set_fill_style_str("#00FFFF");
+        ctx.fill_rect(
+            f64::from(power_up.location.x) * cell_size,
+            f64::from(power_up.location.y) * cell_size,
+            cell_size,
+            cell_size,
+        );
     }
 
     // Draw lasers

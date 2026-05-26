@@ -1499,15 +1499,15 @@ impl Game {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
         self.current_replay.clear();
-        if self.mode == GameMode::Speedrun {
-            if let Some(ghost) = Self::load_ghost_replay() {
-                self.ghost_moves = ghost;
-                self.ghost_snake = Some(Snake::new(Point {
-                    x: start_x,
-                    y: start_y,
-                }));
-            }
-        } else {
+        if self.mode == GameMode::Speedrun
+            && let Some(ghost) = Self::load_ghost_replay()
+        {
+            self.ghost_moves = ghost;
+            self.ghost_snake = Some(Snake::new(Point {
+                x: start_x,
+                y: start_y,
+            }));
+        } else if self.mode != GameMode::Speedrun {
             self.ghost_moves.clear();
             self.ghost_snake = None;
         }
@@ -2941,32 +2941,26 @@ impl Game {
                         break;
                     }
                 }
-                #[expect(
-                    clippy::collapsible_if,
-                    reason = "Using let_chains requires unstable feature"
-                )]
-                if let Some(goblin) = self.goblin {
-                    if laser.position == goblin.position {
-                        self.goblin = None;
-                        destroyed = true;
-                        let multiplier = if self.skin == '₿' {
-                            2
-                        } else {
-                            1
-                        };
-                        self.score += 500;
-                        self.stats.total_score += 500;
-                        self.stats.coins += 500 * multiplier;
-                        self.spawn_particles(
-                            f32::from(laser.position.x),
-                            f32::from(laser.position.y),
-                            50,
-                            crate::color::Color::Yellow,
-                            '$',
-                        );
-                        beep();
-                        break;
-                    }
+                if self.goblin.is_some_and(|goblin| laser.position == goblin.position) {
+                    self.goblin = None;
+                    destroyed = true;
+                    let multiplier = if self.skin == '₿' {
+                        2
+                    } else {
+                        1
+                    };
+                    self.score += 500;
+                    self.stats.total_score += 500;
+                    self.stats.coins += 500 * multiplier;
+                    self.spawn_particles(
+                        f32::from(laser.position.x),
+                        f32::from(laser.position.y),
+                        50,
+                        crate::color::Color::Yellow,
+                        '$',
+                    );
+                    beep();
+                    break;
                 }
                 if let Some(i) = hit_boss_idx {
                     let boss_pos = self.bosses[i].position;
@@ -3250,11 +3244,8 @@ impl Game {
         if hit_laser1 && !is_invincible {
             p1_dead = true;
         }
-        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-        if let Some(col) = self.lightning_column {
-            if final_head1.x == col && !is_invincible {
-                p1_dead = true;
-            }
+        if self.lightning_column.is_some_and(|col| final_head1.x == col) && !is_invincible {
+            p1_dead = true;
         }
         if hit_wall2 || out_of_bounds2 {
             p2_dead = true;
@@ -3265,13 +3256,8 @@ impl Game {
         if hit_laser2 && !is_invincible {
             p2_dead = true;
         }
-        #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-        if let Some(final_head2) = final_head2_opt {
-            if let Some(col) = self.lightning_column {
-                if final_head2.x == col && !is_invincible {
-                    p2_dead = true;
-                }
-            }
+        if final_head2_opt.is_some_and(|head| self.lightning_column.is_some_and(|col| head.x == col)) && !is_invincible {
+            p2_dead = true;
         }
         if let Some(final_head2) = final_head2_opt
             && final_head1 == final_head2

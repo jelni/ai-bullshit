@@ -492,26 +492,14 @@ fn handle_level_editor_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Char('a' | 'A') | KeyCode::Left =>
         {
-            #[expect(
-                clippy::collapsible_if,
-                reason = "Using let_chains requires unstable feature, we want to stay on stable"
-            )]
-            if let Some(cursor) = &mut game.editor_cursor {
-                if cursor.x > 1 {
-                    cursor.x -= 1;
-                }
+            if game.editor_cursor.as_ref().is_some_and(|c| c.x > 1) {
+                game.editor_cursor.as_mut().unwrap().x -= 1;
             }
         },
         KeyCode::Char('d' | 'D') | KeyCode::Right =>
         {
-            #[expect(
-                clippy::collapsible_if,
-                reason = "Using let_chains requires unstable feature, we want to stay on stable"
-            )]
-            if let Some(cursor) = &mut game.editor_cursor {
-                if cursor.x < game.width - 2 {
-                    cursor.x += 1;
-                }
+            if game.editor_cursor.as_ref().is_some_and(|c| c.x < game.width - 2) {
+                game.editor_cursor.as_mut().unwrap().x += 1;
             }
         },
         KeyCode::Char(' ') => {
