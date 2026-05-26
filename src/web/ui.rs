@@ -4,6 +4,11 @@ use web_sys::CanvasRenderingContext2d;
 use rand::{Rng, SeedableRng};
 
 #[expect(clippy::too_many_lines)]
+/// Draws the game to the given canvas context.
+///
+/// # Panics
+///
+/// Panics if the active power-up type is unwrapped but does not exist.
 pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     let cell_size = 15.0;
 
