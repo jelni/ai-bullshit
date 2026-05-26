@@ -893,16 +893,13 @@ fn draw_entities<W: Write>(
             let dy = f32::from(py) - f32::from(head.y);
             let mut visible = f32::hypot(dx, dy) <= 6.0;
 
-            #[expect(clippy::collapsible_if, reason = "Nested if is easier to read")]
-            if !visible {
-                if let Some(p2) = &game.player2 {
+            if !visible
+                && game.player2.as_ref().is_some_and(|p2| {
                     let head2 = p2.head();
-                    let dx2 = f32::from(px) - f32::from(head2.x);
-                    let dy2 = f32::from(py) - f32::from(head2.y);
-                    if f32::hypot(dx2, dy2) <= 6.0 {
-                        visible = true;
-                    }
-                }
+                    f32::hypot(f32::from(px) - f32::from(head2.x), f32::from(py) - f32::from(head2.y)) <= 6.0
+                })
+            {
+                visible = true;
             }
             visible
         } else {
@@ -1121,13 +1118,11 @@ fn draw_entities<W: Write>(
     }
 
     // Draw Goblin
-    #[expect(clippy::collapsible_if, reason = "Using let_chains requires unstable feature")]
-    if let Some(goblin) = game.goblin {
-        if is_visible(goblin.position.x, goblin.position.y) {
-            stdout.queue(cursor::MoveTo(goblin.position.x, goblin.position.y))?;
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            write!(stdout, "G")?;
-        }
+    if game.goblin.is_some_and(|goblin| is_visible(goblin.position.x, goblin.position.y)) {
+        let goblin = game.goblin.unwrap();
+        stdout.queue(cursor::MoveTo(goblin.position.x, goblin.position.y))?;
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        write!(stdout, "G")?;
     }
 
     // Draw Bosses
