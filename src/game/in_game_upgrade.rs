@@ -9,6 +9,7 @@ pub enum InGameUpgrade {
     HomingLasers,
     DoubleCoins,
     Magnet,
+    Turret,
 }
 
 impl InGameUpgrade {
@@ -22,6 +23,7 @@ impl InGameUpgrade {
             Self::HomingLasers => "Homing Lasers",
             Self::DoubleCoins => "Double Coins",
             Self::Magnet => "Magnet",
+            Self::Turret => "Deploy Turret",
         }
     }
 
@@ -35,6 +37,7 @@ impl InGameUpgrade {
             Self::HomingLasers => "Lasers steer towards bosses",
             Self::DoubleCoins => "Increase coin drops from food",
             Self::Magnet => "Attract food and powerups from afar",
+            Self::Turret => "Automatically deploys a turret that shoots enemies",
         }
     }
 }

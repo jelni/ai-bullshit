@@ -39,6 +39,7 @@ pub mod save_state;
 pub mod shop_item;
 pub mod statistics;
 pub mod theme;
+pub mod turret;
 pub mod weather;
 
 #[cfg(test)]
@@ -72,4 +73,5 @@ pub use save_state::*;
 pub use shop_item::*;
 pub use statistics::*;
 pub use theme::*;
+pub use turret::*;
 pub use weather::*;
