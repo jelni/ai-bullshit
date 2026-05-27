@@ -42,6 +42,8 @@ pub struct Game {
     pub food_eaten_session: u32,
     pub mode: GameMode,
     pub player2: Option<Snake>,
+    pub bots: Vec<Snake>,
+    pub bots_autopilot_paths: Vec<Vec<Point>>,
     pub campaign_level: u32,
     pub safe_zone_margin: u16,
     pub last_shrink_time: Instant,
@@ -197,6 +199,8 @@ impl Game {
             food_eaten_session: 0,
             mode,
             player2: None,
+            bots: Vec::new(),
+            bots_autopilot_paths: Vec::new(),
             campaign_level: 1,
             safe_zone_margin: 0,
             last_shrink_time: web_time::Instant::now(),
@@ -399,6 +403,8 @@ impl Game {
                 direction_queue: self.snake.direction_queue.clone(),
             },
             player2: self.player2.clone(),
+            bots: self.bots.clone(),
+            bots_autopilot_paths: self.bots_autopilot_paths.clone(),
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
@@ -485,6 +491,8 @@ impl Game {
                 self.mode = state.mode;
                 self.snake = state.snake;
                 self.player2 = state.player2;
+                self.bots = state.bots;
+                self.bots_autopilot_paths = state.bots_autopilot_paths;
                 self.food = state.food;
                 self.obstacles = state.obstacles;
                 self.score = state.score;
@@ -1670,6 +1678,31 @@ impl Game {
         self.in_game_upgrades.clear();
         self.level_up_options.clear();
         self.level_up_selection = 0;
+        self.bots.clear();
+        self.bots_autopilot_paths.clear();
+
+        if self.mode == GameMode::MassiveMultiplayer {
+            let margin = self.safe_zone_margin;
+            for _ in 0..50 {
+                let avoid = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake, // dummy for this call since we pass avoid logic
+                    avoid,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.bots.push(Snake::new(pos));
+                    self.bots_autopilot_paths.push(Vec::new());
+                }
+            }
+        }
     }
     fn respawn(&mut self) {
         let start_x = self.width / 2;
@@ -1731,6 +1764,8 @@ impl Game {
                 });
             },
         }
+        self.bots.clear();
+        self.bots_autopilot_paths.clear();
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -1941,6 +1976,33 @@ impl Game {
                     }
                 }
             }
+            if self.mode == GameMode::MassiveMultiplayer {
+                for i in 0..self.bots.len() {
+                    if self.bots[i].direction_queue.is_empty() {
+                        let start = self.bots[i].head();
+                        let current_dir = self.bots[i].direction;
+                        let mut targets = vec![self.food];
+                        if let Some((bf_p, _)) = self.bonus_food {
+                            targets.push(bf_p);
+                        }
+                        if let Some(pu) = &self.power_up
+                            && pu.activation_time.is_none()
+                        {
+                            targets.push(pu.location);
+                        }
+                        if let Some(goblin) = &self.goblin {
+                            targets.push(goblin.position);
+                        }
+                        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 4) {
+                            self.bots_autopilot_paths[i] = path;
+                            self.bots[i].direction_queue.push_back(dir);
+                        } else if let Some(dir) = self.flood_fill_fallback(start, current_dir, 4) {
+                            self.bots_autopilot_paths[i].clear();
+                            self.bots[i].direction_queue.push_back(dir);
+                        }
+                    }
+                }
+            }
         }
     }
     pub(crate) fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
@@ -2017,6 +2079,8 @@ impl Game {
         if let Some(state) = self.history.pop_back() {
             self.snake = state.snake;
             self.player2 = state.player2;
+            self.bots = state.bots;
+            self.bots_autopilot_paths = state.bots_autopilot_paths;
             self.food = state.food;
             self.obstacles = state.obstacles;
             self.score = state.score;
@@ -2088,6 +2152,8 @@ impl Game {
         let state = HistoryState {
             snake: self.snake.clone(),
             player2: self.player2.clone(),
+            bots: self.bots.clone(),
+            bots_autopilot_paths: self.bots_autopilot_paths.clone(),
             food: self.food,
             obstacles: self.obstacles.clone(),
             score: self.score,
@@ -2840,6 +2906,7 @@ impl Game {
                         self.obstacles.contains(p)
                             || self.snake.body_map.contains_key(p)
                             || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
                             || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                             || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
                     };
@@ -3474,6 +3541,53 @@ impl Game {
         self.manage_goblin();
         self.apply_magnet();
         self.apply_gravity();
+
+        // Handle bots movement and check collisions with walls/boundaries
+        let mut final_bot_heads = Vec::new();
+        let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::PassThroughWalls
+                && p.activation_time.is_some_and(|t| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(t)
+                        < self.powerup_duration()
+                })
+        });
+
+        for i in 0..self.bots.len() {
+            if let Some(dir) = self.bots[i].direction_queue.pop_front() {
+                self.bots[i].direction = dir;
+            }
+            let next_head = Self::calculate_next_head_dir(self.bots[i].head(), self.bots[i].direction);
+            let mut hit_wall = false;
+            let final_head = if self.portals.is_some_and(|(p1, _)| p1 == next_head) {
+                self.portals.unwrap().1
+            } else if self.portals.is_some_and(|(_, p2)| p2 == next_head) {
+                self.portals.unwrap().0
+            } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
+            {
+                self.calculate_wrapped_head(next_head)
+            } else {
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if next_head.x <= margin
+                    || next_head.x >= self.width - 1 - margin
+                    || next_head.y <= margin
+                    || next_head.y >= self.height - 1 - margin
+                {
+                    hit_wall = true;
+                }
+                next_head
+            };
+            final_bot_heads.push((i, final_head, hit_wall));
+        }
+
         let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
@@ -3796,6 +3910,73 @@ impl Game {
                 return;
             }
         }
+        let mut bots_to_remove = std::collections::HashSet::new();
+        let mut bots_grow = vec![false; self.bots.len()];
+        for (i, final_head, hit_wall) in &final_bot_heads {
+            if *hit_wall {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if self.obstacles.contains(final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if self.bosses.iter().any(|b| b.position == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if self.mines.contains(final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if self.black_hole.is_some_and(|bh| bh == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if self.lasers.iter().any(|l| l.position == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            // Check body collisions for bot
+            if self.snake.body_map.contains_key(final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
+            if let Some(p2) = &self.player2
+                && p2.body_map.contains_key(final_head) {
+                    bots_to_remove.insert(*i);
+                    continue;
+                }
+            for j in 0..self.bots.len() {
+                if *i != j && self.bots[j].body_map.contains_key(final_head) {
+                    bots_to_remove.insert(*i);
+                    break;
+                }
+            }
+
+            // Food logic for bot
+            if *final_head == self.food {
+                bots_grow[*i] = true;
+                if let Some(new_food) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    |p| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.bots.iter().any(|b| b.body_map.contains_key(p)),
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.food = new_food;
+                }
+            }
+            if self.bonus_food.is_some_and(|(bp, _)| *final_head == bp) {
+                bots_grow[*i] = true;
+                self.bonus_food = None;
+            }
+            if self.poison_food.is_some_and(|(pp, _)| *final_head == pp) {
+                self.poison_food = None;
+            }
+        }
+
         let (body_p1_dead, body_p2_dead) = self.check_body_collisions(
             final_head1,
             final_head2_opt,
@@ -3855,6 +4036,22 @@ impl Game {
         {
             p2.move_to(final_head2, p2_grow);
         }
+
+        let old_bots = std::mem::take(&mut self.bots);
+        let mut old_paths = std::mem::take(&mut self.bots_autopilot_paths);
+        let mut alive_bots = Vec::new();
+        let mut alive_paths = Vec::new();
+        for (i, bot) in old_bots.into_iter().enumerate() {
+            if !bots_to_remove.contains(&i) {
+                let mut b = bot;
+                b.move_to(final_bot_heads[i].1, bots_grow[i]);
+                alive_bots.push(b);
+                alive_paths.push(std::mem::take(&mut old_paths[i]));
+            }
+        }
+        self.bots = alive_bots;
+        self.bots_autopilot_paths = alive_paths;
+
         if let Some(mut ghost) = self.ghost_snake.take() {
             if let Some(ghost_dir) = self.ghost_moves.pop_front() {
                 ghost.direction = ghost_dir;
@@ -3916,6 +4113,20 @@ impl Game {
                 }
             }
         }
+
+        // Player hitting bots
+        if !is_invincible {
+            for bot in &self.bots {
+                if bot.body_map.contains_key(&final_head1) {
+                    p1_dead = true;
+                }
+                if let Some(final_head2) = final_head2_opt
+                    && bot.body_map.contains_key(&final_head2) {
+                        p2_dead = true;
+                    }
+            }
+        }
+
         (p1_dead, p2_dead)
     }
     #[expect(clippy::too_many_lines, reason = "Handling many powerup types")]
@@ -4728,6 +4939,15 @@ impl Game {
                     u16::try_from(p2.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
                 if steps < steps_to_clear {
                     return false;
+                }
+            }
+            for b in &self.bots {
+                if let Some(pos) = b.body.iter().position(|&p| p == final_p) {
+                    let steps_to_clear =
+                        u16::try_from(b.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
+                    if steps < steps_to_clear {
+                        return false;
+                    }
                 }
             }
             if steps == 1 {

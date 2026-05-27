@@ -5,6 +5,8 @@ use super::{
 pub struct HistoryState {
     pub snake: Snake,
     pub player2: Option<Snake>,
+    pub bots: Vec<Snake>,
+    pub bots_autopilot_paths: Vec<Vec<Point>>,
     pub food: Point,
     pub obstacles: HashSet<Point>,
     pub score: u32,

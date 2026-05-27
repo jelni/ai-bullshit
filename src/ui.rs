@@ -954,6 +954,17 @@ fn draw_entities<W: Write>(
             {
                 visible = true;
             }
+
+            if !visible {
+                for bot in &game.bots {
+                    let head_b = bot.head();
+                    if f32::hypot(f32::from(px) - f32::from(head_b.x), f32::from(py) - f32::from(head_b.y)) <= 6.0 {
+                        visible = true;
+                        break;
+                    }
+                }
+            }
+
             visible
         } else {
             true
@@ -1368,6 +1379,37 @@ fn draw_entities<W: Write>(
             if is_visible(p.x, p.y) {
                 stdout.queue(cursor::MoveTo(p.x, p.y))?;
                 write!(stdout, "·")?;
+            }
+        }
+    }
+
+    // Draw bots and their paths
+    if game.mode == crate::game::GameMode::MassiveMultiplayer {
+        for (i, bot) in game.bots.iter().enumerate() {
+            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            for p in &game.bots_autopilot_paths[i] {
+                if is_visible(p.x, p.y) {
+                    stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                    write!(stdout, "·")?;
+                }
+            }
+
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            for (j, part) in bot.body.iter().enumerate() {
+                if is_visible(part.x, part.y) {
+                    stdout.queue(cursor::MoveTo(part.x, part.y))?;
+                    if j == 0 {
+                        let head_char = match bot.direction {
+                            crate::snake::Direction::Up => '^',
+                            crate::snake::Direction::Down => 'v',
+                            crate::snake::Direction::Left => '<',
+                            crate::snake::Direction::Right => '>',
+                        };
+                        write!(stdout, "{head_char}")?;
+                    } else {
+                        write!(stdout, "B")?;
+                    }
+                }
             }
         }
     }

@@ -1176,3 +1176,53 @@ mod tests {
         }));
     }
 }
+
+#[test]
+fn test_massive_multiplayer_mode_spawns_bots() {
+    let mut game = Game::new(
+        40,
+        40,
+        false,
+        '#',
+        crate::game::Theme::Dark,
+        crate::game::Difficulty::Normal,
+    );
+    game.mode = GameMode::MassiveMultiplayer;
+    game.reset();
+
+    // Verify 50 bots were spawned successfully
+    assert_eq!(game.bots.len(), 50);
+    assert_eq!(game.bots_autopilot_paths.len(), 50);
+
+    // Verify autopilot works for massive multiplayer
+    game.auto_pilot = true;
+    game.update();
+}
+
+#[test]
+fn test_bot_dies_when_hitting_wall() {
+    let mut game = Game::new(
+        20,
+        20,
+        false,
+        '#',
+        crate::game::Theme::Dark,
+        crate::game::Difficulty::Normal,
+    );
+    game.mode = GameMode::MassiveMultiplayer;
+    game.reset();
+
+    // Force bot position to hit wall
+    let mut bot = game.bots[0].clone();
+    bot.body.clear();
+    bot.body.push_front(Point { x: 1, y: 1 });
+    bot.direction = Direction::Up;
+    bot.direction_queue.push_back(Direction::Up);
+
+    game.bots[0] = bot;
+
+    let bot_count_before = game.bots.len();
+    game.update(); // Tick should calculate next pos (1, 0), which is a wall (hit_wall)
+
+    assert!(game.bots.len() < bot_count_before);
+}
