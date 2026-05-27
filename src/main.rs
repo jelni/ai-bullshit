@@ -806,6 +806,9 @@ fn handle_level_up_input(code: KeyCode, game: &mut Game) -> bool {
             if !game.level_up_options.is_empty() && game.level_up_selection < game.level_up_options.len() {
                 let chosen_upgrade = game.level_up_options[game.level_up_selection];
                 *game.in_game_upgrades.entry(chosen_upgrade).or_insert(0) += 1;
+                if chosen_upgrade == crate::game::InGameUpgrade::Turret {
+                    game.spawn_turret();
+                }
             }
             game.state = GameState::Playing;
         }

@@ -989,7 +989,7 @@ fn draw_entities<W: Write>(
         if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
             // Fade effect: use DarkGrey when lifetime is low, otherwise base color
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
-                crate::color::Color::DarkGrey.into()
+                crossterm::style::Color::DarkGrey
             } else {
                 p.color.into()
             };
@@ -1136,6 +1136,15 @@ fn draw_entities<W: Write>(
         if is_visible(mine.x, mine.y) {
             stdout.queue(cursor::MoveTo(mine.x, mine.y))?;
             write!(stdout, "M")?;
+        }
+    }
+
+    // Draw Turrets
+    stdout.queue(SetForegroundColor(Color::DarkCyan))?;
+    for turret in &game.turrets {
+        if is_visible(turret.position.x, turret.position.y) {
+            stdout.queue(cursor::MoveTo(turret.position.x, turret.position.y))?;
+            write!(stdout, "T")?;
         }
     }
 

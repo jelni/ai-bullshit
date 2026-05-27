@@ -72,6 +72,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Turrets
+    ctx.set_fill_style_str("#008B8B"); // DarkCyan
+    for turret in &game.turrets {
+        if turret.position.x < game.width
+            && turret.position.y < game.height
+            && is_visible(f64::from(turret.position.x), f64::from(turret.position.y))
+        {
+            ctx.fill_rect(
+                f64::from(turret.position.x) * cell_size,
+                f64::from(turret.position.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw Mines
     ctx.set_fill_style_str("#FFA500");
     for mine in &game.mines {

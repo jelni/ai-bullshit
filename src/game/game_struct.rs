@@ -1,7 +1,7 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Difficulty, Direction, Duration, File, GameMode,
     GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant, Laser, Meteor, Particle, Point, PowerUp,
-    PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Weather, Write, beep,
+    PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
     default_unlocked_themes, fs, io,
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
@@ -74,8 +74,16 @@ pub struct Game {
     pub in_game_upgrades: std::collections::HashMap<InGameUpgrade, u32>,
     pub level_up_options: Vec<InGameUpgrade>,
     pub level_up_selection: usize,
+    pub turrets: Vec<Turret>,
 }
 impl Game {
+    pub fn spawn_turret(&mut self) {
+        self.turrets.push(Turret {
+            position: self.snake.head(),
+            shoot_timer: 0,
+        });
+    }
+
     #[must_use]
     pub fn powerup_duration(&self) -> u64 {
         5 + u64::from(self.stats.upgrade_powerup_duration)
@@ -231,6 +239,7 @@ impl Game {
             in_game_upgrades: std::collections::HashMap::new(),
             level_up_options: Vec::new(),
             level_up_selection: 0,
+            turrets: Vec::new(),
         }
     }
     #[must_use]
@@ -601,6 +610,57 @@ impl Game {
             }
         }
     }
+    fn manage_turrets(&mut self) {
+        let mut new_lasers = Vec::new();
+        for turret in &mut self.turrets {
+            turret.shoot_timer += 1;
+            if turret.shoot_timer >= 10 {
+                let mut target_dir = None;
+                let mut min_dist = u32::MAX;
+
+                let mut possible_targets = Vec::new();
+                for boss in &self.bosses {
+                    possible_targets.push(boss.position);
+                }
+                if let Some(goblin) = &self.goblin {
+                    possible_targets.push(goblin.position);
+                }
+                for meteor in &self.meteors {
+                    possible_targets.push(meteor.position);
+                }
+
+                for target in possible_targets {
+                    if target.x == turret.position.x || target.y == turret.position.y {
+                        let dist = u32::from(turret.position.x.abs_diff(target.x))
+                            + u32::from(turret.position.y.abs_diff(target.y));
+                        if dist < min_dist {
+                            min_dist = dist;
+                            if target.x == turret.position.x && target.y < turret.position.y {
+                                target_dir = Some(Direction::Up);
+                            } else if target.x == turret.position.x && target.y > turret.position.y {
+                                target_dir = Some(Direction::Down);
+                            } else if target.y == turret.position.y && target.x < turret.position.x {
+                                target_dir = Some(Direction::Left);
+                            } else if target.y == turret.position.y && target.x > turret.position.x {
+                                target_dir = Some(Direction::Right);
+                            }
+                        }
+                    }
+                }
+
+                if let Some(dir) = target_dir {
+                    turret.shoot_timer = 0;
+                    new_lasers.push(Laser {
+                        position: turret.position,
+                        direction: dir,
+                        player: 1, // Considered player 1's laser
+                    });
+                }
+            }
+        }
+        self.lasers.extend(new_lasers);
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "Game loop inherently requires handling multiple states and events"
@@ -1678,6 +1738,7 @@ impl Game {
         self.in_game_upgrades.clear();
         self.level_up_options.clear();
         self.level_up_selection = 0;
+        self.turrets.clear();
         self.bots.clear();
         self.bots_autopilot_paths.clear();
 
@@ -3539,6 +3600,7 @@ impl Game {
         self.manage_black_hole();
         self.manage_meteors();
         self.manage_goblin();
+        self.manage_turrets();
         self.apply_magnet();
         self.apply_gravity();
 
