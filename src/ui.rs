@@ -978,7 +978,7 @@ fn draw_entities<W: Write>(
         if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
             // Fade effect: use DarkGrey when lifetime is low, otherwise base color
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
-                Color::DarkGrey
+                crate::color::Color::DarkGrey.into()
             } else {
                 p.color.into()
             };

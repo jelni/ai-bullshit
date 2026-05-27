@@ -441,6 +441,7 @@ impl Game {
     pub fn load_game(&mut self) -> bool {
         self.load_game_from_file("savegame.json")
     }
+    #[expect(clippy::too_many_lines, reason = "Loading game requires assigning many fields")]
     pub(crate) fn load_game_from_file(&mut self, path: &str) -> bool {
         File::open(path)
             .ok()
@@ -1734,6 +1735,10 @@ impl Game {
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
     }
+    /// Shoots a laser for the specified player.
+    ///
+    /// # Panics
+    /// Panics if the `Multishot` upgrade is in `in_game_upgrades` but its level value cannot be retrieved.
     pub fn shoot_laser(&mut self, player: u8) {
         let active_lasers = self.lasers.iter().filter(|l| l.player == player).count();
         let mut max_lasers = 3 + usize::from(self.stats.upgrade_laser_capacity);
@@ -1765,7 +1770,7 @@ impl Game {
         if player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::Multishot) {
             let multishot_level = *self.in_game_upgrades.get(&InGameUpgrade::Multishot).unwrap();
 
-            for i in 1..=(multishot_level as i32) {
+            for i in 1..=(i32::try_from(multishot_level).unwrap_or(1)) {
                 match dir {
                     Direction::Up | Direction::Down => {
                         let mut p1 = laser_pos;
@@ -2162,7 +2167,7 @@ impl Game {
         }
     }
     pub fn apply_magnet(&mut self) {
-        let has_magnet_powerup = if let Some(pu) = &self.power_up {
+        let has_magnet_powerup = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::Magnet
                 && pu.activation_time.is_some_and(|t| {
                     web_time::SystemTime::now()
@@ -2172,9 +2177,7 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        } else {
-            false
-        };
+        });
 
         let has_passive_magnet = self.in_game_upgrades.contains_key(&InGameUpgrade::Magnet);
 
@@ -4082,6 +4085,11 @@ impl Game {
             if self.skin == '₿' {
                 coin_multiplier *= 2.0;
             }
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "Score is positive and bounded"
+            )]
             let mut coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
             if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
                 coins_earned *= 1 + double_coins_level;
@@ -4139,6 +4147,11 @@ impl Game {
         if self.skin == '₿' {
             coin_multiplier *= 2.0;
         }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Score is positive and bounded"
+        )]
         let mut coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
         if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
             coins_earned *= 1 + double_coins_level;
