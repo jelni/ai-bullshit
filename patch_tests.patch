@@ -1,0 +1,18 @@
+<<<<<<< SEARCH
+                    let avoid = |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                            || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    };
+=======
+                    let avoid = |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                            || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                            || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    };
+>>>>>>> REPLACE

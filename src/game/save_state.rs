@@ -10,6 +10,10 @@ pub struct SaveState {
     pub snake: Snake,
     #[serde(default)]
     pub player2: Option<Snake>,
+    #[serde(default)]
+    pub bots: Vec<Snake>,
+    #[serde(default)]
+    pub bots_autopilot_paths: Vec<Vec<Point>>,
     pub food: Point,
     pub obstacles: HashSet<Point>,
     pub score: u32,
