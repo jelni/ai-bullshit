@@ -1,0 +1,21 @@
+Let's add "Tron" mode as it's a classic and fits perfectly.
+Or what about "Snake VS Zombies" - a "Zombie" mode where any snake that dies becomes a zombie bot that chases the nearest living snake.
+Actually, what about "Minesweeper" mode? You have to reveal the board.
+What about a "Tron" game mode, name it "Tron Mode".
+What else? "Portal Mode" where portals constantly open and close.
+Let's implement "Tron Mode" (GameMode::Tron).
+
+Wait, the prompt says:
+2. think what would be the best next meaningful, large, major development
+3. autonomously implement it
+
+What about adding "Skill Tree" features that actually do more? Right now `handle_skill_tree_input` in `main.rs` upgrades duration, extra lives, laser capacity, coin multiplier.
+What if we add RPG elements? Classes?
+Let's look at `in_game_upgrade.rs` and `level_up_selection`. We just added level up!
+Ah, there are `InGameUpgrade`s:
+Multishot, Piercing, ExplosiveLasers, LaserSpeed, HomingLasers, DoubleCoins, Magnet.
+Is there an inventory system?
+
+Let's check what a "massive multiplayer engine" needs.
+It needs `Matchmaking` or a `Server`. Wait, we can't really do real online multiplayer easily in this setup because it's a CLI program and there is no server right now, unless we write a server!
+"Online Multiplayer" currently is just a menu option that does exactly the same as "Local Multiplayer" probably. Let's see.

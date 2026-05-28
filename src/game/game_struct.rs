@@ -2,7 +2,7 @@ use super::{
     AStarState, Achievement, Boss, BossType, Difficulty, Direction, Duration, File, GameMode,
     GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant, Laser, Meteor, Particle, Point, PowerUp,
     PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
-    default_unlocked_themes, fs, io,
+    default_unlocked_themes, fs, io, Resource
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
@@ -75,6 +75,7 @@ pub struct Game {
     pub level_up_options: Vec<InGameUpgrade>,
     pub level_up_selection: usize,
     pub turrets: Vec<Turret>,
+    pub resources: std::collections::HashMap<Point, Resource>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -240,6 +241,7 @@ impl Game {
             level_up_options: Vec::new(),
             level_up_selection: 0,
             turrets: Vec::new(),
+            resources: std::collections::HashMap::new(),
         }
     }
     #[must_use]
@@ -3592,6 +3594,7 @@ impl Game {
         {
             p2.direction = dir;
         }
+        self.manage_resources();
         self.manage_bonus_food();
         self.manage_poison_food();
         self.manage_power_ups();
@@ -4091,6 +4094,10 @@ impl Game {
         if let Some(final_head2) = final_head2_opt {
             self.process_power_up_collision(final_head2);
         }
+        self.process_resource_collision(final_head1);
+        if let Some(final_head2) = final_head2_opt {
+            self.process_resource_collision(final_head2);
+        }
         self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
         self.snake.move_to(final_head1, p1_grow);
         if let Some(final_head2) = final_head2_opt
@@ -4321,6 +4328,33 @@ impl Game {
             beep();
         }
     }
+    fn process_resource_collision(&mut self, final_head: Point) {
+        if let Some(res) = self.resources.remove(&final_head) {
+            let color = match res {
+                Resource::Wood | Resource::Gold => crate::color::Color::Yellow,
+                Resource::Iron => crate::color::Color::White,
+                Resource::Diamond => crate::color::Color::Cyan,
+            };
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                15,
+                color,
+                '*',
+            );
+            *self.stats.inventory.entry(res).or_insert(0) += 1;
+            let points = match res {
+                Resource::Wood => 10,
+                Resource::Iron => 20,
+                Resource::Gold => 50,
+                Resource::Diamond => 100,
+            };
+            self.score += points;
+            self.stats.total_score += points;
+            beep();
+        }
+    }
+
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
             self.spawn_particles(
@@ -4639,6 +4673,35 @@ impl Game {
             }
         }
     }
+    fn manage_resources(&mut self) {
+        let spawn_chance = 0.01;
+        if self.rng.gen_bool(spawn_chance) {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.resources.contains_key(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let res = match self.rng.gen_range(0..100) {
+                    0..=40 => Resource::Wood,
+                    41..=70 => Resource::Iron,
+                    71..=90 => Resource::Gold,
+                    _ => Resource::Diamond,
+                };
+                self.resources.insert(pos, res);
+            }
+        }
+    }
+
     fn manage_bonus_food(&mut self) {
         let spawn_chance = if self.skin == 'Ð' {
             if self.weather == Weather::Rain {

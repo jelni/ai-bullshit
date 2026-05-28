@@ -75,3 +75,7 @@ pub use statistics::*;
 pub use theme::*;
 pub use turret::*;
 pub use weather::*;
+pub mod resource;
+pub mod craftable_item;
+pub use resource::Resource;
+pub use craftable_item::CraftableItem;

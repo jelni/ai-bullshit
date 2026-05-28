@@ -1,4 +1,4 @@
-use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes};
+use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem};
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -25,4 +25,8 @@ pub struct Statistics {
     pub player_elo: u32,
     #[serde(default = "default_elo")]
     pub bot_elo: u32,
+    #[serde(default)]
+    pub inventory: std::collections::HashMap<Resource, u32>,
+    #[serde(default)]
+    pub crafted_items: std::collections::HashMap<CraftableItem, u32>,
 }
