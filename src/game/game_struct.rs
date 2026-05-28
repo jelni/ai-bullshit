@@ -12,6 +12,7 @@ pub struct Game {
     pub snake: Snake,
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
+    pub merchant: Option<Point>,
     pub poison_food: Option<(Point, Instant)>,
     pub power_up: Option<PowerUp>,
     pub decoy: Option<(Point, u64)>,
@@ -178,6 +179,7 @@ impl Game {
             snake,
             food,
             bonus_food: None,
+            merchant: None,
             poison_food: None,
             power_up: initial_power_up,
             decoy: None,
@@ -3600,6 +3602,7 @@ impl Game {
             p2.direction = dir;
         }
         self.manage_resources();
+        self.manage_merchant();
         self.manage_bonus_food();
         self.manage_poison_food();
         self.manage_power_ups();
@@ -4104,6 +4107,18 @@ impl Game {
         if let Some(final_head2) = final_head2_opt {
             self.process_resource_collision(final_head2);
         }
+
+        if self.merchant.is_some_and(|m| m == final_head1) {
+            self.state = GameState::MerchantShop;
+            self.merchant = None;
+            beep();
+        } else if let Some(final_head2) = final_head2_opt
+            && self.merchant.is_some_and(|m| m == final_head2) {
+                self.state = GameState::MerchantShop;
+                self.merchant = None;
+                beep();
+            }
+
         self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
         self.snake.move_to(final_head1, p1_grow);
         if let Some(final_head2) = final_head2_opt
@@ -4707,6 +4722,38 @@ impl Game {
             }
         }
     }
+    fn manage_merchant(&mut self) {
+        if self.merchant.is_none() {
+            let spawn_chance = 0.005; // 0.5% chance to spawn per tick
+            if self.rng.gen_bool(spawn_chance) {
+                let avoid = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.resources.contains_key(p)
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.merchant = Some(pos);
+                }
+            }
+        } else {
+            // Despawn merchant occasionally if we want, or just leave it
+            let despawn_chance = 0.001; // 0.1% chance to leave
+            if self.rng.gen_bool(despawn_chance) {
+                self.merchant = None;
+            }
+        }
+    }
+
     fn manage_resources(&mut self) {
         let spawn_chance = 0.01;
         if self.rng.gen_bool(spawn_chance) {
@@ -4950,6 +4997,7 @@ impl Game {
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
             }
+            // Merchant is considered safe.
             if self.mines.contains(&final_p) {
                 return false;
             }
@@ -5150,6 +5198,9 @@ impl Game {
         }
         if let Some(goblin) = &self.goblin {
             targets.push(goblin.position);
+        }
+        if let Some(merchant) = self.merchant {
+            targets.push(merchant);
         }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;

@@ -273,6 +273,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::LevelUp => handle_level_up_input(code, game),
         GameState::Crafting => handle_crafting_input(code, game),
         GameState::BountyBoard => handle_bounty_board_input(code, game),
+        GameState::MerchantShop => handle_merchant_shop_input(code, game),
     };
 
     if should_continue {
@@ -1172,6 +1173,69 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 },
                 _ => {},
             }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Playing;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                // Extra Life [Cost: 500]
+                if game.stats.coins >= 500 {
+                    game.stats.coins -= 500;
+                    game.lives += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            1 => {
+                // Diamond Sword [Cost: 1000]
+                if game.stats.coins >= 1000 {
+                    game.stats.coins -= 1000;
+                    *game.stats.crafted_items.entry(crate::game::CraftableItem::DiamondSword).or_insert(0) += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            2 => {
+                // Speed Potion [Cost: 300]
+                if game.stats.coins >= 300 {
+                    game.stats.coins -= 300;
+                    *game.stats.crafted_items.entry(crate::game::CraftableItem::SpeedPotion).or_insert(0) += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            3 => {
+                // Iron Wall [Cost: 100]
+                if game.stats.coins >= 100 {
+                    game.stats.coins -= 100;
+                    *game.stats.crafted_items.entry(crate::game::CraftableItem::IronWall).or_insert(0) += 1;
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            },
+            _ => {},
         },
         _ => {},
     }
