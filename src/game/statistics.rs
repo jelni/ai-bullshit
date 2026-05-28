@@ -1,4 +1,4 @@
-use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem};
+use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem, Bounty};
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -29,4 +29,8 @@ pub struct Statistics {
     pub inventory: std::collections::HashMap<Resource, u32>,
     #[serde(default)]
     pub crafted_items: std::collections::HashMap<CraftableItem, u32>,
+    #[serde(default)]
+    pub active_bounty: Option<Bounty>,
+    #[serde(default)]
+    pub completed_bounties: u32,
 }
