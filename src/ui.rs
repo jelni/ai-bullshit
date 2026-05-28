@@ -36,6 +36,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::LevelUp => draw_level_up(game, stdout)?,
         GameState::Crafting => draw_crafting(game, stdout)?,
         GameState::BountyBoard => draw_bounty_board(game, stdout)?,
+        GameState::MerchantShop => draw_merchant_shop(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -1283,6 +1284,14 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw merchant
+    if let Some(merchant_p) = game.merchant
+        && is_visible(merchant_p.x, merchant_p.y) {
+            stdout.queue(cursor::MoveTo(merchant_p.x, merchant_p.y))?;
+            stdout.queue(SetForegroundColor(Color::Magenta))?;
+            write!(stdout, "$")?;
+        }
+
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food
         && is_visible(bonus_p.x, bonus_p.y)
@@ -1983,6 +1992,59 @@ fn draw_crafting<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let help = "Use Arrow Keys to select, SPACE to craft, Q to go back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
+fn draw_merchant_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "MERCHANT SHOP";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = format!("Your Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    let items = [
+        "Extra Life [Cost: 500]",
+        "Diamond Sword [Cost: 1000]",
+        "Speed Potion [Cost: 300]",
+        "Iron Wall [Cost: 100]",
+    ];
+
+    for (i, item) in items.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2).saturating_sub(2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {item} <")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{item}")?;
+        }
+    }
+
+    let help = "Up/Down: Select | Space/Enter: Buy | Q/Esc: Leave";
     stdout.queue(SetForegroundColor(Color::DarkGrey))?;
     stdout.queue(cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
