@@ -35,6 +35,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::LevelEditor => draw_level_editor(game, stdout)?,
         GameState::LevelUp => draw_level_up(game, stdout)?,
         GameState::Crafting => draw_crafting(game, stdout)?,
+        GameState::BountyBoard => draw_bounty_board(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -134,6 +135,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Play Custom Level",
         "Level Editor",
         "Crafting",
+        "Bounty Board",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -992,13 +994,13 @@ fn draw_entities<W: Write>(
         if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
             // Fade effect: use DarkGrey when lifetime is low, otherwise base color
             let display_color = if p.lifetime < p.max_lifetime * 0.3 {
-                crossterm::style::Color::DarkGrey
+                crate::color::Color::DarkGrey
             } else {
-                p.color.into()
+                p.color
             };
 
             stdout.queue(cursor::MoveTo(px, py))?;
-            stdout.queue(SetForegroundColor(display_color))?;
+            stdout.queue(SetForegroundColor(display_color.into()))?;
             write!(stdout, "{}", p.symbol)?;
         }
     }
@@ -1857,6 +1859,79 @@ mod settings_tests {
         assert!(output.contains("> Theme: Dark <"), "Settings should indicate selected item");
         assert!(output.contains("Wrap Mode: Off"), "Settings should show Wrap Mode");
     }
+}
+
+fn draw_bounty_board<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "BOUNTY BOARD";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = format!("Completed Bounties: {}", game.stats.completed_bounties);
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    if let Some(ref active) = game.stats.active_bounty {
+        let active_str = format!(
+            "Active Bounty: {:?} - Progress: {} / {}",
+            active.b_type, active.progress, active.target
+        );
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(active_str.len()).unwrap_or(0) / 2),
+            game.height / 2,
+        ))?;
+        write!(stdout, "{active_str}")?;
+
+        let reward_str = format!("Reward: {} Coins", active.reward_coins);
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(reward_str.len()).unwrap_or(0) / 2),
+            game.height / 2 + 1,
+        ))?;
+        write!(stdout, "{reward_str}")?;
+
+        let cancel_str = "Press Enter to Cancel Bounty";
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(cancel_str.len()).unwrap_or(0) / 2),
+            game.height / 2 + 3,
+        ))?;
+        write!(stdout, "{cancel_str}")?;
+    } else {
+        let bounties = [
+            "Eat 50 Food [Reward: 500 Coins]",
+            "Kill 3 Bosses [Reward: 1000 Coins]",
+            "Survive 120 Seconds [Reward: 750 Coins]",
+        ];
+
+        for (i, text) in bounties.iter().enumerate() {
+            if i == game.settings_selection {
+                stdout.queue(SetForegroundColor(Color::Yellow))?;
+                stdout.queue(cursor::MoveTo(
+                    (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2).saturating_sub(2),
+                    game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+                ))?;
+                write!(stdout, "> {text} <")?;
+            } else {
+                stdout.queue(SetForegroundColor(Color::White))?;
+                stdout.queue(cursor::MoveTo(
+                    (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2),
+                    game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+                ))?;
+                write!(stdout, "{text}")?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn draw_crafting<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {

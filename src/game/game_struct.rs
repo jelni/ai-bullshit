@@ -2356,6 +2356,7 @@ impl Game {
             return;
         }
         self.update_tick();
+        self.update_bounty_progress(crate::game::BountyType::SurviveTime(0), 1);
         if self.is_sprinting && self.state == GameState::Playing {
             self.update_tick();
         }
@@ -3045,6 +3046,7 @@ impl Game {
                                     's',
                                 );
                             } else {
+                                self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                                 if self.mode == GameMode::BossRush {
                                     self.score += 1000 * self.campaign_level;
                                     self.campaign_level += 1;
@@ -3355,6 +3357,7 @@ impl Game {
                                 's',
                             );
                         } else {
+                            self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                             if self.mode == GameMode::BossRush {
                                 self.score += 1000 * self.campaign_level;
                                 self.campaign_level += 1;
@@ -3463,6 +3466,7 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
+                         self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                          self.score += 100;
                          self.spawn_particles(
                             f32::from(boss.position.x),
@@ -3892,6 +3896,7 @@ impl Game {
                                             state_timer: 0,
                                         });
                                     } else {
+                                        self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                                         if self.mode == GameMode::BossRush {
                                             self.score += 1000 * self.campaign_level;
                                             self.campaign_level += 1;
@@ -4409,6 +4414,7 @@ impl Game {
             self.stats.total_food_eaten += 1;
             self.stats.coins += coins_earned;
             self.bonus_food = None;
+            self.update_bounty_progress(crate::game::BountyType::EatFood(0), 1);
             beep();
             self.gain_xp(1);
             true
@@ -4470,6 +4476,7 @@ impl Game {
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
         self.stats.coins += coins_earned;
+        self.update_bounty_progress(crate::game::BountyType::EatFood(0), 1);
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
             self.campaign_level += 1;
@@ -4534,6 +4541,32 @@ impl Game {
             self.obstacles.extend(new_obstacles);
         }
     }
+    pub fn update_bounty_progress(&mut self, b_type: crate::game::BountyType, amount: u32) {
+        let mut bounty_completed = false;
+        let mut reward = 0;
+        if let Some(ref mut active) = self.stats.active_bounty {
+            let is_match = matches!(
+                (active.b_type.clone(), b_type),
+                (crate::game::BountyType::EatFood(_), crate::game::BountyType::EatFood(_))
+                    | (crate::game::BountyType::KillBosses(_), crate::game::BountyType::KillBosses(_))
+                    | (crate::game::BountyType::SurviveTime(_), crate::game::BountyType::SurviveTime(_))
+            );
+            if is_match {
+                active.progress += amount;
+                if active.is_completed() {
+                    bounty_completed = true;
+                    reward = active.reward_coins;
+                }
+            }
+        }
+        if bounty_completed {
+            self.stats.active_bounty = None;
+            self.stats.completed_bounties += 1;
+            self.stats.coins += reward;
+            self.save_stats();
+        }
+    }
+
     pub fn check_achievements(&mut self) {
         let mut new_achievements = Vec::new();
         if !self.stats.unlocked_achievements.contains(&Achievement::FirstBlood)

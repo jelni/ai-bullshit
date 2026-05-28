@@ -17,4 +17,5 @@ pub enum GameState {
     LevelEditor,
     LevelUp,
     Crafting,
+    BountyBoard,
 }

@@ -272,6 +272,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::LevelEditor => handle_level_editor_input(code, game),
         GameState::LevelUp => handle_level_up_input(code, game),
         GameState::Crafting => handle_crafting_input(code, game),
+        GameState::BountyBoard => handle_bounty_board_input(code, game),
     };
 
     if should_continue {
@@ -456,6 +457,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0; // Reusing selection variable
             },
             41 => {
+                game.state = GameState::BountyBoard;
+                game.settings_selection = 0;
+            },
+            42 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -465,15 +470,57 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 41;
+                game.menu_selection = 42;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 41 {
+            if game.menu_selection < 42 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
             }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_bounty_board_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.stats.active_bounty.is_none() {
+                if game.settings_selection > 0 {
+                    game.settings_selection -= 1;
+                } else {
+                    game.settings_selection = 2;
+                }
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.stats.active_bounty.is_none() {
+                if game.settings_selection < 2 {
+                    game.settings_selection += 1;
+                } else {
+                    game.settings_selection = 0;
+                }
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            if game.stats.active_bounty.is_some() {
+                game.stats.active_bounty = None;
+            } else {
+                let bounty = match game.settings_selection {
+                    1 => crate::game::Bounty::new(crate::game::BountyType::KillBosses(3), 1000),
+                    2 => crate::game::Bounty::new(crate::game::BountyType::SurviveTime(120), 750),
+                    _ => crate::game::Bounty::new(crate::game::BountyType::EatFood(50), 500),
+                };
+                game.stats.active_bounty = Some(bounty);
+            }
+            game.save_stats();
+            crate::game::beep();
         },
         _ => {},
     }
