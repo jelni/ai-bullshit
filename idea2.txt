@@ -1,0 +1,9 @@
+Wait, let's think bigger. The manifesto says "We envision a future where this terminal Snake game evolves into the ultimate e-sports platform. We are building the foundational engine for a massively multiplayer, AI-assisted universe where billions of players compete globally in real-time."
+What's the most "e-sports" feature?
+Replays! We have a `ghost.json` speedrun ghost. But what about a full Match History and Replay Viewer mode?
+Or Spectator mode with betting coins on Bots.
+Or a Tournament Bracket mode?
+"Tournament" mode exists in `GameMode::Tournament`.
+Let's see what `GameMode::Tournament` does. Actually, it just spawns player2.
+
+Let's check `GameMode` in `ui.rs`.

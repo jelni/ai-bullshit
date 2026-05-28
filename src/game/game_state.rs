@@ -16,4 +16,5 @@ pub enum GameState {
     ConfirmQuit,
     LevelEditor,
     LevelUp,
+    Crafting,
 }

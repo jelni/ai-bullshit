@@ -34,6 +34,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::SkillTree => draw_skill_tree(game, stdout)?,
         GameState::LevelEditor => draw_level_editor(game, stdout)?,
         GameState::LevelUp => draw_level_up(game, stdout)?,
+        GameState::Crafting => draw_crafting(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -131,6 +132,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Help",
         "Play Custom Level",
         "Level Editor",
+        "Crafting",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1114,6 +1116,21 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw resources
+    for (pos, res) in &game.resources {
+        if is_visible(pos.x, pos.y) {
+            let (color, symbol) = match res {
+                crate::game::Resource::Wood => (Color::Yellow, "🪵"),
+                crate::game::Resource::Iron => (Color::White, "🔗"),
+                crate::game::Resource::Gold => (Color::Yellow, "💰"),
+                crate::game::Resource::Diamond => (Color::Cyan, "💎"),
+            };
+            stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "{symbol}")?;
+        }
+    }
+
     // Draw food
     if is_visible(game.food.x, game.food.y) {
         stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
@@ -1615,6 +1632,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     draw_powerup_status(game, stdout)?;
 
+    let potions = game.stats.crafted_items.get(&crate::game::CraftableItem::SpeedPotion).copied().unwrap_or(0);
+    let walls = game.stats.crafted_items.get(&crate::game::CraftableItem::IronWall).copied().unwrap_or(0);
+    let apples = game.stats.crafted_items.get(&crate::game::CraftableItem::GoldenApple).copied().unwrap_or(0);
+    let swords = game.stats.crafted_items.get(&crate::game::CraftableItem::DiamondSword).copied().unwrap_or(0);
+
+    if potions > 0 || walls > 0 || apples > 0 || swords > 0 {
+        stdout.queue(cursor::MoveTo(0, game.height + 1))?;
+        stdout.queue(SetForegroundColor(Color::Cyan))?;
+        write!(stdout, "Items: [1]Potion: {potions} | [2]Wall: {walls} | [3]Apple: {apples} | [4]Sword: {swords}")?;
+    }
+
     Ok(())
 }
 
@@ -1828,4 +1856,63 @@ mod settings_tests {
         assert!(output.contains("> Theme: Dark <"), "Settings should indicate selected item");
         assert!(output.contains("Wrap Mode: Off"), "Settings should show Wrap Mode");
     }
+}
+
+fn draw_crafting<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "CRAFTING MENU";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let wood = game.stats.inventory.get(&crate::game::Resource::Wood).copied().unwrap_or(0);
+    let iron = game.stats.inventory.get(&crate::game::Resource::Iron).copied().unwrap_or(0);
+    let gold = game.stats.inventory.get(&crate::game::Resource::Gold).copied().unwrap_or(0);
+    let diamond = game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
+
+    let inv_str = format!("Inventory: 🪵 {wood} | 🔗 {iron} | 💰 {gold} | 💎 {diamond}");
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(inv_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{inv_str}")?;
+
+    let recipes = [
+        ("Speed Potion [3 Wood]", wood >= 3),
+        ("Iron Wall [3 Iron]", iron >= 3),
+        ("Golden Apple [5 Gold]", gold >= 5),
+        ("Diamond Sword [1 Diamond]", diamond >= 1),
+    ];
+
+    for (i, (text, can_craft)) in recipes.iter().enumerate() {
+        let color = if *can_craft { Color::Green } else { Color::DarkGrey };
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2).saturating_sub(2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {text} <")?;
+        } else {
+            stdout.queue(SetForegroundColor(color))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{text}")?;
+        }
+    }
+
+    let help = "Use Arrow Keys to select, SPACE to craft, Q to go back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    Ok(())
 }
