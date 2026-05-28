@@ -18,4 +18,5 @@ pub enum GameState {
     LevelUp,
     Crafting,
     BountyBoard,
+    PetHouse,
 }

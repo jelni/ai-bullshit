@@ -273,6 +273,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::LevelUp => handle_level_up_input(code, game),
         GameState::Crafting => handle_crafting_input(code, game),
         GameState::BountyBoard => handle_bounty_board_input(code, game),
+        GameState::PetHouse => handle_pet_house_input(code, game),
     };
 
     if should_continue {
@@ -461,6 +462,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             42 => {
+                game.state = GameState::PetHouse;
+                game.settings_selection = 0;
+            },
+            43 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -470,11 +475,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 42;
+                game.menu_selection = 43;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 42 {
+            if game.menu_selection < 43 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1171,6 +1176,57 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                     game.skin = skins[next_idx];
                 },
                 _ => {},
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_pet_house_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let pet_types = [
+                (crate::game::PetType::Dragon, 1000),
+                (crate::game::PetType::Fairy, 800),
+                (crate::game::PetType::Turtle, 600),
+                (crate::game::PetType::Mimic, 500),
+            ];
+
+            if let Some((p_type, cost)) = pet_types.get(game.settings_selection) {
+                if game.stats.unlocked_pets.contains(p_type) {
+                    // Equip or unequip
+                    if game.stats.equipped_pet == Some(*p_type) {
+                        game.stats.equipped_pet = None;
+                    } else {
+                        game.stats.equipped_pet = Some(*p_type);
+                    }
+                    game.save_stats();
+                    crate::game::beep();
+                } else if game.stats.coins >= *cost {
+                    // Buy
+                    game.stats.coins -= *cost;
+                    game.stats.unlocked_pets.push(*p_type);
+                    game.save_stats();
+                    crate::game::beep();
+                }
             }
         },
         _ => {},

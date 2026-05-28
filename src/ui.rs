@@ -36,6 +36,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::LevelUp => draw_level_up(game, stdout)?,
         GameState::Crafting => draw_crafting(game, stdout)?,
         GameState::BountyBoard => draw_bounty_board(game, stdout)?,
+        GameState::PetHouse => draw_pet_house(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -136,6 +137,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Level Editor",
         "Crafting",
         "Bounty Board",
+        "Pet House",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1346,6 +1348,19 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw pet
+    if let Some(pet) = &game.active_pet {
+        let (color, p_char) = match pet.p_type {
+            crate::game::PetType::Dragon => (Color::Red, 'D'),
+            crate::game::PetType::Fairy => (Color::Cyan, 'F'),
+            crate::game::PetType::Mimic => (Color::Yellow, 'M'),
+            crate::game::PetType::Turtle => (Color::Green, 'T'),
+        };
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(pet.location.x, pet.location.y))?;
+        write!(stdout, "{p_char}")?;
+    }
+
     // Draw ghost snake
     if let Some(ghost) = &game.ghost_snake {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
@@ -1987,6 +2002,77 @@ fn draw_crafting<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     stdout.queue(cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
         game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
+fn draw_pet_house<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "PET HOUSE";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 8,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let pets = [
+        ("Dragon (1000) - Shoots Lasers", crate::game::PetType::Dragon),
+        ("Fairy (800) - Spawns Food", crate::game::PetType::Fairy),
+        ("Turtle (600) - Spawns Powerups", crate::game::PetType::Turtle),
+        ("Mimic (500) - Generates Coins", crate::game::PetType::Mimic),
+    ];
+
+    for (i, (text, p_type)) in pets.iter().enumerate() {
+        let is_selected = i == game.settings_selection;
+
+        let prefix = if is_selected { "> " } else { "  " };
+        let suffix = if is_selected { " <" } else { "  " };
+
+        let owned = game.stats.unlocked_pets.contains(p_type);
+        let equipped = game.stats.equipped_pet == Some(*p_type);
+
+        let status = if equipped {
+            "[EQUIPPED]"
+        } else if owned {
+            "[OWNED]"
+        } else {
+            ""
+        };
+
+        let color = if is_selected {
+            Color::Yellow
+        } else if equipped {
+            Color::Green
+        } else if owned {
+            Color::White
+        } else {
+            Color::DarkGrey
+        };
+
+        let item_str = format!("{prefix}{text} {status}{suffix}");
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(item_str.len()).unwrap_or(0) / 2),
+            game.height / 2 - 3 + u16::try_from(i).unwrap_or(0),
+        ))?;
+        write!(stdout, "{item_str}")?;
+    }
+
+    let help = "Enter: Buy/Equip | Q/Esc: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 3,
     ))?;
     write!(stdout, "{help}")?;
 

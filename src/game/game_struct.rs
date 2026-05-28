@@ -10,6 +10,8 @@ pub struct Game {
     pub height: u16,
     pub wrap_mode: bool,
     pub snake: Snake,
+    pub active_pet: Option<crate::game::Pet>,
+    pub pet_history: std::collections::VecDeque<Point>,
     pub food: Point,
     pub bonus_food: Option<(Point, Instant)>,
     pub poison_food: Option<(Point, Instant)>,
@@ -203,6 +205,8 @@ impl Game {
             previous_state: None,
             auto_pilot: false,
             used_bot_this_session: false,
+            active_pet: None,
+            pet_history: std::collections::VecDeque::new(),
             autopilot_path: Vec::new(),
             p2_autopilot_path: Vec::new(),
             food_eaten_session: 0,
@@ -1715,6 +1719,11 @@ impl Game {
         self.last_obstacle_spawn_time = web_time::Instant::now();
         self.history.clear();
         self.particles.clear();
+        self.active_pet = self.stats.equipped_pet.map(|p_type| crate::game::Pet {
+            p_type,
+            location: self.snake.head(),
+        });
+        self.pet_history.clear();
         self.combo = 0;
         self.last_food_time = None;
         self.chat_log.clear();
@@ -2367,6 +2376,8 @@ impl Game {
     )]
     fn update_tick(&mut self) {
         self.save_history_state();
+        self.pet_history.push_front(self.snake.head());
+        self.manage_pet();
         if self.mode == GameMode::Vampire {
             if let Some(last_food) = self.last_food_time {
                 if last_food.elapsed() >= web_time::Duration::from_secs(15) {
@@ -5475,6 +5486,90 @@ impl Game {
             }
         } else {
             self.respawn();
+        }
+    }
+}
+
+impl Game {
+    fn manage_pet(&mut self) {
+        let pet_delay = self.snake.body.len() + 2;
+        if self.pet_history.len() > pet_delay {
+            self.pet_history.truncate(pet_delay + 1);
+            if let Some(pet) = &mut self.active_pet {
+                pet.location = self.pet_history.back().copied().unwrap_or(pet.location);
+
+                // Active pet abilities
+                let frame_count = self.history.len();
+                match pet.p_type {
+                    crate::game::PetType::Dragon => {
+                        if frame_count % 50 == 0 && !self.bosses.is_empty() {
+                            let boss = &self.bosses[0];
+                            self.lasers.push(crate::game::Laser {
+                                position: pet.location,
+                                player: 1,
+                                direction: match () {
+                                    _ if pet.location.x < boss.position.x => crate::snake::Direction::Right,
+                                    _ if pet.location.x > boss.position.x => crate::snake::Direction::Left,
+                                    _ if pet.location.y < boss.position.y => crate::snake::Direction::Down,
+                                    _ => crate::snake::Direction::Up,
+                                },
+                            });
+                        }
+                    },
+                    crate::game::PetType::Fairy => {
+                        if frame_count % 100 == 0 && self.bonus_food.is_none() {
+                            let avoid = |p: &Point| {
+                                self.obstacles.contains(p) || *p == self.food || self.snake.body.contains(p)
+                            };
+                            if let Some(pos) = Self::get_random_empty_point(
+                                self.width,
+                                self.height,
+                                &self.snake,
+                                avoid,
+                                &mut self.rng,
+                                self.safe_zone_margin,
+                            ) {
+                                self.bonus_food = Some((pos, web_time::Instant::now()));
+                            }
+                        }
+                    },
+                    crate::game::PetType::Mimic => {
+                        if frame_count % 150 == 0 {
+                            self.stats.coins += 5;
+                            crate::game::beep();
+                        }
+                    },
+                    crate::game::PetType::Turtle => {
+                        if frame_count % 200 == 0 && self.power_up.is_none() {
+                            let avoid = |p: &Point| {
+                                self.obstacles.contains(p) || *p == self.food || self.snake.body.contains(p)
+                            };
+                            if let Some(pos) = Self::get_random_empty_point(
+                                self.width,
+                                self.height,
+                                &self.snake,
+                                avoid,
+                                &mut self.rng,
+                                self.safe_zone_margin,
+                            ) {
+                                let p_types = [
+                                    crate::game::PowerUpType::SpeedBoost,
+                                    crate::game::PowerUpType::Invincibility,
+                                    crate::game::PowerUpType::ScoreMultiplier,
+                                    crate::game::PowerUpType::TimeFreeze,
+                                ];
+                                use rand::Rng;
+                                let p_type = p_types[self.rng.gen_range(0..p_types.len())];
+                                self.power_up = Some(crate::game::PowerUp {
+                                    p_type,
+                                    location: pos,
+                                    activation_time: None,
+                                });
+                            }
+                        }
+                    },
+                }
+            }
         }
     }
 }

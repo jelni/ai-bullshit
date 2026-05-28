@@ -5,6 +5,7 @@ use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::{
+    collections::VecDeque,
     collections::HashSet,
     fs::{self, File},
     io::{self, Read, Write},
@@ -78,6 +79,8 @@ pub use weather::*;
 pub mod resource;
 pub mod craftable_item;
 pub mod bounty;
+pub mod pet;
+pub use pet::{Pet, PetType};
 pub use resource::Resource;
 pub use craftable_item::CraftableItem;
 pub use bounty::{Bounty, BountyType};
