@@ -1461,7 +1461,7 @@ impl Game {
             | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
-            | GameMode::BattleRoyale => {
+            | GameMode::BattleRoyale | GameMode::Tron => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -1744,9 +1744,10 @@ impl Game {
         self.bots.clear();
         self.bots_autopilot_paths.clear();
 
-        if self.mode == GameMode::MassiveMultiplayer {
+        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron {
             let margin = self.safe_zone_margin;
-            for _ in 0..50 {
+            let count = if self.mode == GameMode::MassiveMultiplayer { 50 } else { 3 };
+            for _ in 0..count {
                 let avoid = |p: &Point| {
                     self.obstacles.contains(p)
                         || self.snake.body_map.contains_key(p)
@@ -1810,7 +1811,7 @@ impl Game {
             | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
-            | GameMode::BattleRoyale => {
+            | GameMode::BattleRoyale | GameMode::Tron => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -2039,7 +2040,7 @@ impl Game {
                     }
                 }
             }
-            if self.mode == GameMode::MassiveMultiplayer {
+            if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
                         let start = self.bots[i].head();
@@ -3949,9 +3950,9 @@ impl Game {
                         < self.powerup_duration()
                 })
         });
-        let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier);
+        let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier) || self.mode == GameMode::Tron;
         let mut p2_grow =
-            final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier));
+            final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier)) || self.mode == GameMode::Tron;
         self.check_poison_food_collision(final_head1, 1);
         if let Some(final_head2) = final_head2_opt {
             self.check_poison_food_collision(final_head2, 2);
@@ -3976,7 +3977,7 @@ impl Game {
             }
         }
         let mut bots_to_remove = std::collections::HashSet::new();
-        let mut bots_grow = vec![false; self.bots.len()];
+        let mut bots_grow = vec![self.mode == GameMode::Tron; self.bots.len()];
         for (i, final_head, hit_wall) in &final_bot_heads {
             if *hit_wall {
                 bots_to_remove.insert(*i);

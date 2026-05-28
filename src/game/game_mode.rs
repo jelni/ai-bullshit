@@ -33,4 +33,5 @@ pub enum GameMode {
     Flood,
     Vampire,
     Gravity,
+    Tron,
 }
