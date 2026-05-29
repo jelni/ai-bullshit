@@ -1,7 +1,7 @@
 use super::{
     Boss, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser, Meteor, Point,
     PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level, default_lives, default_skin,
-    default_wrap_mode,
+    default_wrap_mode, Companion,
 };
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -79,6 +79,8 @@ pub struct SaveState {
     pub level_up_options: Vec<InGameUpgrade>,
     #[serde(default)]
     pub level_up_selection: usize,
+    #[serde(default)]
+    pub companion: Option<Companion>,
 }
 
 #[must_use]

@@ -274,6 +274,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Crafting => handle_crafting_input(code, game),
         GameState::BountyBoard => handle_bounty_board_input(code, game),
         GameState::MerchantShop => handle_merchant_shop_input(code, game),
+        GameState::CompanionCamp => handle_companion_camp_input(code, game),
     };
 
     if should_continue {
@@ -462,6 +463,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             42 => {
+                game.state = GameState::CompanionCamp;
+                game.settings_selection = 0;
+            },
+            43 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -471,11 +476,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 42;
+                game.menu_selection = 43;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 42 {
+            if game.menu_selection < 43 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1236,6 +1241,60 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                 }
             },
             _ => {},
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_companion_camp_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 2;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 2 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let companion_type = match game.settings_selection {
+                0 => crate::game::CompanionType::Collector,
+                1 => crate::game::CompanionType::Fighter,
+                _ => crate::game::CompanionType::Healer,
+            };
+
+            let is_unlocked = game.stats.unlocked_companions.contains(&companion_type);
+
+            if is_unlocked {
+                // Equip or unequip
+                if game.stats.equipped_companion == Some(companion_type) {
+                    game.stats.equipped_companion = None;
+                } else {
+                    game.stats.equipped_companion = Some(companion_type);
+                }
+                game.save_stats();
+                crate::game::beep();
+            } else {
+                // Try to buy
+                let cost = 1000;
+                if game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.unlocked_companions.push(companion_type);
+                    game.stats.equipped_companion = Some(companion_type);
+                    game.save_stats();
+                    crate::game::beep();
+                }
+            }
         },
         _ => {},
     }

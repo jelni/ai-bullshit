@@ -37,6 +37,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Crafting => draw_crafting(game, stdout)?,
         GameState::BountyBoard => draw_bounty_board(game, stdout)?,
         GameState::MerchantShop => draw_merchant_shop(game, stdout)?,
+        GameState::CompanionCamp => draw_companion_camp(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -137,6 +138,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Level Editor",
         "Crafting",
         "Bounty Board",
+        "Companion Camp",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1170,12 +1172,12 @@ fn draw_entities<W: Write>(
     }
 
     // Draw Black Hole
-    if let Some(bh) = game.black_hole
-        && is_visible(bh.x, bh.y)
-    {
-        stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
-        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-        write!(stdout, "O")?;
+    if let Some(bh) = game.black_hole {
+        if is_visible(bh.x, bh.y) {
+            stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            write!(stdout, "O")?;
+        }
     }
 
     // Draw Portals
@@ -1194,12 +1196,12 @@ fn draw_entities<W: Write>(
     }
 
     // Draw Decoy
-    if let Some((decoy_pos, _)) = game.decoy
-        && is_visible(decoy_pos.x, decoy_pos.y)
-    {
-        stdout.queue(cursor::MoveTo(decoy_pos.x, decoy_pos.y))?;
-        stdout.queue(SetForegroundColor(Color::Magenta))?;
-        write!(stdout, "D")?;
+    if let Some((decoy_pos, _)) = game.decoy {
+        if is_visible(decoy_pos.x, decoy_pos.y) {
+            stdout.queue(cursor::MoveTo(decoy_pos.x, decoy_pos.y))?;
+            stdout.queue(SetForegroundColor(Color::Magenta))?;
+            write!(stdout, "D")?;
+        }
     }
 
     // Draw Meteors
@@ -1285,37 +1287,36 @@ fn draw_entities<W: Write>(
     }
 
     // Draw merchant
-    if let Some(merchant_p) = game.merchant
-        && is_visible(merchant_p.x, merchant_p.y) {
+    if let Some(merchant_p) = game.merchant {
+        if is_visible(merchant_p.x, merchant_p.y) {
             stdout.queue(cursor::MoveTo(merchant_p.x, merchant_p.y))?;
             stdout.queue(SetForegroundColor(Color::Magenta))?;
             write!(stdout, "$")?;
         }
+    }
 
     // Draw bonus food
-    if let Some((bonus_p, _)) = game.bonus_food
-        && is_visible(bonus_p.x, bonus_p.y)
-    {
-        stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
-        stdout.queue(SetForegroundColor(Color::Yellow))?;
-        write!(stdout, "★")?;
+    if let Some((bonus_p, _)) = game.bonus_food {
+        if is_visible(bonus_p.x, bonus_p.y) {
+            stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            write!(stdout, "★")?;
+        }
     }
 
     // Draw poison food
-    if let Some((poison_p, _)) = game.poison_food
-        && is_visible(poison_p.x, poison_p.y)
-    {
-        stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
-        stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
-        write!(stdout, "X")?;
+    if let Some((poison_p, _)) = game.poison_food {
+        if is_visible(poison_p.x, poison_p.y) {
+            stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+            write!(stdout, "X")?;
+        }
     }
 
-    if let Some(power_up) = &game.power_up
-        && power_up.activation_time.is_none()
-        && is_visible(power_up.location.x, power_up.location.y)
-    {
-        stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
-        match power_up.p_type {
+    if let Some(power_up) = &game.power_up {
+        if power_up.activation_time.is_none() && is_visible(power_up.location.x, power_up.location.y) {
+            stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
+            match power_up.p_type {
             crate::game::PowerUpType::ExtraLife => {
                 stdout.queue(SetForegroundColor(Color::Magenta))?;
                 write!(stdout, "♥")?;
@@ -1352,6 +1353,21 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
             },
+        }
+        }
+    }
+
+    // Draw companion
+    if let Some(comp) = &game.companion {
+        if is_visible(comp.position.x, comp.position.y) {
+            stdout.queue(cursor::MoveTo(comp.position.x, comp.position.y))?;
+            let (color, symbol) = match comp.kind {
+                crate::game::CompanionType::Collector => (Color::Yellow, 'C'),
+                crate::game::CompanionType::Fighter => (Color::Red, 'F'),
+                crate::game::CompanionType::Healer => (Color::Green, 'H'),
+            };
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "{symbol}")?;
         }
     }
 
@@ -1572,10 +1588,9 @@ fn draw_base_status<W: Write>(
 }
 
 fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    if let Some(power_up) = &game.power_up
-        && let Some(activation_time) = power_up.activation_time
-    {
-        let elapsed = web_time::SystemTime::now()
+    if let Some(power_up) = &game.power_up {
+        if let Some(activation_time) = power_up.activation_time {
+            let elapsed = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs()
@@ -1600,8 +1615,9 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 crate::game::PowerUpType::Emp => "Emp",
                 crate::game::PowerUpType::Nuke => "Nuke",
             };
-            let power_up_msg = format!(" | {power_up_name}: {remaining}s");
-            write!(stdout, "{power_up_msg}")?;
+                let power_up_msg = format!(" | {power_up_name}: {remaining}s");
+                write!(stdout, "{power_up_msg}")?;
+            }
         }
     }
     Ok(())
@@ -2045,6 +2061,78 @@ fn draw_merchant_shop<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let help = "Up/Down: Select | Space/Enter: Buy | Q/Esc: Leave";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
+fn draw_companion_camp<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "COMPANION CAMP";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    let items = [
+        (crate::game::CompanionType::Collector, "Collector [Collects resources/food]"),
+        (crate::game::CompanionType::Fighter, "Fighter [Shoots lasers at bosses]"),
+        (crate::game::CompanionType::Healer, "Healer [Drops Extra Lives periodically]"),
+    ];
+
+    for (i, (comp_type, desc)) in items.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_companions.contains(comp_type);
+        let is_equipped = game.stats.equipped_companion == Some(*comp_type);
+
+        let prefix = if is_equipped {
+            "[EQUIPPED]"
+        } else if is_unlocked {
+            "[OWNED]"
+        } else {
+            "[Cost: 1000c]"
+        };
+
+        let display_text = format!("{prefix} {desc}");
+
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2).saturating_sub(2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {display_text} <")?;
+        } else {
+            let color = if is_equipped {
+                Color::Green
+            } else if is_unlocked {
+                Color::White
+            } else {
+                Color::DarkGrey
+            };
+            stdout.queue(SetForegroundColor(color))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{display_text}")?;
+        }
+    }
+
+    let help = "Up/Down: Select | Enter: Buy/Equip | Q: Back";
     stdout.queue(SetForegroundColor(Color::DarkGrey))?;
     stdout.queue(cursor::MoveTo(
         (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
