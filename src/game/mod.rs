@@ -78,6 +78,8 @@ pub use weather::*;
 pub mod resource;
 pub mod craftable_item;
 pub mod bounty;
+pub mod companion;
 pub use resource::Resource;
 pub use craftable_item::CraftableItem;
 pub use bounty::{Bounty, BountyType};
+pub use companion::{Companion, CompanionType};

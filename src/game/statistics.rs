@@ -1,4 +1,4 @@
-use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem, Bounty};
+use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem, Bounty, CompanionType};
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -33,4 +33,8 @@ pub struct Statistics {
     pub active_bounty: Option<Bounty>,
     #[serde(default)]
     pub completed_bounties: u32,
+    #[serde(default)]
+    pub unlocked_companions: Vec<CompanionType>,
+    #[serde(default)]
+    pub equipped_companion: Option<CompanionType>,
 }

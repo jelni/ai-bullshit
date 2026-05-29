@@ -1,5 +1,5 @@
 use super::{
-    Boss, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake, Weather,
+    Boss, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake, Weather, Companion,
 };
 #[derive(Clone)]
 pub struct HistoryState {
@@ -36,4 +36,5 @@ pub struct HistoryState {
     pub in_game_upgrades: std::collections::HashMap<InGameUpgrade, u32>,
     pub level_up_options: Vec<InGameUpgrade>,
     pub level_up_selection: usize,
+    pub companion: Option<Companion>,
 }

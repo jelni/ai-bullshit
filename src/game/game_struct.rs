@@ -2,7 +2,7 @@ use super::{
     AStarState, Achievement, Boss, BossType, Difficulty, Direction, Duration, File, GameMode,
     GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant, Laser, Meteor, Particle, Point, PowerUp,
     PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
-    default_unlocked_themes, fs, io, Resource
+    default_unlocked_themes, fs, io, Resource, Companion, CompanionType
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
@@ -77,6 +77,7 @@ pub struct Game {
     pub level_up_selection: usize,
     pub turrets: Vec<Turret>,
     pub resources: std::collections::HashMap<Point, Resource>,
+    pub companion: Option<Companion>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -244,6 +245,7 @@ impl Game {
             level_up_selection: 0,
             turrets: Vec::new(),
             resources: std::collections::HashMap::new(),
+            companion: None,
         }
     }
     #[must_use]
@@ -452,6 +454,7 @@ impl Game {
             in_game_upgrades: self.in_game_upgrades.clone(),
             level_up_options: self.level_up_options.clone(),
             level_up_selection: self.level_up_selection,
+            companion: self.companion.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -555,6 +558,7 @@ impl Game {
                 self.in_game_upgrades = state.in_game_upgrades;
                 self.level_up_options = state.level_up_options;
                 self.level_up_selection = state.level_up_selection;
+                self.companion = state.companion;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -1746,6 +1750,21 @@ impl Game {
         self.bots.clear();
         self.bots_autopilot_paths.clear();
 
+        if let Some(companion_type) = self.stats.equipped_companion {
+            self.companion = Some(Companion {
+                position: Point {
+                    x: start_x.saturating_sub(1).max(1),
+                    y: start_y.saturating_sub(1).max(1),
+                },
+                kind: companion_type,
+                move_timer: 0,
+                action_timer: 0,
+                path: Vec::new(),
+            });
+        } else {
+            self.companion = None;
+        }
+
         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron {
             let margin = self.safe_zone_margin;
             let count = if self.mode == GameMode::MassiveMultiplayer { 50 } else { 3 };
@@ -2176,6 +2195,7 @@ impl Game {
             self.in_game_upgrades = state.in_game_upgrades;
             self.level_up_options = state.level_up_options;
             self.level_up_selection = state.level_up_selection;
+            self.companion = state.companion;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2249,6 +2269,7 @@ impl Game {
             in_game_upgrades: self.in_game_upgrades.clone(),
             level_up_options: self.level_up_options.clone(),
             level_up_selection: self.level_up_selection,
+            companion: self.companion.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2353,6 +2374,124 @@ impl Game {
             }
         }
     }
+    #[expect(clippy::too_many_lines, reason = "manage_companion naturally requires many lines")]
+    fn manage_companion(&mut self) {
+        let mut spawn_lasers = Vec::new();
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+
+        if let Some(mut comp) = self.companion.take() {
+            comp.move_timer += 1;
+            comp.action_timer += 1;
+
+            if comp.move_timer >= 2 {
+                comp.move_timer = 0;
+                let target = match comp.kind {
+                    CompanionType::Collector => {
+                        let mut targets = vec![self.food];
+                        if let Some((bp, _)) = self.bonus_food {
+                            targets.push(bp);
+                        }
+                        for p in self.resources.keys() {
+                            targets.push(*p);
+                        }
+                        // Find closest
+                        let mut best_target = self.food;
+                        let mut min_dist = u16::MAX;
+                        for t in targets {
+                            let dist = comp.position.x.abs_diff(t.x).saturating_add(comp.position.y.abs_diff(t.y));
+                            if dist < min_dist {
+                                min_dist = dist;
+                                best_target = t;
+                            }
+                        }
+                        best_target
+                    },
+                    CompanionType::Fighter | CompanionType::Healer => self.snake.head(),
+                };
+
+                // We use bfs_pathfind directly for companions so they don't get restricted by 'neck' turns
+                if let Some(dir) = self.bfs_pathfind(comp.position, target) {
+                    let next_pos = Self::calculate_next_head_dir(comp.position, dir);
+                    if next_pos.x > margin
+                        && next_pos.x < self.width - 1 - margin
+                        && next_pos.y > margin
+                        && next_pos.y < self.height - 1 - margin
+                        && !self.obstacles.contains(&next_pos)
+                    {
+                        comp.position = next_pos;
+                    }
+                }
+            }
+
+            match comp.kind {
+                CompanionType::Collector => {
+                    if comp.position == self.food {
+                        self.process_food_collision(comp.position, false);
+                    }
+                    if let Some((bp, _)) = self.bonus_food {
+                        if comp.position == bp {
+                            self.check_bonus_food_collision(comp.position, false);
+                        }
+                    }
+                    if self.resources.contains_key(&comp.position) {
+                        self.process_resource_collision(comp.position);
+                    }
+                },
+                CompanionType::Fighter => {
+                    if comp.action_timer >= 15 {
+                        comp.action_timer = 0;
+                        if let Some(boss) = self.bosses.first() {
+                            let dx = i32::from(boss.position.x) - i32::from(comp.position.x);
+                            let dy = i32::from(boss.position.y) - i32::from(comp.position.y);
+                            let dir = if dx.abs() > dy.abs() {
+                                if dx > 0 { Direction::Right } else { Direction::Left }
+                            } else if dy > 0 {
+                                Direction::Down
+                            } else {
+                                Direction::Up
+                            };
+                            let laser_pos = Self::calculate_next_head_dir(comp.position, dir);
+                            if laser_pos.x > margin
+                                && laser_pos.x < self.width - 1 - margin
+                                && laser_pos.y > margin
+                                && laser_pos.y < self.height - 1 - margin
+                            {
+                                spawn_lasers.push(Laser {
+                                    position: laser_pos,
+                                    direction: dir,
+                                    player: 1, // acts as player 1 laser
+                                });
+                            }
+                        }
+                    }
+                },
+                CompanionType::Healer => {
+                    if comp.action_timer >= 100 {
+                        comp.action_timer = 0;
+                        if self.lives < 3 {
+                            self.lives += 1;
+                            self.spawn_particles(
+                                f32::from(comp.position.x),
+                                f32::from(comp.position.y),
+                                20,
+                                crate::color::Color::Magenta,
+                                '♥',
+                            );
+                        }
+                    }
+                },
+            }
+
+            self.companion = Some(comp);
+        }
+
+        self.lasers.extend(spawn_lasers);
+    }
+
     pub fn update(&mut self) {
         if self.state != GameState::Playing {
             return;
@@ -3612,6 +3751,7 @@ impl Game {
         self.manage_meteors();
         self.manage_goblin();
         self.manage_turrets();
+        self.manage_companion();
         self.apply_magnet();
         self.apply_gravity();
 
