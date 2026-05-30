@@ -284,6 +284,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::ClassSelect => handle_class_select_input(code, game),
         GameState::Equipment => handle_equipment_input(code, game),
         GameState::Casino => handle_casino_input(code, game),
+        GameState::StockMarket => handle_stock_market_input(code, game),
     };
 
     if should_continue {
@@ -496,6 +497,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             48 => {
+                game.state = GameState::StockMarket;
+                game.settings_selection = 0;
+            },
+            49 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -505,11 +510,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 48;
+                game.menu_selection = 49;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 48 {
+            if game.menu_selection < 49 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1501,6 +1506,69 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
         _ => {},
     }
     game.save_stats();
+    true
+}
+
+fn handle_stock_market_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ' | 'b' | 'B') => {
+            let amount = if matches!(code, KeyCode::Char('b' | 'B')) { 10 } else { 1 };
+            let stock = match game.settings_selection {
+                0 => crate::game::Stock::SnakeCorp,
+                1 => crate::game::Stock::GoblinInc,
+                2 => crate::game::Stock::BossDynamics,
+                3 => crate::game::Stock::LaserTech,
+                _ => return true,
+            };
+
+            let price = game.stats.stock_prices.get(&stock).copied().unwrap_or(100);
+            let cost = price * amount;
+
+            if game.stats.coins >= cost {
+                game.stats.coins -= cost;
+                *game.stats.portfolio.entry(stock).or_insert(0) += amount;
+                crate::game::beep();
+                game.save_stats();
+            }
+        },
+        KeyCode::Char('d' | 'D' | 'l' | 'L') => {
+            let amount = if matches!(code, KeyCode::Char('d' | 'D')) { 10 } else { 1 };
+            let stock = match game.settings_selection {
+                0 => crate::game::Stock::SnakeCorp,
+                1 => crate::game::Stock::GoblinInc,
+                2 => crate::game::Stock::BossDynamics,
+                3 => crate::game::Stock::LaserTech,
+                _ => return true,
+            };
+
+            let owned = game.stats.portfolio.get(&stock).copied().unwrap_or(0);
+            if owned >= amount {
+                let price = game.stats.stock_prices.get(&stock).copied().unwrap_or(100);
+                *game.stats.portfolio.entry(stock).or_insert(0) -= amount;
+                game.stats.coins += price * amount;
+                crate::game::beep();
+                game.save_stats();
+            }
+        },
+        _ => {},
+    }
     true
 }
 
