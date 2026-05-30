@@ -439,19 +439,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             32 => {
+                game.mode = game::GameMode::Farmstead;
+                game.reset();
+            },
+            33 => {
                 let _ = game.load_game();
             },
-            33 => game.state = GameState::Settings,
-            34 => game.state = GameState::NftShop,
-            35 => game.state = GameState::SkillTree,
-            36 => game.state = GameState::Stats,
-            37 => game.state = GameState::Achievements,
-            38 => game.state = GameState::Help,
-            39 => {
+            34 => game.state = GameState::Settings,
+            35 => game.state = GameState::NftShop,
+            36 => game.state = GameState::SkillTree,
+            37 => game.state = GameState::Stats,
+            38 => game.state = GameState::Achievements,
+            39 => game.state = GameState::Help,
+            40 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            40 => {
+            41 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -459,19 +463,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            41 => {
+            42 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            42 => {
+            43 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            43 => {
+            44 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            44 => {
+            45 => {
+                game.state = GameState::ClassSelect;
+                game.settings_selection = 0;
+            },
+            46 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -481,11 +489,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 44;
+                game.menu_selection = 46;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 44 {
+            if game.menu_selection < 46 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -560,40 +568,60 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
             0 => {
                 // Speed Potion: 3 Wood
-                let wood = game.stats.inventory.get(&crate::game::Resource::Wood).copied().unwrap_or(0);
+                let wood =
+                    game.stats.inventory.get(&crate::game::Resource::Wood).copied().unwrap_or(0);
                 if wood >= 3 {
                     *game.stats.inventory.entry(crate::game::Resource::Wood).or_insert(0) -= 3;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::SpeedPotion).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::SpeedPotion)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
             },
             1 => {
                 // Iron Wall: 3 Iron
-                let iron = game.stats.inventory.get(&crate::game::Resource::Iron).copied().unwrap_or(0);
+                let iron =
+                    game.stats.inventory.get(&crate::game::Resource::Iron).copied().unwrap_or(0);
                 if iron >= 3 {
                     *game.stats.inventory.entry(crate::game::Resource::Iron).or_insert(0) -= 3;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::IronWall).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::IronWall)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
             },
             2 => {
                 // Golden Apple: 5 Gold
-                let gold = game.stats.inventory.get(&crate::game::Resource::Gold).copied().unwrap_or(0);
+                let gold =
+                    game.stats.inventory.get(&crate::game::Resource::Gold).copied().unwrap_or(0);
                 if gold >= 5 {
                     *game.stats.inventory.entry(crate::game::Resource::Gold).or_insert(0) -= 5;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::GoldenApple).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::GoldenApple)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
             },
             3 => {
                 // Diamond Sword: 1 Diamond
-                let diamond = game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
+                let diamond =
+                    game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
                 if diamond >= 1 {
                     *game.stats.inventory.entry(crate::game::Resource::Diamond).or_insert(0) -= 1;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::DiamondSword).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::DiamondSword)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
@@ -625,14 +653,12 @@ fn handle_level_editor_input(code: KeyCode, game: &mut Game) -> bool {
                 cursor.y += 1;
             }
         },
-        KeyCode::Char('a' | 'A') | KeyCode::Left =>
-        {
+        KeyCode::Char('a' | 'A') | KeyCode::Left => {
             if game.editor_cursor.as_ref().is_some_and(|c| c.x > 1) {
                 game.editor_cursor.as_mut().unwrap().x -= 1;
             }
         },
-        KeyCode::Char('d' | 'D') | KeyCode::Right =>
-        {
+        KeyCode::Char('d' | 'D') | KeyCode::Right => {
             if game.editor_cursor.as_ref().is_some_and(|c| c.x < game.width - 2) {
                 game.editor_cursor.as_mut().unwrap().x += 1;
             }
@@ -828,9 +854,18 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Char('1') => {
-            let count = game.stats.crafted_items.get(&crate::game::CraftableItem::SpeedPotion).copied().unwrap_or(0);
+            let count = game
+                .stats
+                .crafted_items
+                .get(&crate::game::CraftableItem::SpeedPotion)
+                .copied()
+                .unwrap_or(0);
             if count > 0 {
-                *game.stats.crafted_items.get_mut(&crate::game::CraftableItem::SpeedPotion).unwrap() -= 1;
+                *game
+                    .stats
+                    .crafted_items
+                    .get_mut(&crate::game::CraftableItem::SpeedPotion)
+                    .unwrap() -= 1;
                 game.power_up = Some(crate::game::PowerUp {
                     p_type: crate::game::PowerUpType::SpeedBoost,
                     location: game.snake.head(),
@@ -845,9 +880,18 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Char('2') => {
-            let count = game.stats.crafted_items.get(&crate::game::CraftableItem::IronWall).copied().unwrap_or(0);
+            let count = game
+                .stats
+                .crafted_items
+                .get(&crate::game::CraftableItem::IronWall)
+                .copied()
+                .unwrap_or(0);
             if count > 0 {
-                *game.stats.crafted_items.get_mut(&crate::game::CraftableItem::IronWall).unwrap() -= 1;
+                *game
+                    .stats
+                    .crafted_items
+                    .get_mut(&crate::game::CraftableItem::IronWall)
+                    .unwrap() -= 1;
                 if let Some(tail) = game.snake.body.back() {
                     let mut p = *tail;
                     // Put it slightly behind
@@ -865,20 +909,68 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Char('3') => {
-            let count = game.stats.crafted_items.get(&crate::game::CraftableItem::GoldenApple).copied().unwrap_or(0);
+            let count = game
+                .stats
+                .crafted_items
+                .get(&crate::game::CraftableItem::GoldenApple)
+                .copied()
+                .unwrap_or(0);
             if count > 0 {
-                *game.stats.crafted_items.get_mut(&crate::game::CraftableItem::GoldenApple).unwrap() -= 1;
+                *game
+                    .stats
+                    .crafted_items
+                    .get_mut(&crate::game::CraftableItem::GoldenApple)
+                    .unwrap() -= 1;
                 game.lives += 1;
                 crate::game::beep();
             }
         },
         KeyCode::Char('4') => {
-            let count = game.stats.crafted_items.get(&crate::game::CraftableItem::DiamondSword).copied().unwrap_or(0);
+            let count = game
+                .stats
+                .crafted_items
+                .get(&crate::game::CraftableItem::DiamondSword)
+                .copied()
+                .unwrap_or(0);
             if count > 0 {
-                *game.stats.crafted_items.get_mut(&crate::game::CraftableItem::DiamondSword).unwrap() -= 1;
+                *game
+                    .stats
+                    .crafted_items
+                    .get_mut(&crate::game::CraftableItem::DiamondSword)
+                    .unwrap() -= 1;
                 if !game.bosses.is_empty() {
                     // Deal massive damage to the first boss
                     game.bosses[0].health = game.bosses[0].health.saturating_sub(10);
+                    crate::game::beep();
+                }
+            }
+        },
+        KeyCode::Char('5') => {
+            if game.mode == game::game_mode::GameMode::Farmstead && game.stats.coins >= 10 {
+                let head = game.snake.head();
+                // Plant behind the head
+                let p = crate::game::Game::calculate_next_head_dir(
+                    head,
+                    match game.snake.direction {
+                        crate::snake::Direction::Up => crate::snake::Direction::Down,
+                        crate::snake::Direction::Down => crate::snake::Direction::Up,
+                        crate::snake::Direction::Left => crate::snake::Direction::Right,
+                        crate::snake::Direction::Right => crate::snake::Direction::Left,
+                    },
+                );
+                if p.x > 0
+                    && p.x < game.width - 1
+                    && p.y > 0
+                    && p.y < game.height - 1
+                    && !game.obstacles.contains(&p)
+                    && !game.crops.iter().any(|c| c.position == p)
+                {
+                    game.stats.coins -= 10;
+                    game.crops.push(crate::game::Crop {
+                        position: p,
+                        growth_stage: 0,
+                        timer: 0,
+                    });
                     crate::game::beep();
                 }
             }
@@ -982,7 +1074,7 @@ fn handle_level_up_input(code: KeyCode, game: &mut Game) -> bool {
             } else if !game.level_up_options.is_empty() {
                 game.level_up_selection = game.level_up_options.len() - 1;
             }
-        }
+        },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
             if !game.level_up_options.is_empty() {
                 if game.level_up_selection < game.level_up_options.len() - 1 {
@@ -991,9 +1083,11 @@ fn handle_level_up_input(code: KeyCode, game: &mut Game) -> bool {
                     game.level_up_selection = 0;
                 }
             }
-        }
+        },
         KeyCode::Enter | KeyCode::Char(' ') => {
-            if !game.level_up_options.is_empty() && game.level_up_selection < game.level_up_options.len() {
+            if !game.level_up_options.is_empty()
+                && game.level_up_selection < game.level_up_options.len()
+            {
                 let chosen_upgrade = game.level_up_options[game.level_up_selection];
                 *game.in_game_upgrades.entry(chosen_upgrade).or_insert(0) += 1;
                 if chosen_upgrade == crate::game::InGameUpgrade::Turret {
@@ -1001,8 +1095,8 @@ fn handle_level_up_input(code: KeyCode, game: &mut Game) -> bool {
                 }
             }
             game.state = GameState::Playing;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     true
 }
@@ -1222,7 +1316,11 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                 // Diamond Sword [Cost: 1000]
                 if game.stats.coins >= 1000 {
                     game.stats.coins -= 1000;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::DiamondSword).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::DiamondSword)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
@@ -1231,7 +1329,11 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                 // Speed Potion [Cost: 300]
                 if game.stats.coins >= 300 {
                     game.stats.coins -= 300;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::SpeedPotion).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::SpeedPotion)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }
@@ -1240,7 +1342,11 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                 // Iron Wall [Cost: 100]
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
-                    *game.stats.crafted_items.entry(crate::game::CraftableItem::IronWall).or_insert(0) += 1;
+                    *game
+                        .stats
+                        .crafted_items
+                        .entry(crate::game::CraftableItem::IronWall)
+                        .or_insert(0) += 1;
                     game.save_stats();
                     crate::game::beep();
                 }

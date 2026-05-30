@@ -49,8 +49,14 @@ fn test_juggernaut_destroys_obstacles() {
     });
     game.snake.direction = Direction::Right;
 
-    let initial_pos = Point { x: 10, y: 5 };
-    let obstacle_pos = Point { x: 9, y: 5 };
+    let initial_pos = Point {
+        x: 10,
+        y: 5,
+    };
+    let obstacle_pos = Point {
+        x: 9,
+        y: 5,
+    };
 
     game.obstacles.insert(obstacle_pos);
 
@@ -71,7 +77,10 @@ fn test_juggernaut_destroys_obstacles() {
 
     let current_pos = game.bosses[0].position;
     assert_eq!(current_pos, obstacle_pos, "Juggernaut boss should move into the obstacle");
-    assert!(!game.obstacles.contains(&obstacle_pos), "Juggernaut boss should have destroyed the obstacle");
+    assert!(
+        !game.obstacles.contains(&obstacle_pos),
+        "Juggernaut boss should have destroyed the obstacle"
+    );
 }
 
 #[test]

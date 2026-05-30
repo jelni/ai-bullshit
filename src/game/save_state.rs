@@ -1,7 +1,7 @@
 use super::{
-    Boss, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser, Meteor, Point,
-    PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level, default_lives, default_skin,
-    default_wrap_mode, Companion,
+    Boss, Companion, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser,
+    Meteor, Point, PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level,
+    default_lives, default_skin, default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {

@@ -1,4 +1,7 @@
-use super::{Achievement, Deserialize, Serialize, Theme, default_elo, default_unlocked_themes, Resource, CraftableItem, Bounty, CompanionType, HeroClass};
+use super::{
+    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, HeroClass, Resource, Serialize,
+    Theme, default_elo, default_unlocked_themes,
+};
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,

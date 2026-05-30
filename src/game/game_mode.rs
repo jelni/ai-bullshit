@@ -35,4 +35,5 @@ pub enum GameMode {
     Gravity,
     Tron,
     Zombie,
+    Farmstead,
 }
