@@ -1455,7 +1455,8 @@ impl Game {
             | GameMode::Mirror
             | GameMode::Flood
             | GameMode::Vampire
-            | GameMode::Gravity => {
+            | GameMode::Gravity
+            | GameMode::Zombie => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1772,9 +1773,9 @@ impl Game {
             self.companion = None;
         }
 
-        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron {
+        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron || self.mode == GameMode::Zombie {
             let margin = self.safe_zone_margin;
-            let count = if self.mode == GameMode::MassiveMultiplayer { 50 } else { 3 };
+            let count = if self.mode == GameMode::MassiveMultiplayer { 50 } else if self.mode == GameMode::Tron { 3 } else { 1 };
             for _ in 0..count {
                 let avoid = |p: &Point| {
                     self.obstacles.contains(p)
@@ -1824,7 +1825,8 @@ impl Game {
             | GameMode::Mirror
             | GameMode::Flood
             | GameMode::Vampire
-            | GameMode::Gravity => {
+            | GameMode::Gravity
+            | GameMode::Zombie => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2068,22 +2070,29 @@ impl Game {
                     }
                 }
             }
-            if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron {
+            if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron || self.mode == GameMode::Zombie {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
                         let start = self.bots[i].head();
                         let current_dir = self.bots[i].direction;
-                        let mut targets = vec![self.food];
-                        if let Some((bf_p, _)) = self.bonus_food {
-                            targets.push(bf_p);
-                        }
-                        if let Some(pu) = &self.power_up
-                            && pu.activation_time.is_none()
-                        {
-                            targets.push(pu.location);
-                        }
-                        if let Some(goblin) = &self.goblin {
-                            targets.push(goblin.position);
+                        let mut targets = if self.mode == GameMode::Zombie {
+                            vec![self.snake.head()]
+                        } else {
+                            vec![self.food]
+                        };
+
+                        if self.mode != GameMode::Zombie {
+                            if let Some((bf_p, _)) = self.bonus_food {
+                                targets.push(bf_p);
+                            }
+                            if let Some(pu) = &self.power_up
+                                && pu.activation_time.is_none()
+                            {
+                                targets.push(pu.location);
+                            }
+                            if let Some(goblin) = &self.goblin {
+                                targets.push(goblin.position);
+                            }
                         }
                         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 4) {
                             self.bots_autopilot_paths[i] = path;
@@ -4676,6 +4685,28 @@ impl Game {
         ) {
             self.food = new_food;
             self.gain_xp(1);
+
+            if self.mode == GameMode::Zombie {
+                let margin = self.safe_zone_margin;
+                let bot_avoid = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    bot_avoid,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.bots.push(Snake::new(pos));
+                    self.bots_autopilot_paths.push(Vec::new());
+                }
+            }
+
             true
         } else {
             self.gain_xp(1);
