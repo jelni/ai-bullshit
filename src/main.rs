@@ -1315,11 +1315,11 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
             if game.settings_selection > 0 {
                 game.settings_selection -= 1;
             } else {
-                game.settings_selection = 4;
+                game.settings_selection = 5;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.settings_selection < 4 {
+            if game.settings_selection < 5 {
                 game.settings_selection += 1;
             } else {
                 game.settings_selection = 0;
@@ -1363,6 +1363,15 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                 }
             },
             4 => {
+                if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Necromancer) {
+                    game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
+                } else if game.stats.coins >= 500 {
+                    game.stats.coins -= 500;
+                    game.stats.unlocked_classes.push(crate::game::HeroClass::Necromancer);
+                    game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
+                }
+            },
+            5 => {
                 game.stats.equipped_class = None;
             },
             _ => {},

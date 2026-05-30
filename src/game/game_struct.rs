@@ -3166,6 +3166,17 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
+                            if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                                self.companion = Some(Companion {
+                                    position: boss.position,
+                                    kind: crate::game::CompanionType::Fighter,
+                                    move_timer: 0,
+                                    action_timer: 0,
+                                    path: Vec::new(),
+                                });
+                                crate::game::beep();
+                            }
+
                             if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                 let half_max = boss.max_health / 2;
                                 let child1_pos = Point {
@@ -3477,6 +3488,18 @@ impl Game {
                     let boss_health = self.bosses[i].health;
                     if boss_health == 0 {
                         let dead_boss = self.bosses.remove(i);
+
+                        if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                            self.companion = Some(Companion {
+                                position: dead_boss.position,
+                                kind: crate::game::CompanionType::Fighter,
+                                move_timer: 0,
+                                action_timer: 0,
+                                path: Vec::new(),
+                            });
+                            crate::game::beep();
+                        }
+
                         if dead_boss.kind == BossType::Splitter && dead_boss.max_health > 5 {
                             let half_max = dead_boss.max_health / 2;
                             let child1_pos = Point {
@@ -3622,6 +3645,16 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
+                         if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                            self.companion = Some(Companion {
+                                position: boss.position,
+                                kind: crate::game::CompanionType::Fighter,
+                                move_timer: 0,
+                                action_timer: 0,
+                                path: Vec::new(),
+                            });
+                            crate::game::beep();
+                         }
                          self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                          self.score += 100;
                          self.spawn_particles(
@@ -4032,6 +4065,17 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
+                                    if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                                        self.companion = Some(Companion {
+                                            position: boss.position,
+                                            kind: crate::game::CompanionType::Fighter,
+                                            move_timer: 0,
+                                            action_timer: 0,
+                                            path: Vec::new(),
+                                        });
+                                        crate::game::beep();
+                                    }
+
                                     if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                         let half_max = boss.max_health / 2;
                                         let child1_pos = Point {

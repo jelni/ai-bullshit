@@ -8,4 +8,5 @@ pub enum HeroClass {
     Mage,
     Rogue,
     Paladin,
+    Necromancer,
 }
