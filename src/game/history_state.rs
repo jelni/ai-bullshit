@@ -38,4 +38,5 @@ pub struct HistoryState {
     pub level_up_options: Vec<InGameUpgrade>,
     pub level_up_selection: usize,
     pub companion: Option<Companion>,
+    pub equipment_boxes: Vec<Point>,
 }

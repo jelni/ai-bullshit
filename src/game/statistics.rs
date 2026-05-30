@@ -1,5 +1,5 @@
 use super::{
-    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, HeroClass, Resource, Serialize,
+    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, HeroClass, Resource, Equipment, Serialize,
     Theme, default_elo, default_unlocked_themes,
 };
 #[derive(Serialize, Deserialize, Default)]
@@ -44,4 +44,8 @@ pub struct Statistics {
     pub unlocked_classes: Vec<HeroClass>,
     #[serde(default)]
     pub equipped_class: Option<HeroClass>,
+    #[serde(default)]
+    pub unlocked_equipment: Vec<Equipment>,
+    #[serde(default)]
+    pub equipped_gear: Option<Equipment>,
 }

@@ -81,6 +81,8 @@ pub struct SaveState {
     pub level_up_selection: usize,
     #[serde(default)]
     pub companion: Option<Companion>,
+    #[serde(default)]
+    pub equipment_boxes: Vec<Point>,
 }
 
 #[must_use]

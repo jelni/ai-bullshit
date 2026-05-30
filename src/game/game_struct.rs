@@ -80,6 +80,7 @@ pub struct Game {
     pub resources: std::collections::HashMap<Point, Resource>,
     pub companion: Option<Companion>,
     pub crops: Vec<crate::game::Crop>,
+    pub equipment_boxes: Vec<Point>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -249,6 +250,7 @@ impl Game {
             resources: std::collections::HashMap::new(),
             companion: None,
             crops: Vec::new(),
+            equipment_boxes: Vec::new(),
         }
     }
     #[must_use]
@@ -458,6 +460,7 @@ impl Game {
             level_up_options: self.level_up_options.clone(),
             level_up_selection: self.level_up_selection,
             companion: self.companion.clone(),
+            equipment_boxes: self.equipment_boxes.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -563,6 +566,7 @@ impl Game {
                 self.level_up_selection = state.level_up_selection;
                 self.companion = state.companion;
                 self.crops = Vec::new(); // Or state.crops if we added it to SaveState, but we can just initialize empty for now
+                self.equipment_boxes = state.equipment_boxes;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -2248,6 +2252,7 @@ impl Game {
             self.level_up_options = state.level_up_options;
             self.level_up_selection = state.level_up_selection;
             self.companion = state.companion;
+            self.equipment_boxes = state.equipment_boxes;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2322,6 +2327,7 @@ impl Game {
             level_up_options: self.level_up_options.clone(),
             level_up_selection: self.level_up_selection,
             companion: self.companion.clone(),
+            equipment_boxes: self.equipment_boxes.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2385,8 +2391,9 @@ impl Game {
         });
 
         let has_passive_magnet = self.in_game_upgrades.contains_key(&InGameUpgrade::Magnet);
+        let has_ring_magnet = self.stats.equipped_gear == Some(crate::game::Equipment::MagnetRing);
 
-        if (has_magnet_powerup || has_passive_magnet) && self.rng.gen_bool(0.25) {
+        if (has_magnet_powerup || has_passive_magnet || has_ring_magnet) && self.rng.gen_bool(0.25) {
             let head = self.snake.head();
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
@@ -3232,6 +3239,9 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
+                            if self.rng.gen_bool(0.2) {
+                                self.equipment_boxes.push(boss.position);
+                            }
                             if self.stats.equipped_class
                                 == Some(crate::game::HeroClass::Necromancer)
                             {
@@ -3567,6 +3577,10 @@ impl Game {
                     if boss_health == 0 {
                         let dead_boss = self.bosses.remove(i);
 
+                        if self.rng.gen_bool(0.2) {
+                            self.equipment_boxes.push(dead_boss.position);
+                        }
+
                         if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
                             self.companion = Some(Companion {
                                 position: dead_boss.position,
@@ -3730,6 +3744,9 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
+                        if self.rng.gen_bool(0.2) {
+                            self.equipment_boxes.push(boss.position);
+                        }
                         if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
                             self.companion = Some(Companion {
                                 position: boss.position,
@@ -3993,12 +4010,59 @@ impl Game {
                     'X',
                 );
                 crate::game::beep();
+            } else if self.stats.equipped_gear == Some(crate::game::Equipment::HeavyArmor) {
+                self.obstacles.remove(&final_head1);
+                self.spawn_particles(
+                    f32::from(final_head1.x),
+                    f32::from(final_head1.y),
+                    20,
+                    crate::color::Color::Red,
+                    'X',
+                );
+                self.stats.equipped_gear = None;
+                crate::game::beep();
             } else {
                 p1_dead = true;
             }
         }
         if hit_boss1 && !is_invincible {
-            p1_dead = true;
+            if self.stats.equipped_gear == Some(crate::game::Equipment::SpikedHelmet) {
+                // Deal 5 damage to boss
+                let mut boss_died = false;
+                for boss in &mut self.bosses {
+                    if boss.position == final_head1 || self.snake.body_map.contains_key(&boss.position) {
+                        boss.health = boss.health.saturating_sub(5);
+                        if boss.health == 0 {
+                            boss_died = true;
+                        }
+                    }
+                }
+                if boss_died {
+                    let mut next_bosses = Vec::new();
+                    for boss in std::mem::take(&mut self.bosses) {
+                        if boss.health == 0 {
+                            if self.rng.gen_bool(0.2) {
+                                self.equipment_boxes.push(boss.position);
+                            }
+                            self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                            self.score += 100;
+                            self.spawn_particles(
+                                f32::from(boss.position.x),
+                                f32::from(boss.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                'B',
+                            );
+                        } else {
+                            next_bosses.push(boss);
+                        }
+                    }
+                    self.bosses = next_bosses;
+                }
+                crate::game::beep();
+            } else {
+                p1_dead = true;
+            }
         }
         if hit_laser1 && !is_invincible {
             p1_dead = true;
@@ -4163,6 +4227,9 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
+                                    if self.rng.gen_bool(0.2) {
+                                        self.equipment_boxes.push(boss.position);
+                                    }
                                     if self.stats.equipped_class
                                         == Some(crate::game::HeroClass::Necromancer)
                                     {
@@ -4431,6 +4498,10 @@ impl Game {
         if let Some(final_head2) = final_head2_opt {
             self.process_resource_collision(final_head2);
         }
+        self.process_equipment_box_collision(final_head1);
+        if let Some(final_head2) = final_head2_opt {
+            self.process_equipment_box_collision(final_head2);
+        }
 
         if self.merchant.is_some_and(|m| m == final_head1) {
             self.state = GameState::MerchantShop;
@@ -4665,6 +4736,33 @@ impl Game {
             }
         }
     }
+    fn process_equipment_box_collision(&mut self, final_head: Point) {
+        if let Some(pos) = self.equipment_boxes.iter().position(|&p| p == final_head) {
+            self.equipment_boxes.remove(pos);
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                30,
+                crate::color::Color::Cyan,
+                'E',
+            );
+
+            let possible_equipment = [
+                crate::game::Equipment::SpikedHelmet,
+                crate::game::Equipment::HeavyArmor,
+                crate::game::Equipment::SpeedTail,
+                crate::game::Equipment::MagnetRing,
+            ];
+            let item = possible_equipment[self.rng.gen_range(0..possible_equipment.len())];
+
+            if !self.stats.unlocked_equipment.contains(&item) {
+                self.stats.unlocked_equipment.push(item);
+                self.save_stats();
+            }
+            crate::game::beep();
+        }
+    }
+
     fn check_poison_food_collision(&mut self, final_head: Point, player: u8) {
         if self.poison_food.is_some_and(|(poison_p, _)| final_head == poison_p) {
             if !self.stats.unlocked_achievements.contains(&Achievement::PoisonEater) {
