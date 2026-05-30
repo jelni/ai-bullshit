@@ -2583,6 +2583,38 @@ impl Game {
         if self.is_sprinting && self.state == GameState::Playing {
             self.update_tick();
         }
+
+        self.update_stock_market();
+    }
+
+    fn update_stock_market(&mut self) {
+        let mut rng = rand::thread_rng();
+        if rng.gen_bool(0.01) {
+            let stocks = [
+                crate::game::Stock::SnakeCorp,
+                crate::game::Stock::GoblinInc,
+                crate::game::Stock::BossDynamics,
+                crate::game::Stock::LaserTech,
+            ];
+            let stock = stocks[rng.gen_range(0..stocks.len())];
+            let current_price = self.stats.stock_prices.get(&stock).copied().unwrap_or(100);
+
+            let volatility = rng.gen_range(-10..=10);
+            let mut new_price = i32::try_from(current_price).unwrap_or(100) + volatility;
+
+            // Random market events
+            let event = rng.gen_range(0..100);
+            if event < 5 {
+                // Crash
+                new_price /= 2;
+            } else if event < 10 {
+                // Moon
+                new_price *= 2;
+            }
+
+            let new_price = u32::try_from(new_price.clamp(5, 2000)).unwrap_or(5);
+            self.stats.stock_prices.insert(stock, new_price);
+        }
     }
     #[expect(
         clippy::too_many_lines,

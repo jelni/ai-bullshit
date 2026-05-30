@@ -41,9 +41,68 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::ClassSelect => draw_class_select(game, stdout)?,
         GameState::Equipment => draw_equipment(game, stdout)?,
         GameState::Casino => draw_casino(game, stdout)?,
+        GameState::StockMarket => draw_stock_market(game, stdout)?,
     }
 
     stdout.flush()?;
+    Ok(())
+}
+
+fn draw_stock_market<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "📈 STOCK MARKET 📉";
+    stdout.queue(SetForegroundColor(Color::Green))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let stocks = [
+        crate::game::Stock::SnakeCorp,
+        crate::game::Stock::GoblinInc,
+        crate::game::Stock::BossDynamics,
+        crate::game::Stock::LaserTech,
+    ];
+
+    let stock_names = [
+        "SnakeCorp",
+        "GoblinInc",
+        "BossDynamics",
+        "LaserTech",
+    ];
+
+    for (i, stock) in stocks.iter().enumerate() {
+        let price = game.stats.stock_prices.get(stock).copied().unwrap_or(100);
+        let owned = game.stats.portfolio.get(stock).copied().unwrap_or(0);
+
+        let prefix = if i == game.settings_selection { ">" } else { " " };
+        let color = if i == game.settings_selection { Color::Cyan } else { Color::White };
+
+        let text = format!("{} {}: {} coins (Owned: {})", prefix, stock_names[i], price, owned);
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{text}")?;
+    }
+
+    let help_text = "Space/Enter: Buy (1) | B: Buy (10) | L: Sell (1) | D: Sell (10) | Esc/Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help_text.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help_text}")?;
+
     Ok(())
 }
 
@@ -197,6 +256,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Class Select",
         "Equipment",
         "Casino",
+        "Stock Market",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {

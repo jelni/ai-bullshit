@@ -23,4 +23,5 @@ pub enum GameState {
     ClassSelect,
     Equipment,
     Casino,
+    StockMarket,
 }
