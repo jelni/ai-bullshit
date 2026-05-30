@@ -36,4 +36,5 @@ pub enum GameMode {
     Tron,
     Zombie,
     Farmstead,
+    PacMan,
 }
