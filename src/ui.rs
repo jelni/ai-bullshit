@@ -128,6 +128,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Vampire Mode",
         "Gravity Mode",
         "Tron Mode",
+        "Zombie Mode",
         "Load Game",
         "Settings",
         "NFT Shop",

@@ -435,19 +435,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             31 => {
+                game.mode = game::GameMode::Zombie;
+                game.reset();
+            },
+            32 => {
                 let _ = game.load_game();
             },
-            32 => game.state = GameState::Settings,
-            33 => game.state = GameState::NftShop,
-            34 => game.state = GameState::SkillTree,
-            35 => game.state = GameState::Stats,
-            36 => game.state = GameState::Achievements,
-            37 => game.state = GameState::Help,
-            38 => {
+            33 => game.state = GameState::Settings,
+            34 => game.state = GameState::NftShop,
+            35 => game.state = GameState::SkillTree,
+            36 => game.state = GameState::Stats,
+            37 => game.state = GameState::Achievements,
+            38 => game.state = GameState::Help,
+            39 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            39 => {
+            40 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -455,19 +459,19 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            40 => {
+            41 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            41 => {
+            42 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            42 => {
+            43 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            43 => {
+            44 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -477,11 +481,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 43;
+                game.menu_selection = 44;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 43 {
+            if game.menu_selection < 44 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;

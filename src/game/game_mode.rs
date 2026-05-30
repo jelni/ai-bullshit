@@ -34,4 +34,5 @@ pub enum GameMode {
     Vampire,
     Gravity,
     Tron,
+    Zombie,
 }
