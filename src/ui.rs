@@ -39,6 +39,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::MerchantShop => draw_merchant_shop(game, stdout)?,
         GameState::CompanionCamp => draw_companion_camp(game, stdout)?,
         GameState::ClassSelect => draw_class_select(game, stdout)?,
+        GameState::Equipment => draw_equipment(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -143,6 +144,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Bounty Board",
         "Companion Camp",
         "Class Select",
+        "Equipment",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1103,6 +1105,15 @@ fn draw_entities<W: Write>(
             stdout.queue(cursor::MoveTo(laser.position.x, laser.position.y))?;
             stdout.queue(SetForegroundColor(color))?;
             write!(stdout, "{symbol}")?;
+        }
+    }
+
+    // Draw equipment boxes
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    for ebox in &game.equipment_boxes {
+        if is_visible(ebox.x, ebox.y) {
+            stdout.queue(cursor::MoveTo(ebox.x, ebox.y))?;
+            write!(stdout, "E")?;
         }
     }
 
@@ -2318,6 +2329,64 @@ fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height / 2 + 5,
     ))?;
     write!(stdout, "{unequip_line}")?;
+
+    Ok(())
+}
+
+fn draw_equipment<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "EQUIPMENT";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let items = &game.stats.unlocked_equipment;
+    for (i, item) in items.iter().enumerate() {
+        let name = match item {
+            crate::game::Equipment::SpikedHelmet => "Spiked Helmet",
+            crate::game::Equipment::HeavyArmor => "Heavy Armor",
+            crate::game::Equipment::SpeedTail => "Speed Tail",
+            crate::game::Equipment::MagnetRing => "Magnet Ring",
+        };
+        let desc = match item {
+            crate::game::Equipment::SpikedHelmet => "Deal 5 damage to boss & survive hit",
+            crate::game::Equipment::HeavyArmor => "Ignore 1 obstacle hit per run",
+            crate::game::Equipment::SpeedTail => "Faster tick rate (-10ms)",
+            crate::game::Equipment::MagnetRing => "Passive Magnet effect",
+        };
+
+        let is_equipped = game.stats.equipped_gear == Some(*item);
+        let prefix = if game.settings_selection == i { ">> " } else { "   " };
+        let status = if is_equipped { "[EQUIPPED]" } else { "" };
+        let line = format!("{prefix}{name}: {desc} {status}");
+
+        stdout.queue(SetForegroundColor(if is_equipped { Color::Green } else { Color::White }))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
+            game.height / 2 - 3 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let unequip_idx = items.len();
+    let unequip_prefix = if game.settings_selection == unequip_idx { ">> " } else { "   " };
+    let unequip_line = format!("{unequip_prefix}Unequip Gear");
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(unequip_line.len()).unwrap_or(0) / 2),
+        game.height / 2 - 3 + u16::try_from(items.len()).unwrap_or(0) * 2,
+    ))?;
+    write!(stdout, "{unequip_line}")?;
+
+    let help = "Up/Down: Select | Enter: Equip | Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
 
     Ok(())
 }

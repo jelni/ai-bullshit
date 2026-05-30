@@ -21,4 +21,5 @@ pub enum GameState {
     MerchantShop,
     CompanionCamp,
     ClassSelect,
+    Equipment,
 }
