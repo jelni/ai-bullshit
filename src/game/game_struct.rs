@@ -1452,6 +1452,7 @@ impl Game {
             | GameMode::Cave
             | GameMode::Dungeon
             | GameMode::CustomLevel
+            | GameMode::PacMan
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge
@@ -1518,6 +1519,7 @@ impl Game {
                 || self.mode == GameMode::Cave
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
+                || self.mode == GameMode::PacMan
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::FogOfWar
                 || self.mode == GameMode::Evolution
@@ -1547,6 +1549,7 @@ impl Game {
             || self.mode == GameMode::Cave
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
+            || self.mode == GameMode::PacMan
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::FogOfWar
             || self.mode == GameMode::Evolution
@@ -1648,6 +1651,25 @@ impl Game {
                 Self::generate_dungeon_obstacles(self.width, self.height, &mut self.rng);
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::PacMan {
+            self.obstacles = Self::generate_maze_obstacles(self.width, self.height, &mut self.rng);
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+            for y in 1..self.height - 1 {
+                for x in 1..self.width - 1 {
+                    let p = Point { x, y };
+                    if !self.obstacles.contains(&p)
+                        && !body_map.contains_key(&p)
+                        && p != self.snake.head()
+                    {
+                        self.crops.push(crate::game::Crop {
+                            position: p,
+                            growth_stage: 2,
+                            timer: 0,
+                        });
+                    }
+                }
+            }
         } else if self.mode == GameMode::Evolution {
             let fill_probability = 0.2;
             for y in 1..self.height - 1 {
@@ -1844,6 +1866,7 @@ impl Game {
             | GameMode::Cave
             | GameMode::Dungeon
             | GameMode::CustomLevel
+            | GameMode::PacMan
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
             | GameMode::MonthlyChallenge

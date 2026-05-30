@@ -452,19 +452,23 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             33 => {
+                game.mode = game::GameMode::PacMan;
+                game.reset();
+            },
+            34 => {
                 let _ = game.load_game();
             },
-            34 => game.state = GameState::Settings,
-            35 => game.state = GameState::NftShop,
-            36 => game.state = GameState::SkillTree,
-            37 => game.state = GameState::Stats,
-            38 => game.state = GameState::Achievements,
-            39 => game.state = GameState::Help,
-            40 => {
+            35 => game.state = GameState::Settings,
+            36 => game.state = GameState::NftShop,
+            37 => game.state = GameState::SkillTree,
+            38 => game.state = GameState::Stats,
+            39 => game.state = GameState::Achievements,
+            40 => game.state = GameState::Help,
+            41 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            41 => {
+            42 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -472,35 +476,35 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            42 => {
+            43 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            43 => {
+            44 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            44 => {
+            45 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            45 => {
+            46 => {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            46 => {
+            47 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
-            47 => {
+            48 => {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            48 => {
+            49 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
-            49 => {
+            50 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -510,11 +514,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 49;
+                game.menu_selection = 50;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 49 {
+            if game.menu_selection < 50 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
