@@ -40,9 +40,60 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::CompanionCamp => draw_companion_camp(game, stdout)?,
         GameState::ClassSelect => draw_class_select(game, stdout)?,
         GameState::Equipment => draw_equipment(game, stdout)?,
+        GameState::Casino => draw_casino(game, stdout)?,
     }
 
     stdout.flush()?;
+    Ok(())
+}
+
+fn draw_casino<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "🎰 CASINO 🎰";
+    stdout.queue(SetForegroundColor(Color::Magenta))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let options = [
+        "1. Slot Machine (100 coins)",
+        "2. Roulette [Red/Black] (50 coins)",
+    ];
+    for (i, opt) in options.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(opt.len() + 3).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+            ))?;
+            write!(stdout, ">> {opt}")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(opt.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+            ))?;
+            write!(stdout, "{opt}")?;
+        }
+    }
+
+    let back = "Press 'Q' or 'ESC' to return to menu";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
+        game.height / 2 + 4,
+    ))?;
+    write!(stdout, "{back}")?;
+
     Ok(())
 }
 
@@ -145,6 +196,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Companion Camp",
         "Class Select",
         "Equipment",
+        "Casino",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
