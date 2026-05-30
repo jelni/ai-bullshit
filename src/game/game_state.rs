@@ -20,4 +20,5 @@ pub enum GameState {
     BountyBoard,
     MerchantShop,
     CompanionCamp,
+    ClassSelect,
 }
