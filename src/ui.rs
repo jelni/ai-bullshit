@@ -1147,6 +1147,21 @@ fn draw_entities<W: Write>(
         write!(stdout, "●")?;
     }
 
+    // Draw resources
+    for (pos, res) in &game.resources {
+        if is_visible(pos.x, pos.y) {
+            stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
+            let (symbol, color) = match res {
+                crate::game::Resource::Wood => ("🪵", Color::Yellow),
+                crate::game::Resource::Iron => ("🔗", Color::White),
+                crate::game::Resource::Gold => ("💰", Color::Yellow),
+                crate::game::Resource::Diamond => ("💎", Color::Cyan),
+            };
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "{symbol}")?;
+        }
+    }
+
     // Draw obstacles
     stdout.queue(SetForegroundColor(obs_color))?;
     for obs in &game.obstacles {
@@ -1977,10 +1992,10 @@ fn draw_crafting<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{inv_str}")?;
 
     let recipes = [
-        ("Speed Potion [3 Wood]", wood >= 3),
-        ("Iron Wall [3 Iron]", iron >= 3),
-        ("Golden Apple [5 Gold]", gold >= 5),
-        ("Diamond Sword [1 Diamond]", diamond >= 1),
+        (format!("Speed Potion [3 🪵 ] (Owned: {})", game.stats.crafted_items.get(&crate::game::CraftableItem::SpeedPotion).unwrap_or(&0)), wood >= 3),
+        (format!("Iron Wall [3 🔗 ] (Owned: {})", game.stats.crafted_items.get(&crate::game::CraftableItem::IronWall).unwrap_or(&0)), iron >= 3),
+        (format!("Golden Apple [5 💰 ] (Owned: {})", game.stats.crafted_items.get(&crate::game::CraftableItem::GoldenApple).unwrap_or(&0)), gold >= 5),
+        (format!("Diamond Sword [1 💎 ] (Owned: {})", game.stats.crafted_items.get(&crate::game::CraftableItem::DiamondSword).unwrap_or(&0)), diamond >= 1),
     ];
 
     for (i, (text, can_craft)) in recipes.iter().enumerate() {
