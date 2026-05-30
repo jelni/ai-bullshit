@@ -1,6 +1,6 @@
 use super::{
     Achievement, Bounty, CompanionType, CraftableItem, Deserialize, HeroClass, Resource, Equipment, Serialize,
-    Stock, Property, Theme, default_elo, default_unlocked_themes,
+    Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes,
 };
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
@@ -54,4 +54,8 @@ pub struct Statistics {
     pub stock_prices: std::collections::HashMap<Stock, u32>,
     #[serde(default)]
     pub properties: std::collections::HashMap<Property, u32>,
+    #[serde(default)]
+    pub unlocked_vehicles: Vec<Vehicle>,
+    #[serde(default)]
+    pub equipped_vehicle: Option<Vehicle>,
 }
