@@ -42,6 +42,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Equipment => draw_equipment(game, stdout)?,
         GameState::Casino => draw_casino(game, stdout)?,
         GameState::StockMarket => draw_stock_market(game, stdout)?,
+        GameState::RealEstate => draw_real_estate(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -258,6 +259,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Equipment",
         "Casino",
         "Stock Market",
+        "Real Estate Office",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2501,5 +2503,59 @@ fn draw_equipment<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{help}")?;
 
+    Ok(())
+}
+fn draw_real_estate<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "REAL ESTATE OFFICE";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let options = [
+        ("Buy Shack (Cost: 100, Income: 1/s)", crate::game::Property::Shack),
+        ("Buy Apartment (Cost: 500, Income: 6/s)", crate::game::Property::Apartment),
+        ("Buy Mansion (Cost: 2000, Income: 28/s)", crate::game::Property::Mansion),
+        ("Buy Skyscraper (Cost: 10000, Income: 160/s)", crate::game::Property::Skyscraper),
+        ("Back", crate::game::Property::Shack),
+    ];
+
+    let start_y = game.height / 2 - 2;
+    for (i, (text, prop)) in options.iter().enumerate() {
+        let owned = if i < 4 {
+            game.stats.properties.get(prop).copied().unwrap_or(0)
+        } else {
+            0
+        };
+
+        let mut display_text = if i < 4 {
+            format!("{text} (Owned: {owned})")
+        } else {
+            text.to_string()
+        };
+
+        if i == game.settings_selection {
+            display_text = format!("> {display_text} <");
+            stdout.queue(SetForegroundColor(Color::Green))?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+        }
+
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+            start_y + u16::try_from(i).unwrap_or(0),
+        ))?;
+        write!(stdout, "{display_text}")?;
+    }
     Ok(())
 }

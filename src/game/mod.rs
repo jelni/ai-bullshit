@@ -90,4 +90,6 @@ pub use crop::Crop;
 pub use hero_class::HeroClass;
 pub use resource::Resource;
 pub use equipment::Equipment;
+pub mod real_estate;
 pub use stock::Stock;
+pub use real_estate::Property;
