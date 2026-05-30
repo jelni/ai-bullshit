@@ -1,5 +1,6 @@
 use super::{
-    Boss, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake, Weather, Companion,
+    Boss, Companion, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake,
+    Weather,
 };
 #[derive(Clone)]
 pub struct HistoryState {

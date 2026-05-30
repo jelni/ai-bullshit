@@ -1064,7 +1064,10 @@ mod tests {
     fn test_weather_sandstorm_shifts_food() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.weather = Weather::Sandstorm;
-        game.food = Point { x: 10, y: 10 };
+        game.food = Point {
+            x: 10,
+            y: 10,
+        };
         let initial_food = game.food;
 
         // Run updates to see if Sandstorm moves the food
@@ -1089,8 +1092,14 @@ mod tests {
 
         // clear and add some specific obstacles
         game.obstacles.clear();
-        game.obstacles.insert(Point { x: 5, y: 5 });
-        game.obstacles.insert(Point { x: 6, y: 6 });
+        game.obstacles.insert(Point {
+            x: 5,
+            y: 5,
+        });
+        game.obstacles.insert(Point {
+            x: 6,
+            y: 6,
+        });
         let initial_obs_count = game.obstacles.len();
 
         // Run updates to see if Earthquake changes obstacles
@@ -1099,7 +1108,12 @@ mod tests {
             game.state = GameState::Playing; // Ensure playing state
             game.update();
             game.weather = Weather::Earthquake; // ensure it stays earthquake
-            if game.obstacles.len() != initial_obs_count || !game.obstacles.contains(&Point { x: 5, y: 5 }) {
+            if game.obstacles.len() != initial_obs_count
+                || !game.obstacles.contains(&Point {
+                    x: 5,
+                    y: 5,
+                })
+            {
                 changed = true;
                 break;
             }
@@ -1107,10 +1121,9 @@ mod tests {
 
         assert!(changed, "Earthquake should randomly destroy or spawn obstacles");
     }
-
 }
 #[cfg(test)]
-    mod evolution_tests {
+mod evolution_tests {
     use super::*;
     use crate::game::{Difficulty, GameMode, Theme};
     #[test]
@@ -1179,14 +1192,8 @@ mod tests {
 
 #[test]
 fn test_massive_multiplayer_mode_spawns_bots() {
-    let mut game = Game::new(
-        40,
-        40,
-        false,
-        '#',
-        crate::game::Theme::Dark,
-        crate::game::Difficulty::Normal,
-    );
+    let mut game =
+        Game::new(40, 40, false, '#', crate::game::Theme::Dark, crate::game::Difficulty::Normal);
     game.mode = GameMode::MassiveMultiplayer;
     game.reset();
 
@@ -1201,21 +1208,18 @@ fn test_massive_multiplayer_mode_spawns_bots() {
 
 #[test]
 fn test_bot_dies_when_hitting_wall() {
-    let mut game = Game::new(
-        20,
-        20,
-        false,
-        '#',
-        crate::game::Theme::Dark,
-        crate::game::Difficulty::Normal,
-    );
+    let mut game =
+        Game::new(20, 20, false, '#', crate::game::Theme::Dark, crate::game::Difficulty::Normal);
     game.mode = GameMode::MassiveMultiplayer;
     game.reset();
 
     // Force bot position to hit wall
     let mut bot = game.bots[0].clone();
     bot.body.clear();
-    bot.body.push_front(Point { x: 1, y: 1 });
+    bot.body.push_front(Point {
+        x: 1,
+        y: 1,
+    });
     bot.direction = Direction::Up;
     bot.direction_queue.push_back(Direction::Up);
 

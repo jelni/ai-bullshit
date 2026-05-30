@@ -1,8 +1,9 @@
 use super::{
-    AStarState, Achievement, Boss, BossType, Difficulty, Direction, Duration, File, GameMode,
-    GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant, Laser, Meteor, Particle, Point, PowerUp,
-    PowerUpType, Read, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
-    default_unlocked_themes, fs, io, Resource, Companion, CompanionType
+    AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
+    Duration, File, GameMode, GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant,
+    Laser, Meteor, Particle, Point, PowerUp, PowerUpType, Read, Resource, Rng, SaveState,
+    SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep, default_unlocked_themes,
+    fs, io,
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
@@ -78,6 +79,7 @@ pub struct Game {
     pub turrets: Vec<Turret>,
     pub resources: std::collections::HashMap<Point, Resource>,
     pub companion: Option<Companion>,
+    pub crops: Vec<crate::game::Crop>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -246,6 +248,7 @@ impl Game {
             turrets: Vec::new(),
             resources: std::collections::HashMap::new(),
             companion: None,
+            crops: Vec::new(),
         }
     }
     #[must_use]
@@ -559,6 +562,7 @@ impl Game {
                 self.level_up_options = state.level_up_options;
                 self.level_up_selection = state.level_up_selection;
                 self.companion = state.companion;
+                self.crops = Vec::new(); // Or state.crops if we added it to SaveState, but we can just initialize empty for now
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -645,11 +649,14 @@ impl Game {
                             min_dist = dist;
                             if target.x == turret.position.x && target.y < turret.position.y {
                                 target_dir = Some(Direction::Up);
-                            } else if target.x == turret.position.x && target.y > turret.position.y {
+                            } else if target.x == turret.position.x && target.y > turret.position.y
+                            {
                                 target_dir = Some(Direction::Down);
-                            } else if target.y == turret.position.y && target.x < turret.position.x {
+                            } else if target.y == turret.position.y && target.x < turret.position.x
+                            {
                                 target_dir = Some(Direction::Left);
-                            } else if target.y == turret.position.y && target.x > turret.position.x {
+                            } else if target.y == turret.position.y && target.x > turret.position.x
+                            {
                                 target_dir = Some(Direction::Right);
                             }
                         }
@@ -1456,7 +1463,8 @@ impl Game {
             | GameMode::Flood
             | GameMode::Vampire
             | GameMode::Gravity
-            | GameMode::Zombie => {
+            | GameMode::Zombie
+            | GameMode::Farmstead => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1468,7 +1476,8 @@ impl Game {
             | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
-            | GameMode::BattleRoyale | GameMode::Tron => {
+            | GameMode::BattleRoyale
+            | GameMode::Tron => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -1703,17 +1712,27 @@ impl Game {
             });
         } else {
             self.power_up = None;
-        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
-            self.power_up = Some(PowerUp {
-                p_type: PowerUpType::TimeFreeze,
-                location: Point { x: 0, y: 0 },
-                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
-            });
-        }
+            if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+                self.power_up = Some(PowerUp {
+                    p_type: PowerUpType::TimeFreeze,
+                    location: Point {
+                        x: 0,
+                        y: 0,
+                    },
+                    activation_time: Some(
+                        web_time::SystemTime::now()
+                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    ),
+                });
+            }
         }
         self.decoy = None;
         self.score = 0;
-        self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) { 3 + u32::from(self.stats.upgrade_extra_lives) } else if self.skin == '💎' {
+        self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) {
+            3 + u32::from(self.stats.upgrade_extra_lives)
+        } else if self.skin == '💎' {
             3 + u32::from(self.stats.upgrade_extra_lives) + 1
         } else {
             3 + u32::from(self.stats.upgrade_extra_lives)
@@ -1773,9 +1792,19 @@ impl Game {
             self.companion = None;
         }
 
-        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron || self.mode == GameMode::Zombie {
+        self.crops.clear();
+        if self.mode == GameMode::MassiveMultiplayer
+            || self.mode == GameMode::Tron
+            || self.mode == GameMode::Zombie
+        {
             let margin = self.safe_zone_margin;
-            let count = if self.mode == GameMode::MassiveMultiplayer { 50 } else if self.mode == GameMode::Tron { 3 } else { 1 };
+            let count = if self.mode == GameMode::MassiveMultiplayer {
+                50
+            } else if self.mode == GameMode::Tron {
+                3
+            } else {
+                1
+            };
             for _ in 0..count {
                 let avoid = |p: &Point| {
                     self.obstacles.contains(p)
@@ -1826,7 +1855,8 @@ impl Game {
             | GameMode::Flood
             | GameMode::Vampire
             | GameMode::Gravity
-            | GameMode::Zombie => {
+            | GameMode::Zombie
+            | GameMode::Farmstead => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1841,7 +1871,8 @@ impl Game {
             | GameMode::Tournament
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
-            | GameMode::BattleRoyale | GameMode::Tron => {
+            | GameMode::BattleRoyale
+            | GameMode::Tron => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -1918,7 +1949,7 @@ impl Game {
                         let mut p2 = laser_pos;
                         p2.y = (i32::from(p2.y) - i).try_into().unwrap_or(p2.y);
                         spawn_positions.push(p2);
-                    }
+                    },
                 }
             }
         }
@@ -2070,7 +2101,10 @@ impl Game {
                     }
                 }
             }
-            if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Tron || self.mode == GameMode::Zombie {
+            if self.mode == GameMode::MassiveMultiplayer
+                || self.mode == GameMode::Tron
+                || self.mode == GameMode::Zombie
+            {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
                         let start = self.bots[i].head();
@@ -2094,7 +2128,9 @@ impl Game {
                                 targets.push(goblin.position);
                             }
                         }
-                        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 4) {
+                        if let Some((dir, path)) =
+                            self.astar_search(start, current_dir, &targets, 4)
+                        {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
                         } else if let Some(dir) = self.flood_fill_fallback(start, current_dir, 4) {
@@ -2390,6 +2426,21 @@ impl Game {
             }
         }
     }
+    fn manage_crops(&mut self) {
+        if self.mode == GameMode::Farmstead {
+            for crop in &mut self.crops {
+                crop.timer += 1;
+                if crop.growth_stage == 0 && crop.timer > 30 {
+                    crop.growth_stage = 1;
+                    crop.timer = 0;
+                } else if crop.growth_stage == 1 && crop.timer > 50 {
+                    crop.growth_stage = 2;
+                    crop.timer = 0;
+                }
+            }
+        }
+    }
+
     #[expect(clippy::too_many_lines, reason = "manage_companion naturally requires many lines")]
     fn manage_companion(&mut self) {
         let mut spawn_lasers = Vec::new();
@@ -2418,7 +2469,11 @@ impl Game {
                         let mut best_target = self.food;
                         let mut min_dist = u16::MAX;
                         for t in targets {
-                            let dist = comp.position.x.abs_diff(t.x).saturating_add(comp.position.y.abs_diff(t.y));
+                            let dist = comp
+                                .position
+                                .x
+                                .abs_diff(t.x)
+                                .saturating_add(comp.position.y.abs_diff(t.y));
                             if dist < min_dist {
                                 min_dist = dist;
                                 best_target = t;
@@ -2449,9 +2504,10 @@ impl Game {
                         self.process_food_collision(comp.position, false);
                     }
                     if let Some((bp, _)) = self.bonus_food
-                        && comp.position == bp {
-                            self.check_bonus_food_collision(comp.position, false);
-                        }
+                        && comp.position == bp
+                    {
+                        self.check_bonus_food_collision(comp.position, false);
+                    }
                     if self.resources.contains_key(&comp.position) {
                         self.process_resource_collision(comp.position);
                     }
@@ -2463,7 +2519,11 @@ impl Game {
                             let dx = i32::from(boss.position.x) - i32::from(comp.position.x);
                             let dy = i32::from(boss.position.y) - i32::from(comp.position.y);
                             let dir = if dx.abs() > dy.abs() {
-                                if dx > 0 { Direction::Right } else { Direction::Left }
+                                if dx > 0 {
+                                    Direction::Right
+                                } else {
+                                    Direction::Left
+                                }
                             } else if dy > 0 {
                                 Direction::Down
                             } else {
@@ -2990,7 +3050,8 @@ impl Game {
                             } else {
                                 0
                             };
-                            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+                            let dirs =
+                                [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                             for &dir in &dirs {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 if laser_pos.x > margin
@@ -3080,7 +3141,12 @@ impl Game {
             let min_y = margin;
             let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
 
-            if new_food.x > min_x && new_food.x < max_x && new_food.y > min_y && new_food.y < max_y && !self.obstacles.contains(&new_food) {
+            if new_food.x > min_x
+                && new_food.x < max_x
+                && new_food.y > min_y
+                && new_food.y < max_y
+                && !self.obstacles.contains(&new_food)
+            {
                 self.food = new_food;
             }
         }
@@ -3095,7 +3161,7 @@ impl Game {
                 } else {
                     0
                 };
-                let avoid = |p: &Point| { self.obstacles.contains(p) };
+                let avoid = |p: &Point| self.obstacles.contains(p);
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
                     self.height,
@@ -3166,7 +3232,9 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
-                            if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                            if self.stats.equipped_class
+                                == Some(crate::game::HeroClass::Necromancer)
+                            {
                                 self.companion = Some(Companion {
                                     position: boss.position,
                                     kind: crate::game::CompanionType::Fighter,
@@ -3213,7 +3281,10 @@ impl Game {
                                     's',
                                 );
                             } else {
-                                self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                                self.update_bounty_progress(
+                                    crate::game::BountyType::KillBosses(0),
+                                    1,
+                                );
                                 if self.mode == GameMode::BossRush {
                                     self.score += 1000 * self.campaign_level;
                                     self.campaign_level += 1;
@@ -3387,15 +3458,20 @@ impl Game {
 
             let loops = base_loops + extra_loops;
 
-            let is_piercing = laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::Piercing);
+            let is_piercing =
+                laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::Piercing);
 
             for _ in 0..loops {
                 if !is_time_frozen {
-                    if laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::HomingLasers) && !self.bosses.is_empty() {
+                    if laser.player == 1
+                        && self.in_game_upgrades.contains_key(&InGameUpgrade::HomingLasers)
+                        && !self.bosses.is_empty()
+                    {
                         let mut best_dist = u16::MAX;
                         let mut closest_boss = None;
                         for boss in &self.bosses {
-                            let dist = laser.position.x.abs_diff(boss.position.x) + laser.position.y.abs_diff(boss.position.y);
+                            let dist = laser.position.x.abs_diff(boss.position.x)
+                                + laser.position.y.abs_diff(boss.position.y);
                             if dist < best_dist {
                                 best_dist = dist;
                                 closest_boss = Some(boss.position);
@@ -3403,23 +3479,25 @@ impl Game {
                         }
 
                         if let Some(target) = closest_boss
-                            && best_dist <= 5 { // Homing range
-                                let dx = i32::from(target.x) - i32::from(laser.position.x);
-                                let dy = i32::from(target.y) - i32::from(laser.position.y);
-                                if dx.abs() > dy.abs() {
-                                    if dx > 0 {
-                                        laser.direction = Direction::Right;
-                                    } else {
-                                        laser.direction = Direction::Left;
-                                    }
-                                } else if dy != 0 {
-                                    if dy > 0 {
-                                        laser.direction = Direction::Down;
-                                    } else {
-                                        laser.direction = Direction::Up;
-                                    }
+                            && best_dist <= 5
+                        {
+                            // Homing range
+                            let dx = i32::from(target.x) - i32::from(laser.position.x);
+                            let dy = i32::from(target.y) - i32::from(laser.position.y);
+                            if dx.abs() > dy.abs() {
+                                if dx > 0 {
+                                    laser.direction = Direction::Right;
+                                } else {
+                                    laser.direction = Direction::Left;
+                                }
+                            } else if dy != 0 {
+                                if dy > 0 {
+                                    laser.direction = Direction::Down;
+                                } else {
+                                    laser.direction = Direction::Up;
                                 }
                             }
+                        }
                     }
                     laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
                 }
@@ -3610,7 +3688,10 @@ impl Game {
                     break;
                 }
             }
-            if destroyed && laser.player == 1 && self.in_game_upgrades.contains_key(&InGameUpgrade::ExplosiveLasers) {
+            if destroyed
+                && laser.player == 1
+                && self.in_game_upgrades.contains_key(&InGameUpgrade::ExplosiveLasers)
+            {
                 // Explosive Lasers AOE effect
                 let radius = 2; // 5x5 area centered on laser.position
                 let mut boss_hits = std::collections::HashSet::new();
@@ -3618,7 +3699,11 @@ impl Game {
                     for dx in -radius..=radius {
                         let nx = i32::from(laser.position.x) + dx;
                         let ny = i32::from(laser.position.y) + dy;
-                        if nx > 0 && nx < i32::from(self.width - 1) && ny > 0 && ny < i32::from(self.height - 1) {
+                        if nx > 0
+                            && nx < i32::from(self.width - 1)
+                            && ny > 0
+                            && ny < i32::from(self.height - 1)
+                        {
                             let p = Point {
                                 x: u16::try_from(nx).unwrap_or(0),
                                 y: u16::try_from(ny).unwrap_or(0),
@@ -3645,7 +3730,7 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
-                         if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                        if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
                             self.companion = Some(Companion {
                                 position: boss.position,
                                 kind: crate::game::CompanionType::Fighter,
@@ -3654,10 +3739,10 @@ impl Game {
                                 path: Vec::new(),
                             });
                             crate::game::beep();
-                         }
-                         self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
-                         self.score += 100;
-                         self.spawn_particles(
+                        }
+                        self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                        self.score += 100;
+                        self.spawn_particles(
                             f32::from(boss.position.x),
                             f32::from(boss.position.y),
                             30,
@@ -3737,13 +3822,21 @@ impl Game {
                         || pu.location.y >= self.height - 1 - self.safe_zone_margin)
                 {
                     self.power_up = None;
-        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
-            self.power_up = Some(PowerUp {
-                p_type: PowerUpType::TimeFreeze,
-                location: Point { x: 0, y: 0 },
-                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
-            });
-        }
+                    if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+                        self.power_up = Some(PowerUp {
+                            p_type: PowerUpType::TimeFreeze,
+                            location: Point {
+                                x: 0,
+                                y: 0,
+                            },
+                            activation_time: Some(
+                                web_time::SystemTime::now()
+                                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                            ),
+                        });
+                    }
                 }
                 crate::game::beep();
             }
@@ -3807,6 +3900,7 @@ impl Game {
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
+        self.manage_crops();
         self.apply_magnet();
         self.apply_gravity();
 
@@ -3828,7 +3922,8 @@ impl Game {
             if let Some(dir) = self.bots[i].direction_queue.pop_front() {
                 self.bots[i].direction = dir;
             }
-            let next_head = Self::calculate_next_head_dir(self.bots[i].head(), self.bots[i].direction);
+            let next_head =
+                Self::calculate_next_head_dir(self.bots[i].head(), self.bots[i].direction);
             let mut hit_wall = false;
             let final_head = if self.portals.is_some_and(|(p1, _)| p1 == next_head) {
                 self.portals.unwrap().1
@@ -3920,7 +4015,10 @@ impl Game {
         if hit_laser2 && !is_invincible {
             p2_dead = true;
         }
-        if final_head2_opt.is_some_and(|head| self.lightning_column.is_some_and(|col| head.x == col)) && !is_invincible {
+        if final_head2_opt
+            .is_some_and(|head| self.lightning_column.is_some_and(|col| head.x == col))
+            && !is_invincible
+        {
             p2_dead = true;
         }
         if let Some(final_head2) = final_head2_opt
@@ -4065,7 +4163,9 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
-                                    if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                                    if self.stats.equipped_class
+                                        == Some(crate::game::HeroClass::Necromancer)
+                                    {
                                         self.companion = Some(Companion {
                                             position: boss.position,
                                             kind: crate::game::CompanionType::Fighter,
@@ -4105,7 +4205,10 @@ impl Game {
                                             state_timer: 0,
                                         });
                                     } else {
-                                        self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                                        self.update_bounty_progress(
+                                            crate::game::BountyType::KillBosses(0),
+                                            1,
+                                        );
                                         if self.mode == GameMode::BossRush {
                                             self.score += 1000 * self.campaign_level;
                                             self.campaign_level += 1;
@@ -4164,9 +4267,19 @@ impl Game {
                         < self.powerup_duration()
                 })
         });
-        let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier) || self.mode == GameMode::Tron;
-        let mut p2_grow =
-            final_head2_opt.is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier)) || self.mode == GameMode::Tron;
+        let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier)
+            || self.mode == GameMode::Tron;
+        if self.check_crop_collision(final_head1, is_multiplier) {
+            p1_grow = true;
+        }
+        let mut p2_grow = final_head2_opt
+            .is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier))
+            || self.mode == GameMode::Tron;
+        if let Some(fh2) = final_head2_opt
+            && self.check_crop_collision(fh2, is_multiplier)
+        {
+            p2_grow = true;
+        }
         self.check_poison_food_collision(final_head1, 1);
         if let Some(final_head2) = final_head2_opt {
             self.check_poison_food_collision(final_head2, 2);
@@ -4223,10 +4336,11 @@ impl Game {
                 continue;
             }
             if let Some(p2) = &self.player2
-                && p2.body_map.contains_key(final_head) {
-                    bots_to_remove.insert(*i);
-                    continue;
-                }
+                && p2.body_map.contains_key(final_head)
+            {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             for j in 0..self.bots.len() {
                 if *i != j && self.bots[j].body_map.contains_key(final_head) {
                     bots_to_remove.insert(*i);
@@ -4241,7 +4355,11 @@ impl Game {
                     self.width,
                     self.height,
                     &self.snake,
-                    |p| self.obstacles.contains(p) || self.snake.body_map.contains_key(p) || self.bots.iter().any(|b| b.body_map.contains_key(p)),
+                    |p| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    },
                     &mut self.rng,
                     self.safe_zone_margin,
                 ) {
@@ -4319,11 +4437,12 @@ impl Game {
             self.merchant = None;
             beep();
         } else if let Some(final_head2) = final_head2_opt
-            && self.merchant.is_some_and(|m| m == final_head2) {
-                self.state = GameState::MerchantShop;
-                self.merchant = None;
-                beep();
-            }
+            && self.merchant.is_some_and(|m| m == final_head2)
+        {
+            self.state = GameState::MerchantShop;
+            self.merchant = None;
+            beep();
+        }
 
         self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
         self.snake.move_to(final_head1, p1_grow);
@@ -4417,9 +4536,10 @@ impl Game {
                     p1_dead = true;
                 }
                 if let Some(final_head2) = final_head2_opt
-                    && bot.body_map.contains_key(&final_head2) {
-                        p2_dead = true;
-                    }
+                    && bot.body_map.contains_key(&final_head2)
+                {
+                    p2_dead = true;
+                }
             }
         }
 
@@ -4528,13 +4648,21 @@ impl Game {
             && final_head == p.location
         {
             self.power_up = None;
-        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
-            self.power_up = Some(PowerUp {
-                p_type: PowerUpType::TimeFreeze,
-                location: Point { x: 0, y: 0 },
-                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
-            });
-        }
+            if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+                self.power_up = Some(PowerUp {
+                    p_type: PowerUpType::TimeFreeze,
+                    location: Point {
+                        x: 0,
+                        y: 0,
+                    },
+                    activation_time: Some(
+                        web_time::SystemTime::now()
+                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    ),
+                });
+            }
         }
     }
     fn check_poison_food_collision(&mut self, final_head: Point, player: u8) {
@@ -4569,13 +4697,7 @@ impl Game {
                 Resource::Iron => crate::color::Color::White,
                 Resource::Diamond => crate::color::Color::Cyan,
             };
-            self.spawn_particles(
-                f32::from(final_head.x),
-                f32::from(final_head.y),
-                15,
-                color,
-                '*',
-            );
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, color, '*');
             *self.stats.inventory.entry(res).or_insert(0) += 1;
             let points = match res {
                 Resource::Wood => 10,
@@ -4586,6 +4708,57 @@ impl Game {
             self.score += points;
             self.stats.total_score += points;
             beep();
+        }
+    }
+
+    fn check_crop_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
+        let mut crop_eaten = false;
+        let mut new_crops = Vec::new();
+        for crop in &self.crops {
+            if crop.position == final_head {
+                if crop.growth_stage == 2 {
+                    crop_eaten = true;
+                } else {
+                    new_crops.push(crop.clone());
+                }
+            } else {
+                new_crops.push(crop.clone());
+            }
+        }
+        self.crops = new_crops;
+
+        if crop_eaten {
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                25,
+                crate::color::Color::Yellow,
+                '¥',
+            );
+
+            let added_score = if is_multiplier {
+                50
+            } else {
+                25
+            };
+            let mut coins_earned = 50;
+            if let Some(&double_coins_level) =
+                self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins)
+            {
+                coins_earned *= 1 + double_coins_level;
+            }
+            if self.skin == '₿' {
+                coins_earned *= 2;
+            }
+            self.score += added_score;
+            self.stats.total_score += added_score;
+            self.stats.coins += coins_earned;
+            self.food_eaten_session += 1;
+            beep();
+            self.gain_xp(5);
+            true
+        } else {
+            false
         }
     }
 
@@ -4632,7 +4805,9 @@ impl Game {
                 reason = "Score is positive and bounded"
             )]
             let mut coins_earned = (f64::from(added_score) * coin_multiplier).round() as u32;
-            if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
+            if let Some(&double_coins_level) =
+                self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins)
+            {
                 coins_earned *= 1 + double_coins_level;
                 added_score *= 1 + double_coins_level;
             }
@@ -4798,8 +4973,14 @@ impl Game {
             let is_match = matches!(
                 (active.b_type.clone(), b_type),
                 (crate::game::BountyType::EatFood(_), crate::game::BountyType::EatFood(_))
-                    | (crate::game::BountyType::KillBosses(_), crate::game::BountyType::KillBosses(_))
-                    | (crate::game::BountyType::SurviveTime(_), crate::game::BountyType::SurviveTime(_))
+                    | (
+                        crate::game::BountyType::KillBosses(_),
+                        crate::game::BountyType::KillBosses(_)
+                    )
+                    | (
+                        crate::game::BountyType::SurviveTime(_),
+                        crate::game::BountyType::SurviveTime(_)
+                    )
             );
             if is_match {
                 active.progress += amount;
@@ -5207,9 +5388,15 @@ impl Game {
                 let mut juggernaut_will_destroy = false;
                 for boss in &self.bosses {
                     if boss.kind == BossType::Juggernaut {
-                        let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                        let active_steps =
+                            u32::from(steps).saturating_sub(u32::from(boss.state_timer));
                         let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
-                            std::cmp::max(1, 3_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
                         } else {
                             2
                         });
@@ -5218,7 +5405,8 @@ impl Game {
                             move_threshold = std::cmp::max(1, move_threshold / 2);
                         }
                         let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                        let dist = u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y));
+                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                            + u32::from(final_p.y.abs_diff(boss.position.y));
                         if dist <= moves {
                             juggernaut_will_destroy = true;
                             break;
@@ -5326,14 +5514,32 @@ impl Game {
                     if boss.kind == BossType::Shooter || boss.kind == BossType::Puffer {
                         let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
-                                if boss.kind == BossType::Puffer { 10 } else { 5 },
-                                (if boss.kind == BossType::Puffer { 30_u8 } else { 15_u8 }).saturating_sub(
-                                    u8::try_from(self.campaign_level).unwrap_or(255),
-                                ),
+                                if boss.kind == BossType::Puffer {
+                                    10
+                                } else {
+                                    5
+                                },
+                                (if boss.kind == BossType::Puffer {
+                                    30_u8
+                                } else {
+                                    15_u8
+                                })
+                                .saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
                             )
-                        } else if boss.kind == BossType::Puffer { 30 } else { 15 });
+                        } else if boss.kind == BossType::Puffer {
+                            30
+                        } else {
+                            15
+                        });
                         if boss.health <= boss.max_health / 2 {
-                            shoot_threshold = std::cmp::max(if boss.kind == BossType::Puffer { 5 } else { 1 }, shoot_threshold / 2);
+                            shoot_threshold = std::cmp::max(
+                                if boss.kind == BossType::Puffer {
+                                    5
+                                } else {
+                                    1
+                                },
+                                shoot_threshold / 2,
+                            );
                         }
                         let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
                         if shoots > 0
@@ -5734,7 +5940,13 @@ impl Game {
             crate::color::Color::Red,
             'X',
         );
-        if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue) && self.rng.gen_bool(0.2) { crate::game::beep(); } else { self.lives = self.lives.saturating_sub(1); }
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue)
+            && self.rng.gen_bool(0.2)
+        {
+            crate::game::beep();
+        } else {
+            self.lives = self.lives.saturating_sub(1);
+        }
         self.just_died = true;
         beep();
         if self.lives == 0 {
