@@ -22,4 +22,5 @@ pub enum GameState {
     CompanionCamp,
     ClassSelect,
     Equipment,
+    Casino,
 }

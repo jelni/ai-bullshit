@@ -283,6 +283,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::CompanionCamp => handle_companion_camp_input(code, game),
         GameState::ClassSelect => handle_class_select_input(code, game),
         GameState::Equipment => handle_equipment_input(code, game),
+        GameState::Casino => handle_casino_input(code, game),
     };
 
     if should_continue {
@@ -491,6 +492,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             47 => {
+                game.state = GameState::Casino;
+                game.settings_selection = 0;
+            },
+            48 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -500,11 +505,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 47;
+                game.menu_selection = 48;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 47 {
+            if game.menu_selection < 48 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1496,6 +1501,61 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
         _ => {},
     }
     game.save_stats();
+    true
+}
+
+fn handle_casino_input(code: KeyCode, game: &mut Game) -> bool {
+    use rand::Rng;
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 1;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 1 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                // Slot Machine
+                if game.stats.coins >= 100 {
+                    game.stats.coins -= 100;
+                    let mut rng = rand::thread_rng();
+                    let s1 = rng.gen_range(0..5);
+                    let s2 = rng.gen_range(0..5);
+                    let s3 = rng.gen_range(0..5);
+                    if s1 == s2 && s2 == s3 {
+                        game.stats.coins += rng.gen_range(500..=2000);
+                        crate::game::beep();
+                    }
+                    game.save_stats();
+                }
+            },
+            1 => {
+                // Roulette
+                if game.stats.coins >= 50 {
+                    game.stats.coins -= 50;
+                    let mut rng = rand::thread_rng();
+                    if rng.gen_bool(0.5) {
+                        game.stats.coins += 100;
+                        crate::game::beep();
+                    }
+                    game.save_stats();
+                }
+            },
+            _ => {},
+        },
+        _ => {},
+    }
     true
 }
 
