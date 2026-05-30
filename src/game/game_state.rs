@@ -24,4 +24,5 @@ pub enum GameState {
     Equipment,
     Casino,
     StockMarket,
+    RealEstate,
 }

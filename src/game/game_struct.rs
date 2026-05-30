@@ -81,6 +81,7 @@ pub struct Game {
     pub companion: Option<Companion>,
     pub crops: Vec<crate::game::Crop>,
     pub equipment_boxes: Vec<Point>,
+    pub last_real_estate_tick: Option<Instant>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -251,6 +252,7 @@ impl Game {
             companion: None,
             crops: Vec::new(),
             equipment_boxes: Vec::new(),
+            last_real_estate_tick: Some(Instant::now()),
         }
     }
     #[must_use]
@@ -567,6 +569,7 @@ impl Game {
                 self.companion = state.companion;
                 self.crops = Vec::new(); // Or state.crops if we added it to SaveState, but we can just initialize empty for now
                 self.equipment_boxes = state.equipment_boxes;
+                self.last_real_estate_tick = Some(Instant::now());
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -2276,6 +2279,7 @@ impl Game {
             self.level_up_selection = state.level_up_selection;
             self.companion = state.companion;
             self.equipment_boxes = state.equipment_boxes;
+                self.last_real_estate_tick = Some(Instant::now());
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2598,6 +2602,18 @@ impl Game {
     }
 
     pub fn update(&mut self) {
+        if let Some(last_tick) = self.last_real_estate_tick {
+            if last_tick.elapsed() >= web_time::Duration::from_secs(1) {
+                let mut total_income = 0;
+                for (prop, count) in &self.stats.properties {
+                    total_income += prop.income_per_second() * count;
+                }
+                self.stats.coins += total_income;
+                self.last_real_estate_tick = Some(web_time::Instant::now());
+            }
+        } else {
+            self.last_real_estate_tick = Some(web_time::Instant::now());
+        }
         if self.state != GameState::Playing {
             return;
         }

@@ -285,6 +285,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Equipment => handle_equipment_input(code, game),
         GameState::Casino => handle_casino_input(code, game),
         GameState::StockMarket => handle_stock_market_input(code, game),
+        GameState::RealEstate => handle_real_estate_input(code, game),
     };
 
     if should_continue {
@@ -505,6 +506,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             50 => {
+                game.state = GameState::RealEstate;
+                game.settings_selection = 0;
+            },
+            51 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -1661,6 +1666,47 @@ fn handle_equipment_input(code: KeyCode, game: &mut Game) -> bool {
             game.save_stats();
         },
         _ => {},
+    }
+    true
+}
+
+fn handle_real_estate_input(code: KeyCode, game: &mut Game) -> bool {
+    let options_count = 5;
+    match code {
+        KeyCode::Up => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = options_count - 1;
+            }
+        }
+        KeyCode::Down => {
+            if game.settings_selection < options_count - 1 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        }
+        KeyCode::Enter => {
+            let props = [
+                crate::game::Property::Shack,
+                crate::game::Property::Apartment,
+                crate::game::Property::Mansion,
+                crate::game::Property::Skyscraper,
+            ];
+            if game.settings_selection < 4 {
+                let prop = props[game.settings_selection];
+                let cost = prop.cost();
+                if game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    *game.stats.properties.entry(prop).or_insert(0) += 1;
+                }
+            } else {
+                game.state = GameState::Menu;
+            }
+        }
+        KeyCode::Esc => game.state = GameState::Menu,
+        _ => {}
     }
     true
 }
