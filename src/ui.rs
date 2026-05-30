@@ -38,6 +38,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::BountyBoard => draw_bounty_board(game, stdout)?,
         GameState::MerchantShop => draw_merchant_shop(game, stdout)?,
         GameState::CompanionCamp => draw_companion_camp(game, stdout)?,
+        GameState::ClassSelect => draw_class_select(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -139,6 +140,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Crafting",
         "Bounty Board",
         "Companion Camp",
+        "Class Select",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1172,13 +1174,12 @@ fn draw_entities<W: Write>(
     }
 
     // Draw Black Hole
-    if let Some(bh) = game.black_hole {
-        if is_visible(bh.x, bh.y) {
+    if let Some(bh) = game.black_hole
+        && is_visible(bh.x, bh.y) {
             stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
             stdout.queue(SetForegroundColor(Color::DarkGrey))?;
             write!(stdout, "O")?;
         }
-    }
 
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
@@ -1196,13 +1197,12 @@ fn draw_entities<W: Write>(
     }
 
     // Draw Decoy
-    if let Some((decoy_pos, _)) = game.decoy {
-        if is_visible(decoy_pos.x, decoy_pos.y) {
+    if let Some((decoy_pos, _)) = game.decoy
+        && is_visible(decoy_pos.x, decoy_pos.y) {
             stdout.queue(cursor::MoveTo(decoy_pos.x, decoy_pos.y))?;
             stdout.queue(SetForegroundColor(Color::Magenta))?;
             write!(stdout, "D")?;
         }
-    }
 
     // Draw Meteors
     for meteor in &game.meteors {
@@ -1287,34 +1287,31 @@ fn draw_entities<W: Write>(
     }
 
     // Draw merchant
-    if let Some(merchant_p) = game.merchant {
-        if is_visible(merchant_p.x, merchant_p.y) {
+    if let Some(merchant_p) = game.merchant
+        && is_visible(merchant_p.x, merchant_p.y) {
             stdout.queue(cursor::MoveTo(merchant_p.x, merchant_p.y))?;
             stdout.queue(SetForegroundColor(Color::Magenta))?;
             write!(stdout, "$")?;
         }
-    }
 
     // Draw bonus food
-    if let Some((bonus_p, _)) = game.bonus_food {
-        if is_visible(bonus_p.x, bonus_p.y) {
+    if let Some((bonus_p, _)) = game.bonus_food
+        && is_visible(bonus_p.x, bonus_p.y) {
             stdout.queue(cursor::MoveTo(bonus_p.x, bonus_p.y))?;
             stdout.queue(SetForegroundColor(Color::Yellow))?;
             write!(stdout, "★")?;
         }
-    }
 
     // Draw poison food
-    if let Some((poison_p, _)) = game.poison_food {
-        if is_visible(poison_p.x, poison_p.y) {
+    if let Some((poison_p, _)) = game.poison_food
+        && is_visible(poison_p.x, poison_p.y) {
             stdout.queue(cursor::MoveTo(poison_p.x, poison_p.y))?;
             stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
             write!(stdout, "X")?;
         }
-    }
 
-    if let Some(power_up) = &game.power_up {
-        if power_up.activation_time.is_none() && is_visible(power_up.location.x, power_up.location.y) {
+    if let Some(power_up) = &game.power_up
+        && power_up.activation_time.is_none() && is_visible(power_up.location.x, power_up.location.y) {
             stdout.queue(cursor::MoveTo(power_up.location.x, power_up.location.y))?;
             match power_up.p_type {
             crate::game::PowerUpType::ExtraLife => {
@@ -1355,11 +1352,10 @@ fn draw_entities<W: Write>(
             },
         }
         }
-    }
 
     // Draw companion
-    if let Some(comp) = &game.companion {
-        if is_visible(comp.position.x, comp.position.y) {
+    if let Some(comp) = &game.companion
+        && is_visible(comp.position.x, comp.position.y) {
             stdout.queue(cursor::MoveTo(comp.position.x, comp.position.y))?;
             let (color, symbol) = match comp.kind {
                 crate::game::CompanionType::Collector => (Color::Yellow, 'C'),
@@ -1369,7 +1365,6 @@ fn draw_entities<W: Write>(
             stdout.queue(SetForegroundColor(color))?;
             write!(stdout, "{symbol}")?;
         }
-    }
 
     // Draw ghost snake
     if let Some(ghost) = &game.ghost_snake {
@@ -1588,8 +1583,8 @@ fn draw_base_status<W: Write>(
 }
 
 fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
-    if let Some(power_up) = &game.power_up {
-        if let Some(activation_time) = power_up.activation_time {
+    if let Some(power_up) = &game.power_up
+        && let Some(activation_time) = power_up.activation_time {
             let elapsed = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
@@ -1619,7 +1614,6 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 write!(stdout, "{power_up_msg}")?;
             }
         }
-    }
     Ok(())
 }
 
@@ -2139,6 +2133,54 @@ fn draw_companion_camp<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
         game.height - 2,
     ))?;
     write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
+fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "CLASS SELECT";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let classes = [
+        ("Warrior", crate::game::HeroClass::Warrior, "Extra Lives"),
+        ("Mage", crate::game::HeroClass::Mage, "Start with Time Freeze"),
+        ("Rogue", crate::game::HeroClass::Rogue, "Dodge Chance"),
+        ("Paladin", crate::game::HeroClass::Paladin, "Regenerate Lives"),
+    ];
+
+    for (i, (name, class, desc)) in classes.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_classes.contains(class);
+        let prefix = if game.settings_selection == i { ">> " } else { "   " };
+        let status = if game.stats.equipped_class == Some(*class) {
+            "[EQUIPPED]"
+        } else if is_unlocked {
+            "[UNLOCKED]"
+        } else {
+            "[500 COINS]"
+        };
+
+        let line = format!("{prefix}{name}: {desc} {status}");
+        stdout.queue(SetForegroundColor(if is_unlocked { Color::White } else { Color::DarkGrey }))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
+            game.height / 2 - 3 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let unequip_prefix = if game.settings_selection == 4 { ">> " } else { "   " };
+    let unequip_line = format!("{unequip_prefix}Unequip Class");
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(unequip_line.len()).unwrap_or(0) / 2),
+        game.height / 2 + 5,
+    ))?;
+    write!(stdout, "{unequip_line}")?;
 
     Ok(())
 }

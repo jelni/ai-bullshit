@@ -1702,10 +1702,17 @@ impl Game {
             });
         } else {
             self.power_up = None;
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+            self.power_up = Some(PowerUp {
+                p_type: PowerUpType::TimeFreeze,
+                location: Point { x: 0, y: 0 },
+                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
+            });
+        }
         }
         self.decoy = None;
         self.score = 0;
-        self.lives = if self.skin == '💎' {
+        self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) { 3 + u32::from(self.stats.upgrade_extra_lives) } else if self.skin == '💎' {
             3 + u32::from(self.stats.upgrade_extra_lives) + 1
         } else {
             3 + u32::from(self.stats.upgrade_extra_lives)
@@ -2432,11 +2439,10 @@ impl Game {
                     if comp.position == self.food {
                         self.process_food_collision(comp.position, false);
                     }
-                    if let Some((bp, _)) = self.bonus_food {
-                        if comp.position == bp {
+                    if let Some((bp, _)) = self.bonus_food
+                        && comp.position == bp {
                             self.check_bonus_food_collision(comp.position, false);
                         }
-                    }
                     if self.resources.contains_key(&comp.position) {
                         self.process_resource_collision(comp.position);
                     }
@@ -3689,6 +3695,13 @@ impl Game {
                         || pu.location.y >= self.height - 1 - self.safe_zone_margin)
                 {
                     self.power_up = None;
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+            self.power_up = Some(PowerUp {
+                p_type: PowerUpType::TimeFreeze,
+                location: Point { x: 0, y: 0 },
+                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
+            });
+        }
                 }
                 crate::game::beep();
             }
@@ -4462,6 +4475,13 @@ impl Game {
             && final_head == p.location
         {
             self.power_up = None;
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Mage) {
+            self.power_up = Some(PowerUp {
+                p_type: PowerUpType::TimeFreeze,
+                location: Point { x: 0, y: 0 },
+                activation_time: Some(web_time::SystemTime::now().duration_since(web_time::SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
+            });
+        }
         }
     }
     fn check_poison_food_collision(&mut self, final_head: Point, player: u8) {
@@ -5639,7 +5659,7 @@ impl Game {
             crate::color::Color::Red,
             'X',
         );
-        self.lives = self.lives.saturating_sub(1);
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue) && self.rng.gen_bool(0.2) { crate::game::beep(); } else { self.lives = self.lives.saturating_sub(1); }
         self.just_died = true;
         beep();
         if self.lives == 0 {
