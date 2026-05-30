@@ -2189,7 +2189,7 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        });
+        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
         let mut hit_wall1 = false;
         let final_head1 = if self.portals.is_some_and(|(p1, _)| p1 == next_head1) {
             self.portals.unwrap().1
@@ -4004,7 +4004,7 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        });
+        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
 
         for i in 0..self.bots.len() {
             if let Some(dir) = self.bots[i].direction_queue.pop_front() {
@@ -4080,6 +4080,17 @@ impl Game {
                     crate::color::Color::Red,
                     'X',
                 );
+                crate::game::beep();
+            } else if self.stats.equipped_vehicle == Some(crate::game::Vehicle::Tank) {
+                self.obstacles.remove(&final_head1);
+                self.spawn_particles(
+                    f32::from(final_head1.x),
+                    f32::from(final_head1.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    '*',
+                );
+                self.stats.equipped_vehicle = None; // Unequip to balance, like a 1-time shield
                 crate::game::beep();
             } else if self.stats.equipped_gear == Some(crate::game::Equipment::HeavyArmor) {
                 self.obstacles.remove(&final_head1);
@@ -4406,18 +4417,15 @@ impl Game {
                 })
         });
         let mut p1_grow = self.check_bonus_food_collision(final_head1, is_multiplier)
+            || self.check_crop_collision(final_head1, is_multiplier)
             || self.mode == GameMode::Tron;
-        if self.check_crop_collision(final_head1, is_multiplier) {
-            p1_grow = true;
-        }
+
         let mut p2_grow = final_head2_opt
-            .is_some_and(|fh2| self.check_bonus_food_collision(fh2, is_multiplier))
+            .is_some_and(|fh2| {
+                self.check_bonus_food_collision(fh2, is_multiplier)
+                    || self.check_crop_collision(fh2, is_multiplier)
+            })
             || self.mode == GameMode::Tron;
-        if let Some(fh2) = final_head2_opt
-            && self.check_crop_collision(fh2, is_multiplier)
-        {
-            p2_grow = true;
-        }
         self.check_poison_food_collision(final_head1, 1);
         if let Some(final_head2) = final_head2_opt {
             self.check_poison_food_collision(final_head2, 2);
@@ -4587,6 +4595,14 @@ impl Game {
         }
 
         self.add_obstacles_if_needed(old_food_eaten_session, final_head1);
+
+        if self.stats.equipped_vehicle == Some(crate::game::Vehicle::Car)
+            && self.rng.gen_bool(0.05)
+            && let Some(tail) = self.snake.body.back()
+        {
+            self.obstacles.insert(*tail);
+        }
+
         self.snake.move_to(final_head1, p1_grow);
         if let Some(final_head2) = final_head2_opt
             && let Some(p2) = &mut self.player2
@@ -5444,7 +5460,7 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        });
+        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
         {
@@ -5869,7 +5885,7 @@ impl Game {
                             .saturating_sub(time)
                             < self.powerup_duration()
                     })
-            });
+            }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
             let calc_dist = |p1: Point, p2: Point| -> u16 {
                 let mut dx = p1.x.abs_diff(p2.x);
                 let mut dy = p1.y.abs_diff(p2.y);

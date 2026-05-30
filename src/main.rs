@@ -163,6 +163,12 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                 .max(Duration::from_millis(30));
         }
 
+        if game.stats.equipped_vehicle == Some(crate::game::Vehicle::Bike) {
+            current_tick_rate = current_tick_rate
+                .saturating_sub(Duration::from_millis(15))
+                .max(Duration::from_millis(30));
+        }
+
         let powerup_duration = game.powerup_duration();
         if let Some(power_up) = &mut game.power_up
             && let Some(activation_time) = power_up.activation_time
@@ -286,6 +292,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Casino => handle_casino_input(code, game),
         GameState::StockMarket => handle_stock_market_input(code, game),
         GameState::RealEstate => handle_real_estate_input(code, game),
+        GameState::VehicleGarage => handle_vehicle_garage_input(code, game),
     };
 
     if should_continue {
@@ -510,6 +517,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             51 => {
+                game.state = GameState::VehicleGarage;
+                game.settings_selection = 0;
+            },
+            52 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -519,11 +530,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 50;
+                game.menu_selection = 52;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 50 {
+            if game.menu_selection < 52 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1662,6 +1673,60 @@ fn handle_equipment_input(code: KeyCode, game: &mut Game) -> bool {
                 game.stats.equipped_gear = Some(game.stats.unlocked_equipment[game.settings_selection]);
             } else {
                 game.stats.equipped_gear = None;
+            }
+            game.save_stats();
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_vehicle_garage_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            let total_items = 5; // 4 vehicles + 1 unequip
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = total_items - 1;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            let total_items = 5;
+            if game.settings_selection < total_items - 1 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let vehicles = [
+                crate::game::Vehicle::Bike,
+                crate::game::Vehicle::Car,
+                crate::game::Vehicle::Tank,
+                crate::game::Vehicle::Spaceship,
+            ];
+
+            if game.settings_selection < 4 {
+                let v = vehicles[game.settings_selection];
+                let cost = match v {
+                    crate::game::Vehicle::Bike => 1000,
+                    crate::game::Vehicle::Car => 2500,
+                    crate::game::Vehicle::Tank => 5000,
+                    crate::game::Vehicle::Spaceship => 10000,
+                };
+                if game.stats.unlocked_vehicles.contains(&v) {
+                    game.stats.equipped_vehicle = Some(v);
+                } else if game.stats.coins >= cost {
+                    game.stats.coins -= cost;
+                    game.stats.unlocked_vehicles.push(v);
+                    game.stats.equipped_vehicle = Some(v);
+                }
+            } else {
+                game.stats.equipped_vehicle = None;
             }
             game.save_stats();
         },

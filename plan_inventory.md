@@ -1,4 +1,4 @@
-I will implement an **Inventory & Crafting System**.
+# Plan: Implement Inventory & Crafting System
 
 1. Add `Resource` types: `Wood`, `Iron`, `Gold`, `Diamond`.
 2. Add `CraftableItem` types: `SpeedPotion`, `IronWall`, `GoldenApple`, `DiamondSword`.
@@ -28,5 +28,3 @@ Gold: 💰 (or 'G' yellow, Goblin uses 'G' though so maybe 'O')
 Diamond: 💎 (or 'D' cyan)
 
 This is a very cool feature! It fits the "massive multiplayer e-sports RPG" vision perfectly.
-
-Let's do it!

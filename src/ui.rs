@@ -43,9 +43,101 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Casino => draw_casino(game, stdout)?,
         GameState::StockMarket => draw_stock_market(game, stdout)?,
         GameState::RealEstate => draw_real_estate(game, stdout)?,
+        GameState::VehicleGarage => draw_vehicle_garage(game, stdout)?,
     }
 
     stdout.flush()?;
+    Ok(())
+}
+
+fn draw_vehicle_garage<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "🏎️ VEHICLE GARAGE 🚀";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let vehicles = [
+        crate::game::Vehicle::Bike,
+        crate::game::Vehicle::Car,
+        crate::game::Vehicle::Tank,
+        crate::game::Vehicle::Spaceship,
+    ];
+
+    let names = [
+        "Bike (Speed boost)",
+        "Car (Drop obstacles)",
+        "Tank (Destroy obstacles)",
+        "Spaceship (Pass through walls)",
+    ];
+
+    let costs = [1000, 2500, 5000, 10000];
+
+    for (i, v) in vehicles.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_vehicles.contains(v);
+        let is_equipped = game.stats.equipped_vehicle == Some(*v);
+
+        let status = if is_equipped {
+            "[EQUIPPED]".to_string()
+        } else if is_unlocked {
+            "[UNLOCKED]".to_string()
+        } else {
+            format!("[Cost: {}]", costs[i])
+        };
+
+        let prefix = if i == game.settings_selection { ">" } else { " " };
+        let suffix = if i == game.settings_selection { "<" } else { " " };
+        let color = if is_equipped {
+            Color::Green
+        } else if is_unlocked {
+            Color::White
+        } else if game.stats.coins >= costs[i] {
+            Color::Yellow
+        } else {
+            Color::DarkGrey
+        };
+
+        let item_str = format!("{prefix} {} {} {suffix}", names[i], status);
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(item_str.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i * 2).unwrap_or(0),
+        ))?;
+        write!(stdout, "{item_str}")?;
+    }
+
+    // Unequip option
+    let unequip_idx = 4;
+    let prefix = if unequip_idx == game.settings_selection { ">" } else { " " };
+    let suffix = if unequip_idx == game.settings_selection { "<" } else { " " };
+    let color = if game.stats.equipped_vehicle.is_none() { Color::Green } else { Color::White };
+    let item_str = format!("{prefix} Unequip Vehicle {suffix}");
+
+    stdout.queue(SetForegroundColor(color))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(item_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 2 + u16::try_from(unequip_idx * 2).unwrap_or(0),
+    ))?;
+    write!(stdout, "{item_str}")?;
+
+    let help_text = "Space/Enter: Select | Esc/Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help_text.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help_text}")?;
+
     Ok(())
 }
 
@@ -189,6 +281,7 @@ const fn get_elo_rank(elo: u32) -> &'static str {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "Menu naturally has many entries to draw")]
 fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "SNAKE GAME";
 
@@ -260,6 +353,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Casino",
         "Stock Market",
         "Real Estate Office",
+        "Vehicle Garage",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1656,6 +1750,7 @@ fn draw_entities<W: Write>(
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Status rendering naturally has many elements")]
 fn draw_base_status<W: Write>(
     game: &Game,
     stdout: &mut W,
