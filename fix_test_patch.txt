@@ -1,0 +1,22 @@
+<<<<<<< SEARCH
+        let mut shifted = false;
+        for _ in 0..10000 {
+            game.weather = Weather::Tornado;
+            game.snake.direction_queue.push_back(crate::snake::Direction::Down);
+            game.snake = crate::snake::Snake::new(crate::snake::Point {
+                x: 10,
+                y: 10,
+            });
+            game.update();
+=======
+        let mut shifted = false;
+        for _ in 0..10000 {
+            game.current_planet = crate::game::Planet::Earth; // ensure we aren't overriding tornado back to sandstorm
+            game.weather = Weather::Tornado;
+            game.snake.direction_queue.push_back(crate::snake::Direction::Down);
+            game.snake = crate::snake::Snake::new(crate::snake::Point {
+                x: 10,
+                y: 10,
+            });
+            game.update();
+>>>>>>> REPLACE

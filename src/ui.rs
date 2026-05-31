@@ -48,9 +48,78 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::BattlePass => draw_battle_pass(game, stdout)?,
         GameState::ArtifactShrine => draw_artifact_shrine(game, stdout)?,
         GameState::Hatchery => draw_hatchery(game, stdout)?,
+        GameState::SpacePort => draw_space_port(game, stdout)?,
     }
 
     stdout.flush()?;
+    Ok(())
+}
+
+fn draw_space_port<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "SPACE PORT";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 5,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let planets = [
+        (crate::game::Planet::Earth, "Earth (Normal Gravity)"),
+        (crate::game::Planet::Moon, "Moon (Low Gravity, Slower)"),
+        (crate::game::Planet::Mars, "Mars (Sandstorms)"),
+        (crate::game::Planet::Jupiter, "Jupiter (High Gravity, Faster)"),
+    ];
+
+    for (i, (planet, name)) in planets.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_planets.contains(planet);
+        let color = if i == game.settings_selection {
+            Color::Yellow
+        } else if is_unlocked {
+            Color::White
+        } else {
+            Color::DarkGrey
+        };
+        stdout.queue(SetForegroundColor(color))?;
+
+        let text = if is_unlocked {
+            if *planet == game.current_planet {
+                format!("{name} [CURRENT]")
+            } else {
+                (*name).to_string()
+            }
+        } else {
+            format!("{name} (Locked - 50 Coins)")
+        };
+
+        let prefix = if i == game.settings_selection { "> " } else { "  " };
+        let suffix = if i == game.settings_selection { " <" } else { "  " };
+
+        let display_text = format!("{prefix}{text}{suffix}");
+
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0),
+        ))?;
+        write!(stdout, "{display_text}")?;
+    }
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        game.height / 2 + 3,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let help_text = "Up/Down: Select | Enter: Travel/Unlock | Q: Back";
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help_text.len()).unwrap_or(0) / 2),
+        game.height / 2 + 5,
+    ))?;
+    write!(stdout, "{help_text}")?;
+
     Ok(())
 }
 
@@ -425,6 +494,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Battle Pass",
         "Artifact Shrine",
         "Pet Hatchery",
+        "Space Port",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {

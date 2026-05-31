@@ -114,13 +114,23 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
     let mut last_frame = Instant::now();
 
     'mainloop: loop {
-        let base_tick_rate = match game.difficulty {
+        let mut base_tick_rate = match game.difficulty {
             game::Difficulty::Easy => Duration::from_millis(200),
             game::Difficulty::Normal => Duration::from_millis(150),
             game::Difficulty::Hard => Duration::from_millis(100),
             game::Difficulty::Insane => Duration::from_millis(60),
             game::Difficulty::GodMode => Duration::from_millis(30),
         };
+
+        match game.current_planet {
+            game::Planet::Moon => {
+                base_tick_rate = base_tick_rate.mul_f32(1.5);
+            },
+            game::Planet::Jupiter => {
+                base_tick_rate = base_tick_rate.mul_f32(0.7);
+            },
+            _ => {},
+        }
 
         let delta = last_frame.elapsed();
         last_frame = Instant::now();
@@ -297,6 +307,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::BattlePass => handle_battle_pass_input(code, game),
         GameState::ArtifactShrine => handle_artifact_shrine_input(code, game),
         GameState::Hatchery => handle_hatchery_input(code, game),
+        GameState::SpacePort => handle_space_port_input(code, game),
     };
 
     if should_continue {
@@ -542,6 +553,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             56 => {
+                game.state = GameState::SpacePort;
+                game.settings_selection = 0;
+            },
+            57 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -551,14 +566,56 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 56;
+                game.menu_selection = 57;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 56 {
+            if game.menu_selection < 57 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_space_port_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let selected_planet = match game.settings_selection {
+                0 => crate::game::Planet::Earth,
+                1 => crate::game::Planet::Moon,
+                2 => crate::game::Planet::Mars,
+                _ => crate::game::Planet::Jupiter,
+            };
+
+            if game.stats.unlocked_planets.contains(&selected_planet) {
+                game.current_planet = selected_planet;
+                crate::game::beep();
+            } else if game.stats.coins >= 50 {
+                game.stats.coins -= 50;
+                game.stats.unlocked_planets.push(selected_planet);
+                game.current_planet = selected_planet;
+                crate::game::beep();
             }
         },
         _ => {},

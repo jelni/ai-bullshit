@@ -564,6 +564,7 @@ mod tests {
         game.snake.direction_queue.push_back(crate::snake::Direction::Down);
         let mut shifted = false;
         for _ in 0..10000 {
+            game.current_planet = crate::game::Planet::Earth;
             game.weather = Weather::Tornado;
             game.snake.direction_queue.push_back(crate::snake::Direction::Down);
             game.snake = crate::snake::Snake::new(crate::snake::Point {
