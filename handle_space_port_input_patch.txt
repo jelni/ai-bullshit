@@ -1,0 +1,14 @@
+<<<<<<< SEARCH
+        GameState::ArtifactShrine => handle_artifact_shrine_input(code, game),
+        GameState::Hatchery => handle_hatchery_input(code, game),
+    };
+
+    if should_continue {
+=======
+        GameState::ArtifactShrine => handle_artifact_shrine_input(code, game),
+        GameState::Hatchery => handle_hatchery_input(code, game),
+        GameState::SpacePort => handle_space_port_input(code, game),
+    };
+
+    if should_continue {
+>>>>>>> REPLACE

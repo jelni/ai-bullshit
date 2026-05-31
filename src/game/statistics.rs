@@ -1,7 +1,11 @@
 use super::{Artifact,
     Achievement, Bounty, CompanionType, CraftableItem, Deserialize, Fish, HeroClass, Resource, Equipment, Serialize,
-    Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes,
+    Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes, Planet,
 };
+
+pub fn default_unlocked_planets() -> Vec<Planet> {
+    vec![Planet::Earth]
+}
 #[derive(Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub games_played: u32,
@@ -72,4 +76,6 @@ pub struct Statistics {
     pub inventory_eggs: std::collections::HashMap<crate::game::EggType, u32>,
     #[serde(default)]
     pub incubator: Option<(crate::game::EggType, u32)>,
+    #[serde(default = "default_unlocked_planets")]
+    pub unlocked_planets: Vec<Planet>,
 }

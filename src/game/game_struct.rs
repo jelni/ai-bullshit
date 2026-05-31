@@ -1,7 +1,7 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
     Duration, File, GameMode, GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant,
-    Laser, Meteor, Particle, Point, PowerUp, PowerUpType, Read, Resource, Rng, SaveState,
+    Laser, Meteor, Particle, Planet, Point, PowerUp, PowerUpType, Read, Resource, Rng, SaveState,
     SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep, default_unlocked_themes,
     fs, io,
 };
@@ -87,6 +87,7 @@ pub struct Game {
     pub is_fishing: bool,
     pub eggs_on_board: std::collections::HashMap<Point, crate::game::EggType>,
     pub paladin_life_timer: u32,
+    pub current_planet: Planet,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -263,6 +264,7 @@ impl Game {
             is_fishing: false,
             eggs_on_board: std::collections::HashMap::new(),
             paladin_life_timer: 0,
+            current_planet: Planet::Earth,
         }
     }
     #[must_use]
@@ -1817,6 +1819,9 @@ impl Game {
         self.eggs_on_board.clear();
         self.portals = None;
         self.weather = Weather::Clear;
+        if self.current_planet == Planet::Mars {
+            self.weather = Weather::Sandstorm;
+        }
         self.lightning_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;

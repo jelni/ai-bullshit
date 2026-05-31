@@ -30,4 +30,5 @@ pub enum GameState {
     BattlePass,
     ArtifactShrine,
     Hatchery,
+    SpacePort,
 }
