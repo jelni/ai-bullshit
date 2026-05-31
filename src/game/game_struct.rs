@@ -2298,6 +2298,7 @@ impl Game {
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
+        self.stats.battle_pass_xp += amount;
         self.xp += amount;
         if self.xp >= self.xp_to_next_level {
             self.xp -= self.xp_to_next_level;

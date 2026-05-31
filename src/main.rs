@@ -294,6 +294,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::RealEstate => handle_real_estate_input(code, game),
         GameState::VehicleGarage => handle_vehicle_garage_input(code, game),
         GameState::Fishing => handle_fishing_input(code, game),
+        GameState::BattlePass => handle_battle_pass_input(code, game),
     };
 
     if should_continue {
@@ -528,6 +529,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.fishing_progress = 0;
             },
             53 => {
+                game.state = GameState::BattlePass;
+                game.settings_selection = 0;
+            },
+            54 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -537,11 +542,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 53;
+                game.menu_selection = 54;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 53 {
+            if game.menu_selection < 54 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1815,6 +1820,57 @@ fn handle_fishing_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                     game.save_stats();
                 }
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 49; // 50 tiers
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 49 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let tier = (game.settings_selection + 1) as u32;
+            let required_xp = tier * 1000;
+            if game.stats.battle_pass_xp >= required_xp && !game.stats.claimed_battle_pass_tiers.contains(&tier) {
+                // Claim reward
+                game.stats.claimed_battle_pass_tiers.push(tier);
+
+                // Determine reward based on tier
+                if tier % 10 == 0 {
+                    // Big reward (Skin or Theme)
+                    if tier == 50 {
+                        if !game.stats.unlocked_skins.contains(&'🚀') {
+                            game.stats.unlocked_skins.push('🚀');
+                        }
+                    } else {
+                        game.stats.coins += 5000;
+                    }
+                } else if tier % 5 == 0 {
+                    game.stats.coins += 2000;
+                } else {
+                    game.stats.coins += 500;
+                }
+
+                game.save_stats();
+                crate::game::beep();
             }
         },
         _ => {},

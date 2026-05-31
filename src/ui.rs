@@ -45,6 +45,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::RealEstate => draw_real_estate(game, stdout)?,
         GameState::VehicleGarage => draw_vehicle_garage(game, stdout)?,
         GameState::Fishing => draw_fishing(game, stdout)?,
+        GameState::BattlePass => draw_battle_pass(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -356,6 +357,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Real Estate Office",
         "Vehicle Garage",
         "Fishing Pond",
+        "Battle Pass",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2711,6 +2713,81 @@ fn draw_fishing<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height / 2 + 4,
     ))?;
     write!(stdout, "{back}")?;
+
+    Ok(())
+}
+
+fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "BATTLE PASS";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 8,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let xp_str = format!("Battle Pass XP: {}", game.stats.battle_pass_xp);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(xp_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{xp_str}")?;
+
+    // Display 5 tiers centered around the selection
+    let selection = game.settings_selection as u32;
+    let start_tier = selection.saturating_sub(2).max(0);
+    let end_tier = (start_tier + 5).min(50);
+    let start_tier = end_tier.saturating_sub(5); // Adjust start if at end
+
+    for (i, tier_idx) in (start_tier..end_tier).enumerate() {
+        let tier = tier_idx + 1;
+        let required_xp = tier * 1000;
+        let is_unlocked = game.stats.battle_pass_xp >= required_xp;
+        let is_claimed = game.stats.claimed_battle_pass_tiers.contains(&tier);
+        let is_selected = tier_idx == selection;
+
+        let reward_str = if tier % 10 == 0 {
+            if tier == 50 { "Exclusive Skin 🚀" } else { "5000 Coins" }
+        } else if tier % 5 == 0 {
+            "2000 Coins"
+        } else {
+            "500 Coins"
+        };
+
+        let status = if is_claimed {
+            "[CLAIMED]"
+        } else if is_unlocked {
+            "[UNLOCKED]"
+        } else {
+            "[LOCKED]"
+        };
+
+        let prefix = if is_selected { ">> " } else { "   " };
+        let color = if is_claimed {
+            Color::DarkGrey
+        } else if is_unlocked {
+            if is_selected { Color::Cyan } else { Color::Green }
+        } else {
+            if is_selected { Color::White } else { Color::Red }
+        };
+
+        let line = format!("{prefix}Tier {tier} ({required_xp} XP) - {reward_str} {status}");
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + (i as u16) * 2,
+        ))?;
+        write!(stdout, "{line}")?;
+    }
+
+    let help_text = "Space/Enter: Claim Reward | Up/Down: Scroll | Esc/Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help_text.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help_text}")?;
 
     Ok(())
 }
