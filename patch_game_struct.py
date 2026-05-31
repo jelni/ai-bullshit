@@ -1,42 +1,91 @@
-with open('src/game/game_struct.rs', 'r') as f:
-    content = f.read()
+import re
+import sys
 
-# 1. LifeChalice: In reset(), after self.lives = ...
-search_lives = "        self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) { 3 + u32::from(self.stats.upgrade_extra_lives) } else if self.skin == '💖' {"
-replace_lives = "        self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) { 3 + u32::from(self.stats.upgrade_extra_lives) } else if self.skin == '💖' {\n            3 + u32::from(self.stats.upgrade_extra_lives)\n        } else {\n            1 + u32::from(self.stats.upgrade_extra_lives)\n        };\n        if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::LifeChalice) {\n            self.lives += 1;\n        }"
+def main():
+    with open('src/game/game_struct.rs', 'r') as f:
+        content = f.read()
 
-if search_lives in content:
-    content = content.split(search_lives)[0] + replace_lives + content.split(search_lives)[1].split("        };", 1)[1]
+    # Step 1: Inject get_boss_path
 
-# 2. CoinAmulet: Double coins_earned
-search_coins = "            if self.skin == '₿' {\n                coins_earned *= 2;\n            }"
-replace_coins = "            if self.skin == '₿' {\n                coins_earned *= 2;\n            }\n            if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::CoinAmulet) {\n                coins_earned *= 2;\n            }"
-content = content.replace(search_coins, replace_coins)
+    boss_path_code = """
+    pub fn get_boss_path(&self, start: Point, target: Point, boss_kind: BossType) -> Option<Point> {
+        let mut open_set = std::collections::BinaryHeap::new();
+        let mut g_score = std::collections::HashMap::new();
+        let mut came_from = std::collections::HashMap::new();
 
-search_coins_2 = "        if self.skin == '₿' {\n            coins_earned *= 2;\n        }"
-replace_coins_2 = "        if self.skin == '₿' {\n            coins_earned *= 2;\n        }\n        if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::CoinAmulet) {\n            coins_earned *= 2;\n        }"
-content = content.replace(search_coins_2, replace_coins_2)
+        g_score.insert(start, 0u16);
 
-# 3. GhostCloak: Dodge death
-search_dodge = """        if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue)
-            && self.rng.gen_bool(0.2)
-        {
-            crate::game::beep();
-        } else {
-            self.lives = self.lives.saturating_sub(1);
-        }"""
-replace_dodge = """        if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue)
-            && self.rng.gen_bool(0.2)
-        {
-            crate::game::beep();
-        } else if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::GhostCloak)
-            && self.rng.gen_bool(0.10)
-        {
-            crate::game::beep();
-        } else {
-            self.lives = self.lives.saturating_sub(1);
-        }"""
-content = content.replace(search_dodge, replace_dodge)
+        let heuristic = |p: Point| -> u16 {
+            let dx = p.x.abs_diff(target.x);
+            let dy = p.y.abs_diff(target.y);
+            dx + dy
+        };
 
-with open('src/game/game_struct.rs', 'w') as f:
-    f.write(content)
+        open_set.push(AStarState {
+            f_score: heuristic(start),
+            position: start,
+        });
+
+        while let Some(AStarState { position: current, .. }) = open_set.pop() {
+            if current == target {
+                let mut path = Vec::new();
+                let mut curr = current;
+                while let Some(&prev) = came_from.get(&curr) {
+                    path.push(curr);
+                    if prev == start {
+                        break;
+                    }
+                    curr = prev;
+                }
+                return path.last().copied();
+            }
+
+            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
+
+            let dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)];
+            for (dx, dy) in dirs {
+                let nx = i32::from(current.x) + dx;
+                let ny = i32::from(current.y) + dy;
+
+                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 } + 1;
+
+                if nx > i32::from(margin) && nx < i32::from(self.width) - 1 - i32::from(margin) &&
+                   ny > i32::from(margin) && ny < i32::from(self.height) - 1 - i32::from(margin) {
+
+                    let next_p = Point { x: nx as u16, y: ny as u16 };
+
+                    let mut can_move = true;
+                    if self.snake.body_map.contains_key(&next_p) {
+                        can_move = false;
+                    } else if self.obstacles.contains(&next_p) {
+                        if boss_kind != BossType::Charger && boss_kind != BossType::Juggernaut {
+                            can_move = false;
+                        }
+                    }
+
+                    if can_move {
+                        let tentative_g = current_g.saturating_add(1);
+                        if tentative_g < *g_score.get(&next_p).unwrap_or(&u16::MAX) {
+                            came_from.insert(next_p, current);
+                            g_score.insert(next_p, tentative_g);
+                            open_set.push(AStarState {
+                                f_score: tentative_g.saturating_add(heuristic(next_p)),
+                                position: next_p,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+"""
+    if "pub fn get_boss_path" not in content:
+        # inject before update_tick
+        content = content.replace("fn update_tick(&mut self) {", boss_path_code + "\n    fn update_tick(&mut self) {")
+
+    with open('src/game/game_struct.rs', 'w') as f:
+        f.write(content)
+
+if __name__ == "__main__":
+    main()

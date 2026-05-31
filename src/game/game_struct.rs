@@ -2678,6 +2678,83 @@ impl Game {
             self.stats.stock_prices.insert(stock, new_price);
         }
     }
+    pub fn get_boss_path(&self, start: Point, target: Point, boss_kind: BossType) -> Option<Point> {
+        let mut open_set = std::collections::BinaryHeap::new();
+        let mut g_score = std::collections::HashMap::new();
+        let mut came_from = std::collections::HashMap::new();
+
+        g_score.insert(start, 0u16);
+
+        let heuristic = |p: Point| -> u16 {
+            let dx = p.x.abs_diff(target.x);
+            let dy = p.y.abs_diff(target.y);
+            dx + dy
+        };
+
+        open_set.push(AStarState {
+            f_score: heuristic(start),
+            position: start,
+        });
+
+        let mut iterations = 0;
+        while let Some(AStarState { position: current, .. }) = open_set.pop() {
+            iterations += 1;
+            if iterations > 300 {
+                break;
+            }
+            if current == target {
+                let mut path = Vec::new();
+                let mut curr = current;
+                while let Some(&prev) = came_from.get(&curr) {
+                    path.push(curr);
+                    if prev == start {
+                        break;
+                    }
+                    curr = prev;
+                }
+                return path.last().copied();
+            }
+
+            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
+
+            let dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)];
+            for (dx, dy) in dirs {
+                let nx = i32::from(current.x) + dx;
+                let ny = i32::from(current.y) + dy;
+
+                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 } + 1;
+
+                if nx >= i32::from(margin) && nx < i32::from(self.width) - i32::from(margin) &&
+                   ny >= i32::from(margin) && ny < i32::from(self.height) - i32::from(margin) {
+
+                    let next_p = Point { x: nx as u16, y: ny as u16 };
+
+                    let mut can_move = true;
+                    if next_p != target && self.snake.body_map.contains_key(&next_p) {
+                        can_move = false;
+                    } else if self.obstacles.contains(&next_p) {
+                        if boss_kind != BossType::Charger && boss_kind != BossType::Juggernaut {
+                            can_move = false;
+                        }
+                    }
+
+                    if can_move {
+                        let tentative_g = current_g.saturating_add(1);
+                        if tentative_g < *g_score.get(&next_p).unwrap_or(&u16::MAX) {
+                            came_from.insert(next_p, current);
+                            g_score.insert(next_p, tentative_g);
+                            open_set.push(AStarState {
+                                f_score: tentative_g.saturating_add(heuristic(next_p)),
+                                position: next_p,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "Game loop inherently requires handling multiple states and events"
@@ -2815,46 +2892,22 @@ impl Game {
                         } else {
                             self.snake.head()
                         };
-                        let dir_opt = if boss.kind == BossType::Juggernaut {
-                            let dx = i32::from(target_pos.x) - i32::from(boss.position.x);
-                            let dy = i32::from(target_pos.y) - i32::from(boss.position.y);
-                            if dx.abs() > dy.abs() {
-                                if dx > 0 {
-                                    Some(Direction::Right)
-                                } else {
-                                    Some(Direction::Left)
-                                }
-                            } else if dy != 0 {
-                                if dy > 0 {
-                                    Some(Direction::Down)
-                                } else {
-                                    Some(Direction::Up)
-                                }
+                        let dir_opt = if let Some(next_p) = self.get_boss_path(boss.position, target_pos, boss.kind).or_else(|| self.bfs_pathfind(boss.position, target_pos).map(|d| Self::calculate_next_head_dir(boss.position, d))) {
+                            let dx = i32::from(next_p.x) - i32::from(boss.position.x);
+                            let dy = i32::from(next_p.y) - i32::from(boss.position.y);
+                            if dx > 0 {
+                                Some(Direction::Right)
+                            } else if dx < 0 {
+                                Some(Direction::Left)
+                            } else if dy > 0 {
+                                Some(Direction::Down)
+                            } else if dy < 0 {
+                                Some(Direction::Up)
                             } else {
                                 None
                             }
-                        } else if boss.kind == BossType::Charger {
-                            let targets = vec![target_pos];
-                            let dx = i32::from(target_pos.x) - i32::from(boss.position.x);
-                            let dy = i32::from(target_pos.y) - i32::from(boss.position.y);
-                            let fake_dir = if dx.abs() > dy.abs() {
-                                if dx > 0 {
-                                    Direction::Right
-                                } else {
-                                    Direction::Left
-                                }
-                            } else {
-                                if dy > 0 {
-                                    Direction::Down
-                                } else {
-                                    Direction::Up
-                                }
-                            };
-                            self.astar_search(boss.position, fake_dir, &targets, 3)
-                                .map(|(d, _)| d)
-                                .or_else(|| self.bfs_pathfind(boss.position, target_pos))
                         } else {
-                            self.bfs_pathfind(boss.position, target_pos)
+                            None
                         };
                         if let Some(dir) = dir_opt {
                             let next_pos = Self::calculate_next_head_dir(boss.position, dir);
