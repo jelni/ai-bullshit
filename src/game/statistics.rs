@@ -62,4 +62,8 @@ pub struct Statistics {
     pub fishing_rod_level: u8,
     #[serde(default)]
     pub fish_caught: std::collections::HashMap<Fish, u32>,
+    #[serde(default)]
+    pub battle_pass_xp: u32,
+    #[serde(default)]
+    pub claimed_battle_pass_tiers: Vec<u32>,
 }

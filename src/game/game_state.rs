@@ -27,4 +27,5 @@ pub enum GameState {
     RealEstate,
     VehicleGarage,
     Fishing,
+    BattlePass,
 }
