@@ -293,6 +293,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::StockMarket => handle_stock_market_input(code, game),
         GameState::RealEstate => handle_real_estate_input(code, game),
         GameState::VehicleGarage => handle_vehicle_garage_input(code, game),
+        GameState::Fishing => handle_fishing_input(code, game),
     };
 
     if should_continue {
@@ -521,6 +522,12 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             52 => {
+                game.state = GameState::Fishing;
+                game.settings_selection = 0;
+                game.is_fishing = false;
+                game.fishing_progress = 0;
+            },
+            53 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -530,11 +537,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 52;
+                game.menu_selection = 53;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 52 {
+            if game.menu_selection < 53 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1772,6 +1779,45 @@ fn handle_real_estate_input(code: KeyCode, game: &mut Game) -> bool {
         }
         KeyCode::Esc => game.state = GameState::Menu,
         _ => {}
+    }
+    true
+}
+
+fn handle_fishing_input(code: KeyCode, game: &mut Game) -> bool {
+    use rand::Rng;
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+            game.is_fishing = false;
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            if !game.is_fishing {
+                game.is_fishing = true;
+                game.fishing_progress = 0;
+            } else {
+                game.fishing_progress += 2 + u32::from(game.stats.fishing_rod_level);
+                if game.fishing_progress >= 50 {
+                    game.is_fishing = false;
+                    game.fishing_progress = 0;
+
+                    let rand_val = rand::thread_rng().gen_range(0..100);
+                    let fish = if rand_val < 50 {
+                        crate::game::Fish::Minnow
+                    } else if rand_val < 80 {
+                        crate::game::Fish::Salmon
+                    } else if rand_val < 95 {
+                        crate::game::Fish::Tuna
+                    } else {
+                        crate::game::Fish::Kraken
+                    };
+
+                    *game.stats.fish_caught.entry(fish).or_insert(0) += 1;
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            }
+        },
+        _ => {},
     }
     true
 }

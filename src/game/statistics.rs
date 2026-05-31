@@ -1,5 +1,5 @@
 use super::{
-    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, HeroClass, Resource, Equipment, Serialize,
+    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, Fish, HeroClass, Resource, Equipment, Serialize,
     Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes,
 };
 #[derive(Serialize, Deserialize, Default)]
@@ -58,4 +58,8 @@ pub struct Statistics {
     pub unlocked_vehicles: Vec<Vehicle>,
     #[serde(default)]
     pub equipped_vehicle: Option<Vehicle>,
+    #[serde(default)]
+    pub fishing_rod_level: u8,
+    #[serde(default)]
+    pub fish_caught: std::collections::HashMap<Fish, u32>,
 }

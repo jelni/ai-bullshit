@@ -83,6 +83,12 @@ pub struct SaveState {
     pub companion: Option<Companion>,
     #[serde(default)]
     pub equipment_boxes: Vec<Point>,
+    #[serde(default)]
+    pub fishing_timer: u32,
+    #[serde(default)]
+    pub fishing_progress: u32,
+    #[serde(default)]
+    pub is_fishing: bool,
 }
 
 #[must_use]

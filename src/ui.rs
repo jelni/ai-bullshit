@@ -44,6 +44,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::StockMarket => draw_stock_market(game, stdout)?,
         GameState::RealEstate => draw_real_estate(game, stdout)?,
         GameState::VehicleGarage => draw_vehicle_garage(game, stdout)?,
+        GameState::Fishing => draw_fishing(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -354,6 +355,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Stock Market",
         "Real Estate Office",
         "Vehicle Garage",
+        "Fishing Pond",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2652,5 +2654,63 @@ fn draw_real_estate<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         ))?;
         write!(stdout, "{display_text}")?;
     }
+    Ok(())
+}
+
+fn draw_fishing<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "🎣 FISHING POND 🐟";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let help = if game.is_fishing {
+        "Mash SPACEBAR to reel it in!"
+    } else {
+        "Press SPACEBAR to cast your line..."
+    };
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height / 2 - 3,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    if game.is_fishing {
+        let max_progress = 50;
+        let p_bar_len = 20;
+        let filled = (game.fishing_progress as usize * p_bar_len) / max_progress;
+        let filled_str = "█".repeat(filled);
+        let empty_str = "░".repeat(p_bar_len.saturating_sub(filled));
+
+        let bar_str = format!("[{}{}]", filled_str, empty_str);
+
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(bar_str.chars().count()).unwrap_or(0) / 2),
+            game.height / 2 + 1,
+        ))?;
+        write!(stdout, "{bar_str}")?;
+    } else {
+        let fish_stats = format!("Caught: {:?}", game.stats.fish_caught);
+        let display_len = u16::try_from(fish_stats.len()).unwrap_or(0).min(game.width.saturating_sub(2));
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(display_len / 2),
+            game.height / 2 + 1,
+        ))?;
+        write!(stdout, "{}", &fish_stats[..display_len as usize])?;
+    }
+
+    let back = "Press 'Q' or 'ESC' to return to menu";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(back.len()).unwrap_or(0) / 2),
+        game.height / 2 + 4,
+    ))?;
+    write!(stdout, "{back}")?;
+
     Ok(())
 }

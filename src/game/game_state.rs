@@ -26,4 +26,5 @@ pub enum GameState {
     StockMarket,
     RealEstate,
     VehicleGarage,
+    Fishing,
 }

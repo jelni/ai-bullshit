@@ -82,6 +82,9 @@ pub struct Game {
     pub crops: Vec<crate::game::Crop>,
     pub equipment_boxes: Vec<Point>,
     pub last_real_estate_tick: Option<Instant>,
+    pub fishing_timer: u32,
+    pub fishing_progress: u32,
+    pub is_fishing: bool,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -253,6 +256,9 @@ impl Game {
             crops: Vec::new(),
             equipment_boxes: Vec::new(),
             last_real_estate_tick: Some(Instant::now()),
+            fishing_timer: 0,
+            fishing_progress: 0,
+            is_fishing: false,
         }
     }
     #[must_use]
@@ -463,6 +469,9 @@ impl Game {
             level_up_selection: self.level_up_selection,
             companion: self.companion.clone(),
             equipment_boxes: self.equipment_boxes.clone(),
+            fishing_timer: self.fishing_timer,
+            fishing_progress: self.fishing_progress,
+            is_fishing: self.is_fishing,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -570,6 +579,9 @@ impl Game {
                 self.crops = Vec::new(); // Or state.crops if we added it to SaveState, but we can just initialize empty for now
                 self.equipment_boxes = state.equipment_boxes;
                 self.last_real_estate_tick = Some(Instant::now());
+                self.fishing_timer = state.fishing_timer;
+                self.fishing_progress = state.fishing_progress;
+                self.is_fishing = state.is_fishing;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -2280,6 +2292,9 @@ impl Game {
             self.companion = state.companion;
             self.equipment_boxes = state.equipment_boxes;
                 self.last_real_estate_tick = Some(Instant::now());
+            self.fishing_timer = state.fishing_timer;
+            self.fishing_progress = state.fishing_progress;
+            self.is_fishing = state.is_fishing;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2355,6 +2370,9 @@ impl Game {
             level_up_selection: self.level_up_selection,
             companion: self.companion.clone(),
             equipment_boxes: self.equipment_boxes.clone(),
+            fishing_timer: self.fishing_timer,
+            fishing_progress: self.fishing_progress,
+            is_fishing: self.is_fishing,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -5730,7 +5748,16 @@ impl Game {
                         if shoots > 0
                             && (final_p.x == boss.position.x || final_p.y == boss.position.y)
                         {
-                            return false;
+                            // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
+                            // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
+                            // Only consider it unsafe if within the same column/row AND fairly close.
+                            let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                                + u32::from(final_p.y.abs_diff(boss.position.y));
+                            // A laser travels 2 tiles per tick.
+                            let laser_reach = shoots * 2;
+                            if dist <= laser_reach {
+                                return false;
+                            }
                         }
                     }
                 }
