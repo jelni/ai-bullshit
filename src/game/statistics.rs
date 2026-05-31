@@ -1,4 +1,4 @@
-use super::{Artifact,
+use super::{Artifact, Faction,
     Achievement, Bounty, CompanionType, CraftableItem, Deserialize, Fish, HeroClass, Resource, Equipment, Serialize,
     Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes, Planet,
 };
@@ -66,6 +66,10 @@ pub struct Statistics {
     pub equipped_vehicle: Option<Vehicle>,
     #[serde(default)]
     pub fishing_rod_level: u8,
+    #[serde(default)]
+    pub faction: Option<Faction>,
+    #[serde(default)]
+    pub faction_rep: u32,
     #[serde(default)]
     pub fish_caught: std::collections::HashMap<Fish, u32>,
     #[serde(default)]
