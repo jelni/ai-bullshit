@@ -3479,6 +3479,9 @@ impl Game {
                                 } else {
                                     self.score += 100;
                                 }
+                                if self.stats.faction.is_some() {
+                                    self.stats.faction_rep += 100;
+                                }
                                 self.spawn_particles(
                                     f32::from(strike_x),
                                     f32::from(boss.position.y),
@@ -3716,7 +3719,11 @@ impl Game {
                 let mut hit_boss_idx = None;
                 for (i, boss) in self.bosses.iter_mut().enumerate() {
                     if boss.position == laser.position {
-                        boss.health = boss.health.saturating_sub(1);
+                        let mut damage = 1;
+                        if laser.player == 1 && self.stats.faction == Some(crate::game::Faction::CrimsonVipers) {
+                            damage += 1 + (self.stats.faction_rep / 5000);
+                        }
+                        boss.health = boss.health.saturating_sub(damage);
                         if !is_piercing {
                             destroyed = true;
                         }
@@ -3812,6 +3819,9 @@ impl Game {
                                 self.campaign_level += 1;
                             } else {
                                 self.score += 100;
+                            }
+                            if self.stats.faction.is_some() {
+                                self.stats.faction_rep += 100;
                             }
                             self.spawn_particles(
                                 f32::from(laser.position.x),
@@ -3937,6 +3947,9 @@ impl Game {
                         }
                         self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                         self.score += 100;
+                        if self.stats.faction.is_some() {
+                            self.stats.faction_rep += 100;
+                        }
                         self.spawn_particles(
                             f32::from(boss.position.x),
                             f32::from(boss.position.y),
@@ -4236,6 +4249,9 @@ impl Game {
                             }
                             self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
                             self.score += 100;
+                            if self.stats.faction.is_some() {
+                                self.stats.faction_rep += 100;
+                            }
                             self.spawn_particles(
                                 f32::from(boss.position.x),
                                 f32::from(boss.position.y),
@@ -4471,6 +4487,9 @@ impl Game {
                                             self.campaign_level += 1;
                                         } else {
                                             self.score += 100;
+                                        }
+                                        if self.stats.faction.is_some() {
+                                            self.stats.faction_rep += 100;
                                         }
                                         let boss_pos = boss.position;
                                         let margin = if self.mode == GameMode::BattleRoyale {
@@ -5085,6 +5104,14 @@ impl Game {
             if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::CoinAmulet) {
                 coins_earned *= 2;
             }
+            if self.stats.faction == Some(crate::game::Faction::EmeraldPythons) {
+                let multiplier = 1.1 + (self.stats.faction_rep as f64 / 1000.0) * 0.01;
+                coins_earned = (coins_earned as f64 * multiplier).round() as u32;
+            }
+
+            if self.stats.faction.is_some() {
+                self.stats.faction_rep += 5;
+            }
             self.score += added_score;
             self.stats.total_score += added_score;
             self.stats.coins += coins_earned;
@@ -5145,6 +5172,14 @@ impl Game {
             {
                 coins_earned *= 1 + double_coins_level;
                 added_score *= 1 + double_coins_level;
+            }
+            if self.stats.faction == Some(crate::game::Faction::EmeraldPythons) {
+                let multiplier = 1.1 + (self.stats.faction_rep as f64 / 1000.0) * 0.01;
+                coins_earned = (coins_earned as f64 * multiplier).round() as u32;
+            }
+
+            if self.stats.faction.is_some() {
+                self.stats.faction_rep += 5;
             }
             self.score += added_score;
             self.food_eaten_session += 1;
@@ -5208,6 +5243,15 @@ impl Game {
         if let Some(&double_coins_level) = self.in_game_upgrades.get(&InGameUpgrade::DoubleCoins) {
             coins_earned *= 1 + double_coins_level;
             added_score *= 1 + double_coins_level;
+        }
+
+        if self.stats.faction == Some(crate::game::Faction::EmeraldPythons) {
+            let multiplier = 1.1 + (self.stats.faction_rep as f64 / 1000.0) * 0.01;
+            coins_earned = (coins_earned as f64 * multiplier).round() as u32;
+        }
+
+        if self.stats.faction.is_some() {
+            self.stats.faction_rep += 5;
         }
         self.score += added_score;
         self.food_eaten_session += 1;

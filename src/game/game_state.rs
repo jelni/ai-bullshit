@@ -31,4 +31,5 @@ pub enum GameState {
     ArtifactShrine,
     Hatchery,
     SpacePort,
+    FactionBase,
 }

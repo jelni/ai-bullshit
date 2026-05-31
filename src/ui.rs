@@ -49,6 +49,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::ArtifactShrine => draw_artifact_shrine(game, stdout)?,
         GameState::Hatchery => draw_hatchery(game, stdout)?,
         GameState::SpacePort => draw_space_port(game, stdout)?,
+        GameState::FactionBase => draw_faction_base(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -495,6 +496,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Artifact Shrine",
         "Pet Hatchery",
         "Space Port",
+        "Faction Base",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2988,6 +2990,90 @@ fn draw_artifact_shrine<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()>
         game.height / 2 + 9,
     ))?;
     write!(stdout, "{coins}")?;
+
+    Ok(())
+}
+
+fn draw_faction_base<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "FACTION BASE";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    if let Some(faction) = game.stats.faction {
+        let current_faction_str = format!("Current Faction: {}", faction.name());
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(current_faction_str.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2,
+        ))?;
+        write!(stdout, "{current_faction_str}")?;
+
+        let rep_str = format!("Reputation: {}", game.stats.faction_rep);
+        stdout.queue(SetForegroundColor(Color::White))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(rep_str.len()).unwrap_or(0) / 2),
+            game.height / 2,
+        ))?;
+        write!(stdout, "{rep_str}")?;
+
+        let perk_str = format!("Perk: {}", faction.description());
+        stdout.queue(SetForegroundColor(Color::Magenta))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(perk_str.len()).unwrap_or(0) / 2),
+            game.height / 2 + 2,
+        ))?;
+        write!(stdout, "{perk_str}")?;
+
+        let leave_str = "> Leave Faction <";
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(leave_str.len()).unwrap_or(0) / 2),
+            game.height / 2 + 5,
+        ))?;
+        write!(stdout, "{leave_str}")?;
+    } else {
+        let factions = [
+            crate::game::Faction::CrimsonVipers,
+            crate::game::Faction::AzureCobras,
+            crate::game::Faction::EmeraldPythons,
+        ];
+
+        for (i, faction) in factions.iter().enumerate() {
+            let desc = format!("{}: {}", faction.name(), faction.description());
+            let prefix = if i == game.settings_selection { ">" } else { " " };
+            let suffix = if i == game.settings_selection { "<" } else { " " };
+            let color = if i == game.settings_selection { Color::Yellow } else { Color::White };
+
+            let display_text = format!("{} {} {}", prefix, desc, suffix);
+
+            stdout.queue(SetForegroundColor(color))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{display_text}")?;
+        }
+    }
+
+    let help = "Up/Down: Select | Enter: Join/Leave | Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
 
     Ok(())
 }
