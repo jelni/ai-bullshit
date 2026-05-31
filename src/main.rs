@@ -295,6 +295,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::VehicleGarage => handle_vehicle_garage_input(code, game),
         GameState::Fishing => handle_fishing_input(code, game),
         GameState::BattlePass => handle_battle_pass_input(code, game),
+        GameState::ArtifactShrine => handle_artifact_shrine_input(code, game),
     };
 
     if should_continue {
@@ -533,6 +534,9 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             54 => {
+                game.state = GameState::ArtifactShrine;
+            },
+            55 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -542,11 +546,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 54;
+                game.menu_selection = 55;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 54 {
+            if game.menu_selection < 55 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -1869,6 +1873,40 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.coins += 500;
                 }
 
+                game.save_stats();
+                crate::game::beep();
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_artifact_shrine_input(code: KeyCode, game: &mut Game) -> bool {
+    use rand::Rng;
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            if game.stats.coins >= 1000 {
+                game.stats.coins -= 1000;
+                let artifacts = [
+                    crate::game::Artifact::CoinAmulet,
+                    crate::game::Artifact::LifeChalice,
+                    crate::game::Artifact::GhostCloak,
+                    crate::game::Artifact::MagnetStone,
+                    crate::game::Artifact::TimeCrystal,
+                ];
+                let mut rng = rand::thread_rng();
+                let idx = rng.gen_range(0..artifacts.len());
+                let artifact = artifacts[idx];
+
+                if !game.stats.unlocked_artifacts.contains(&artifact) {
+                    game.stats.unlocked_artifacts.push(artifact);
+                } else {
+                    game.stats.coins += 500;
+                }
                 game.save_stats();
                 crate::game::beep();
             }

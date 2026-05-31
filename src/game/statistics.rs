@@ -1,4 +1,4 @@
-use super::{
+use super::{Artifact,
     Achievement, Bounty, CompanionType, CraftableItem, Deserialize, Fish, HeroClass, Resource, Equipment, Serialize,
     Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes,
 };
@@ -44,6 +44,8 @@ pub struct Statistics {
     pub unlocked_classes: Vec<HeroClass>,
     #[serde(default)]
     pub equipped_class: Option<HeroClass>,
+    #[serde(default)]
+    pub unlocked_artifacts: Vec<Artifact>,
     #[serde(default)]
     pub unlocked_equipment: Vec<Equipment>,
     #[serde(default)]

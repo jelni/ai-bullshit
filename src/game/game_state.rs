@@ -28,4 +28,5 @@ pub enum GameState {
     VehicleGarage,
     Fishing,
     BattlePass,
+    ArtifactShrine,
 }
