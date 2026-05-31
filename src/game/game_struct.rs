@@ -86,6 +86,7 @@ pub struct Game {
     pub fishing_progress: u32,
     pub is_fishing: bool,
     pub eggs_on_board: std::collections::HashMap<Point, crate::game::EggType>,
+    pub paladin_life_timer: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -261,6 +262,7 @@ impl Game {
             fishing_progress: 0,
             is_fishing: false,
             eggs_on_board: std::collections::HashMap::new(),
+            paladin_life_timer: 0,
         }
     }
     #[must_use]
@@ -475,6 +477,7 @@ impl Game {
             fishing_progress: self.fishing_progress,
             is_fishing: self.is_fishing,
             eggs_on_board: self.eggs_on_board.clone(),
+            paladin_life_timer: self.paladin_life_timer,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -586,6 +589,7 @@ impl Game {
                 self.fishing_progress = state.fishing_progress;
                 self.is_fishing = state.is_fishing;
                 self.eggs_on_board = state.eggs_on_board;
+                self.paladin_life_timer = state.paladin_life_timer;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -1775,6 +1779,7 @@ impl Game {
         }
         self.decoy = None;
         self.score = 0;
+        self.paladin_life_timer = 0;
         self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) {
             3 + u32::from(self.stats.upgrade_extra_lives)
         } else if self.skin == '💎' {
@@ -2768,6 +2773,20 @@ impl Game {
     )]
     fn update_tick(&mut self) {
         self.save_history_state();
+
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Paladin) {
+            self.paladin_life_timer += 1;
+            if self.paladin_life_timer >= 200 {
+                self.paladin_life_timer = 0;
+                self.lives += 1;
+                self.chat_log.push_back((
+                    "SYSTEM: Paladin generated an extra life!".to_string(),
+                    crate::color::Color::Yellow,
+                ));
+                crate::game::beep();
+            }
+        }
+
         if self.mode == GameMode::Vampire {
             if let Some(last_food) = self.last_food_time {
                 if last_food.elapsed() >= web_time::Duration::from_secs(15) {

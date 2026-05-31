@@ -91,6 +91,8 @@ pub struct SaveState {
     pub is_fishing: bool,
     #[serde(default)]
     pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
+    #[serde(default)]
+    pub paladin_life_timer: u32,
 }
 
 #[must_use]
