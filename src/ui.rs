@@ -47,9 +47,73 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Fishing => draw_fishing(game, stdout)?,
         GameState::BattlePass => draw_battle_pass(game, stdout)?,
         GameState::ArtifactShrine => draw_artifact_shrine(game, stdout)?,
+        GameState::Hatchery => draw_hatchery(game, stdout)?,
     }
 
     stdout.flush()?;
+    Ok(())
+}
+
+fn draw_hatchery<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "PET HATCHERY";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = if let Some((egg_type, timer)) = &game.stats.incubator {
+        format!("INCUBATING: {:?} EGG - {} TICKS REMAINING", egg_type, timer)
+    } else {
+        "INCUBATOR IS EMPTY".to_string()
+    };
+
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    let common = game.stats.inventory_eggs.get(&crate::game::EggType::Common).copied().unwrap_or(0);
+    let rare = game.stats.inventory_eggs.get(&crate::game::EggType::Rare).copied().unwrap_or(0);
+    let legendary = game.stats.inventory_eggs.get(&crate::game::EggType::Legendary).copied().unwrap_or(0);
+
+    let items = [
+        format!("Incubate Common Egg [Owned: {}]", common),
+        format!("Incubate Rare Egg [Owned: {}]", rare),
+        format!("Incubate Legendary Egg [Owned: {}]", legendary),
+    ];
+
+    for (i, item) in items.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2)
+                    .saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2)
+                    .saturating_sub(2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {item} <")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(item.len()).unwrap_or(0) / 2),
+                game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{item}")?;
+        }
+    }
+
+    let help = "Up/Down: Select | Space/Enter: Incubate | Q/Esc: Leave";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
     Ok(())
 }
 
@@ -360,6 +424,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Fishing Pond",
         "Battle Pass",
         "Artifact Shrine",
+        "Pet Hatchery",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1366,6 +1431,20 @@ fn draw_entities<W: Write>(
             stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
             stdout.queue(SetForegroundColor(color))?;
             write!(stdout, "{symbol}")?;
+        }
+    }
+
+    // Draw eggs
+    for (pos, egg) in &game.eggs_on_board {
+        if is_visible(pos.x, pos.y) {
+            let color = match egg {
+                crate::game::EggType::Common => Color::White,
+                crate::game::EggType::Rare => Color::Cyan,
+                crate::game::EggType::Legendary => Color::Yellow,
+            };
+            stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
+            stdout.queue(SetForegroundColor(color))?;
+            write!(stdout, "🥚")?;
         }
     }
 

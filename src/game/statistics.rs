@@ -68,4 +68,8 @@ pub struct Statistics {
     pub battle_pass_xp: u32,
     #[serde(default)]
     pub claimed_battle_pass_tiers: Vec<u32>,
+    #[serde(default)]
+    pub inventory_eggs: std::collections::HashMap<crate::game::EggType, u32>,
+    #[serde(default)]
+    pub incubator: Option<(crate::game::EggType, u32)>,
 }

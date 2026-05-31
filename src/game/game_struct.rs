@@ -85,6 +85,7 @@ pub struct Game {
     pub fishing_timer: u32,
     pub fishing_progress: u32,
     pub is_fishing: bool,
+    pub eggs_on_board: std::collections::HashMap<Point, crate::game::EggType>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -259,6 +260,7 @@ impl Game {
             fishing_timer: 0,
             fishing_progress: 0,
             is_fishing: false,
+            eggs_on_board: std::collections::HashMap::new(),
         }
     }
     #[must_use]
@@ -472,6 +474,7 @@ impl Game {
             fishing_timer: self.fishing_timer,
             fishing_progress: self.fishing_progress,
             is_fishing: self.is_fishing,
+            eggs_on_board: self.eggs_on_board.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -582,6 +585,7 @@ impl Game {
                 self.fishing_timer = state.fishing_timer;
                 self.fishing_progress = state.fishing_progress;
                 self.is_fishing = state.is_fishing;
+                self.eggs_on_board = state.eggs_on_board;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -1805,6 +1809,7 @@ impl Game {
         self.last_chat_time = None;
         self.bosses.clear();
         self.resources.clear();
+        self.eggs_on_board.clear();
         self.portals = None;
         self.weather = Weather::Clear;
         self.lightning_column = None;
@@ -2299,6 +2304,7 @@ impl Game {
             self.fishing_timer = state.fishing_timer;
             self.fishing_progress = state.fishing_progress;
             self.is_fishing = state.is_fishing;
+            self.eggs_on_board = state.eggs_on_board;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2378,6 +2384,7 @@ impl Game {
             fishing_timer: self.fishing_timer,
             fishing_progress: self.fishing_progress,
             is_fishing: self.is_fishing,
+            eggs_on_board: self.eggs_on_board.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -4065,6 +4072,7 @@ impl Game {
         self.manage_turrets();
         self.manage_companion();
         self.manage_crops();
+        self.manage_eggs();
         self.apply_magnet();
         self.apply_gravity();
 
@@ -4653,6 +4661,34 @@ impl Game {
         if let Some(final_head2) = final_head2_opt {
             self.process_resource_collision(final_head2);
         }
+        self.process_egg_collision(final_head1);
+        if let Some(final_head2) = final_head2_opt {
+            self.process_egg_collision(final_head2);
+        }
+
+        if let Some((_, mut timer)) = self.stats.incubator {
+            if timer > 0 {
+                timer -= 1;
+                self.stats.incubator.as_mut().unwrap().1 = timer;
+                if timer == 0 {
+                    self.stats.incubator = None;
+                    let possible_companions = [
+                        crate::game::CompanionType::Collector,
+                        crate::game::CompanionType::Fighter,
+                        crate::game::CompanionType::Healer,
+                    ];
+                    let comp = possible_companions[self.rng.gen_range(0..possible_companions.len())];
+                    if !self.stats.unlocked_companions.contains(&comp) {
+                        self.stats.unlocked_companions.push(comp);
+                        self.chat_log.push_back((format!("SYSTEM: Your egg hatched a {:?}!", comp), crate::color::Color::Yellow));
+                    } else {
+                        self.stats.coins += 500;
+                        self.chat_log.push_back(("SYSTEM: Your egg hatched a duplicate companion. (+500 Coins)".to_string(), crate::color::Color::Yellow));
+                    }
+                    crate::game::beep();
+                }
+            }
+        }
         self.process_equipment_box_collision(final_head1);
         if let Some(final_head2) = final_head2_opt {
             self.process_equipment_box_collision(final_head2);
@@ -4952,6 +4988,16 @@ impl Game {
             beep();
         }
     }
+    fn process_egg_collision(&mut self, final_head: Point) {
+        if let Some(egg) = self.eggs_on_board.remove(&final_head) {
+            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crate::color::Color::White, 'O');
+            *self.stats.inventory_eggs.entry(egg).or_insert(0) += 1;
+            self.score += 50;
+            self.stats.total_score += 50;
+            beep();
+        }
+    }
+
     fn process_resource_collision(&mut self, final_head: Point) {
         if let Some(res) = self.resources.remove(&final_head) {
             let color = match res {
@@ -5431,6 +5477,35 @@ impl Game {
             let despawn_chance = 0.001; // 0.1% chance to leave
             if self.rng.gen_bool(despawn_chance) {
                 self.merchant = None;
+            }
+        }
+    }
+
+    fn manage_eggs(&mut self) {
+        let spawn_chance = 0.005;
+        if self.rng.gen_bool(spawn_chance) {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.resources.contains_key(p)
+                    || self.eggs_on_board.contains_key(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let egg = match self.rng.gen_range(0..100) {
+                    0..=60 => crate::game::EggType::Common,
+                    61..=90 => crate::game::EggType::Rare,
+                    _ => crate::game::EggType::Legendary,
+                };
+                self.eggs_on_board.insert(pos, egg);
             }
         }
     }

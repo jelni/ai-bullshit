@@ -42,4 +42,5 @@ pub struct HistoryState {
     pub fishing_timer: u32,
     pub fishing_progress: u32,
     pub is_fishing: bool,
+    pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
 }
