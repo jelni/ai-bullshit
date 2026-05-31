@@ -89,6 +89,8 @@ pub struct SaveState {
     pub fishing_progress: u32,
     #[serde(default)]
     pub is_fishing: bool,
+    #[serde(default)]
+    pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
 }
 
 #[must_use]

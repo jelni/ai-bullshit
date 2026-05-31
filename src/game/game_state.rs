@@ -29,4 +29,5 @@ pub enum GameState {
     Fishing,
     BattlePass,
     ArtifactShrine,
+    Hatchery,
 }

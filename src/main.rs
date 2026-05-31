@@ -296,6 +296,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Fishing => handle_fishing_input(code, game),
         GameState::BattlePass => handle_battle_pass_input(code, game),
         GameState::ArtifactShrine => handle_artifact_shrine_input(code, game),
+        GameState::Hatchery => handle_hatchery_input(code, game),
     };
 
     if should_continue {
@@ -537,6 +538,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::ArtifactShrine;
             },
             55 => {
+                game.state = GameState::Hatchery;
+                game.settings_selection = 0;
+            },
+            56 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -546,14 +551,60 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 55;
+                game.menu_selection = 56;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 55 {
+            if game.menu_selection < 56 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
+            }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_hatchery_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 2;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 2 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            if game.stats.incubator.is_none() {
+                let egg_type = match game.settings_selection {
+                    0 => crate::game::EggType::Common,
+                    1 => crate::game::EggType::Rare,
+                    _ => crate::game::EggType::Legendary,
+                };
+
+                let count = game.stats.inventory_eggs.get(&egg_type).copied().unwrap_or(0);
+                if count > 0 {
+                    *game.stats.inventory_eggs.get_mut(&egg_type).unwrap() -= 1;
+                    let timer = match egg_type {
+                        crate::game::EggType::Common => 100,
+                        crate::game::EggType::Rare => 250,
+                        crate::game::EggType::Legendary => 500,
+                    };
+                    game.stats.incubator = Some((egg_type, timer));
+                    game.save_stats();
+                    crate::game::beep();
+                }
             }
         },
         _ => {},
