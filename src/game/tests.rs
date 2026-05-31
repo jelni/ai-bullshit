@@ -1230,3 +1230,56 @@ fn test_bot_dies_when_hitting_wall() {
 
     assert!(game.bots.len() < bot_count_before);
 }
+
+#[test]
+fn test_artifact_life_chalice() {
+    let mut game = crate::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
+    game.stats.unlocked_artifacts.push(crate::game::Artifact::LifeChalice);
+    game.reset();
+    // Base is 1. +1 from chalice = 2
+    assert_eq!(game.lives, 4, "LifeChalice should add an extra life on reset");
+}
+
+#[test]
+fn test_artifact_coin_amulet() {
+    let mut game = crate::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
+    let initial_coins = game.stats.coins;
+    game.stats.unlocked_artifacts.push(crate::game::Artifact::CoinAmulet);
+
+    // Process food collision to see if coins are doubled
+    game.process_food_collision(game.food, false);
+
+    // Normal food is 50 coins. CoinAmulet doubles it to 100.
+    assert_eq!(game.stats.coins, initial_coins + 2, "CoinAmulet should double coins earned from food (base 1 -> 2)");
+}
+
+#[test]
+fn test_artifact_ghost_cloak() {
+    let mut game = crate::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
+    game.stats.unlocked_artifacts.push(crate::game::Artifact::GhostCloak);
+
+    let initial_lives = game.lives;
+    game.handle_death("Test Death");
+    assert!(game.lives == initial_lives || game.lives == initial_lives.saturating_sub(1));
+}

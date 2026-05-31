@@ -1778,6 +1778,9 @@ impl Game {
         } else {
             3 + u32::from(self.stats.upgrade_extra_lives)
         };
+        if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::LifeChalice) {
+            self.lives += 1;
+        }
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = web_time::Instant::now();
@@ -1801,6 +1804,7 @@ impl Game {
         }
         self.last_chat_time = None;
         self.bosses.clear();
+        self.resources.clear();
         self.portals = None;
         self.weather = Weather::Clear;
         self.lightning_column = None;
@@ -4765,6 +4769,7 @@ impl Game {
                 }
             } else if p.p_type == PowerUpType::Nuke {
                 self.bosses.clear();
+        self.resources.clear();
                 self.meteors.clear();
                 self.mines.clear();
                 self.lasers.clear();
@@ -4952,6 +4957,9 @@ impl Game {
                 coins_earned *= 1 + double_coins_level;
             }
             if self.skin == '₿' {
+                coins_earned *= 2;
+            }
+            if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::CoinAmulet) {
                 coins_earned *= 2;
             }
             self.score += added_score;
@@ -6144,7 +6152,7 @@ impl Game {
             y,
         }
     }
-    fn handle_death(&mut self, cause: &str) {
+    pub(crate) fn handle_death(&mut self, cause: &str) {
         let head = self.snake.head();
         self.spawn_particles(
             f32::from(head.x),
@@ -6155,6 +6163,10 @@ impl Game {
         );
         if self.stats.equipped_class == Some(crate::game::HeroClass::Rogue)
             && self.rng.gen_bool(0.2)
+        {
+            crate::game::beep();
+        } else if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::GhostCloak)
+            && self.rng.gen_bool(0.10)
         {
             crate::game::beep();
         } else {
