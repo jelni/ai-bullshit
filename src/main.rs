@@ -318,6 +318,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::FactionBase => handle_faction_base_input(code, game),
         GameState::MagicAcademy => handle_magic_academy_input(code, game),
         GameState::QuestLog => handle_quest_log_input(code, game),
+        GameState::Bestiary => handle_bestiary_input(code, game),
     };
 
     if should_continue {
@@ -578,6 +579,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::QuestLog;
             },
             60 => {
+                game.state = GameState::Bestiary;
+                game.settings_selection = 0;
+            },
+            61 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -587,11 +592,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 60;
+                game.menu_selection = 61;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 60 {
+            if game.menu_selection < 61 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2163,6 +2168,32 @@ const fn handle_quest_log_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::Menu;
         },
         _ => {},
+    }
+    true
+}
+
+fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            let total_bosses = 11;
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = total_bosses - 1;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            let total_bosses = 11;
+            if game.settings_selection < total_bosses - 1 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        _ => {}
     }
     true
 }

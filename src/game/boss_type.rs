@@ -1,5 +1,6 @@
 use super::{Deserialize, Serialize};
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+use std::hash::Hash;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default, Hash)]
 pub enum BossType {
     #[default]
     Shooter,
