@@ -318,6 +318,8 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::FactionBase => handle_faction_base_input(code, game),
         GameState::MagicAcademy => handle_magic_academy_input(code, game),
         GameState::QuestLog => handle_quest_log_input(code, game),
+        GameState::AILab => handle_ai_lab_input(code, game),
+
     };
 
     if should_continue {
@@ -578,6 +580,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::QuestLog;
             },
             60 => {
+                game.state = GameState::AILab;
+                game.settings_selection = 0;
+            },
+            61 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -587,11 +593,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 60;
+                game.menu_selection = 61;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 60 {
+            if game.menu_selection < 61 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2161,6 +2167,57 @@ const fn handle_quest_log_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
         KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
             game.state = GameState::Menu;
+        },
+        _ => {},
+    }
+    true
+}
+
+
+fn handle_ai_lab_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                game.train_ai_generation();
+            },
+            1 => {
+                for _ in 0..10 {
+                    game.train_ai_generation();
+                }
+            },
+            2 => {
+                if game.stats.best_neural_net.is_some() {
+                    game.mode = crate::game::GameMode::NeuralNet;
+                    game.reset();
+                    game.state = GameState::Playing;
+                }
+            },
+            3 => {
+                game.stats.nn_population.clear();
+                game.stats.best_neural_net = None;
+                game.stats.ai_generation = 0;
+                game.stats.best_ai_fitness = -1.0;
+                game.save_stats();
+                crate::game::beep();
+            },
+            _ => {},
         },
         _ => {},
     }

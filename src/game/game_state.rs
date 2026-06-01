@@ -34,4 +34,5 @@ pub enum GameState {
     FactionBase,
     MagicAcademy,
     QuestLog,
+    AILab,
 }

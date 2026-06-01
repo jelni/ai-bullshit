@@ -92,4 +92,12 @@ pub struct Statistics {
     pub active_quests: Vec<Quest>,
     #[serde(default)]
     pub completed_quests: Vec<QuestType>,
+    #[serde(default)]
+    pub best_neural_net: Option<crate::game::NeuralNet>,
+    #[serde(default)]
+    pub nn_population: Vec<crate::game::NeuralNet>,
+    #[serde(default)]
+    pub ai_generation: u32,
+    #[serde(default)]
+    pub best_ai_fitness: f32,
 }

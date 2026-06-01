@@ -92,6 +92,8 @@ pub mod faction;
 pub mod fish;
 pub mod hero_class;
 pub mod resource;
+pub mod neural_net;
+pub use neural_net::NeuralNet;
 pub mod stock;
 pub use artifact::Artifact;
 pub use bounty::{Bounty, BountyType};

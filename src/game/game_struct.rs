@@ -93,6 +93,117 @@ pub struct Game {
     pub max_mana: u32,
 }
 impl Game {
+
+    pub fn get_neural_net_inputs(&self, player: u8) -> Vec<f32> {
+        let mut inputs = Vec::new();
+        let head = if player == 1 { self.snake.head() } else { self.player2.as_ref().unwrap().head() };
+        let dirs = [
+            (0, -1), (1, -1), (1, 0), (1, 1),
+            (0, 1), (-1, 1), (-1, 0), (-1, -1),
+        ];
+
+        for &(dx, dy) in &dirs {
+            let mut dist = 0.0;
+            let mut food_dist = -1.0;
+            let mut body_dist = -1.0;
+            let mut x = i32::from(head.x);
+            let mut y = i32::from(head.y);
+            loop {
+                dist += 1.0;
+                x += dx;
+                y += dy;
+                if x <= 0 || x >= i32::from(self.width) - 1 || y <= 0 || y >= i32::from(self.height) - 1 {
+                    break; // hit wall
+                }
+                let p = Point { x: x as u16, y: y as u16 };
+                if self.obstacles.contains(&p) {
+                    break;
+                }
+                if food_dist < 0.0 && self.food == p {
+                    food_dist = dist;
+                }
+                if body_dist < 0.0 && (self.snake.body_map.contains_key(&p) || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))) {
+                    body_dist = dist;
+                }
+            }
+            inputs.push(1.0 / dist);
+            inputs.push(if food_dist > 0.0 { 1.0 / food_dist } else { 0.0 });
+            inputs.push(if body_dist > 0.0 { 1.0 / body_dist } else { 0.0 });
+        }
+        inputs
+    }
+
+    pub fn train_ai_generation(&mut self) -> (f32, u32) {
+        use crate::game::neural_net::NeuralNet;
+        use rand::Rng;
+
+        let mut rng = rand::thread_rng();
+
+        if self.stats.nn_population.is_empty() {
+            self.stats.nn_population = vec![NeuralNet::default(); 50];
+        }
+
+        let mut fitness_scores = Vec::new();
+
+        for nn in &self.stats.nn_population {
+            let mut sim = Game::new(self.width, self.height, false, 'o', self.theme, self.difficulty);
+            sim.mode = GameMode::NeuralNet;
+            let mut steps = 0;
+            while sim.state == GameState::Playing && steps < 1000 {
+                let inputs = sim.get_neural_net_inputs(1);
+                let out = nn.predict(&inputs);
+                let dir = match out {
+                    0 => Direction::Up,
+                    1 => Direction::Down,
+                    2 => Direction::Left,
+                    _ => Direction::Right,
+                };
+                sim.handle_input(dir, 1);
+                sim.update_tick();
+                steps += 1;
+            }
+            let fitness = (sim.score as f32) * 100.0 + (sim.food_eaten_session as f32) * 10.0 + (steps as f32) * 0.1;
+            fitness_scores.push(fitness);
+        }
+
+        let mut best_idx = 0;
+        let mut best_fitness = -1.0;
+        for (i, &f) in fitness_scores.iter().enumerate() {
+            if f > best_fitness {
+                best_fitness = f;
+                best_idx = i;
+            }
+        }
+
+        if best_fitness > self.stats.best_ai_fitness {
+            self.stats.best_ai_fitness = best_fitness;
+            self.stats.best_neural_net = Some(self.stats.nn_population[best_idx].clone());
+        }
+
+        let mut new_pop = Vec::new();
+        new_pop.push(self.stats.nn_population[best_idx].clone());
+
+        while new_pop.len() < 50 {
+            let p1_1 = rng.gen_range(0..50);
+            let p1_2 = rng.gen_range(0..50);
+            let parent1_idx = if fitness_scores[p1_1] > fitness_scores[p1_2] { p1_1 } else { p1_2 };
+            let p2_1 = rng.gen_range(0..50);
+            let p2_2 = rng.gen_range(0..50);
+            let parent2_idx = if fitness_scores[p2_1] > fitness_scores[p2_2] { p2_1 } else { p2_2 };
+            let parent1 = &self.stats.nn_population[parent1_idx];
+            let parent2 = &self.stats.nn_population[parent2_idx];
+            let mut child = NeuralNet::crossover(parent1, parent2);
+            child.mutate(0.1);
+            new_pop.push(child);
+        }
+
+        self.stats.nn_population = new_pop;
+        self.stats.ai_generation += 1;
+        self.save_stats();
+
+        (best_fitness, self.stats.ai_generation)
+    }
+
     pub fn spawn_turret(&mut self) {
         self.turrets.push(Turret {
             position: self.snake.head(),
@@ -1589,7 +1700,8 @@ impl Game {
             | GameMode::Vampire
             | GameMode::Gravity
             | GameMode::Zombie
-            | GameMode::Farmstead => {
+            | GameMode::Farmstead
+            | GameMode::NeuralNet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2019,7 +2131,8 @@ impl Game {
             | GameMode::Vampire
             | GameMode::Gravity
             | GameMode::Zombie
-            | GameMode::Farmstead => {
+            | GameMode::Farmstead
+            | GameMode::NeuralNet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2201,6 +2314,19 @@ impl Game {
             && current_pos.y < self.height - 1 - margin
         {
             steps += 1;
+
+            // Check self collision first!
+            if player == 1 {
+                if self.snake.body_map.contains_key(&current_pos) {
+                    return false;
+                }
+            } else if player == 2
+                && let Some(p2) = &self.player2
+                && p2.body_map.contains_key(&current_pos)
+            {
+                return false;
+            }
+
             for boss in &self.bosses {
                 if boss.position == current_pos {
                     return true;
@@ -2223,16 +2349,7 @@ impl Game {
             if self.obstacles.contains(&current_pos) {
                 return steps <= 5;
             }
-            if player == 1 {
-                if self.snake.body_map.contains_key(&current_pos) {
-                    return false;
-                }
-            } else if player == 2
-                && let Some(p2) = &self.player2
-                && p2.body_map.contains_key(&current_pos)
-            {
-                return false;
-            }
+
             current_pos = Self::calculate_next_head_dir(current_pos, dir);
         }
         false
@@ -2240,7 +2357,19 @@ impl Game {
     fn handle_autopilot_moves(&mut self) {
         let delay_bot = self.weather == Weather::Snow && self.rng.gen_bool(0.2);
         if !delay_bot {
-            if (self.auto_pilot || self.mode == GameMode::BotVsBot)
+            if self.mode == GameMode::NeuralNet {
+                if let Some(nn) = &self.stats.best_neural_net {
+                    let inputs = self.get_neural_net_inputs(1);
+                    let out = nn.predict(&inputs);
+                    let dir = match out {
+                        0 => Direction::Up,
+                        1 => Direction::Down,
+                        2 => Direction::Left,
+                        _ => Direction::Right,
+                    };
+                    self.snake.direction_queue.push_back(dir);
+                }
+            } else if (self.auto_pilot || self.mode == GameMode::BotVsBot)
                 && self.snake.direction_queue.is_empty()
             {
                 if let Some(dir) = self.calculate_autopilot_move() {
@@ -3290,7 +3419,7 @@ impl Game {
                         boss.move_timer += 1;
                         if boss.move_timer >= teleport_threshold {
                             boss.move_timer = 0;
-                            let margin = self.safe_zone_margin + 5;
+                            let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
                             let avoid = |p: &Point| {
                                 self.obstacles.contains(p) || self.snake.body_map.contains_key(p)
                             };

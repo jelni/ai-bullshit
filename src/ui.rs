@@ -52,6 +52,8 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::FactionBase => draw_faction_base(game, stdout)?,
         GameState::MagicAcademy => draw_magic_academy(game, stdout)?,
         GameState::QuestLog => draw_quest_log(game, stdout)?,
+        GameState::AILab => draw_ai_lab(game, stdout)?,
+
     }
 
     stdout.flush()?;
@@ -612,6 +614,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Faction Base",
         "Magic Academy",
         "Quest Log",
+        "AI Lab",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3350,6 +3353,56 @@ fn draw_quest_log<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height.saturating_sub(2),
     ))?;
     write!(stdout, "{footer}")?;
+
+    Ok(())
+}
+
+
+fn draw_ai_lab<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "AI RESEARCH LAB";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stats1 = format!("Generation: {}", game.stats.ai_generation);
+    let stats2 = format!("Best Fitness: {}", game.stats.best_ai_fitness);
+
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(u16::try_from(stats1.len()).unwrap_or(0) / 2), game.height / 2 - 4))?;
+    write!(stdout, "{stats1}")?;
+    stdout.queue(cursor::MoveTo((game.width / 2).saturating_sub(u16::try_from(stats2.len()).unwrap_or(0) / 2), game.height / 2 - 3))?;
+    write!(stdout, "{stats2}")?;
+
+    let options = [
+        "Train 1 Generation",
+        "Train 10 Generations",
+        "Watch Best AI",
+        "Reset AI",
+    ];
+
+    for (i, opt) in options.iter().enumerate() {
+        let prefix = if i == game.settings_selection { ">" } else { " " };
+        let suffix = if i == game.settings_selection { "<" } else { " " };
+        let color = if i == game.settings_selection { Color::Green } else { Color::White };
+        let text = format!("{prefix} {opt} {suffix}");
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(text.len()).unwrap_or(0) / 2),
+            game.height / 2 + 1 + (i as u16) * 2,
+        ))?;
+        write!(stdout, "{text}")?;
+    }
+
+    let help = "Up/Down: Select | Enter: Execute | Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
 
     Ok(())
 }
