@@ -1265,7 +1265,11 @@ fn test_artifact_coin_amulet() {
     game.process_food_collision(game.food, false);
 
     // Normal food is 50 coins. CoinAmulet doubles it to 100.
-    assert_eq!(game.stats.coins, initial_coins + 2, "CoinAmulet should double coins earned from food (base 1 -> 2)");
+    assert_eq!(
+        game.stats.coins,
+        initial_coins + 2,
+        "CoinAmulet should double coins earned from food (base 1 -> 2)"
+    );
 }
 
 #[test]

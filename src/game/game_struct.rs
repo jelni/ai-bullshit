@@ -1,9 +1,9 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
-    Duration, File, GameMode, GameState, Goblin, HashSet, HistoryState, InGameUpgrade, Instant,
-    Laser, Meteor, Particle, Planet, Point, PowerUp, PowerUpType, Read, Resource, Rng, SaveState,
-    SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep, default_unlocked_themes,
-    fs, io,
+    Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
+    InGameUpgrade, Instant, Laser, Meteor, Particle, Planet, Point, PowerUp, PowerUpType, Read,
+    Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
+    default_unlocked_themes, fs, io,
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
@@ -88,6 +88,7 @@ pub struct Game {
     pub eggs_on_board: std::collections::HashMap<Point, crate::game::EggType>,
     pub paladin_life_timer: u32,
     pub current_planet: Planet,
+    pub floating_texts: Vec<FloatingText>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -265,6 +266,7 @@ impl Game {
             eggs_on_board: std::collections::HashMap::new(),
             paladin_life_timer: 0,
             current_planet: Planet::Earth,
+            floating_texts: Vec::new(),
         }
     }
     #[must_use]
@@ -598,6 +600,7 @@ impl Game {
                 self.is_sprinting = false;
                 self.state = GameState::Paused;
                 self.start_time = web_time::Instant::now();
+                self.floating_texts = Vec::new();
                 self.update_high_scores();
                 self.history.clear();
                 true
@@ -1682,7 +1685,10 @@ impl Game {
             self.obstacles.retain(|p| !body_map.contains_key(p));
             for y in 1..self.height - 1 {
                 for x in 1..self.width - 1 {
-                    let p = Point { x, y };
+                    let p = Point {
+                        x,
+                        y,
+                    };
                     if !self.obstacles.contains(&p)
                         && !body_map.contains_key(&p)
                         && p != self.snake.head()
@@ -1795,6 +1801,7 @@ impl Game {
         self.state = GameState::Playing;
         self.just_died = false;
         self.start_time = web_time::Instant::now();
+        self.floating_texts = Vec::new();
         self.food_eaten_session = 0;
         self.auto_pilot = false;
         self.used_bot_this_session = false;
@@ -1803,6 +1810,7 @@ impl Game {
         self.last_obstacle_spawn_time = web_time::Instant::now();
         self.history.clear();
         self.particles.clear();
+        self.floating_texts.clear();
         self.combo = 0;
         self.last_food_time = None;
         self.chat_log.clear();
@@ -2220,7 +2228,8 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
+        }) || self.stats.equipped_vehicle
+            == Some(crate::game::Vehicle::Spaceship);
         let mut hit_wall1 = false;
         let final_head1 = if self.portals.is_some_and(|(p1, _)| p1 == next_head1) {
             self.portals.unwrap().1
@@ -2310,7 +2319,7 @@ impl Game {
             self.level_up_selection = state.level_up_selection;
             self.companion = state.companion;
             self.equipment_boxes = state.equipment_boxes;
-                self.last_real_estate_tick = Some(Instant::now());
+            self.last_real_estate_tick = Some(Instant::now());
             self.fishing_timer = state.fishing_timer;
             self.fishing_progress = state.fishing_progress;
             self.is_fishing = state.is_fishing;
@@ -2401,6 +2410,23 @@ impl Game {
             self.history.pop_front();
         }
     }
+    pub fn spawn_floating_text(
+        &mut self,
+        x: f32,
+        y: f32,
+        text: String,
+        color: crate::color::Color,
+    ) {
+        self.floating_texts.push(FloatingText {
+            x,
+            y,
+            text,
+            color,
+            lifetime: 20.0,
+            max_lifetime: 20.0,
+        });
+    }
+
     pub fn spawn_particles(
         &mut self,
         x: f32,
@@ -2460,7 +2486,8 @@ impl Game {
         let has_passive_magnet = self.in_game_upgrades.contains_key(&InGameUpgrade::Magnet);
         let has_ring_magnet = self.stats.equipped_gear == Some(crate::game::Equipment::MagnetRing);
 
-        if (has_magnet_powerup || has_passive_magnet || has_ring_magnet) && self.rng.gen_bool(0.25) {
+        if (has_magnet_powerup || has_passive_magnet || has_ring_magnet) && self.rng.gen_bool(0.25)
+        {
             let head = self.snake.head();
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
@@ -2714,7 +2741,11 @@ impl Game {
         });
 
         let mut iterations = 0;
-        while let Some(AStarState { position: current, .. }) = open_set.pop() {
+        while let Some(AStarState {
+            position: current,
+            ..
+        }) = open_set.pop()
+        {
             iterations += 1;
             if iterations > 300 {
                 break;
@@ -2739,12 +2770,21 @@ impl Game {
                 let nx = i32::from(current.x) + dx;
                 let ny = i32::from(current.y) + dy;
 
-                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 } + 1;
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                } + 1;
 
-                if nx >= i32::from(margin) && nx < i32::from(self.width) - i32::from(margin) &&
-                   ny >= i32::from(margin) && ny < i32::from(self.height) - i32::from(margin) {
-
-                    let next_p = Point { x: nx as u16, y: ny as u16 };
+                if nx >= i32::from(margin)
+                    && nx < i32::from(self.width) - i32::from(margin)
+                    && ny >= i32::from(margin)
+                    && ny < i32::from(self.height) - i32::from(margin)
+                {
+                    let next_p = Point {
+                        x: nx as u16,
+                        y: ny as u16,
+                    };
 
                     let mut can_move = true;
                     if next_p != target && self.snake.body_map.contains_key(&next_p) {
@@ -2923,7 +2963,11 @@ impl Game {
                         } else {
                             self.snake.head()
                         };
-                        let dir_opt = if let Some(next_p) = self.get_boss_path(boss.position, target_pos, boss.kind).or_else(|| self.bfs_pathfind(boss.position, target_pos).map(|d| Self::calculate_next_head_dir(boss.position, d))) {
+                        let dir_opt = if let Some(next_p) =
+                            self.get_boss_path(boss.position, target_pos, boss.kind).or_else(|| {
+                                self.bfs_pathfind(boss.position, target_pos)
+                                    .map(|d| Self::calculate_next_head_dir(boss.position, d))
+                            }) {
                             let dx = i32::from(next_p.x) - i32::from(boss.position.x);
                             let dy = i32::from(next_p.y) - i32::from(boss.position.y);
                             if dx > 0 {
@@ -3613,6 +3657,11 @@ impl Game {
             p.lifetime -= 1.0;
         }
         self.particles.retain(|p| p.lifetime > 0.0);
+        for t in &mut self.floating_texts {
+            t.y -= 0.1;
+            t.lifetime -= 1.0;
+        }
+        self.floating_texts.retain(|t| t.lifetime > 0.0);
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|p| {
                 p.p_type == PowerUpType::Invincibility
@@ -3717,19 +3766,31 @@ impl Game {
                     }
                 }
                 let mut hit_boss_idx = None;
+                let mut damage_text = None;
                 for (i, boss) in self.bosses.iter_mut().enumerate() {
                     if boss.position == laser.position {
                         let mut damage = 1;
-                        if laser.player == 1 && self.stats.faction == Some(crate::game::Faction::CrimsonVipers) {
+                        if laser.player == 1
+                            && self.stats.faction == Some(crate::game::Faction::CrimsonVipers)
+                        {
                             damage += 1 + (self.stats.faction_rep / 5000);
                         }
                         boss.health = boss.health.saturating_sub(damage);
+                        damage_text = Some((
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            format!("-{}", damage),
+                            crate::color::Color::Red,
+                        ));
                         if !is_piercing {
                             destroyed = true;
                         }
                         hit_boss_idx = Some(i);
                         break;
                     }
+                }
+                if let Some((x, y, text, color)) = damage_text {
+                    self.spawn_floating_text(x, y, text, color);
                 }
                 if self.goblin.is_some_and(|goblin| laser.position == goblin.position) {
                     self.goblin = None;
@@ -3744,6 +3805,12 @@ impl Game {
                     self.score += 500;
                     self.stats.total_score += 500;
                     self.stats.coins += 500 * multiplier;
+                    self.spawn_floating_text(
+                        f32::from(laser.position.x),
+                        f32::from(laser.position.y),
+                        "+500".to_string(),
+                        crate::color::Color::Yellow,
+                    );
                     self.spawn_particles(
                         f32::from(laser.position.x),
                         f32::from(laser.position.y),
@@ -3923,10 +3990,20 @@ impl Game {
                         }
                     }
                 }
+                let mut spawn_texts = Vec::new();
                 for &b_idx in &boss_hits {
                     if let Some(b) = self.bosses.get_mut(b_idx) {
                         b.health = b.health.saturating_sub(2); // AOE deals extra damage
+                        spawn_texts.push((
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            "-2".to_string(),
+                            crate::color::Color::Red,
+                        ));
                     }
+                }
+                for (x, y, text, color) in spawn_texts {
+                    self.spawn_floating_text(x, y, text, color);
                 }
                 // Handle boss deaths from AOE
                 let mut next_bosses = Vec::new();
@@ -4125,7 +4202,8 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
+        }) || self.stats.equipped_vehicle
+            == Some(crate::game::Vehicle::Spaceship);
 
         for i in 0..self.bots.len() {
             if let Some(dir) = self.bots[i].direction_queue.pop_front() {
@@ -4233,7 +4311,9 @@ impl Game {
                 // Deal 5 damage to boss
                 let mut boss_died = false;
                 for boss in &mut self.bosses {
-                    if boss.position == final_head1 || self.snake.body_map.contains_key(&boss.position) {
+                    if boss.position == final_head1
+                        || self.snake.body_map.contains_key(&boss.position)
+                    {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
                             boss_died = true;
@@ -4311,6 +4391,12 @@ impl Game {
             self.score += 500;
             self.stats.total_score += 500;
             self.stats.coins += 500 * multiplier;
+            self.spawn_floating_text(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                "+500".to_string(),
+                crate::color::Color::Yellow,
+            );
             let spawn_x = if hit_goblin1 {
                 f32::from(final_head1.x)
             } else {
@@ -4547,12 +4633,10 @@ impl Game {
             || self.check_crop_collision(final_head1, is_multiplier)
             || self.mode == GameMode::Tron;
 
-        let mut p2_grow = final_head2_opt
-            .is_some_and(|fh2| {
-                self.check_bonus_food_collision(fh2, is_multiplier)
-                    || self.check_crop_collision(fh2, is_multiplier)
-            })
-            || self.mode == GameMode::Tron;
+        let mut p2_grow = final_head2_opt.is_some_and(|fh2| {
+            self.check_bonus_food_collision(fh2, is_multiplier)
+                || self.check_crop_collision(fh2, is_multiplier)
+        }) || self.mode == GameMode::Tron;
         self.check_poison_food_collision(final_head1, 1);
         if let Some(final_head2) = final_head2_opt {
             self.check_poison_food_collision(final_head2, 2);
@@ -4720,13 +4804,21 @@ impl Game {
                         crate::game::CompanionType::Fighter,
                         crate::game::CompanionType::Healer,
                     ];
-                    let comp = possible_companions[self.rng.gen_range(0..possible_companions.len())];
+                    let comp =
+                        possible_companions[self.rng.gen_range(0..possible_companions.len())];
                     if !self.stats.unlocked_companions.contains(&comp) {
                         self.stats.unlocked_companions.push(comp);
-                        self.chat_log.push_back((format!("SYSTEM: Your egg hatched a {:?}!", comp), crate::color::Color::Yellow));
+                        self.chat_log.push_back((
+                            format!("SYSTEM: Your egg hatched a {:?}!", comp),
+                            crate::color::Color::Yellow,
+                        ));
                     } else {
                         self.stats.coins += 500;
-                        self.chat_log.push_back(("SYSTEM: Your egg hatched a duplicate companion. (+500 Coins)".to_string(), crate::color::Color::Yellow));
+                        self.chat_log.push_back((
+                            "SYSTEM: Your egg hatched a duplicate companion. (+500 Coins)"
+                                .to_string(),
+                            crate::color::Color::Yellow,
+                        ));
                     }
                     crate::game::beep();
                 }
@@ -4901,7 +4993,7 @@ impl Game {
                 }
             } else if p.p_type == PowerUpType::Nuke {
                 self.bosses.clear();
-        self.resources.clear();
+                self.resources.clear();
                 self.meteors.clear();
                 self.mines.clear();
                 self.lasers.clear();
@@ -5033,10 +5125,22 @@ impl Game {
     }
     fn process_egg_collision(&mut self, final_head: Point) {
         if let Some(egg) = self.eggs_on_board.remove(&final_head) {
-            self.spawn_particles(f32::from(final_head.x), f32::from(final_head.y), 15, crate::color::Color::White, 'O');
+            self.spawn_particles(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                15,
+                crate::color::Color::White,
+                'O',
+            );
             *self.stats.inventory_eggs.entry(egg).or_insert(0) += 1;
             self.score += 50;
             self.stats.total_score += 50;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "+50".to_string(),
+                crate::color::Color::White,
+            );
             beep();
         }
     }
@@ -5058,6 +5162,12 @@ impl Game {
             };
             self.score += points;
             self.stats.total_score += points;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                format!("+{}", points),
+                color,
+            );
             beep();
         }
     }
@@ -5116,6 +5226,12 @@ impl Game {
             self.stats.total_score += added_score;
             self.stats.coins += coins_earned;
             self.food_eaten_session += 1;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                format!("+{}", added_score),
+                crate::color::Color::Yellow,
+            );
             beep();
             self.gain_xp(5);
             true
@@ -5183,6 +5299,12 @@ impl Game {
             }
             self.score += added_score;
             self.food_eaten_session += 1;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                format!("+{}", added_score),
+                crate::color::Color::Green,
+            );
             self.stats.total_score += added_score;
             self.stats.total_food_eaten += 1;
             self.stats.coins += coins_earned;
@@ -5255,6 +5377,12 @@ impl Game {
         }
         self.score += added_score;
         self.food_eaten_session += 1;
+        self.spawn_floating_text(
+            f32::from(final_head.x),
+            f32::from(final_head.y),
+            format!("+{}", added_score),
+            crate::color::Color::Green,
+        );
         self.stats.total_score += added_score;
         self.stats.total_food_eaten += 1;
         self.stats.coins += coins_earned;
@@ -5683,7 +5811,8 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
+        }) || self.stats.equipped_vehicle
+            == Some(crate::game::Vehicle::Spaceship);
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
         {
@@ -6117,7 +6246,8 @@ impl Game {
                             .saturating_sub(time)
                             < self.powerup_duration()
                     })
-            }) || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
+            }) || self.stats.equipped_vehicle
+                == Some(crate::game::Vehicle::Spaceship);
             let calc_dist = |p1: Point, p2: Point| -> u16 {
                 let mut dx = p1.x.abs_diff(p2.x);
                 let mut dy = p1.y.abs_diff(p2.y);

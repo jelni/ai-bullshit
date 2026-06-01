@@ -1,6 +1,7 @@
-use super::{Artifact, Faction,
-    Achievement, Bounty, CompanionType, CraftableItem, Deserialize, Fish, HeroClass, Resource, Equipment, Serialize,
-    Stock, Property, Theme, Vehicle, default_elo, default_unlocked_themes, Planet,
+use super::{
+    Achievement, Artifact, Bounty, CompanionType, CraftableItem, Deserialize, Equipment, Faction,
+    Fish, HeroClass, Planet, Property, Resource, Serialize, Stock, Theme, Vehicle, default_elo,
+    default_unlocked_themes,
 };
 
 pub fn default_unlocked_planets() -> Vec<Planet> {
