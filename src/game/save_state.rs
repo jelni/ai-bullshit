@@ -93,6 +93,10 @@ pub struct SaveState {
     pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
     #[serde(default)]
     pub paladin_life_timer: u32,
+    #[serde(default)]
+    pub mana: u32,
+    #[serde(default)]
+    pub max_mana: u32,
 }
 
 #[must_use]

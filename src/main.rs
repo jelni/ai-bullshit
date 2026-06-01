@@ -135,7 +135,7 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
         if game.stats.faction == Some(crate::game::Faction::AzureCobras) {
             let reduction = 10 + (game.stats.faction_rep / 1000);
             base_tick_rate = base_tick_rate
-                .saturating_sub(Duration::from_millis(reduction as u64))
+                .saturating_sub(Duration::from_millis(u64::from(reduction)))
                 .max(Duration::from_millis(30));
         }
 
@@ -316,6 +316,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Hatchery => handle_hatchery_input(code, game),
         GameState::SpacePort => handle_space_port_input(code, game),
         GameState::FactionBase => handle_faction_base_input(code, game),
+        GameState::MagicAcademy => handle_magic_academy_input(code, game),
     };
 
     if should_continue {
@@ -569,6 +570,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             58 => {
+                game.state = GameState::MagicAcademy;
+                game.settings_selection = 0;
+            },
+            59 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -578,15 +583,63 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 58;
+                game.menu_selection = 59;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 58 {
+            if game.menu_selection < 59 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
             }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_magic_academy_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            let total_options = 5;
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = total_options - 1;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            let total_options = 5;
+            if game.settings_selection < total_options - 1 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let spells = [
+                crate::game::SpellType::Heal,
+                crate::game::SpellType::Blink,
+                crate::game::SpellType::Fireball,
+                crate::game::SpellType::Shield,
+            ];
+
+            if game.settings_selection < 4 {
+                let spell = spells[game.settings_selection];
+                if game.stats.unlocked_spells.contains(&spell) {
+                    game.stats.equipped_spell = Some(spell);
+                } else if game.stats.coins >= 1000 {
+                    game.stats.coins -= 1000;
+                    game.stats.unlocked_spells.push(spell);
+                    game.stats.equipped_spell = Some(spell);
+                }
+            } else if game.settings_selection == 4 {
+                game.stats.equipped_spell = None;
+            }
+            game.save_stats();
         },
         _ => {},
     }
@@ -1119,6 +1172,15 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                     // Deal massive damage to the first boss
                     game.bosses[0].health = game.bosses[0].health.saturating_sub(10);
                     crate::game::beep();
+                }
+            }
+        },
+        KeyCode::Char('e' | 'E') => {
+            if let Some(spell) = game.stats.equipped_spell {
+                let cost = spell.cost();
+                if game.mana >= cost {
+                    game.mana -= cost;
+                    game.cast_spell(spell);
                 }
             }
         },
@@ -1929,10 +1991,7 @@ fn handle_fishing_input(code: KeyCode, game: &mut Game) -> bool {
             game.is_fishing = false;
         },
         KeyCode::Enter | KeyCode::Char(' ') => {
-            if !game.is_fishing {
-                game.is_fishing = true;
-                game.fishing_progress = 0;
-            } else {
+            if game.is_fishing {
                 game.fishing_progress += 2 + u32::from(game.stats.fishing_rod_level);
                 if game.fishing_progress >= 50 {
                     game.is_fishing = false;
@@ -1953,6 +2012,9 @@ fn handle_fishing_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                     game.save_stats();
                 }
+            } else {
+                game.is_fishing = true;
+                game.fishing_progress = 0;
             }
         },
         _ => {},
@@ -1989,7 +2051,7 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
                 game.stats.claimed_battle_pass_tiers.push(tier);
 
                 // Determine reward based on tier
-                if tier % 10 == 0 {
+                if tier.is_multiple_of(10) {
                     // Big reward (Skin or Theme)
                     if tier == 50 {
                         if !game.stats.unlocked_skins.contains(&'🚀') {
@@ -1998,7 +2060,7 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
                     } else {
                         game.stats.coins += 5000;
                     }
-                } else if tier % 5 == 0 {
+                } else if tier.is_multiple_of(5) {
                     game.stats.coins += 2000;
                 } else {
                     game.stats.coins += 500;
@@ -2033,10 +2095,10 @@ fn handle_artifact_shrine_input(code: KeyCode, game: &mut Game) -> bool {
                 let idx = rng.gen_range(0..artifacts.len());
                 let artifact = artifacts[idx];
 
-                if !game.stats.unlocked_artifacts.contains(&artifact) {
-                    game.stats.unlocked_artifacts.push(artifact);
-                } else {
+                if game.stats.unlocked_artifacts.contains(&artifact) {
                     game.stats.coins += 500;
+                } else {
+                    game.stats.unlocked_artifacts.push(artifact);
                 }
                 game.save_stats();
                 crate::game::beep();

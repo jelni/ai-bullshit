@@ -32,4 +32,5 @@ pub enum GameState {
     Hatchery,
     SpacePort,
     FactionBase,
+    MagicAcademy,
 }

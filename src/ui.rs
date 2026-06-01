@@ -50,6 +50,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Hatchery => draw_hatchery(game, stdout)?,
         GameState::SpacePort => draw_space_port(game, stdout)?,
         GameState::FactionBase => draw_faction_base(game, stdout)?,
+        GameState::MagicAcademy => draw_magic_academy(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -132,6 +133,88 @@ fn draw_space_port<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
+fn draw_magic_academy<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "MAGIC ACADEMY";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 6,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let stat_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stat_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 4,
+    ))?;
+    write!(stdout, "{stat_str}")?;
+
+    let spells = [
+        (crate::game::SpellType::Heal, "Heal (+1 Life, 50 Mana)"),
+        (crate::game::SpellType::Blink, "Blink (Teleport 3 steps, 30 Mana)"),
+        (crate::game::SpellType::Fireball, "Fireball (Shoot laser, 40 Mana)"),
+        (crate::game::SpellType::Shield, "Shield (Invincibility, 60 Mana)"),
+    ];
+
+    for (i, (spell, desc)) in spells.iter().enumerate() {
+        let is_unlocked = game.stats.unlocked_spells.contains(spell);
+        let is_equipped = game.stats.equipped_spell == Some(*spell);
+
+        let status = if is_equipped {
+            "[EQUIPPED]"
+        } else if is_unlocked {
+            "[OWNED]"
+        } else {
+            "[1000 COINS]"
+        };
+
+        let prefix = if i == game.settings_selection { ">" } else { " " };
+        let suffix = if i == game.settings_selection { "<" } else { " " };
+        let color = if is_equipped {
+            Color::Green
+        } else if is_unlocked {
+            Color::White
+        } else if game.stats.coins >= 1000 {
+            Color::Yellow
+        } else {
+            Color::DarkGrey
+        };
+
+        let display_text = format!("{prefix} {desc} {status} {suffix}");
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{display_text}")?;
+    }
+
+    // Unequip option
+    let unequip_idx = 4;
+    let prefix = if unequip_idx == game.settings_selection { ">" } else { " " };
+    let suffix = if unequip_idx == game.settings_selection { "<" } else { " " };
+    let color = if game.stats.equipped_spell.is_none() { Color::Green } else { Color::White };
+    let display_text = format!("{prefix} Unequip Spell {suffix}");
+
+    stdout.queue(SetForegroundColor(color))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(display_text.len()).unwrap_or(0) / 2),
+        game.height / 2 - 2 + u16::try_from(unequip_idx).unwrap_or(0) * 2,
+    ))?;
+    write!(stdout, "{display_text}")?;
+
+    let help = "Up/Down: Select | Enter: Buy/Equip | Q: Back";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
 fn draw_hatchery<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "PET HATCHERY";
     stdout.queue(SetForegroundColor(Color::Cyan))?;
@@ -142,7 +225,7 @@ fn draw_hatchery<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{title}")?;
 
     let stat_str = if let Some((egg_type, timer)) = &game.stats.incubator {
-        format!("INCUBATING: {:?} EGG - {} TICKS REMAINING", egg_type, timer)
+        format!("INCUBATING: {egg_type:?} EGG - {timer} TICKS REMAINING")
     } else {
         "INCUBATOR IS EMPTY".to_string()
     };
@@ -160,9 +243,9 @@ fn draw_hatchery<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.stats.inventory_eggs.get(&crate::game::EggType::Legendary).copied().unwrap_or(0);
 
     let items = [
-        format!("Incubate Common Egg [Owned: {}]", common),
-        format!("Incubate Rare Egg [Owned: {}]", rare),
-        format!("Incubate Legendary Egg [Owned: {}]", legendary),
+        format!("Incubate Common Egg [Owned: {common}]"),
+        format!("Incubate Rare Egg [Owned: {rare}]"),
+        format!("Incubate Legendary Egg [Owned: {legendary}]"),
     ];
 
     for (i, item) in items.iter().enumerate() {
@@ -526,6 +609,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Pet Hatchery",
         "Space Port",
         "Faction Base",
+        "Magic Academy",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -1968,10 +2052,12 @@ fn draw_base_status<W: Write>(
     if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Campaign Lvl: {} | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Campaign Lvl: {} | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -1990,10 +2076,12 @@ fn draw_base_status<W: Write>(
         };
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | {:?}{}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | {:?}{}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -2006,10 +2094,12 @@ fn draw_base_status<W: Write>(
         let time_left = 60u64.saturating_sub(game.start_time.elapsed().as_secs());
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Time: {}s | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Time: {}s | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -2022,10 +2112,12 @@ fn draw_base_status<W: Write>(
         let elapsed = game.start_time.elapsed().as_secs();
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Time: {}s | Food: {}/50 | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Time: {}s | Food: {}/50 | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -2038,10 +2130,12 @@ fn draw_base_status<W: Write>(
     } else if game.mode == crate::game::GameMode::BossRush {
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Boss Lvl: {} | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Boss Lvl: {} | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -2054,10 +2148,12 @@ fn draw_base_status<W: Write>(
         let level = game.score / 20 + 1;
         write!(
             stdout,
-            "Score: {} | High: {} | Lives: {} | Lvl: {} | XP: {}/{} | Stage: {} | {:?}{}{}",
+            "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Stage: {} | {:?}{}{}",
             game.score,
             game.high_score,
             game.lives,
+            game.mana,
+            game.max_mana,
             game.player_level,
             game.xp,
             game.xp_to_next_level,
@@ -2907,7 +3003,7 @@ fn draw_fishing<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let filled_str = "█".repeat(filled);
         let empty_str = "░".repeat(p_bar_len.saturating_sub(filled));
 
-        let bar_str = format!("[{}{}]", filled_str, empty_str);
+        let bar_str = format!("[{filled_str}{empty_str}]");
 
         stdout.queue(SetForegroundColor(Color::Green))?;
         stdout.queue(cursor::MoveTo(
@@ -2958,7 +3054,7 @@ fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     // Display 5 tiers centered around the selection
     let selection = game.settings_selection as u32;
-    let start_tier = selection.saturating_sub(2).max(0);
+    let start_tier = selection.saturating_sub(2);
     let end_tier = (start_tier + 5).min(50);
     let start_tier = end_tier.saturating_sub(5); // Adjust start if at end
 
@@ -3162,7 +3258,7 @@ fn draw_faction_base<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
                 Color::White
             };
 
-            let display_text = format!("{} {} {}", prefix, desc, suffix);
+            let display_text = format!("{prefix} {desc} {suffix}");
 
             stdout.queue(SetForegroundColor(color))?;
             stdout.queue(cursor::MoveTo(

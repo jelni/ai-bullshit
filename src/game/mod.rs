@@ -107,3 +107,5 @@ pub mod vehicle;
 pub use real_estate::Property;
 pub use stock::Stock;
 pub use vehicle::Vehicle;
+pub mod spell;
+pub use spell::SpellType;
