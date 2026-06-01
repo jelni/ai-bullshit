@@ -1,4 +1,0 @@
-Update A* Target Generation
-
-- The bot should explicitly target the goblin.
-- Update `calculate_autopilot_move` and `calculate_p2_autopilot_move` to push `goblin.position` to `targets`.

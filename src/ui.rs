@@ -93,8 +93,16 @@ fn draw_space_port<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             format!("{name} (Locked - 50 Coins)")
         };
 
-        let prefix = if i == game.settings_selection { "> " } else { "  " };
-        let suffix = if i == game.settings_selection { " <" } else { "  " };
+        let prefix = if i == game.settings_selection {
+            "> "
+        } else {
+            "  "
+        };
+        let suffix = if i == game.settings_selection {
+            " <"
+        } else {
+            "  "
+        };
 
         let display_text = format!("{prefix}{text}{suffix}");
 
@@ -148,7 +156,8 @@ fn draw_hatchery<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     let common = game.stats.inventory_eggs.get(&crate::game::EggType::Common).copied().unwrap_or(0);
     let rare = game.stats.inventory_eggs.get(&crate::game::EggType::Rare).copied().unwrap_or(0);
-    let legendary = game.stats.inventory_eggs.get(&crate::game::EggType::Legendary).copied().unwrap_or(0);
+    let legendary =
+        game.stats.inventory_eggs.get(&crate::game::EggType::Legendary).copied().unwrap_or(0);
 
     let items = [
         format!("Incubate Common Egg [Owned: {}]", common),
@@ -232,8 +241,16 @@ fn draw_vehicle_garage<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
             format!("[Cost: {}]", costs[i])
         };
 
-        let prefix = if i == game.settings_selection { ">" } else { " " };
-        let suffix = if i == game.settings_selection { "<" } else { " " };
+        let prefix = if i == game.settings_selection {
+            ">"
+        } else {
+            " "
+        };
+        let suffix = if i == game.settings_selection {
+            "<"
+        } else {
+            " "
+        };
         let color = if is_equipped {
             Color::Green
         } else if is_unlocked {
@@ -255,9 +272,21 @@ fn draw_vehicle_garage<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
 
     // Unequip option
     let unequip_idx = 4;
-    let prefix = if unequip_idx == game.settings_selection { ">" } else { " " };
-    let suffix = if unequip_idx == game.settings_selection { "<" } else { " " };
-    let color = if game.stats.equipped_vehicle.is_none() { Color::Green } else { Color::White };
+    let prefix = if unequip_idx == game.settings_selection {
+        ">"
+    } else {
+        " "
+    };
+    let suffix = if unequip_idx == game.settings_selection {
+        "<"
+    } else {
+        " "
+    };
+    let color = if game.stats.equipped_vehicle.is_none() {
+        Color::Green
+    } else {
+        Color::White
+    };
     let item_str = format!("{prefix} Unequip Vehicle {suffix}");
 
     stdout.queue(SetForegroundColor(color))?;
@@ -302,19 +331,22 @@ fn draw_stock_market<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Stock::LaserTech,
     ];
 
-    let stock_names = [
-        "SnakeCorp",
-        "GoblinInc",
-        "BossDynamics",
-        "LaserTech",
-    ];
+    let stock_names = ["SnakeCorp", "GoblinInc", "BossDynamics", "LaserTech"];
 
     for (i, stock) in stocks.iter().enumerate() {
         let price = game.stats.stock_prices.get(stock).copied().unwrap_or(100);
         let owned = game.stats.portfolio.get(stock).copied().unwrap_or(0);
 
-        let prefix = if i == game.settings_selection { ">" } else { " " };
-        let color = if i == game.settings_selection { Color::Cyan } else { Color::White };
+        let prefix = if i == game.settings_selection {
+            ">"
+        } else {
+            " "
+        };
+        let color = if i == game.settings_selection {
+            Color::Cyan
+        } else {
+            Color::White
+        };
 
         let text = format!("{} {}: {} coins (Owned: {})", prefix, stock_names[i], price, owned);
         stdout.queue(SetForegroundColor(color))?;
@@ -353,10 +385,7 @@ fn draw_casino<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{coins_str}")?;
 
-    let options = [
-        "1. Slot Machine (100 coins)",
-        "2. Roulette [Red/Black] (50 coins)",
-    ];
+    let options = ["1. Slot Machine (100 coins)", "2. Roulette [Red/Black] (50 coins)"];
     for (i, opt) in options.iter().enumerate() {
         if i == game.settings_selection {
             stdout.queue(SetForegroundColor(Color::Green))?;
@@ -1338,6 +1367,28 @@ fn draw_entities<W: Write>(
             true
         }
     };
+
+    // Draw floating texts
+    for t in &game.floating_texts {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Screen coords are within valid bounds"
+        )]
+        let px = t.x.round() as u16;
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Screen coords are within valid bounds"
+        )]
+        let py = t.y.round() as u16;
+
+        if px > 0 && px < game.width - 1 && py > 0 && py < game.height - 1 && is_visible(px, py) {
+            stdout.queue(cursor::MoveTo(px, py))?;
+            stdout.queue(SetForegroundColor(t.color.into()))?;
+            write!(stdout, "{} ", t.text)?;
+        }
+    }
 
     // Draw particles
     for p in &game.particles {
@@ -2725,11 +2776,23 @@ fn draw_equipment<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         };
 
         let is_equipped = game.stats.equipped_gear == Some(*item);
-        let prefix = if game.settings_selection == i { ">> " } else { "   " };
-        let status = if is_equipped { "[EQUIPPED]" } else { "" };
+        let prefix = if game.settings_selection == i {
+            ">> "
+        } else {
+            "   "
+        };
+        let status = if is_equipped {
+            "[EQUIPPED]"
+        } else {
+            ""
+        };
         let line = format!("{prefix}{name}: {desc} {status}");
 
-        stdout.queue(SetForegroundColor(if is_equipped { Color::Green } else { Color::White }))?;
+        stdout.queue(SetForegroundColor(if is_equipped {
+            Color::Green
+        } else {
+            Color::White
+        }))?;
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             game.height / 2 - 3 + u16::try_from(i).unwrap_or(0) * 2,
@@ -2738,7 +2801,11 @@ fn draw_equipment<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     let unequip_idx = items.len();
-    let unequip_prefix = if game.settings_selection == unequip_idx { ">> " } else { "   " };
+    let unequip_prefix = if game.settings_selection == unequip_idx {
+        ">> "
+    } else {
+        "   "
+    };
     let unequip_line = format!("{unequip_prefix}Unequip Gear");
     stdout.queue(SetForegroundColor(Color::White))?;
     stdout.queue(cursor::MoveTo(
@@ -2844,13 +2911,15 @@ fn draw_fishing<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
         stdout.queue(SetForegroundColor(Color::Green))?;
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(bar_str.chars().count()).unwrap_or(0) / 2),
+            (game.width / 2)
+                .saturating_sub(u16::try_from(bar_str.chars().count()).unwrap_or(0) / 2),
             game.height / 2 + 1,
         ))?;
         write!(stdout, "{bar_str}")?;
     } else {
         let fish_stats = format!("Caught: {:?}", game.stats.fish_caught);
-        let display_len = u16::try_from(fish_stats.len()).unwrap_or(0).min(game.width.saturating_sub(2));
+        let display_len =
+            u16::try_from(fish_stats.len()).unwrap_or(0).min(game.width.saturating_sub(2));
         stdout.queue(SetForegroundColor(Color::White))?;
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(display_len / 2),
@@ -2901,7 +2970,11 @@ fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let is_selected = tier_idx == selection;
 
         let reward_str = if tier % 10 == 0 {
-            if tier == 50 { "Exclusive Skin 🚀" } else { "5000 Coins" }
+            if tier == 50 {
+                "Exclusive Skin 🚀"
+            } else {
+                "5000 Coins"
+            }
         } else if tier % 5 == 0 {
             "2000 Coins"
         } else {
@@ -2916,13 +2989,25 @@ fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             "[LOCKED]"
         };
 
-        let prefix = if is_selected { ">> " } else { "   " };
+        let prefix = if is_selected {
+            ">> "
+        } else {
+            "   "
+        };
         let color = if is_claimed {
             Color::DarkGrey
         } else if is_unlocked {
-            if is_selected { Color::Cyan } else { Color::Green }
+            if is_selected {
+                Color::Cyan
+            } else {
+                Color::Green
+            }
         } else {
-            if is_selected { Color::White } else { Color::Red }
+            if is_selected {
+                Color::White
+            } else {
+                Color::Red
+            }
         };
 
         let line = format!("{prefix}Tier {tier} ({required_xp} XP) - {reward_str} {status}");
@@ -2964,10 +3049,18 @@ fn draw_artifact_shrine<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()>
 
     for (i, (artifact, desc)) in artifacts.iter().enumerate() {
         let is_unlocked = game.stats.unlocked_artifacts.contains(artifact);
-        let status = if is_unlocked { "[UNLOCKED]" } else { "[LOCKED]" };
+        let status = if is_unlocked {
+            "[UNLOCKED]"
+        } else {
+            "[LOCKED]"
+        };
 
         let line = format!("{desc} {status}");
-        stdout.queue(SetForegroundColor(if is_unlocked { Color::White } else { Color::DarkGrey }))?;
+        stdout.queue(SetForegroundColor(if is_unlocked {
+            Color::White
+        } else {
+            Color::DarkGrey
+        }))?;
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
             game.height / 2 - 3 + (i as u16) * 2,
@@ -3015,7 +3108,8 @@ fn draw_faction_base<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let current_faction_str = format!("Current Faction: {}", faction.name());
         stdout.queue(SetForegroundColor(Color::Green))?;
         stdout.queue(cursor::MoveTo(
-            (game.width / 2).saturating_sub(u16::try_from(current_faction_str.len()).unwrap_or(0) / 2),
+            (game.width / 2)
+                .saturating_sub(u16::try_from(current_faction_str.len()).unwrap_or(0) / 2),
             game.height / 2 - 2,
         ))?;
         write!(stdout, "{current_faction_str}")?;
@@ -3052,9 +3146,21 @@ fn draw_faction_base<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
         for (i, faction) in factions.iter().enumerate() {
             let desc = format!("{}: {}", faction.name(), faction.description());
-            let prefix = if i == game.settings_selection { ">" } else { " " };
-            let suffix = if i == game.settings_selection { "<" } else { " " };
-            let color = if i == game.settings_selection { Color::Yellow } else { Color::White };
+            let prefix = if i == game.settings_selection {
+                ">"
+            } else {
+                " "
+            };
+            let suffix = if i == game.settings_selection {
+                "<"
+            } else {
+                " "
+            };
+            let color = if i == game.settings_selection {
+                Color::Yellow
+            } else {
+                Color::White
+            };
 
             let display_text = format!("{} {} {}", prefix, desc, suffix);
 

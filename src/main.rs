@@ -134,7 +134,9 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
 
         if game.stats.faction == Some(crate::game::Faction::AzureCobras) {
             let reduction = 10 + (game.stats.faction_rep / 1000);
-            base_tick_rate = base_tick_rate.saturating_sub(Duration::from_millis(reduction as u64)).max(Duration::from_millis(30));
+            base_tick_rate = base_tick_rate
+                .saturating_sub(Duration::from_millis(reduction as u64))
+                .max(Duration::from_millis(30));
         }
 
         let delta = last_frame.elapsed();
@@ -1683,7 +1685,11 @@ fn handle_stock_market_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Enter | KeyCode::Char(' ' | 'b' | 'B') => {
-            let amount = if matches!(code, KeyCode::Char('b' | 'B')) { 10 } else { 1 };
+            let amount = if matches!(code, KeyCode::Char('b' | 'B')) {
+                10
+            } else {
+                1
+            };
             let stock = match game.settings_selection {
                 0 => crate::game::Stock::SnakeCorp,
                 1 => crate::game::Stock::GoblinInc,
@@ -1703,7 +1709,11 @@ fn handle_stock_market_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Char('d' | 'D' | 'l' | 'L') => {
-            let amount = if matches!(code, KeyCode::Char('d' | 'D')) { 10 } else { 1 };
+            let amount = if matches!(code, KeyCode::Char('d' | 'D')) {
+                10
+            } else {
+                1
+            };
             let stock = match game.settings_selection {
                 0 => crate::game::Stock::SnakeCorp,
                 1 => crate::game::Stock::GoblinInc,
@@ -1804,7 +1814,8 @@ fn handle_equipment_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Enter | KeyCode::Char(' ') => {
             if game.settings_selection < game.stats.unlocked_equipment.len() {
-                game.stats.equipped_gear = Some(game.stats.unlocked_equipment[game.settings_selection]);
+                game.stats.equipped_gear =
+                    Some(game.stats.unlocked_equipment[game.settings_selection]);
             } else {
                 game.stats.equipped_gear = None;
             }
@@ -1878,14 +1889,14 @@ fn handle_real_estate_input(code: KeyCode, game: &mut Game) -> bool {
             } else {
                 game.settings_selection = options_count - 1;
             }
-        }
+        },
         KeyCode::Down => {
             if game.settings_selection < options_count - 1 {
                 game.settings_selection += 1;
             } else {
                 game.settings_selection = 0;
             }
-        }
+        },
         KeyCode::Enter => {
             let props = [
                 crate::game::Property::Shack,
@@ -1903,9 +1914,9 @@ fn handle_real_estate_input(code: KeyCode, game: &mut Game) -> bool {
             } else {
                 game.state = GameState::Menu;
             }
-        }
+        },
         KeyCode::Esc => game.state = GameState::Menu,
-        _ => {}
+        _ => {},
     }
     true
 }
@@ -1971,7 +1982,9 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Enter | KeyCode::Char(' ') => {
             let tier = (game.settings_selection + 1) as u32;
             let required_xp = tier * 1000;
-            if game.stats.battle_pass_xp >= required_xp && !game.stats.claimed_battle_pass_tiers.contains(&tier) {
+            if game.stats.battle_pass_xp >= required_xp
+                && !game.stats.claimed_battle_pass_tiers.contains(&tier)
+            {
                 // Claim reward
                 game.stats.claimed_battle_pass_tiers.push(tier);
 
