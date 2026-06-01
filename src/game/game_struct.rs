@@ -1526,6 +1526,36 @@ impl Game {
     #[doc = ""]
     #[doc = " Panics if the board is completely full and there's no room for food upon reset."]
     pub fn reset(&mut self) {
+        // Initialize quests if none are active and none are completed (a simple way to populate initial quests)
+        if self.stats.active_quests.is_empty() && self.stats.completed_quests.is_empty() {
+            self.stats.active_quests.push(crate::game::Quest {
+                name: "First Blood".to_string(),
+                description: "Defeat 1 Boss".to_string(),
+                q_type: crate::game::QuestType::SlayBosses,
+                target: 1,
+                progress: 0,
+                reward: 500,
+                status: crate::game::QuestStatus::Active,
+            });
+            self.stats.active_quests.push(crate::game::Quest {
+                name: "High Roller".to_string(),
+                description: "Reach 500 Score".to_string(),
+                q_type: crate::game::QuestType::ReachScore,
+                target: 500,
+                progress: 0,
+                reward: 1000,
+                status: crate::game::QuestStatus::Active,
+            });
+            self.stats.active_quests.push(crate::game::Quest {
+                name: "Coin Collector".to_string(),
+                description: "Collect 1000 Coins".to_string(),
+                q_type: crate::game::QuestType::CollectCoins,
+                target: 1000,
+                progress: 0,
+                reward: 250,
+                status: crate::game::QuestStatus::Active,
+            });
+        }
         let start_x = self.width / 2;
         let start_y = self.height / 2;
         if self.mode == GameMode::Campaign || self.mode == GameMode::BossRush {
@@ -2757,6 +2787,7 @@ impl Game {
         if self.is_sprinting && self.state == GameState::Playing {
             self.update_tick();
         }
+        self.update_quest_progress(crate::game::QuestType::ReachScore, self.score);
 
         if self.mana < self.max_mana && self.rng.gen_bool(0.1) {
             self.mana += 1;
@@ -3533,6 +3564,7 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
+                            self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                             if self.rng.gen_bool(0.2) {
                                 self.equipment_boxes.push(boss.position);
                             }
@@ -3899,6 +3931,7 @@ impl Game {
                     let boss_pos = self.bosses[i].position;
                     let boss_health = self.bosses[i].health;
                     if boss_health == 0 {
+                        self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         let dead_boss = self.bosses.remove(i);
 
                         if self.rng.gen_bool(0.2) {
@@ -4081,6 +4114,7 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
+                        self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         if self.rng.gen_bool(0.2) {
                             self.equipment_boxes.push(boss.position);
                         }
@@ -4396,6 +4430,7 @@ impl Game {
                     let mut next_bosses = Vec::new();
                     for boss in std::mem::take(&mut self.bosses) {
                         if boss.health == 0 {
+                            self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                             if self.rng.gen_bool(0.2) {
                                 self.equipment_boxes.push(boss.position);
                             }
@@ -4591,6 +4626,7 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
+                                    self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                                     if self.rng.gen_bool(0.2) {
                                         self.equipment_boxes.push(boss.position);
                                     }
@@ -5381,6 +5417,7 @@ impl Game {
             self.stats.coins += coins_earned;
             self.bonus_food = None;
             self.update_bounty_progress(crate::game::BountyType::EatFood(0), 1);
+            self.update_quest_progress(crate::game::QuestType::CollectCoins, coins_earned);
             beep();
             self.gain_xp(1);
             true
@@ -5458,6 +5495,7 @@ impl Game {
         self.stats.total_food_eaten += 1;
         self.stats.coins += coins_earned;
         self.update_bounty_progress(crate::game::BountyType::EatFood(0), 1);
+        self.update_quest_progress(crate::game::QuestType::CollectCoins, coins_earned);
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
             self.campaign_level += 1;
@@ -5544,6 +5582,38 @@ impl Game {
             self.obstacles.extend(new_obstacles);
         }
     }
+    pub fn update_quest_progress(&mut self, q_type: crate::game::QuestType, amount: u32) {
+        let mut completed_any = false;
+        for quest in &mut self.stats.active_quests {
+            if quest.q_type == q_type && quest.status == crate::game::QuestStatus::Active {
+                if q_type == crate::game::QuestType::ReachScore {
+                    // Score is absolute, not additive over time, so just update it if the amount is larger
+                    if amount > quest.progress {
+                        quest.progress = amount;
+                    }
+                } else {
+                    quest.progress += amount;
+                }
+                if quest.progress >= quest.target {
+                    quest.progress = quest.target;
+                    quest.status = crate::game::QuestStatus::Completed;
+                    self.stats.coins += quest.reward;
+                    self.stats.completed_quests.push(q_type.clone());
+                    completed_any = true;
+                    self.chat_log.push_back((
+                        format!("SYSTEM: Quest Completed! '{}' - Reward: {} Coins", quest.name, quest.reward),
+                        crate::color::Color::Yellow,
+                    ));
+                }
+            }
+        }
+        if completed_any {
+            self.stats.active_quests.retain(|q| q.status != crate::game::QuestStatus::Completed);
+            crate::game::beep();
+            self.save_stats();
+        }
+    }
+
     pub fn update_bounty_progress(&mut self, b_type: crate::game::BountyType, amount: u32) {
         let mut bounty_completed = false;
         let mut reward = 0;

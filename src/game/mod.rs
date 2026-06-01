@@ -69,6 +69,8 @@ pub use meteor::*;
 pub use misc::*;
 pub use particle::*;
 pub mod floating_text;
+pub mod quest;
+pub use quest::*;
 pub use floating_text::FloatingText;
 pub use planet::*;
 pub use power_up::*;

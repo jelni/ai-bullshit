@@ -1,6 +1,6 @@
 use super::{
     Achievement, Artifact, Bounty, CompanionType, CraftableItem, Deserialize, Equipment, Faction,
-    Fish, HeroClass, Planet, Property, Resource, Serialize, SpellType, Stock, Theme, Vehicle,
+    Fish, HeroClass, Planet, Property, Resource, Serialize, SpellType, Stock, Theme, Vehicle, Quest, QuestType,
     default_elo, default_unlocked_themes,
 };
 
@@ -88,4 +88,8 @@ pub struct Statistics {
     pub unlocked_spells: Vec<SpellType>,
     #[serde(default)]
     pub equipped_spell: Option<SpellType>,
+    #[serde(default)]
+    pub active_quests: Vec<Quest>,
+    #[serde(default)]
+    pub completed_quests: Vec<QuestType>,
 }

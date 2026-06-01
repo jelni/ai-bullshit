@@ -51,6 +51,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::SpacePort => draw_space_port(game, stdout)?,
         GameState::FactionBase => draw_faction_base(game, stdout)?,
         GameState::MagicAcademy => draw_magic_academy(game, stdout)?,
+        GameState::QuestLog => draw_quest_log(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -610,6 +611,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Space Port",
         "Faction Base",
         "Magic Academy",
+        "Quest Log",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3276,6 +3278,78 @@ fn draw_faction_base<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height - 2,
     ))?;
     write!(stdout, "{help}")?;
+
+    Ok(())
+}
+
+fn draw_quest_log<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "QUEST LOG";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let mut start_y = 5;
+    stdout.queue(SetForegroundColor(Color::White))?;
+
+    if game.stats.active_quests.is_empty() {
+        let msg = "No active quests.";
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2),
+            start_y,
+        ))?;
+        write!(stdout, "{msg}")?;
+        start_y += 2;
+    } else {
+        for quest in &game.stats.active_quests {
+            let quest_str = format!("{} - {} ({}/{}) - Reward: {} Coins", quest.name, quest.description, quest.progress, quest.target, quest.reward);
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(quest_str.len()).unwrap_or(0) / 2),
+                start_y,
+            ))?;
+            write!(stdout, "{quest_str}")?;
+            start_y += 1;
+        }
+    }
+
+    start_y += 2;
+    let completed_title = "COMPLETED QUESTS:";
+    stdout.queue(SetForegroundColor(Color::Green))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(completed_title.len()).unwrap_or(0) / 2),
+        start_y,
+    ))?;
+    write!(stdout, "{completed_title}")?;
+    start_y += 1;
+
+    if game.stats.completed_quests.is_empty() {
+        let msg = "No completed quests.";
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2),
+            start_y,
+        ))?;
+        write!(stdout, "{msg}")?;
+    } else {
+        for q_type in &game.stats.completed_quests {
+            let msg = format!("{q_type:?}");
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2),
+                start_y,
+            ))?;
+            write!(stdout, "{msg}")?;
+            start_y += 1;
+        }
+    }
+
+    let footer = "Press Q or Esc to Return";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(footer.len()).unwrap_or(0) / 2),
+        game.height.saturating_sub(2),
+    ))?;
+    write!(stdout, "{footer}")?;
 
     Ok(())
 }
