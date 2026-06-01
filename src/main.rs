@@ -1832,12 +1832,11 @@ fn handle_casino_input(code: KeyCode, game: &mut Game) -> bool {
                 // Slot Machine
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
-                    let mut rng = rand::thread_rng();
-                    let s1 = rng.gen_range(0..5);
-                    let s2 = rng.gen_range(0..5);
-                    let s3 = rng.gen_range(0..5);
+                    let s1 = game.rng.gen_range(0..5);
+                    let s2 = game.rng.gen_range(0..5);
+                    let s3 = game.rng.gen_range(0..5);
                     if s1 == s2 && s2 == s3 {
-                        game.stats.coins += rng.gen_range(500..=2000);
+                        game.stats.coins += game.rng.gen_range(500..=2000);
                         crate::game::beep();
                     }
                     game.save_stats();
@@ -1847,8 +1846,7 @@ fn handle_casino_input(code: KeyCode, game: &mut Game) -> bool {
                 // Roulette
                 if game.stats.coins >= 50 {
                     game.stats.coins -= 50;
-                    let mut rng = rand::thread_rng();
-                    if rng.gen_bool(0.5) {
+                    if game.rng.gen_bool(0.5) {
                         game.stats.coins += 100;
                         crate::game::beep();
                     }
@@ -2006,7 +2004,7 @@ fn handle_fishing_input(code: KeyCode, game: &mut Game) -> bool {
                     game.is_fishing = false;
                     game.fishing_progress = 0;
 
-                    let rand_val = rand::thread_rng().gen_range(0..100);
+                    let rand_val = game.rng.gen_range(0..100);
                     let fish = if rand_val < 50 {
                         crate::game::Fish::Minnow
                     } else if rand_val < 80 {
@@ -2100,8 +2098,7 @@ fn handle_artifact_shrine_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::Artifact::MagnetStone,
                     crate::game::Artifact::TimeCrystal,
                 ];
-                let mut rng = rand::thread_rng();
-                let idx = rng.gen_range(0..artifacts.len());
+                let idx = game.rng.gen_range(0..artifacts.len());
                 let artifact = artifacts[idx];
 
                 if game.stats.unlocked_artifacts.contains(&artifact) {

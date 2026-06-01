@@ -2797,22 +2797,21 @@ impl Game {
     }
 
     fn update_stock_market(&mut self) {
-        let mut rng = rand::thread_rng();
-        if rng.gen_bool(0.01) {
+        if self.rng.gen_bool(0.01) {
             let stocks = [
                 crate::game::Stock::SnakeCorp,
                 crate::game::Stock::GoblinInc,
                 crate::game::Stock::BossDynamics,
                 crate::game::Stock::LaserTech,
             ];
-            let stock = stocks[rng.gen_range(0..stocks.len())];
+            let stock = stocks[self.rng.gen_range(0..stocks.len())];
             let current_price = self.stats.stock_prices.get(&stock).copied().unwrap_or(100);
 
-            let volatility = rng.gen_range(-10..=10);
+            let volatility = self.rng.gen_range(-10..=10);
             let mut new_price = i32::try_from(current_price).unwrap_or(100) + volatility;
 
             // Random market events
-            let event = rng.gen_range(0..100);
+            let event = self.rng.gen_range(0..100);
             if event < 5 {
                 // Crash
                 new_price /= 2;
