@@ -563,6 +563,8 @@ mod tests {
         let initial_food = game.food;
         game.snake.direction_queue.push_back(crate::snake::Direction::Down);
         let mut shifted = false;
+        // Make the score not grow up to infinity inside the loop since update_tick is called, or ensure quests don't panic or something.
+        // Wait, tornado has a 5% chance.
         for _ in 0..10000 {
             game.current_planet = crate::game::Planet::Earth;
             game.weather = Weather::Tornado;

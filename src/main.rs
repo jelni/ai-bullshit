@@ -317,6 +317,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::SpacePort => handle_space_port_input(code, game),
         GameState::FactionBase => handle_faction_base_input(code, game),
         GameState::MagicAcademy => handle_magic_academy_input(code, game),
+        GameState::QuestLog => handle_quest_log_input(code, game),
     };
 
     if should_continue {
@@ -574,6 +575,9 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             59 => {
+                game.state = GameState::QuestLog;
+            },
+            60 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -583,11 +587,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 59;
+                game.menu_selection = 60;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 59 {
+            if game.menu_selection < 60 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2147,6 +2151,16 @@ fn handle_faction_base_input(code: KeyCode, game: &mut Game) -> bool {
             }
             game.save_stats();
             crate::game::beep();
+        },
+        _ => {},
+    }
+    true
+}
+
+const fn handle_quest_log_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
         },
         _ => {},
     }
