@@ -52,6 +52,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::FactionBase => draw_faction_base(game, stdout)?,
         GameState::MagicAcademy => draw_magic_academy(game, stdout)?,
         GameState::QuestLog => draw_quest_log(game, stdout)?,
+        GameState::Bestiary => draw_bestiary(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -612,6 +613,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Faction Base",
         "Magic Academy",
         "Quest Log",
+        "Bestiary",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3350,6 +3352,63 @@ fn draw_quest_log<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height.saturating_sub(2),
     ))?;
     write!(stdout, "{footer}")?;
+
+    Ok(())
+}
+
+
+pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "BESTIARY";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let bosses = [
+        crate::game::BossType::Shooter,
+        crate::game::BossType::Charger,
+        crate::game::BossType::Spawner,
+        crate::game::BossType::Teleporter,
+        crate::game::BossType::Splitter,
+        crate::game::BossType::Trapper,
+        crate::game::BossType::Necromancer,
+        crate::game::BossType::ShadowClone,
+        crate::game::BossType::Mimic,
+        crate::game::BossType::Puffer,
+        crate::game::BossType::Juggernaut,
+    ];
+
+    for (i, boss) in bosses.iter().enumerate() {
+        let is_selected = i == game.settings_selection;
+        let kills = game.stats.bestiary.get(boss).copied().unwrap_or(0);
+        let name = format!("{:?}", boss);
+
+        let color = if is_selected { Color::Yellow } else { Color::White };
+        let prefix = if is_selected { "> " } else { "  " };
+
+        let display_str = format!("{prefix}{name} - Kills: {kills}");
+
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(4, 5 + u16::try_from(i).unwrap_or(0)))?;
+        write!(stdout, "{display_str}")?;
+
+        if is_selected {
+            let lore = crate::game::bestiary::get_boss_lore(boss, kills);
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(4, 5 + u16::try_from(bosses.len()).unwrap_or(0) + 2))?;
+            write!(stdout, "Lore: {lore}")?;
+        }
+    }
+
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    let help_msg = "Press W/S to navigate | Q/Esc to go back";
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(help_msg.len()).unwrap_or(0) / 2),
+        game.height - 2,
+    ))?;
+    write!(stdout, "{help_msg}")?;
 
     Ok(())
 }

@@ -3564,6 +3564,7 @@ impl Game {
                     if boss.position.x == strike_x {
                         boss.health = boss.health.saturating_sub(5);
                         if boss.health == 0 {
+                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
                             self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                             if self.rng.gen_bool(0.2) {
                                 self.equipment_boxes.push(boss.position);
@@ -3931,6 +3932,7 @@ impl Game {
                     let boss_pos = self.bosses[i].position;
                     let boss_health = self.bosses[i].health;
                     if boss_health == 0 {
+                        *self.stats.bestiary.entry(self.bosses[i].kind).or_insert(0) += 1;
                         self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         let dead_boss = self.bosses.remove(i);
 
@@ -4114,6 +4116,7 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
+                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
                         self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         if self.rng.gen_bool(0.2) {
                             self.equipment_boxes.push(boss.position);
@@ -4430,6 +4433,7 @@ impl Game {
                     let mut next_bosses = Vec::new();
                     for boss in std::mem::take(&mut self.bosses) {
                         if boss.health == 0 {
+                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
                             self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                             if self.rng.gen_bool(0.2) {
                                 self.equipment_boxes.push(boss.position);
@@ -4626,6 +4630,7 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
+                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
                                     self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                                     if self.rng.gen_bool(0.2) {
                                         self.equipment_boxes.push(boss.position);
