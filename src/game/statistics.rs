@@ -1,9 +1,10 @@
 use super::{
     Achievement, Artifact, Bounty, CompanionType, CraftableItem, Deserialize, Equipment, Faction,
-    Fish, HeroClass, Planet, Property, Resource, Serialize, Stock, Theme, Vehicle, default_elo,
-    default_unlocked_themes,
+    Fish, HeroClass, Planet, Property, Resource, Serialize, SpellType, Stock, Theme, Vehicle,
+    default_elo, default_unlocked_themes,
 };
 
+#[must_use]
 pub fn default_unlocked_planets() -> Vec<Planet> {
     vec![Planet::Earth]
 }
@@ -83,4 +84,8 @@ pub struct Statistics {
     pub incubator: Option<(crate::game::EggType, u32)>,
     #[serde(default = "default_unlocked_planets")]
     pub unlocked_planets: Vec<Planet>,
+    #[serde(default)]
+    pub unlocked_spells: Vec<SpellType>,
+    #[serde(default)]
+    pub equipped_spell: Option<SpellType>,
 }
