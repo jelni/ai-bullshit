@@ -53,6 +53,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::MagicAcademy => draw_magic_academy(game, stdout)?,
         GameState::QuestLog => draw_quest_log(game, stdout)?,
         GameState::Bestiary => draw_bestiary(game, stdout)?,
+        GameState::Tavern => draw_tavern(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -614,6 +615,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Magic Academy",
         "Quest Log",
         "Bestiary",
+        "Tavern",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3409,6 +3411,73 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         game.height - 2,
     ))?;
     write!(stdout, "{help_msg}")?;
+
+    Ok(())
+}
+
+pub fn draw_tavern<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "THE TAVERN";
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        game.height / 2 - 5,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let subtitle = "A place to rest and meet travelers";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(subtitle.len()).unwrap_or(0) / 2),
+        game.height / 2 - 3,
+    ))?;
+    write!(stdout, "{subtitle}")?;
+
+    let stats_str = format!("Coins: {} | Lives: {}", game.stats.coins, game.lives);
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(stats_str.len()).unwrap_or(0) / 2),
+        game.height / 2 - 1,
+    ))?;
+    write!(stdout, "{stats_str}")?;
+
+    // Draw recent chat logs if any
+    let chat_start_y = game.height / 2 + 10;
+    for (i, (msg, color)) in game.chat_log.iter().rev().take(5).enumerate() {
+        let y = chat_start_y + u16::try_from(i).unwrap_or(0);
+        if y < game.height {
+            stdout.queue(SetForegroundColor((*color).into()))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(msg.len()).unwrap_or(0) / 2),
+                y,
+            ))?;
+            write!(stdout, "{msg}")?;
+        }
+    }
+
+    let menu_items = [
+        "Talk to Barkeep",
+        "Play Dice",
+        "Rest (Restore Lives)",
+        "Leave Tavern",
+    ];
+
+    for (i, item) in menu_items.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(
+                game.width / 2 - 10,
+                game.height / 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "> {item}")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                game.width / 2 - 8,
+                game.height / 2 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{item}")?;
+        }
+    }
 
     Ok(())
 }
