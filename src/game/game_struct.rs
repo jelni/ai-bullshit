@@ -6230,8 +6230,15 @@ impl Game {
                             // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
                             // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
                             // Only consider it unsafe if within the same column/row AND fairly close.
-                            let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                            let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
                                 + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                            if let Some((portal1, portal2)) = self.portals {
+                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x)) + u32::from(final_p.y.abs_diff(portal1.y)) + u32::from(portal2.x.abs_diff(boss.position.x)) + u32::from(portal2.y.abs_diff(boss.position.y));
+                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x)) + u32::from(final_p.y.abs_diff(portal2.y)) + u32::from(portal1.x.abs_diff(boss.position.x)) + u32::from(portal1.y.abs_diff(boss.position.y));
+                                dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                            }
+
                             // A laser travels 2 tiles per tick.
                             let laser_reach = shoots * 2;
                             if dist <= laser_reach {
