@@ -36,4 +36,5 @@ pub enum GameState {
     QuestLog,
     Bestiary,
     Tavern,
+    BlackMarket,
 }
