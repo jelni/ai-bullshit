@@ -54,6 +54,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::QuestLog => draw_quest_log(game, stdout)?,
         GameState::Bestiary => draw_bestiary(game, stdout)?,
         GameState::Tavern => draw_tavern(game, stdout)?,
+        GameState::BlackMarket => draw_black_market(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -616,6 +617,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Quest Log",
         "Bestiary",
         "Tavern",
+        "Black Market",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3477,6 +3479,48 @@ pub fn draw_tavern<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             ))?;
             write!(stdout, "{item}")?;
         }
+    }
+
+    Ok(())
+}
+
+pub fn draw_black_market<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "BLACK MARKET";
+    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let options = [
+        "1. Buy Shadow Cloak (Artifact) - 5000 Coins",
+        "2. Buy Hacker Theme - 2000 Coins",
+        "3. Buy Corrupted Egg - 3000 Coins",
+        "4. Buy Forbidden Spell (Fireball) - 4000 Coins",
+        "5. Sell Max Mana (+1000 Coins)",
+        "Leave Black Market",
+    ];
+
+    for (i, option) in options.iter().enumerate() {
+        let is_selected = i == game.settings_selection;
+        let color = if is_selected { Color::Red } else { Color::DarkGrey };
+        let prefix = if is_selected { "> " } else { "  " };
+
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(option.len() + 2).unwrap_or(0) / 2),
+            6 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{prefix}{option}")?;
     }
 
     Ok(())
