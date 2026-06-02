@@ -35,4 +35,5 @@ pub enum GameState {
     MagicAcademy,
     QuestLog,
     Bestiary,
+    Tavern,
 }

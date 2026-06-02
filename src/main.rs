@@ -319,6 +319,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::MagicAcademy => handle_magic_academy_input(code, game),
         GameState::QuestLog => handle_quest_log_input(code, game),
         GameState::Bestiary => handle_bestiary_input(code, game),
+        GameState::Tavern => handle_tavern_input(code, game),
     };
 
     if should_continue {
@@ -583,6 +584,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             61 => {
+                game.state = GameState::Tavern;
+                game.settings_selection = 0;
+            },
+            62 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -592,11 +597,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 61;
+                game.menu_selection = 62;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 61 {
+            if game.menu_selection < 62 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2191,6 +2196,75 @@ fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         _ => {}
+    }
+    true
+}
+
+fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            match game.settings_selection {
+                0 => { // Talk to Barkeep
+                    game.chat_log.push_back((
+                        "Barkeep: Welcome to the Tavern, traveler! Stay a while and listen.".to_string(),
+                        crate::color::Color::Yellow,
+                    ));
+                },
+                1 => { // Play Dice
+                    use rand::Rng;
+                    if game.stats.coins >= 100 {
+                        game.stats.coins -= 100;
+                        let roll1 = game.rng.gen_range(1..=6);
+                        let roll2 = game.rng.gen_range(1..=6);
+                        let total = roll1 + roll2;
+                        if total == 7 || total == 11 {
+                            game.stats.coins += 250;
+                            game.chat_log.push_back((
+                                format!("Barkeep: You rolled {} and {} ({}). You win 250 coins!", roll1, roll2, total),
+                                crate::color::Color::Green,
+                            ));
+                        } else {
+                            game.chat_log.push_back((
+                                format!("Barkeep: You rolled {} and {} ({}). You lose 100 coins.", roll1, roll2, total),
+                                crate::color::Color::Red,
+                            ));
+                        }
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                2 => { // Rest
+                    if game.stats.coins >= 50 {
+                        game.stats.coins -= 50;
+                        game.lives += 1;
+                        game.save_stats();
+                        crate::game::beep();
+                    }
+                },
+                3 => { // Leave
+                    game.state = GameState::Menu;
+                },
+                _ => {}
+            }
+        },
+        _ => {},
     }
     true
 }
