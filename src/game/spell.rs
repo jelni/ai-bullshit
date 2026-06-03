@@ -10,7 +10,7 @@ pub enum SpellType {
 
 impl SpellType {
     #[must_use]
-    pub const fn cost(&self) -> u32 {
+    pub const fn cost(self) -> u32 {
         match self {
             Self::Heal => 50,
             Self::Blink => 30,
