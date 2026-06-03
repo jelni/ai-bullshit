@@ -5617,7 +5617,7 @@ impl Game {
                     quest.progress = quest.target;
                     quest.status = crate::game::QuestStatus::Completed;
                     self.stats.coins += quest.reward;
-                    self.stats.completed_quests.push(q_type.clone());
+                    self.stats.completed_quests.push(q_type);
                     completed_any = true;
                     self.chat_log.push_back((
                         format!("SYSTEM: Quest Completed! '{}' - Reward: {} Coins", quest.name, quest.reward),

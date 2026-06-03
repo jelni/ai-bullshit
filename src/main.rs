@@ -2164,8 +2164,8 @@ fn handle_faction_base_input(code: KeyCode, game: &mut Game) -> bool {
                     _ => crate::game::Faction::EmeraldPythons,
                 };
                 game.stats.faction = Some(faction);
-                game.stats.faction_rep = 0;
             }
+            game.stats.faction_rep = 0;
             game.save_stats();
             crate::game::beep();
         },

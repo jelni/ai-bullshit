@@ -3063,7 +3063,7 @@ fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(stdout, "{xp_str}")?;
 
     // Display 5 tiers centered around the selection
-    let selection = game.settings_selection as u32;
+    let selection = u32::try_from(game.settings_selection).unwrap_or(0);
     let start_tier = selection.saturating_sub(2);
     let end_tier = (start_tier + 5).min(50);
     let start_tier = end_tier.saturating_sub(5); // Adjust start if at end
@@ -3120,7 +3120,7 @@ fn draw_battle_pass<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         stdout.queue(SetForegroundColor(color))?;
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
-            game.height / 2 - 2 + (i as u16) * 2,
+            game.height / 2 - 2 + u16::try_from(i).unwrap_or(0) * 2,
         ))?;
         write!(stdout, "{line}")?;
     }

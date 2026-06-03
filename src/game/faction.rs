@@ -9,7 +9,7 @@ pub enum Faction {
 
 impl Faction {
     #[must_use]
-    pub const fn description(&self) -> &'static str {
+    pub const fn description(self) -> &'static str {
         match self {
             Self::CrimsonVipers => "+1 Laser Damage (+1 per 5000 Rep)",
             Self::AzureCobras => "-10ms Base Tick Rate (-1ms per 1000 Rep)",
@@ -18,7 +18,7 @@ impl Faction {
     }
 
     #[must_use]
-    pub const fn name(&self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::CrimsonVipers => "Crimson Vipers",
             Self::AzureCobras => "Azure Cobras",
