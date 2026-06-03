@@ -40,6 +40,7 @@ pub mod save_state;
 pub mod shop_item;
 pub mod statistics;
 pub mod theme;
+pub mod time_of_day;
 pub mod turret;
 pub mod weather;
 
@@ -80,6 +81,7 @@ pub use save_state::*;
 pub use shop_item::*;
 pub use statistics::*;
 pub use theme::*;
+pub use time_of_day::*;
 pub use turret::*;
 pub use weather::*;
 pub mod artifact;

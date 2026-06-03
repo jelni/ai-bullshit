@@ -97,6 +97,10 @@ pub struct SaveState {
     pub mana: u32,
     #[serde(default)]
     pub max_mana: u32,
+    #[serde(default)]
+    pub time_of_day: crate::game::TimeOfDay,
+    #[serde(default)]
+    pub tick_counter: u32,
 }
 
 #[must_use]

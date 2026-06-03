@@ -92,6 +92,8 @@ pub struct Game {
     pub floating_texts: Vec<FloatingText>,
     pub mana: u32,
     pub max_mana: u32,
+    pub time_of_day: crate::game::TimeOfDay,
+    pub tick_counter: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -327,6 +329,8 @@ impl Game {
             floating_texts: Vec::new(),
             mana: 100,
             max_mana: 100,
+            time_of_day: crate::game::TimeOfDay::Day,
+            tick_counter: 0,
         }
     }
     #[must_use]
@@ -544,6 +548,8 @@ impl Game {
             paladin_life_timer: self.paladin_life_timer,
             mana: self.mana,
             max_mana: self.max_mana,
+            time_of_day: self.time_of_day,
+            tick_counter: self.tick_counter,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -658,6 +664,8 @@ impl Game {
                 self.paladin_life_timer = state.paladin_life_timer;
                 self.mana = state.mana;
                 self.max_mana = state.max_mana;
+                self.time_of_day = state.time_of_day;
+                self.tick_counter = state.tick_counter;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -777,7 +785,12 @@ impl Game {
         reason = "Game loop inherently requires handling multiple states and events"
     )]
     fn manage_goblin(&mut self) {
-        if self.goblin.is_none() && self.rng.gen_bool(0.005) && self.bosses.is_empty() {
+        let spawn_chance = if self.time_of_day == crate::game::TimeOfDay::Night {
+            0.02
+        } else {
+            0.005
+        };
+        if self.goblin.is_none() && self.rng.gen_bool(spawn_chance) && self.bosses.is_empty() {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1921,6 +1934,8 @@ impl Game {
         self.eggs_on_board.clear();
         self.mana = 100;
         self.max_mana = 100;
+        self.time_of_day = crate::game::TimeOfDay::Day;
+        self.tick_counter = 0;
         self.portals = None;
         self.weather = Weather::Clear;
         if self.current_planet == Planet::Mars {
@@ -2422,6 +2437,8 @@ impl Game {
             self.eggs_on_board = state.eggs_on_board;
             self.mana = state.mana;
             self.max_mana = state.max_mana;
+            self.time_of_day = state.time_of_day;
+            self.tick_counter = state.tick_counter;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2504,6 +2521,8 @@ impl Game {
             eggs_on_board: self.eggs_on_board.clone(),
             mana: self.mana,
             max_mana: self.max_mana,
+            time_of_day: self.time_of_day,
+            tick_counter: self.tick_counter,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2934,6 +2953,15 @@ impl Game {
         reason = "Game loop inherently requires handling multiple states and events"
     )]
     fn update_tick(&mut self) {
+        self.tick_counter = self.tick_counter.saturating_add(1);
+        if self.tick_counter >= 250 {
+            self.tick_counter = 0;
+            self.time_of_day = match self.time_of_day {
+                crate::game::TimeOfDay::Day => crate::game::TimeOfDay::Night,
+                crate::game::TimeOfDay::Night => crate::game::TimeOfDay::Day,
+            };
+        }
+
         self.save_history_state();
 
         if self.stats.equipped_class == Some(crate::game::HeroClass::Paladin) {
