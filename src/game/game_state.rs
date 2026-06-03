@@ -37,4 +37,5 @@ pub enum GameState {
     Bestiary,
     Tavern,
     BlackMarket,
+    Bank,
 }

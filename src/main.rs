@@ -321,6 +321,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Bestiary => handle_bestiary_input(code, game),
         GameState::Tavern => handle_tavern_input(code, game),
         GameState::BlackMarket => handle_black_market_input(code, game),
+        GameState::Bank => handle_bank_input(code, game),
     };
 
     if should_continue {
@@ -593,6 +594,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             63 => {
+                game.state = GameState::Bank;
+                game.settings_selection = 0;
+            },
+            64 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -602,11 +607,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 63;
+                game.menu_selection = 64;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 63 {
+            if game.menu_selection < 64 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2341,6 +2346,55 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                 },
                 _ => {}
             }
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 2;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 2 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                // Deposit
+                if game.stats.coins >= 100 {
+                    game.stats.coins -= 100;
+                    game.stats.bank_balance += 100;
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            },
+            1 => {
+                // Withdraw
+                if game.stats.bank_balance >= 100 {
+                    game.stats.bank_balance -= 100;
+                    game.stats.coins += 100;
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            },
+            2 => {
+                // Leave
+                game.state = GameState::Menu;
+            },
+            _ => {},
         },
         _ => {},
     }

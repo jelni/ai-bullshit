@@ -94,4 +94,6 @@ pub struct Statistics {
     pub completed_quests: Vec<QuestType>,
     #[serde(default)]
     pub bestiary: std::collections::HashMap<crate::game::BossType, u32>,
+    #[serde(default)]
+    pub bank_balance: u32,
 }

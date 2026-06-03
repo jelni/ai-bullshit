@@ -55,6 +55,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Bestiary => draw_bestiary(game, stdout)?,
         GameState::Tavern => draw_tavern(game, stdout)?,
         GameState::BlackMarket => draw_black_market(game, stdout)?,
+        GameState::Bank => draw_bank(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -618,6 +619,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Bestiary",
         "Tavern",
         "Black Market",
+        "Bank",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3519,6 +3521,53 @@ pub fn draw_black_market<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(option.len() + 2).unwrap_or(0) / 2),
             6 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{prefix}{option}")?;
+    }
+
+    Ok(())
+}
+
+pub fn draw_bank<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "BANK";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let bank_str = format!("Bank Balance: {}", game.stats.bank_balance);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(bank_str.len()).unwrap_or(0) / 2),
+        4,
+    ))?;
+    write!(stdout, "{bank_str}")?;
+
+    let coins_str = format!("Coins on Hand: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::White))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        6,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let options = [
+        "1. Deposit 100 Coins",
+        "2. Withdraw 100 Coins",
+        "Leave Bank",
+    ];
+
+    for (i, option) in options.iter().enumerate() {
+        let is_selected = i == game.settings_selection;
+        let color = if is_selected { Color::Green } else { Color::DarkGrey };
+        let prefix = if is_selected { "> " } else { "  " };
+
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(option.len() + 2).unwrap_or(0) / 2),
+            8 + u16::try_from(i).unwrap_or(0) * 2,
         ))?;
         write!(stdout, "{prefix}{option}")?;
     }
