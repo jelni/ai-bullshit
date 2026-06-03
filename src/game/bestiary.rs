@@ -1,7 +1,7 @@
 use crate::game::BossType;
 
 #[must_use]
-pub fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
+pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
     if kills == 0 {
         return "??? (Defeat this boss to unlock lore)";
     }

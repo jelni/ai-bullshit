@@ -2184,7 +2184,7 @@ const fn handle_quest_log_input(code: KeyCode, game: &mut Game) -> bool {
     true
 }
 
-fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
+const fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
     match code {
         KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
             game.state = GameState::Menu;
@@ -2247,12 +2247,12 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
                         if total == 7 || total == 11 {
                             game.stats.coins += 250;
                             game.chat_log.push_back((
-                                format!("Barkeep: You rolled {} and {} ({}). You win 250 coins!", roll1, roll2, total),
+                                format!("Barkeep: You rolled {roll1} and {roll2} ({total}). You win 250 coins!"),
                                 crate::color::Color::Green,
                             ));
                         } else {
                             game.chat_log.push_back((
-                                format!("Barkeep: You rolled {} and {} ({}). You lose 100 coins.", roll1, roll2, total),
+                                format!("Barkeep: You rolled {roll1} and {roll2} ({total}). You lose 100 coins."),
                                 crate::color::Color::Red,
                             ));
                         }

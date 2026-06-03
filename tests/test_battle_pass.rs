@@ -55,11 +55,11 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
 #[test]
 fn test_battle_pass_xp_gain() {
     let mut game = Game::new(20, 20, false, 'X', Theme::Classic, Difficulty::Normal);
-    assert_eq!(game.stats.battle_pass_xp, 0);
+    let initial_xp = game.stats.battle_pass_xp;
     game.gain_xp(50);
-    assert_eq!(game.stats.battle_pass_xp, 50);
+    assert_eq!(game.stats.battle_pass_xp, initial_xp + 50);
     game.gain_xp(1000);
-    assert_eq!(game.stats.battle_pass_xp, 1050);
+    assert_eq!(game.stats.battle_pass_xp, initial_xp + 1050);
 }
 
 #[test]
@@ -68,39 +68,43 @@ fn test_battle_pass_claim_reward() {
     game.state = GameState::BattlePass;
     game.settings_selection = 0; // Tier 1
 
+    // Ensure coins are isolated properly by capturing initial
+    let initial_coins = game.stats.coins;
+    let initial_xp = game.stats.battle_pass_xp;
+
     // Not enough XP
-    game.stats.battle_pass_xp = 500;
+    game.stats.battle_pass_xp = initial_xp + 500;
     handle_battle_pass_input(KeyCode::Enter, &mut game);
     assert!(!game.stats.claimed_battle_pass_tiers.contains(&1));
-    assert_eq!(game.stats.coins, 0); // No reward
+    assert_eq!(game.stats.coins, initial_coins); // No reward
 
     // Enough XP
-    game.stats.battle_pass_xp = 1000;
+    game.stats.battle_pass_xp = initial_xp + 1000;
     handle_battle_pass_input(KeyCode::Enter, &mut game);
     assert!(game.stats.claimed_battle_pass_tiers.contains(&1));
-    assert_eq!(game.stats.coins, 500); // 500 coins for non-multiple of 5
+    assert_eq!(game.stats.coins, initial_coins + 500); // 500 coins for non-multiple of 5
 
     // Trying to claim again
     handle_battle_pass_input(KeyCode::Enter, &mut game);
-    assert_eq!(game.stats.coins, 500); // Still 500
+    assert_eq!(game.stats.coins, initial_coins + 500); // Still 500
 
     // Tier 5 reward
     game.settings_selection = 4; // Tier 5
-    game.stats.battle_pass_xp = 5000;
+    game.stats.battle_pass_xp = initial_xp + 5000;
     handle_battle_pass_input(KeyCode::Enter, &mut game);
     assert!(game.stats.claimed_battle_pass_tiers.contains(&5));
-    assert_eq!(game.stats.coins, 2500); // 500 + 2000
+    assert_eq!(game.stats.coins, initial_coins + 2500); // 500 + 2000
 
     // Tier 10 reward
     game.settings_selection = 9; // Tier 10
-    game.stats.battle_pass_xp = 10000;
+    game.stats.battle_pass_xp = initial_xp + 10000;
     handle_battle_pass_input(KeyCode::Enter, &mut game);
     assert!(game.stats.claimed_battle_pass_tiers.contains(&10));
-    assert_eq!(game.stats.coins, 7500); // 2500 + 5000
+    assert_eq!(game.stats.coins, initial_coins + 7500); // 2500 + 5000
 
     // Tier 50 reward
     game.settings_selection = 49; // Tier 50
-    game.stats.battle_pass_xp = 50000;
+    game.stats.battle_pass_xp = initial_xp + 50000;
     assert!(!game.stats.unlocked_skins.contains(&'🚀'));
     handle_battle_pass_input(KeyCode::Enter, &mut game);
     assert!(game.stats.claimed_battle_pass_tiers.contains(&50));

@@ -3389,7 +3389,7 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     for (i, boss) in bosses.iter().enumerate() {
         let is_selected = i == game.settings_selection;
         let kills = game.stats.bestiary.get(boss).copied().unwrap_or(0);
-        let name = format!("{:?}", boss);
+        let name = format!("{boss:?}");
 
         let color = if is_selected { Color::Yellow } else { Color::White };
         let prefix = if is_selected { "> " } else { "  " };

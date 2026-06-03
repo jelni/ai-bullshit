@@ -71,7 +71,6 @@ pub use particle::*;
 pub mod floating_text;
 pub mod bestiary;
 pub mod quest;
-pub use bestiary::*;
 pub use quest::*;
 pub use floating_text::FloatingText;
 pub use planet::*;
