@@ -3114,8 +3114,20 @@ impl Game {
                                 self.bfs_pathfind(boss.position, target_pos)
                                     .map(|d| Self::calculate_next_head_dir(boss.position, d))
                             }) {
-                            let dx = i32::from(next_p.x) - i32::from(boss.position.x);
-                            let dy = i32::from(next_p.y) - i32::from(boss.position.y);
+                            let mut dx = i32::from(next_p.x) - i32::from(boss.position.x);
+                            let mut dy = i32::from(next_p.y) - i32::from(boss.position.y);
+
+                            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+                                let w = i32::from(self.width) - 2;
+                                let h = i32::from(self.height) - 2;
+                                if dx.abs() > w / 2 {
+                                    dx = if dx > 0 { dx - w } else { dx + w };
+                                }
+                                if dy.abs() > h / 2 {
+                                    dy = if dy > 0 { dy - h } else { dy + h };
+                                }
+                            }
+
                             if dx > 0 {
                                 Some(Direction::Right)
                             } else if dx < 0 {
