@@ -3047,7 +3047,7 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..10) {
+                let kind = match self.rng.gen_range(0..11) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
@@ -3057,6 +3057,7 @@ impl Game {
                     6 => BossType::Trapper,
                     7 => BossType::Puffer,
                     8 => BossType::Juggernaut,
+                    9 => BossType::Dragon,
                     _ => BossType::Mimic,
                 };
                 self.bosses.push(Boss {
@@ -3176,7 +3177,84 @@ impl Game {
                             }
                         }
                     }
-                    if boss.kind == BossType::Shooter {
+                    if boss.kind == BossType::Dragon {
+                        let mut shoot_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                10,
+                                20_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            20
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            shoot_threshold = std::cmp::max(2, shoot_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= shoot_threshold {
+                            boss.shoot_timer = 0;
+                            let head = self.snake.head();
+                            let dx = i32::from(head.x) - i32::from(boss.position.x);
+                            let dy = i32::from(head.y) - i32::from(boss.position.y);
+                            let dir = if dx.abs() > dy.abs() {
+                                if dx > 0 {
+                                    crate::snake::Direction::Right
+                                } else {
+                                    crate::snake::Direction::Left
+                                }
+                            } else {
+                                if dy > 0 {
+                                    crate::snake::Direction::Down
+                                } else {
+                                    crate::snake::Direction::Up
+                                }
+                            };
+                            let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+
+                            let mut spawn_positions = vec![laser_pos];
+                            match dir {
+                                Direction::Up | Direction::Down => {
+                                    let mut p1 = laser_pos;
+                                    p1.x = (i32::from(p1.x) + 1).try_into().unwrap_or(p1.x);
+                                    spawn_positions.push(p1);
+
+                                    let mut p2 = laser_pos;
+                                    p2.x = (i32::from(p2.x) - 1).try_into().unwrap_or(p2.x);
+                                    spawn_positions.push(p2);
+                                },
+                                Direction::Left | Direction::Right => {
+                                    let mut p1 = laser_pos;
+                                    p1.y = (i32::from(p1.y) + 1).try_into().unwrap_or(p1.y);
+                                    spawn_positions.push(p1);
+
+                                    let mut p2 = laser_pos;
+                                    p2.y = (i32::from(p2.y) - 1).try_into().unwrap_or(p2.y);
+                                    spawn_positions.push(p2);
+                                },
+                            }
+
+                            for pos in spawn_positions {
+                                if pos.x > margin
+                                    && pos.x < self.width - 1 - margin
+                                    && pos.y > margin
+                                    && pos.y < self.height - 1 - margin
+                                {
+                                    new_lasers.push(Laser {
+                                        position: pos,
+                                        direction: dir,
+                                        player: 3,
+                                    });
+                                }
+                            }
+                            beep();
+                        }
+                    } else if boss.kind == BossType::Shooter {
                         let mut shoot_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 5,
@@ -6252,16 +6330,20 @@ impl Game {
                             return false;
                         }
                     }
-                    if boss.kind == BossType::Shooter || boss.kind == BossType::Puffer {
+                    if boss.kind == BossType::Shooter || boss.kind == BossType::Puffer || boss.kind == BossType::Dragon {
                         let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 if boss.kind == BossType::Puffer {
+                                    10
+                                } else if boss.kind == BossType::Dragon {
                                     10
                                 } else {
                                     5
                                 },
                                 (if boss.kind == BossType::Puffer {
                                     30_u8
+                                } else if boss.kind == BossType::Dragon {
+                                    20_u8
                                 } else {
                                     15_u8
                                 })
@@ -6269,6 +6351,8 @@ impl Game {
                             )
                         } else if boss.kind == BossType::Puffer {
                             30
+                        } else if boss.kind == BossType::Dragon {
+                            20
                         } else {
                             15
                         });
@@ -6276,6 +6360,8 @@ impl Game {
                             shoot_threshold = std::cmp::max(
                                 if boss.kind == BossType::Puffer {
                                     5
+                                } else if boss.kind == BossType::Dragon {
+                                    2
                                 } else {
                                     1
                                 },

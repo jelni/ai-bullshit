@@ -17,5 +17,6 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
         BossType::Mimic => if kills >= 5 { "Disguises itself as food. Don't be fooled!" } else { "Looks like a tasty snack." },
         BossType::Puffer => if kills >= 5 { "Expands in size, creating a massive impassable area." } else { "Inflates to block paths." },
         BossType::Juggernaut => if kills >= 5 { "Heavily armored. Can destroy obstacles effortlessly." } else { "A massive, unstoppable force." },
+        BossType::Dragon => if kills >= 5 { "Breathes a wide cone of fire that scorches the earth." } else { "A fearsome beast." },
     }
 }
