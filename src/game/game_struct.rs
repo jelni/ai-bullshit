@@ -82,6 +82,7 @@ pub struct Game {
     pub crops: Vec<crate::game::Crop>,
     pub equipment_boxes: Vec<Point>,
     pub last_real_estate_tick: Option<Instant>,
+    pub last_bank_tick: Option<Instant>,
     pub fishing_timer: u32,
     pub fishing_progress: u32,
     pub is_fishing: bool,
@@ -316,6 +317,7 @@ impl Game {
             crops: Vec::new(),
             equipment_boxes: Vec::new(),
             last_real_estate_tick: Some(Instant::now()),
+            last_bank_tick: None,
             fishing_timer: 0,
             fishing_progress: 0,
             is_fishing: false,
@@ -2767,6 +2769,19 @@ impl Game {
     }
 
     pub fn update(&mut self) {
+        if let Some(last_tick) = self.last_bank_tick {
+            if last_tick.elapsed() >= web_time::Duration::from_secs(10) {
+                // Add 5% interest
+                let interest = (self.stats.bank_balance / 20).max(1);
+                if self.stats.bank_balance > 0 {
+                    self.stats.bank_balance = self.stats.bank_balance.saturating_add(interest);
+                }
+                self.last_bank_tick = Some(web_time::Instant::now());
+            }
+        } else {
+            self.last_bank_tick = Some(web_time::Instant::now());
+        }
+
         if let Some(last_tick) = self.last_real_estate_tick {
             if last_tick.elapsed() >= web_time::Duration::from_secs(1) {
                 let mut total_income = 0;
