@@ -1839,6 +1839,10 @@ fn draw_entities<W: Write>(
                         write!(stdout, "★")?;
                     }
                 },
+                crate::game::BossType::Dragon => {
+                    stdout.queue(SetForegroundColor(Color::Red))?;
+                    write!(stdout, "D")?;
+                }
             }
         }
     }
@@ -3388,6 +3392,7 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::BossType::Mimic,
         crate::game::BossType::Puffer,
         crate::game::BossType::Juggernaut,
+        crate::game::BossType::Dragon,
     ];
 
     for (i, boss) in bosses.iter().enumerate() {

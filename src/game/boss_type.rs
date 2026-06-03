@@ -14,4 +14,5 @@ pub enum BossType {
     Mimic,
     Puffer,
     Juggernaut,
+    Dragon,
 }
