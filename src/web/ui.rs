@@ -13,7 +13,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     let cell_size = 15.0;
 
     let is_visible = |px: f64, py: f64| -> bool {
-        if game.mode == crate::game::GameMode::FogOfWar {
+        if game.mode == crate::game::GameMode::FogOfWar || game.time_of_day == crate::game::TimeOfDay::Night {
             let head = game.snake.head();
             let dx = px - f64::from(head.x);
             let dy = py - f64::from(head.y);

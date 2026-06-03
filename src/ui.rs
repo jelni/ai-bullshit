@@ -1424,7 +1424,7 @@ fn draw_entities<W: Write>(
     obs_color: Color,
 ) -> io::Result<()> {
     let is_visible = |px: u16, py: u16| -> bool {
-        if game.mode == crate::game::GameMode::FogOfWar {
+        if game.mode == crate::game::GameMode::FogOfWar || game.time_of_day == crate::game::TimeOfDay::Night {
             let head = game.snake.head();
             let dx = f32::from(px) - f32::from(head.x);
             let dy = f32::from(py) - f32::from(head.y);
@@ -2220,6 +2220,10 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         ""
     };
+    let tod_str = match game.time_of_day {
+        crate::game::TimeOfDay::Day => " | Day",
+        crate::game::TimeOfDay::Night => " | Night",
+    };
     let weather_str = match game.weather {
         crate::game::Weather::Clear => "",
         crate::game::Weather::Rain => " | Weather: Rain",
@@ -2238,7 +2242,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
-    write!(stdout, "{weather_str}")?;
+    write!(stdout, "{weather_str}{tod_str}")?;
 
     if !game.bosses.is_empty() {
         let total_health: u32 = game.bosses.iter().map(|b| b.health).sum();
