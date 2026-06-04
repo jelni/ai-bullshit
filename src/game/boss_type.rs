@@ -16,4 +16,5 @@ pub enum BossType {
     Juggernaut,
     Dragon,
     Mage,
+    Gorgon,
 }

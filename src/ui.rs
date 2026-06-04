@@ -1847,6 +1847,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Cyan))?;
                     write!(stdout, "M")?;
                 }
+                crate::game::BossType::Gorgon => {
+                    stdout.queue(SetForegroundColor(Color::Green))?;
+                    write!(stdout, "G")?;
+                },
             }
         }
     }

@@ -287,3 +287,37 @@ fn test_shadowclone_moves_towards_snake() {
     // But it should move closer to the snake.
     assert!(new_pos.x < 7 || new_pos.y < 7, "Shadow clone should move towards the snake");
 }
+
+#[test]
+fn test_gorgon_turns_food_to_stone() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = Direction::Right;
+
+    let food_pos = game.food;
+
+    // Gorgon Boss
+    game.bosses.push(Boss {
+        position: Point {
+            x: 9,
+            y: 5,
+        },
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 44, // Default threshold is 45 in Normal mode, so next update it triggers ability
+        kind: BossType::Gorgon,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+
+    // Gorgon's ability should turn the current food into an obstacle, and a new food should be spawned
+    assert!(game.obstacles.contains(&food_pos), "Food should be turned into an obstacle by Gorgon");
+    assert_ne!(game.food, food_pos, "A new food should have been spawned");
+}
