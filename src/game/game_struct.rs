@@ -3047,7 +3047,7 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..11) {
+                let kind = match self.rng.gen_range(0..12) {
                     0 => BossType::Shooter,
                     1 => BossType::Charger,
                     2 => BossType::Spawner,
@@ -3058,6 +3058,7 @@ impl Game {
                     7 => BossType::Puffer,
                     8 => BossType::Juggernaut,
                     9 => BossType::Dragon,
+                    10 => BossType::Mage,
                     _ => BossType::Mimic,
                 };
                 self.bosses.push(Boss {
@@ -3264,6 +3265,46 @@ impl Game {
                                     });
                                 }
                             }
+                            beep();
+                        }
+                    } else if boss.kind == BossType::Mage {
+                        let mut shoot_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                15,
+                                30_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            30
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            shoot_threshold = std::cmp::max(5, shoot_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= shoot_threshold {
+                            boss.shoot_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+
+                            self.meteors.push(Meteor {
+                                position: target_pos,
+                                timer: 15, // Delay before meteor hits
+                            });
+
+                            self.power_up = Some(PowerUp {
+                                p_type: PowerUpType::TimeFreeze,
+                                location: Point { x: 0, y: 0 },
+                                activation_time: Some(
+                                    web_time::SystemTime::now()
+                                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                ),
+                            });
                             beep();
                         }
                     } else if boss.kind == BossType::Shooter {
