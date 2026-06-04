@@ -15,4 +15,5 @@ pub enum BossType {
     Puffer,
     Juggernaut,
     Dragon,
+    Mage,
 }

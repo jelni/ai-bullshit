@@ -1842,6 +1842,10 @@ fn draw_entities<W: Write>(
                 crate::game::BossType::Dragon => {
                     stdout.queue(SetForegroundColor(Color::Red))?;
                     write!(stdout, "D")?;
+                },
+                crate::game::BossType::Mage => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "M")?;
                 }
             }
         }

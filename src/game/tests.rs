@@ -1290,3 +1290,31 @@ fn test_artifact_ghost_cloak() {
     game.handle_death("Test Death");
     assert!(game.lives == initial_lives || game.lives == initial_lives.saturating_sub(1));
 }
+
+#[test]
+fn test_mage_boss_attack() {
+    use crate::game::{Theme, Difficulty, BossType, GameMode, PowerUpType};
+    let mut game = crate::game::Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::BossRush; // To predictably trigger the shoot_timer based on campaign_level
+
+    game.bosses.push(crate::game::Boss {
+        position: crate::snake::Point { x: 5, y: 5 },
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 29, // One tick away from firing (for normal campaign level)
+        kind: BossType::Mage,
+        state_timer: 0,
+    });
+
+    game.state = crate::game::GameState::Playing;
+    game.update();
+    let player_pos = game.snake.head();
+
+    assert_eq!(game.meteors.len(), 1, "Mage should spawn a meteor");
+    assert!((game.meteors[0].position.x as i32 - player_pos.x as i32).abs() <= 1 && (game.meteors[0].position.y as i32 - player_pos.y as i32).abs() <= 1, "Meteor should spawn at or near player position");
+    assert!(game.power_up.is_some(), "Mage should trigger a time freeze power up");
+    let power_up = game.power_up.as_ref().unwrap();
+    assert_eq!(power_up.p_type as u8, PowerUpType::TimeFreeze as u8, "Power up type must be TimeFreeze");
+    assert!(power_up.activation_time.is_some(), "TimeFreeze should be activated");
+}
