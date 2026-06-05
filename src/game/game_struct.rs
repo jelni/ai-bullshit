@@ -115,8 +115,17 @@ impl Game {
                 let mut next_pos = current_head;
                 for _ in 0..3 {
                     let tentative = Self::calculate_next_head_dir(next_pos, dir);
-                    let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-                    if tentative.x > margin && tentative.x < self.width - 1 - margin && tentative.y > margin && tentative.y < self.height - 1 - margin && !self.obstacles.contains(&tentative) {
+                    let margin = if self.mode == GameMode::BattleRoyale {
+                        self.safe_zone_margin
+                    } else {
+                        0
+                    };
+                    if tentative.x > margin
+                        && tentative.x < self.width - 1 - margin
+                        && tentative.y > margin
+                        && tentative.y < self.height - 1 - margin
+                        && !self.obstacles.contains(&tentative)
+                    {
                         next_pos = tentative;
                     } else {
                         break;
@@ -131,8 +140,16 @@ impl Game {
                 let current_head = self.snake.head();
                 let dir = self.snake.direction;
                 let laser_pos = Self::calculate_next_head_dir(current_head, dir);
-                let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
-                if laser_pos.x > margin && laser_pos.x < self.width - 1 - margin && laser_pos.y > margin && laser_pos.y < self.height - 1 - margin {
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                if laser_pos.x > margin
+                    && laser_pos.x < self.width - 1 - margin
+                    && laser_pos.y > margin
+                    && laser_pos.y < self.height - 1 - margin
+                {
                     self.lasers.push(Laser {
                         position: laser_pos,
                         direction: dir,
@@ -144,7 +161,10 @@ impl Game {
             super::SpellType::Shield => {
                 self.power_up = Some(PowerUp {
                     p_type: PowerUpType::Invincibility,
-                    location: Point { x: 0, y: 0 },
+                    location: Point {
+                        x: 0,
+                        y: 0,
+                    },
                     activation_time: Some(
                         web_time::SystemTime::now()
                             .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -2859,17 +2879,41 @@ impl Game {
         }
     }
     #[must_use]
-    pub fn get_boss_path(&self, start: Point, target: Point, boss_kind: BossType) -> Option<Point> {
+    pub fn get_boss_path(
+        &self,
+        start: Point,
+        target: Point,
+        boss_kind: BossType,
+    ) -> Option<Direction> {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
         let mut came_from = std::collections::HashMap::new();
+        let mut first_step = std::collections::HashMap::new();
 
         g_score.insert(start, 0u16);
 
+        let calc_dist = |p1: Point, p2: Point| -> u16 {
+            let mut dx = p1.x.abs_diff(p2.x);
+            let mut dy = p1.y.abs_diff(p2.y);
+            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+            {
+                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+            }
+            dx.saturating_add(dy)
+        };
+
         let heuristic = |p: Point| -> u16 {
-            let dx = p.x.abs_diff(target.x);
-            let dy = p.y.abs_diff(target.y);
-            dx + dy
+            let dist_direct = calc_dist(p, target);
+            if let Some((portal1, portal2)) = self.portals {
+                let dist_via_portal1 =
+                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target));
+                let dist_via_portal2 =
+                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target));
+                std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+            } else {
+                dist_direct
+            }
         };
 
         open_set.push(AStarState {
@@ -2888,58 +2932,55 @@ impl Game {
                 break;
             }
             if current == target {
-                let mut path = Vec::new();
-                let mut curr = current;
-                while let Some(&prev) = came_from.get(&curr) {
-                    path.push(curr);
-                    if prev == start {
-                        break;
-                    }
-                    curr = prev;
-                }
-                return path.last().copied();
+                return first_step.get(&current).copied();
             }
 
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
 
-            let dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)];
-            for (dx, dy) in dirs {
-                let nx = i32::from(current.x) + dx;
-                let ny = i32::from(current.y) + dy;
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(current, d);
 
                 let margin = if self.mode == GameMode::BattleRoyale {
                     self.safe_zone_margin
                 } else {
                     0
-                } + 1;
+                };
 
-                if nx >= i32::from(margin)
-                    && nx < i32::from(self.width) - i32::from(margin)
-                    && ny >= i32::from(margin)
-                    && ny < i32::from(self.height) - i32::from(margin)
-                {
-                    let next_p = Point {
-                        x: nx as u16,
-                        y: ny as u16,
-                    };
-
-                    let mut can_move = true;
-                    if next_p != target && self.snake.body_map.contains_key(&next_p) {
-                        can_move = false;
-                    } else if self.obstacles.contains(&next_p)
-                        && boss_kind != BossType::Charger && boss_kind != BossType::Juggernaut {
+                // When moving we need to get the final point (which resolves portals)
+                if let Some(final_p) = self.get_final_p(next_p) {
+                    if final_p.x > margin
+                        && final_p.x < self.width - 1 - margin
+                        && final_p.y > margin
+                        && final_p.y < self.height - 1 - margin
+                    {
+                        let mut can_move = true;
+                        if final_p != target && self.snake.body_map.contains_key(&final_p) {
+                            can_move = false;
+                        } else if self.obstacles.contains(&final_p)
+                            && boss_kind != BossType::Charger
+                            && boss_kind != BossType::Juggernaut
+                        {
                             can_move = false;
                         }
 
-                    if can_move {
-                        let tentative_g = current_g.saturating_add(1);
-                        if tentative_g < *g_score.get(&next_p).unwrap_or(&u16::MAX) {
-                            came_from.insert(next_p, current);
-                            g_score.insert(next_p, tentative_g);
-                            open_set.push(AStarState {
-                                f_score: tentative_g.saturating_add(heuristic(next_p)),
-                                position: next_p,
-                            });
+                        if can_move {
+                            let tentative_g = current_g.saturating_add(1);
+                            if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
+                                came_from.insert(final_p, current);
+                                g_score.insert(final_p, tentative_g);
+
+                                if current == start {
+                                    first_step.insert(final_p, d);
+                                } else if let Some(&f_step) = first_step.get(&current) {
+                                    first_step.insert(final_p, f_step);
+                                }
+
+                                open_set.push(AStarState {
+                                    f_score: tentative_g.saturating_add(heuristic(final_p)),
+                                    position: final_p,
+                                });
+                            }
                         }
                     }
                 }
@@ -3111,39 +3152,9 @@ impl Game {
                         } else {
                             self.snake.head()
                         };
-                        let dir_opt = if let Some(next_p) =
-                            self.get_boss_path(boss.position, target_pos, boss.kind).or_else(|| {
-                                self.bfs_pathfind(boss.position, target_pos)
-                                    .map(|d| Self::calculate_next_head_dir(boss.position, d))
-                            }) {
-                            let mut dx = i32::from(next_p.x) - i32::from(boss.position.x);
-                            let mut dy = i32::from(next_p.y) - i32::from(boss.position.y);
-
-                            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
-                                let w = i32::from(self.width) - 2;
-                                let h = i32::from(self.height) - 2;
-                                if dx.abs() > w / 2 {
-                                    dx = if dx > 0 { dx - w } else { dx + w };
-                                }
-                                if dy.abs() > h / 2 {
-                                    dy = if dy > 0 { dy - h } else { dy + h };
-                                }
-                            }
-
-                            if dx > 0 {
-                                Some(Direction::Right)
-                            } else if dx < 0 {
-                                Some(Direction::Left)
-                            } else if dy > 0 {
-                                Some(Direction::Down)
-                            } else if dy < 0 {
-                                Some(Direction::Up)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
+                        let dir_opt = self
+                            .get_boss_path(boss.position, target_pos, boss.kind)
+                            .or_else(|| self.bfs_pathfind(boss.position, target_pos));
                         if let Some(dir) = dir_opt {
                             let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             let margin = if self.mode == GameMode::BattleRoyale {
@@ -3298,7 +3309,10 @@ impl Game {
 
                             self.power_up = Some(PowerUp {
                                 p_type: PowerUpType::TimeFreeze,
-                                location: Point { x: 0, y: 0 },
+                                location: Point {
+                                    x: 0,
+                                    y: 0,
+                                },
                                 activation_time: Some(
                                     web_time::SystemTime::now()
                                         .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -3641,7 +3655,10 @@ impl Game {
                             let avoid_food = |p: &Point| {
                                 self.obstacles.contains(p)
                                     || self.snake.body_map.contains_key(p)
-                                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                                    || self
+                                        .player2
+                                        .as_ref()
+                                        .is_some_and(|p2| p2.body_map.contains_key(p))
                             };
                             if let Some(new_food) = Self::get_random_empty_point(
                                 self.width,
@@ -4371,7 +4388,7 @@ impl Game {
                 let mut next_bosses = Vec::new();
                 for boss in std::mem::take(&mut self.bosses) {
                     if boss.health == 0 {
-                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                        *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
                         self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         if self.rng.gen_bool(0.2) {
                             self.equipment_boxes.push(boss.position);
@@ -4885,8 +4902,11 @@ impl Game {
                             if boss.position == p {
                                 boss.health = boss.health.saturating_sub(5);
                                 if boss.health == 0 {
-                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
-                                    self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
+                                    *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                                    self.update_quest_progress(
+                                        crate::game::QuestType::SlayBosses,
+                                        1,
+                                    );
                                     if self.rng.gen_bool(0.2) {
                                         self.equipment_boxes.push(boss.position);
                                     }
@@ -5162,35 +5182,34 @@ impl Game {
         }
 
         if let Some((_, mut timer)) = self.stats.incubator
-            && timer > 0 {
-                timer -= 1;
-                self.stats.incubator.as_mut().unwrap().1 = timer;
-                if timer == 0 {
-                    self.stats.incubator = None;
-                    let possible_companions = [
-                        crate::game::CompanionType::Collector,
-                        crate::game::CompanionType::Fighter,
-                        crate::game::CompanionType::Healer,
-                    ];
-                    let comp =
-                        possible_companions[self.rng.gen_range(0..possible_companions.len())];
-                    if self.stats.unlocked_companions.contains(&comp) {
-                        self.stats.coins += 500;
-                        self.chat_log.push_back((
-                            "SYSTEM: Your egg hatched a duplicate companion. (+500 Coins)"
-                                .to_string(),
-                            crate::color::Color::Yellow,
-                        ));
-                    } else {
-                        self.stats.unlocked_companions.push(comp);
-                        self.chat_log.push_back((
-                            format!("SYSTEM: Your egg hatched a {comp:?}!"),
-                            crate::color::Color::Yellow,
-                        ));
-                    }
-                    crate::game::beep();
+            && timer > 0
+        {
+            timer -= 1;
+            self.stats.incubator.as_mut().unwrap().1 = timer;
+            if timer == 0 {
+                self.stats.incubator = None;
+                let possible_companions = [
+                    crate::game::CompanionType::Collector,
+                    crate::game::CompanionType::Fighter,
+                    crate::game::CompanionType::Healer,
+                ];
+                let comp = possible_companions[self.rng.gen_range(0..possible_companions.len())];
+                if self.stats.unlocked_companions.contains(&comp) {
+                    self.stats.coins += 500;
+                    self.chat_log.push_back((
+                        "SYSTEM: Your egg hatched a duplicate companion. (+500 Coins)".to_string(),
+                        crate::color::Color::Yellow,
+                    ));
+                } else {
+                    self.stats.unlocked_companions.push(comp);
+                    self.chat_log.push_back((
+                        format!("SYSTEM: Your egg hatched a {comp:?}!"),
+                        crate::color::Color::Yellow,
+                    ));
                 }
+                crate::game::beep();
             }
+        }
         self.process_equipment_box_collision(final_head1);
         if let Some(final_head2) = final_head2_opt {
             self.process_equipment_box_collision(final_head2);
@@ -5861,7 +5880,10 @@ impl Game {
                     self.stats.completed_quests.push(q_type);
                     completed_any = true;
                     self.chat_log.push_back((
-                        format!("SYSTEM: Quest Completed! '{}' - Reward: {} Coins", quest.name, quest.reward),
+                        format!(
+                            "SYSTEM: Quest Completed! '{}' - Reward: {} Coins",
+                            quest.name, quest.reward
+                        ),
                         crate::color::Color::Yellow,
                     ));
                 }
@@ -6396,10 +6418,11 @@ impl Game {
                         for &d in &dirs {
                             let b_next_head = Self::calculate_next_head_dir(b.head(), d);
                             if let Some(final_b_next) = self.get_final_p(b_next_head)
-                                && final_p == final_b_next {
-                                    other_bots_count += 1;
-                                    break; // counted for this bot
-                                }
+                                && final_p == final_b_next
+                            {
+                                other_bots_count += 1;
+                                break; // counted for this bot
+                            }
                         }
                     }
                     if other_bots_count > 1 {
@@ -6454,7 +6477,10 @@ impl Game {
                             return false;
                         }
                     }
-                    if boss.kind == BossType::Shooter || boss.kind == BossType::Puffer || boss.kind == BossType::Dragon {
+                    if boss.kind == BossType::Shooter
+                        || boss.kind == BossType::Puffer
+                        || boss.kind == BossType::Dragon
+                    {
                         let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 if boss.kind == BossType::Puffer {
@@ -6503,8 +6529,14 @@ impl Game {
                                 + u32::from(final_p.y.abs_diff(boss.position.y));
 
                             if let Some((portal1, portal2)) = self.portals {
-                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x)) + u32::from(final_p.y.abs_diff(portal1.y)) + u32::from(portal2.x.abs_diff(boss.position.x)) + u32::from(portal2.y.abs_diff(boss.position.y));
-                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x)) + u32::from(final_p.y.abs_diff(portal2.y)) + u32::from(portal1.x.abs_diff(boss.position.x)) + u32::from(portal1.y.abs_diff(boss.position.y));
+                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                    + u32::from(final_p.y.abs_diff(portal1.y))
+                                    + u32::from(portal2.x.abs_diff(boss.position.x))
+                                    + u32::from(portal2.y.abs_diff(boss.position.y));
+                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                    + u32::from(final_p.y.abs_diff(portal2.y))
+                                    + u32::from(portal1.x.abs_diff(boss.position.x))
+                                    + u32::from(portal1.y.abs_diff(boss.position.y));
                                 dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
                             }
 

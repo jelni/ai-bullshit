@@ -2210,7 +2210,7 @@ const fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             }
         },
-        _ => {}
+        _ => {},
     }
     true
 }
@@ -2236,13 +2236,16 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Enter | KeyCode::Char(' ') => {
             match game.settings_selection {
-                0 => { // Talk to Barkeep
+                0 => {
+                    // Talk to Barkeep
                     game.chat_log.push_back((
-                        "Barkeep: Welcome to the Tavern, traveler! Stay a while and listen.".to_string(),
+                        "Barkeep: Welcome to the Tavern, traveler! Stay a while and listen."
+                            .to_string(),
                         crate::color::Color::Yellow,
                     ));
                 },
-                1 => { // Play Dice
+                1 => {
+                    // Play Dice
                     use rand::Rng;
                     if game.stats.coins >= 100 {
                         game.stats.coins -= 100;
@@ -2265,7 +2268,8 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
                         crate::game::beep();
                     }
                 },
-                2 => { // Rest
+                2 => {
+                    // Rest
                     if game.stats.coins >= 50 {
                         game.stats.coins -= 50;
                         game.lives += 1;
@@ -2273,10 +2277,11 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
                         crate::game::beep();
                     }
                 },
-                3 => { // Leave
+                3 => {
+                    // Leave
                     game.state = GameState::Menu;
                 },
-                _ => {}
+                _ => {},
             }
         },
         _ => {},
@@ -2305,39 +2310,57 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
         },
         KeyCode::Enter | KeyCode::Char(' ') => {
             match game.settings_selection {
-                0 => { // Buy Shadow Cloak
-                    if game.stats.coins >= 5000 && !game.stats.unlocked_artifacts.contains(&crate::game::Artifact::GhostCloak) {
+                0 => {
+                    // Buy Shadow Cloak
+                    if game.stats.coins >= 5000
+                        && !game
+                            .stats
+                            .unlocked_artifacts
+                            .contains(&crate::game::Artifact::GhostCloak)
+                    {
                         game.stats.coins -= 5000;
                         game.stats.unlocked_artifacts.push(crate::game::Artifact::GhostCloak);
                         crate::game::beep();
                         game.save_stats();
                     }
                 },
-                1 => { // Buy Hacker Theme
-                    if game.stats.coins >= 2000 && !game.stats.unlocked_themes.contains(&crate::game::Theme::Hacker) {
+                1 => {
+                    // Buy Hacker Theme
+                    if game.stats.coins >= 2000
+                        && !game.stats.unlocked_themes.contains(&crate::game::Theme::Hacker)
+                    {
                         game.stats.coins -= 2000;
                         game.stats.unlocked_themes.push(crate::game::Theme::Hacker);
                         crate::game::beep();
                         game.save_stats();
                     }
                 },
-                2 => { // Buy Corrupted Egg
+                2 => {
+                    // Buy Corrupted Egg
                     if game.stats.coins >= 3000 {
                         game.stats.coins -= 3000;
-                        *game.stats.inventory_eggs.entry(crate::game::EggType::Legendary).or_insert(0) += 1;
+                        *game
+                            .stats
+                            .inventory_eggs
+                            .entry(crate::game::EggType::Legendary)
+                            .or_insert(0) += 1;
                         crate::game::beep();
                         game.save_stats();
                     }
                 },
-                3 => { // Buy Forbidden Spell
-                    if game.stats.coins >= 4000 && !game.stats.unlocked_spells.contains(&crate::game::SpellType::Fireball) {
+                3 => {
+                    // Buy Forbidden Spell
+                    if game.stats.coins >= 4000
+                        && !game.stats.unlocked_spells.contains(&crate::game::SpellType::Fireball)
+                    {
                         game.stats.coins -= 4000;
                         game.stats.unlocked_spells.push(crate::game::SpellType::Fireball);
                         crate::game::beep();
                         game.save_stats();
                     }
                 },
-                4 => { // Sell Max Mana
+                4 => {
+                    // Sell Max Mana
                     if game.max_mana > 10 {
                         game.max_mana = game.max_mana.saturating_sub(10);
                         game.mana = std::cmp::min(game.mana, game.max_mana);
@@ -2346,10 +2369,11 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                         game.save_stats();
                     }
                 },
-                5 => { // Leave
+                5 => {
+                    // Leave
                     game.state = GameState::Menu;
                 },
-                _ => {}
+                _ => {},
             }
         },
         _ => {},
@@ -2428,7 +2452,9 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
         KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
             0 => {
                 // Bid on Mystery Artifact
-                if game.stats.coins >= 5000 && !game.stats.unlocked_artifacts.contains(&crate::game::Artifact::LifeChalice) {
+                if game.stats.coins >= 5000
+                    && !game.stats.unlocked_artifacts.contains(&crate::game::Artifact::LifeChalice)
+                {
                     game.stats.coins -= 5000;
                     game.stats.unlocked_artifacts.push(crate::game::Artifact::LifeChalice);
                     crate::game::beep();
@@ -2437,7 +2463,9 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
             },
             1 => {
                 // Bid on Rare Theme
-                if game.stats.coins >= 2000 && !game.stats.unlocked_themes.contains(&crate::game::Theme::Matrix) {
+                if game.stats.coins >= 2000
+                    && !game.stats.unlocked_themes.contains(&crate::game::Theme::Matrix)
+                {
                     game.stats.coins -= 2000;
                     game.stats.unlocked_themes.push(crate::game::Theme::Matrix);
                     crate::game::beep();
@@ -2446,7 +2474,12 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
             },
             2 => {
                 // Bid on Epic Boss Pet
-                if game.stats.coins >= 10000 && !game.stats.unlocked_companions.contains(&crate::game::CompanionType::Fighter) {
+                if game.stats.coins >= 10000
+                    && !game
+                        .stats
+                        .unlocked_companions
+                        .contains(&crate::game::CompanionType::Fighter)
+                {
                     game.stats.coins -= 10000;
                     game.stats.unlocked_companions.push(crate::game::CompanionType::Fighter);
                     crate::game::beep();
