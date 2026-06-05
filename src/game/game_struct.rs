@@ -6245,24 +6245,17 @@ impl Game {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
-            let margin = if self.mode == GameMode::BattleRoyale {
-                self.safe_zone_margin
-            } else {
-                0
-            };
-            if next_p.x > margin
-                && next_p.x < self.width - 1 - margin
-                && next_p.y > margin
-                && next_p.y < self.height - 1 - margin
-                && !self.obstacles.contains(&next_p)
-                && self.is_safe_final_p(next_p, 1, 3)
-            {
-                if next_p == target {
-                    return Some(d);
+            if let Some(final_p) = self.get_final_p(next_p) {
+                if !self.obstacles.contains(&final_p) && self.is_safe_final_p(final_p, 1, 3) {
+                    if final_p == target {
+                        return Some(d);
+                    }
+                    if !visited.contains(&final_p) {
+                        queue.push_back((final_p, 1));
+                        visited.insert(final_p);
+                        first_step.insert(final_p, d);
+                    }
                 }
-                queue.push_back((next_p, 1));
-                visited.insert(next_p);
-                first_step.insert(next_p, d);
             }
         }
         while let Some((current, dist)) = queue.pop_front() {
@@ -6271,24 +6264,19 @@ impl Game {
             }
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                let margin = if self.mode == GameMode::BattleRoyale {
-                    self.safe_zone_margin
-                } else {
-                    0
-                };
-                if next_p.x > margin
-                    && next_p.x < self.width - 1 - margin
-                    && next_p.y > margin
-                    && next_p.y < self.height - 1 - margin
-                    && !self.obstacles.contains(&next_p)
-                    && !visited.contains(&next_p)
-                    && self.is_safe_final_p(next_p, dist + 1, 3)
-                {
-                    visited.insert(next_p);
-                    if let Some(&first) = first_step.get(&current) {
-                        first_step.insert(next_p, first);
+                if let Some(final_p) = self.get_final_p(next_p) {
+                    if !self.obstacles.contains(&final_p)
+                        && !visited.contains(&final_p)
+                        && self.is_safe_final_p(final_p, dist + 1, 3)
+                    {
+                        visited.insert(final_p);
+                        if !first_step.contains_key(&final_p) {
+                            if let Some(&first) = first_step.get(&current) {
+                                first_step.insert(final_p, first);
+                            }
+                        }
+                        queue.push_back((final_p, dist + 1));
                     }
-                    queue.push_back((next_p, dist + 1));
                 }
             }
         }

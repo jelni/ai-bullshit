@@ -1318,3 +1318,48 @@ fn test_mage_boss_attack() {
     assert_eq!(power_up.p_type as u8, PowerUpType::TimeFreeze as u8, "Power up type must be TimeFreeze");
     assert!(power_up.activation_time.is_some(), "TimeFreeze should be activated");
 }
+    #[test]
+    fn test_bfs_pathfind_uses_portals() {
+        let mut game = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game.obstacles.clear();
+        for x in 0..20 {
+            game.obstacles.insert(Point { x, y: 10 });
+        }
+
+        game.portals = Some((Point { x: 5, y: 5 }, Point { x: 5, y: 15 }));
+
+        let start = Point { x: 5, y: 3 };
+        let target = Point { x: 5, y: 17 };
+
+        let mut current = start;
+        let mut path_len = 0;
+        let mut reached = false;
+
+        for _ in 0..20 {
+            if current == target {
+                reached = true;
+                break;
+            }
+            if let Some(next_dir) = game.bfs_pathfind(current, target) {
+                let next_p = Game::calculate_next_head_dir(current, next_dir);
+                if let Some(final_p) = game.get_final_p(next_p) {
+                    current = final_p;
+                    path_len += 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        assert!(reached, "BFS should reach the target using portals");
+        assert!(path_len < 10, "Path should be short, indicating it used the portal");
+    }
