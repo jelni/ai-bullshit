@@ -1,7 +1,7 @@
 use super::{
     Achievement, Artifact, Bounty, CompanionType, CraftableItem, Deserialize, Equipment, Faction,
-    Fish, HeroClass, Planet, Property, Resource, Serialize, SpellType, Stock, Theme, Vehicle, Quest, QuestType,
-    default_elo, default_unlocked_themes,
+    Fish, HeroClass, Planet, Property, Quest, QuestType, Resource, Serialize, SpellType, Stock,
+    Theme, Vehicle, default_elo, default_unlocked_themes,
 };
 
 #[must_use]

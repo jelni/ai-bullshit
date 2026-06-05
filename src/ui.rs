@@ -175,8 +175,16 @@ fn draw_magic_academy<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             "[1000 COINS]"
         };
 
-        let prefix = if i == game.settings_selection { ">" } else { " " };
-        let suffix = if i == game.settings_selection { "<" } else { " " };
+        let prefix = if i == game.settings_selection {
+            ">"
+        } else {
+            " "
+        };
+        let suffix = if i == game.settings_selection {
+            "<"
+        } else {
+            " "
+        };
         let color = if is_equipped {
             Color::Green
         } else if is_unlocked {
@@ -198,9 +206,21 @@ fn draw_magic_academy<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     // Unequip option
     let unequip_idx = 4;
-    let prefix = if unequip_idx == game.settings_selection { ">" } else { " " };
-    let suffix = if unequip_idx == game.settings_selection { "<" } else { " " };
-    let color = if game.stats.equipped_spell.is_none() { Color::Green } else { Color::White };
+    let prefix = if unequip_idx == game.settings_selection {
+        ">"
+    } else {
+        " "
+    };
+    let suffix = if unequip_idx == game.settings_selection {
+        "<"
+    } else {
+        " "
+    };
+    let color = if game.stats.equipped_spell.is_none() {
+        Color::Green
+    } else {
+        Color::White
+    };
     let display_text = format!("{prefix} Unequip Spell {suffix}");
 
     stdout.queue(SetForegroundColor(color))?;
@@ -1426,7 +1446,9 @@ fn draw_entities<W: Write>(
     obs_color: Color,
 ) -> io::Result<()> {
     let is_visible = |px: u16, py: u16| -> bool {
-        if game.mode == crate::game::GameMode::FogOfWar || game.time_of_day == crate::game::TimeOfDay::Night {
+        if game.mode == crate::game::GameMode::FogOfWar
+            || game.time_of_day == crate::game::TimeOfDay::Night
+        {
             let head = game.snake.head();
             let dx = f32::from(px) - f32::from(head.x);
             let dy = f32::from(py) - f32::from(head.y);
@@ -1848,7 +1870,7 @@ fn draw_entities<W: Write>(
                 crate::game::BossType::Mage => {
                     stdout.queue(SetForegroundColor(Color::Cyan))?;
                     write!(stdout, "M")?;
-                }
+                },
                 crate::game::BossType::Gorgon => {
                     stdout.queue(SetForegroundColor(Color::Green))?;
                     write!(stdout, "G")?;
@@ -3330,7 +3352,10 @@ fn draw_quest_log<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         start_y += 2;
     } else {
         for quest in &game.stats.active_quests {
-            let quest_str = format!("{} - {} ({}/{}) - Reward: {} Coins", quest.name, quest.description, quest.progress, quest.target, quest.reward);
+            let quest_str = format!(
+                "{} - {} ({}/{}) - Reward: {} Coins",
+                quest.name, quest.description, quest.progress, quest.target, quest.reward
+            );
             stdout.queue(cursor::MoveTo(
                 (game.width / 2).saturating_sub(u16::try_from(quest_str.len()).unwrap_or(0) / 2),
                 start_y,
@@ -3380,7 +3405,6 @@ fn draw_quest_log<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
-
 pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let title = "BESTIARY";
     stdout.queue(SetForegroundColor(Color::Cyan))?;
@@ -3410,8 +3434,16 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         let kills = game.stats.bestiary.get(boss).copied().unwrap_or(0);
         let name = format!("{boss:?}");
 
-        let color = if is_selected { Color::Yellow } else { Color::White };
-        let prefix = if is_selected { "> " } else { "  " };
+        let color = if is_selected {
+            Color::Yellow
+        } else {
+            Color::White
+        };
+        let prefix = if is_selected {
+            "> "
+        } else {
+            "  "
+        };
 
         let display_str = format!("{prefix}{name} - Kills: {kills}");
 
@@ -3477,12 +3509,7 @@ pub fn draw_tavern<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         }
     }
 
-    let menu_items = [
-        "Talk to Barkeep",
-        "Play Dice",
-        "Rest (Restore Lives)",
-        "Leave Tavern",
-    ];
+    let menu_items = ["Talk to Barkeep", "Play Dice", "Rest (Restore Lives)", "Leave Tavern"];
 
     for (i, item) in menu_items.iter().enumerate() {
         if i == game.settings_selection {
@@ -3533,8 +3560,16 @@ pub fn draw_black_market<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()
 
     for (i, option) in options.iter().enumerate() {
         let is_selected = i == game.settings_selection;
-        let color = if is_selected { Color::Red } else { Color::DarkGrey };
-        let prefix = if is_selected { "> " } else { "  " };
+        let color = if is_selected {
+            Color::Red
+        } else {
+            Color::DarkGrey
+        };
+        let prefix = if is_selected {
+            "> "
+        } else {
+            "  "
+        };
 
         stdout.queue(SetForegroundColor(color))?;
         stdout.queue(cursor::MoveTo(
@@ -3572,16 +3607,20 @@ pub fn draw_bank<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     ))?;
     write!(stdout, "{coins_str}")?;
 
-    let options = [
-        "1. Deposit 100 Coins",
-        "2. Withdraw 100 Coins",
-        "Leave Bank",
-    ];
+    let options = ["1. Deposit 100 Coins", "2. Withdraw 100 Coins", "Leave Bank"];
 
     for (i, option) in options.iter().enumerate() {
         let is_selected = i == game.settings_selection;
-        let color = if is_selected { Color::Green } else { Color::DarkGrey };
-        let prefix = if is_selected { "> " } else { "  " };
+        let color = if is_selected {
+            Color::Green
+        } else {
+            Color::DarkGrey
+        };
+        let prefix = if is_selected {
+            "> "
+        } else {
+            "  "
+        };
 
         stdout.queue(SetForegroundColor(color))?;
         stdout.queue(cursor::MoveTo(
@@ -3620,8 +3659,16 @@ pub fn draw_auction_house<W: Write>(game: &Game, stdout: &mut W) -> io::Result<(
 
     for (i, option) in options.iter().enumerate() {
         let is_selected = i == game.settings_selection;
-        let color = if is_selected { Color::Green } else { Color::DarkGrey };
-        let prefix = if is_selected { "> " } else { "  " };
+        let color = if is_selected {
+            Color::Green
+        } else {
+            Color::DarkGrey
+        };
+        let prefix = if is_selected {
+            "> "
+        } else {
+            "  "
+        };
 
         stdout.queue(SetForegroundColor(color))?;
         stdout.queue(cursor::MoveTo(

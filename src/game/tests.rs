@@ -1293,12 +1293,15 @@ fn test_artifact_ghost_cloak() {
 
 #[test]
 fn test_mage_boss_attack() {
-    use crate::game::{Theme, Difficulty, BossType, GameMode, PowerUpType};
+    use crate::game::{BossType, Difficulty, GameMode, PowerUpType, Theme};
     let mut game = crate::game::Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::BossRush; // To predictably trigger the shoot_timer based on campaign_level
 
     game.bosses.push(crate::game::Boss {
-        position: crate::snake::Point { x: 5, y: 5 },
+        position: crate::snake::Point {
+            x: 5,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -1312,54 +1315,74 @@ fn test_mage_boss_attack() {
     let player_pos = game.snake.head();
 
     assert_eq!(game.meteors.len(), 1, "Mage should spawn a meteor");
-    assert!((game.meteors[0].position.x as i32 - player_pos.x as i32).abs() <= 1 && (game.meteors[0].position.y as i32 - player_pos.y as i32).abs() <= 1, "Meteor should spawn at or near player position");
+    assert!(
+        (game.meteors[0].position.x as i32 - player_pos.x as i32).abs() <= 1
+            && (game.meteors[0].position.y as i32 - player_pos.y as i32).abs() <= 1,
+        "Meteor should spawn at or near player position"
+    );
     assert!(game.power_up.is_some(), "Mage should trigger a time freeze power up");
     let power_up = game.power_up.as_ref().unwrap();
-    assert_eq!(power_up.p_type as u8, PowerUpType::TimeFreeze as u8, "Power up type must be TimeFreeze");
+    assert_eq!(
+        power_up.p_type as u8,
+        PowerUpType::TimeFreeze as u8,
+        "Power up type must be TimeFreeze"
+    );
     assert!(power_up.activation_time.is_some(), "TimeFreeze should be activated");
 }
-    #[test]
-    fn test_bfs_pathfind_uses_portals() {
-        let mut game = Game::new(
-            20,
-            20,
-            false,
-            'x',
-            crate::game::Theme::Classic,
-            crate::game::Difficulty::Normal,
-        );
-        game.obstacles.clear();
-        for x in 0..20 {
-            game.obstacles.insert(Point { x, y: 10 });
+#[test]
+fn test_bfs_pathfind_uses_portals() {
+    let mut game =
+        Game::new(20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
+    game.obstacles.clear();
+    for x in 0..20 {
+        game.obstacles.insert(Point {
+            x,
+            y: 10,
+        });
+    }
+
+    game.portals = Some((
+        Point {
+            x: 5,
+            y: 5,
+        },
+        Point {
+            x: 5,
+            y: 15,
+        },
+    ));
+
+    let start = Point {
+        x: 5,
+        y: 3,
+    };
+    let target = Point {
+        x: 5,
+        y: 17,
+    };
+
+    let mut current = start;
+    let mut path_len = 0;
+    let mut reached = false;
+
+    for _ in 0..20 {
+        if current == target {
+            reached = true;
+            break;
         }
-
-        game.portals = Some((Point { x: 5, y: 5 }, Point { x: 5, y: 15 }));
-
-        let start = Point { x: 5, y: 3 };
-        let target = Point { x: 5, y: 17 };
-
-        let mut current = start;
-        let mut path_len = 0;
-        let mut reached = false;
-
-        for _ in 0..20 {
-            if current == target {
-                reached = true;
-                break;
-            }
-            if let Some(next_dir) = game.bfs_pathfind(current, target) {
-                let next_p = Game::calculate_next_head_dir(current, next_dir);
-                if let Some(final_p) = game.get_final_p(next_p) {
-                    current = final_p;
-                    path_len += 1;
-                } else {
-                    break;
-                }
+        if let Some(next_dir) = game.bfs_pathfind(current, target) {
+            let next_p = Game::calculate_next_head_dir(current, next_dir);
+            if let Some(final_p) = game.get_final_p(next_p) {
+                current = final_p;
+                path_len += 1;
             } else {
                 break;
             }
+        } else {
+            break;
         }
-
-        assert!(reached, "BFS should reach the target using portals");
-        assert!(path_len < 10, "Path should be short, indicating it used the portal");
     }
+
+    assert!(reached, "BFS should reach the target using portals");
+    assert!(path_len < 10, "Path should be short, indicating it used the portal");
+}
