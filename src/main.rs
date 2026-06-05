@@ -322,6 +322,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::Tavern => handle_tavern_input(code, game),
         GameState::BlackMarket => handle_black_market_input(code, game),
         GameState::Bank => handle_bank_input(code, game),
+        GameState::AuctionHouse => handle_auction_house_input(code, game),
     };
 
     if should_continue {
@@ -598,6 +599,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             64 => {
+                game.state = GameState::AuctionHouse;
+                game.settings_selection = 0;
+            },
+            65 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -607,11 +612,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 64;
+                game.menu_selection = 65;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 64 {
+            if game.menu_selection < 65 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2391,6 +2396,64 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                 }
             },
             2 => {
+                // Leave
+                game.state = GameState::Menu;
+            },
+            _ => {},
+        },
+        _ => {},
+    }
+    true
+}
+
+fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 3;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 3 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                // Bid on Mystery Artifact
+                if game.stats.coins >= 5000 && !game.stats.unlocked_artifacts.contains(&crate::game::Artifact::LifeChalice) {
+                    game.stats.coins -= 5000;
+                    game.stats.unlocked_artifacts.push(crate::game::Artifact::LifeChalice);
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            },
+            1 => {
+                // Bid on Rare Theme
+                if game.stats.coins >= 2000 && !game.stats.unlocked_themes.contains(&crate::game::Theme::Matrix) {
+                    game.stats.coins -= 2000;
+                    game.stats.unlocked_themes.push(crate::game::Theme::Matrix);
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            },
+            2 => {
+                // Bid on Epic Boss Pet
+                if game.stats.coins >= 10000 && !game.stats.unlocked_companions.contains(&crate::game::CompanionType::Fighter) {
+                    game.stats.coins -= 10000;
+                    game.stats.unlocked_companions.push(crate::game::CompanionType::Fighter);
+                    crate::game::beep();
+                    game.save_stats();
+                }
+            },
+            3 => {
                 // Leave
                 game.state = GameState::Menu;
             },

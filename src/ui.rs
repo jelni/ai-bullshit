@@ -56,6 +56,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::Tavern => draw_tavern(game, stdout)?,
         GameState::BlackMarket => draw_black_market(game, stdout)?,
         GameState::Bank => draw_bank(game, stdout)?,
+        GameState::AuctionHouse => draw_auction_house(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -620,6 +621,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Tavern",
         "Black Market",
         "Bank",
+        "Auction House",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3590,4 +3592,72 @@ pub fn draw_bank<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn draw_auction_house<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "AUCTION HOUSE";
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(title.len()).unwrap_or(0) / 2),
+        2,
+    ))?;
+    write!(stdout, "{title}")?;
+
+    let coins_str = format!("Coins: {}", game.stats.coins);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(u16::try_from(coins_str.len()).unwrap_or(0) / 2),
+        4,
+    ))?;
+    write!(stdout, "{coins_str}")?;
+
+    let options = [
+        "1. Bid on Mystery Artifact (5000 Coins)",
+        "2. Bid on Rare Theme (2000 Coins)",
+        "3. Bid on Epic Boss Pet (10000 Coins)",
+        "Leave Auction House",
+    ];
+
+    for (i, option) in options.iter().enumerate() {
+        let is_selected = i == game.settings_selection;
+        let color = if is_selected { Color::Green } else { Color::DarkGrey };
+        let prefix = if is_selected { "> " } else { "  " };
+
+        stdout.queue(SetForegroundColor(color))?;
+        stdout.queue(cursor::MoveTo(
+            (game.width / 2).saturating_sub(u16::try_from(option.len() + 2).unwrap_or(0) / 2),
+            8 + u16::try_from(i).unwrap_or(0) * 2,
+        ))?;
+        write!(stdout, "{prefix}{option}")?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod auction_tests {
+    use super::*;
+    use crate::game::Game;
+
+    #[test]
+    fn test_draw_auction_house() {
+        let mut game = Game::new(
+            40,
+            40,
+            false,
+            'O',
+            crate::game::Theme::Dark,
+            crate::game::Difficulty::Normal,
+        );
+        game.settings_selection = 1;
+        game.stats.coins = 9000;
+
+        let mut buf = Vec::new();
+        draw_auction_house(&game, &mut buf).expect("Valid operation in tests");
+        let output = String::from_utf8(buf).expect("Valid operation in tests");
+
+        assert!(output.contains("AUCTION HOUSE"), "Should contain title");
+        assert!(output.contains("Coins: 9000"), "Should contain coins");
+        assert!(output.contains("> 2. Bid on Rare Theme"), "Should highlight selected option");
+    }
 }
