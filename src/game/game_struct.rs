@@ -94,6 +94,12 @@ pub struct Game {
     pub max_mana: u32,
     pub time_of_day: crate::game::TimeOfDay,
     pub tick_counter: u32,
+    pub p1_flag: Option<Point>,
+    pub p2_flag: Option<Point>,
+    pub p1_has_flag: bool,
+    pub p2_has_flag: bool,
+    pub p1_score: u32,
+    pub p2_score: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -351,6 +357,12 @@ impl Game {
             max_mana: 100,
             time_of_day: crate::game::TimeOfDay::Day,
             tick_counter: 0,
+            p1_flag: None,
+            p2_flag: None,
+            p1_has_flag: false,
+            p2_has_flag: false,
+            p1_score: 0,
+            p2_score: 0,
         }
     }
     #[must_use]
@@ -570,6 +582,12 @@ impl Game {
             max_mana: self.max_mana,
             time_of_day: self.time_of_day,
             tick_counter: self.tick_counter,
+            p1_flag: self.p1_flag,
+            p2_flag: self.p2_flag,
+            p1_has_flag: self.p1_has_flag,
+            p2_has_flag: self.p2_has_flag,
+            p1_score: self.p1_score,
+            p2_score: self.p2_score,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -686,6 +704,12 @@ impl Game {
                 self.max_mana = state.max_mana;
                 self.time_of_day = state.time_of_day;
                 self.tick_counter = state.tick_counter;
+                self.p1_flag = state.p1_flag;
+                self.p2_flag = state.p2_flag;
+                self.p1_has_flag = state.p1_has_flag;
+                self.p2_has_flag = state.p2_has_flag;
+                self.p1_score = state.p1_score;
+                self.p2_score = state.p2_score;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -1637,7 +1661,8 @@ impl Game {
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
             | GameMode::BattleRoyale
-            | GameMode::Tron => {
+            | GameMode::Tron
+            | GameMode::CaptureTheFlag => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -1969,6 +1994,19 @@ impl Game {
         self.xp = 0;
         self.player_level = 1;
         self.xp_to_next_level = 5;
+        self.p1_has_flag = false;
+        self.p2_has_flag = false;
+
+        if self.mode == GameMode::CaptureTheFlag {
+            self.p1_flag = Some(Point { x: 2, y: start_y });
+            self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: start_y });
+        } else {
+            self.p1_flag = None;
+            self.p2_flag = None;
+        }
+        // Score is kept across respawns, but reset on full game reset
+        self.p1_score = 0;
+        self.p2_score = 0;
         self.in_game_upgrades.clear();
         self.level_up_options.clear();
         self.level_up_selection = 0;
@@ -2072,7 +2110,8 @@ impl Game {
             | GameMode::PlayerVsBot
             | GameMode::BotVsBot
             | GameMode::BattleRoyale
-            | GameMode::Tron => {
+            | GameMode::Tron
+            | GameMode::CaptureTheFlag => {
                 self.snake = Snake::new(Point {
                     x: start_x - 5,
                     y: start_y,
@@ -2087,6 +2126,13 @@ impl Game {
                         || (p.x == start_x + 5
                             && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)))
                 });
+
+                if self.mode == GameMode::CaptureTheFlag {
+                    self.p1_flag = Some(Point { x: 2, y: start_y });
+                    self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: start_y });
+                    self.p1_has_flag = false;
+                    self.p2_has_flag = false;
+                }
             },
         }
         self.bots.clear();
@@ -2459,6 +2505,12 @@ impl Game {
             self.max_mana = state.max_mana;
             self.time_of_day = state.time_of_day;
             self.tick_counter = state.tick_counter;
+            self.p1_flag = state.p1_flag;
+            self.p2_flag = state.p2_flag;
+            self.p1_has_flag = state.p1_has_flag;
+            self.p2_has_flag = state.p2_has_flag;
+            self.p1_score = state.p1_score;
+            self.p2_score = state.p2_score;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2543,6 +2595,12 @@ impl Game {
             max_mana: self.max_mana,
             time_of_day: self.time_of_day,
             tick_counter: self.tick_counter,
+            p1_flag: self.p1_flag,
+            p2_flag: self.p2_flag,
+            p1_has_flag: self.p1_has_flag,
+            p2_has_flag: self.p2_has_flag,
+            p1_score: self.p1_score,
+            p2_score: self.p2_score,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2948,8 +3006,8 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                if let Some(final_p) = self.get_final_p(next_p) {
-                    if final_p.x > margin
+                if let Some(final_p) = self.get_final_p(next_p)
+                    && final_p.x > margin
                         && final_p.x < self.width - 1 - margin
                         && final_p.y > margin
                         && final_p.y < self.height - 1 - margin
@@ -2983,7 +3041,6 @@ impl Game {
                             }
                         }
                     }
-                }
             }
         }
         None
@@ -5138,9 +5195,23 @@ impl Game {
                 self.update_elo(false, true);
                 self.save_stats();
             }
+            if self.mode == GameMode::CaptureTheFlag {
+                self.p1_has_flag = false;
+                self.p2_has_flag = false;
+                self.p1_flag = Some(Point { x: 2, y: self.height / 2 });
+                self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: self.height / 2 });
+                self.respawn();
+                return;
+            }
             self.handle_death("Draw! Both snakes died!");
             return;
         } else if p1_dead {
+            if self.mode == GameMode::CaptureTheFlag {
+                self.p1_has_flag = false;
+                self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: self.height / 2 });
+                self.respawn();
+                return;
+            }
             if self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
@@ -5161,6 +5232,12 @@ impl Game {
             }
             return;
         } else if p2_dead {
+            if self.mode == GameMode::CaptureTheFlag {
+                self.p2_has_flag = false;
+                self.p1_flag = Some(Point { x: 2, y: self.height / 2 });
+                self.respawn();
+                return;
+            }
             if self.mode == GameMode::PlayerVsBot {
                 self.update_elo(true, false);
                 self.save_stats();
@@ -5168,6 +5245,38 @@ impl Game {
             self.handle_death("Player 1 Wins!");
             return;
         }
+
+        if self.mode == GameMode::CaptureTheFlag {
+            let p1_base = Point { x: 2, y: self.height / 2 };
+            let p2_base = Point { x: self.width.saturating_sub(3), y: self.height / 2 };
+
+            // Player 1 logic
+            if !self.p1_has_flag && Some(final_head1) == self.p2_flag {
+                self.p1_has_flag = true;
+                self.p2_flag = None;
+                beep();
+            } else if self.p1_has_flag && final_head1 == p1_base {
+                self.p1_score += 1;
+                self.p1_has_flag = false;
+                self.p2_flag = Some(p2_base);
+                beep();
+            }
+
+            // Player 2 logic
+            if let Some(fh2) = final_head2_opt {
+                if !self.p2_has_flag && Some(fh2) == self.p1_flag {
+                    self.p2_has_flag = true;
+                    self.p1_flag = None;
+                    beep();
+                } else if self.p2_has_flag && fh2 == p2_base {
+                    self.p2_score += 1;
+                    self.p2_has_flag = false;
+                    self.p1_flag = Some(p1_base);
+                    beep();
+                }
+            }
+        }
+
         self.process_power_up_collision(final_head1);
         if let Some(final_head2) = final_head2_opt {
             self.process_power_up_collision(final_head2);
@@ -6267,8 +6376,8 @@ impl Game {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
-            if let Some(final_p) = self.get_final_p(next_p) {
-                if !self.obstacles.contains(&final_p) && self.is_safe_final_p(final_p, 1, 3) {
+            if let Some(final_p) = self.get_final_p(next_p)
+                && !self.obstacles.contains(&final_p) && self.is_safe_final_p(final_p, 1, 3) {
                     if final_p == target {
                         return Some(d);
                     }
@@ -6278,7 +6387,6 @@ impl Game {
                         first_step.insert(final_p, d);
                     }
                 }
-            }
         }
         while let Some((current, dist)) = queue.pop_front() {
             if current == target {
@@ -6286,20 +6394,18 @@ impl Game {
             }
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                if let Some(final_p) = self.get_final_p(next_p) {
-                    if !self.obstacles.contains(&final_p)
+                if let Some(final_p) = self.get_final_p(next_p)
+                    && !self.obstacles.contains(&final_p)
                         && !visited.contains(&final_p)
                         && self.is_safe_final_p(final_p, dist + 1, 3)
                     {
                         visited.insert(final_p);
-                        if !first_step.contains_key(&final_p) {
-                            if let Some(&first) = first_step.get(&current) {
+                        if !first_step.contains_key(&final_p)
+                            && let Some(&first) = first_step.get(&current) {
                                 first_step.insert(final_p, first);
                             }
-                        }
                         queue.push_back((final_p, dist + 1));
                     }
-                }
             }
         }
         None

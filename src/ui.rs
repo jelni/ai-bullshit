@@ -611,6 +611,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Zombie Mode",
         "Farmstead Mode",
         "PacMan Mode",
+        "Capture The Flag Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1888,6 +1889,22 @@ fn draw_entities<W: Write>(
         write!(stdout, "$")?;
     }
 
+    // Draw flags for Capture The Flag mode
+    if game.mode == crate::game::GameMode::CaptureTheFlag {
+        if let Some(p1_flag) = game.p1_flag
+            && is_visible(p1_flag.x, p1_flag.y) {
+                stdout.queue(cursor::MoveTo(p1_flag.x, p1_flag.y))?;
+                stdout.queue(SetForegroundColor(Color::Cyan))?;
+                write!(stdout, "F")?;
+            }
+        if let Some(p2_flag) = game.p2_flag
+            && is_visible(p2_flag.x, p2_flag.y) {
+                stdout.queue(cursor::MoveTo(p2_flag.x, p2_flag.y))?;
+                stdout.queue(SetForegroundColor(Color::Red))?;
+                write!(stdout, "F")?;
+            }
+    }
+
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food
         && is_visible(bonus_p.x, bonus_p.y)
@@ -2095,7 +2112,19 @@ fn draw_base_status<W: Write>(
     bot_str: &str,
     combo_str: &str,
 ) -> io::Result<()> {
-    if game.mode == crate::game::GameMode::Campaign {
+    if game.mode == crate::game::GameMode::CaptureTheFlag {
+        write!(
+            stdout,
+            "P1 Score: {} | P2 Score: {} | Mana: {}/{} | {:?}{}{}",
+            game.p1_score,
+            game.p2_score,
+            game.mana,
+            game.max_mana,
+            game.difficulty,
+            bot_str,
+            combo_str
+        )?;
+    } else if game.mode == crate::game::GameMode::Campaign {
         write!(
             stdout,
             "Score: {} | High: {} | Lives: {} | Mana: {}/{} | Lvl: {} | XP: {}/{} | Campaign Lvl: {} | {:?}{}{}",

@@ -37,4 +37,5 @@ pub enum GameMode {
     Zombie,
     Farmstead,
     PacMan,
+    CaptureTheFlag,
 }
