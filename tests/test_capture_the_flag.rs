@@ -1,4 +1,4 @@
-use snake_game::game::{Game, GameMode, Difficulty, Theme};
+use snake_game::game::{Difficulty, Game, GameMode, Theme};
 use snake_game::snake::{Direction, Point};
 
 #[test]
@@ -23,7 +23,13 @@ fn test_capture_the_flag_pickup() {
 
     // Position P1 right next to P2's flag
     if let Some(p2_flag) = game.p2_flag {
-        game.snake.move_to(Point { x: p2_flag.x - 1, y: p2_flag.y }, false);
+        game.snake.move_to(
+            Point {
+                x: p2_flag.x - 1,
+                y: p2_flag.y,
+            },
+            false,
+        );
         game.snake.direction_queue.push_back(Direction::Right);
     }
 
@@ -44,8 +50,17 @@ fn test_capture_the_flag_scoring() {
     game.p2_flag = None;
 
     // Position P1 right next to P1's base to score
-    let p1_base = Point { x: 2, y: game.height / 2 };
-    game.snake.move_to(Point { x: p1_base.x + 1, y: p1_base.y }, false);
+    let p1_base = Point {
+        x: 2,
+        y: game.height / 2,
+    };
+    game.snake.move_to(
+        Point {
+            x: p1_base.x + 1,
+            y: p1_base.y,
+        },
+        false,
+    );
     game.snake.direction_queue.push_back(Direction::Left);
 
     // Update tick
@@ -66,7 +81,13 @@ fn test_capture_the_flag_death_drops_flag() {
     game.p2_flag = None;
 
     // Force P1 into a wall
-    game.snake.move_to(Point { x: 1, y: 1 }, false);
+    game.snake.move_to(
+        Point {
+            x: 1,
+            y: 1,
+        },
+        false,
+    );
     game.snake.direction_queue.push_back(Direction::Up); // Move into top wall (y=0)
 
     game.update();

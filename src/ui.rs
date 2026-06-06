@@ -1892,17 +1892,19 @@ fn draw_entities<W: Write>(
     // Draw flags for Capture The Flag mode
     if game.mode == crate::game::GameMode::CaptureTheFlag {
         if let Some(p1_flag) = game.p1_flag
-            && is_visible(p1_flag.x, p1_flag.y) {
-                stdout.queue(cursor::MoveTo(p1_flag.x, p1_flag.y))?;
-                stdout.queue(SetForegroundColor(Color::Cyan))?;
-                write!(stdout, "F")?;
-            }
+            && is_visible(p1_flag.x, p1_flag.y)
+        {
+            stdout.queue(cursor::MoveTo(p1_flag.x, p1_flag.y))?;
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            write!(stdout, "F")?;
+        }
         if let Some(p2_flag) = game.p2_flag
-            && is_visible(p2_flag.x, p2_flag.y) {
-                stdout.queue(cursor::MoveTo(p2_flag.x, p2_flag.y))?;
-                stdout.queue(SetForegroundColor(Color::Red))?;
-                write!(stdout, "F")?;
-            }
+            && is_visible(p2_flag.x, p2_flag.y)
+        {
+            stdout.queue(cursor::MoveTo(p2_flag.x, p2_flag.y))?;
+            stdout.queue(SetForegroundColor(Color::Red))?;
+            write!(stdout, "F")?;
+        }
     }
 
     // Draw bonus food
