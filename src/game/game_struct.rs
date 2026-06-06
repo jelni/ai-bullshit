@@ -6922,11 +6922,59 @@ impl Game {
                         }
                     }
                 }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
             } else if checking_player == 2 {
                 for part in &self.snake.body {
                     let d = calc_dist(p, *part);
                     if d < 4 {
                         penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            } else if checking_player == 4 {
+                for part in &self.snake.body {
+                    let d = calc_dist(p, *part);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                if let Some(p2) = &self.player2 {
+                    for part in &p2.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
                     }
                 }
             }

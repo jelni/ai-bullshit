@@ -202,6 +202,9 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::ShadowClone => ctx.set_fill_style_str("#696969"),
             crate::game::BossType::Puffer => ctx.set_fill_style_str("#FFA500"),
             crate::game::BossType::Juggernaut => ctx.set_fill_style_str("#8B0000"),
+            crate::game::BossType::Dragon => ctx.set_fill_style_str("#FF0000"),
+            crate::game::BossType::Mage => ctx.set_fill_style_str("#0000FF"),
+            crate::game::BossType::Gorgon => ctx.set_fill_style_str("#008000"),
             crate::game::BossType::Mimic => {
                 let target_pos = if let Some((decoy_pos, _)) = game.decoy {
                     decoy_pos
