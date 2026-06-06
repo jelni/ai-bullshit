@@ -101,6 +101,18 @@ pub struct SaveState {
     pub time_of_day: crate::game::TimeOfDay,
     #[serde(default)]
     pub tick_counter: u32,
+    #[serde(default)]
+    pub p1_flag: Option<Point>,
+    #[serde(default)]
+    pub p2_flag: Option<Point>,
+    #[serde(default)]
+    pub p1_has_flag: bool,
+    #[serde(default)]
+    pub p2_has_flag: bool,
+    #[serde(default)]
+    pub p1_score: u32,
+    #[serde(default)]
+    pub p2_score: u32,
 }
 
 #[must_use]

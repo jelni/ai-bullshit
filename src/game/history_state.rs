@@ -47,4 +47,10 @@ pub struct HistoryState {
     pub max_mana: u32,
     pub time_of_day: crate::game::TimeOfDay,
     pub tick_counter: u32,
+    pub p1_flag: Option<Point>,
+    pub p2_flag: Option<Point>,
+    pub p1_has_flag: bool,
+    pub p2_has_flag: bool,
+    pub p1_score: u32,
+    pub p2_score: u32,
 }
