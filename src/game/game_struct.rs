@@ -6586,6 +6586,7 @@ impl Game {
                     if boss.kind == BossType::Shooter
                         || boss.kind == BossType::Puffer
                         || boss.kind == BossType::Dragon
+                        || boss.kind == BossType::Mage
                     {
                         let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
@@ -6593,6 +6594,8 @@ impl Game {
                                     10
                                 } else if boss.kind == BossType::Dragon {
                                     10
+                                } else if boss.kind == BossType::Mage {
+                                    15
                                 } else {
                                     5
                                 },
@@ -6600,6 +6603,8 @@ impl Game {
                                     30_u8
                                 } else if boss.kind == BossType::Dragon {
                                     20_u8
+                                } else if boss.kind == BossType::Mage {
+                                    30_u8
                                 } else {
                                     15_u8
                                 })
@@ -6609,6 +6614,8 @@ impl Game {
                             30
                         } else if boss.kind == BossType::Dragon {
                             20
+                        } else if boss.kind == BossType::Mage {
+                            30
                         } else {
                             15
                         });
@@ -6618,6 +6625,8 @@ impl Game {
                                     5
                                 } else if boss.kind == BossType::Dragon {
                                     2
+                                } else if boss.kind == BossType::Mage {
+                                    5
                                 } else {
                                     1
                                 },
@@ -6625,31 +6634,52 @@ impl Game {
                             );
                         }
                         let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
-                        if shoots > 0
-                            && (final_p.x == boss.position.x || final_p.y == boss.position.y)
-                        {
-                            // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
-                            // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
-                            // Only consider it unsafe if within the same column/row AND fairly close.
-                            let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                                + u32::from(final_p.y.abs_diff(boss.position.y));
+                        if shoots > 0 {
+                            if boss.kind == BossType::Mage {
+                                // The mage will spawn a meteor exactly at the target's current head.
+                                // So if we are considering staying at or moving to a point that is the same as
+                                // the CURRENT head of the player/bot being targeted, it's dangerous.
+                                // However, the meteor takes 15 ticks to hit.
+                                // This is an immediate prediction: "Where will the mage shoot?"
+                                // We know it shoots at self.snake.head() or decoy.
+                                let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                    decoy_pos
+                                } else {
+                                    // Depending on checking_player we might want to be more specific,
+                                    // but self.snake.head() is standard targeting.
+                                    self.snake.head()
+                                };
 
-                            if let Some((portal1, portal2)) = self.portals {
-                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                    + u32::from(final_p.y.abs_diff(portal1.y))
-                                    + u32::from(portal2.x.abs_diff(boss.position.x))
-                                    + u32::from(portal2.y.abs_diff(boss.position.y));
-                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                    + u32::from(final_p.y.abs_diff(portal2.y))
-                                    + u32::from(portal1.x.abs_diff(boss.position.x))
-                                    + u32::from(portal1.y.abs_diff(boss.position.y));
-                                dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
-                            }
+                                // We don't know the exact time it will take for the bot to reach `final_p`.
+                                // If `final_p` IS the target_pos, a meteor is about to be spawned there.
+                                // Better to avoid `target_pos` right now to ensure the bot paths away from it.
+                                if final_p == target_pos {
+                                    return false;
+                                }
+                            } else if final_p.x == boss.position.x || final_p.y == boss.position.y {
+                                // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
+                                // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
+                                // Only consider it unsafe if within the same column/row AND fairly close.
+                                let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                                    + u32::from(final_p.y.abs_diff(boss.position.y));
 
-                            // A laser travels 2 tiles per tick.
-                            let laser_reach = shoots * 2;
-                            if dist <= laser_reach {
-                                return false;
+                                if let Some((portal1, portal2)) = self.portals {
+                                    let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                        + u32::from(final_p.y.abs_diff(portal1.y))
+                                        + u32::from(portal2.x.abs_diff(boss.position.x))
+                                        + u32::from(portal2.y.abs_diff(boss.position.y));
+                                    let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                        + u32::from(final_p.y.abs_diff(portal2.y))
+                                        + u32::from(portal1.x.abs_diff(boss.position.x))
+                                        + u32::from(portal1.y.abs_diff(boss.position.y));
+                                    dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                                }
+
+                                // A laser travels 2 tiles per tick.
+                                let laser_reach = shoots * 2;
+                                if dist <= laser_reach {
+                                    return false;
+                                }
                             }
                         }
                     }
