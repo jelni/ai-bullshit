@@ -1998,8 +1998,14 @@ impl Game {
         self.p2_has_flag = false;
 
         if self.mode == GameMode::CaptureTheFlag {
-            self.p1_flag = Some(Point { x: 2, y: start_y });
-            self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: start_y });
+            self.p1_flag = Some(Point {
+                x: 2,
+                y: start_y,
+            });
+            self.p2_flag = Some(Point {
+                x: self.width.saturating_sub(3),
+                y: start_y,
+            });
         } else {
             self.p1_flag = None;
             self.p2_flag = None;
@@ -2128,8 +2134,14 @@ impl Game {
                 });
 
                 if self.mode == GameMode::CaptureTheFlag {
-                    self.p1_flag = Some(Point { x: 2, y: start_y });
-                    self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: start_y });
+                    self.p1_flag = Some(Point {
+                        x: 2,
+                        y: start_y,
+                    });
+                    self.p2_flag = Some(Point {
+                        x: self.width.saturating_sub(3),
+                        y: start_y,
+                    });
                     self.p1_has_flag = false;
                     self.p2_has_flag = false;
                 }
@@ -3008,39 +3020,39 @@ impl Game {
                 // When moving we need to get the final point (which resolves portals)
                 if let Some(final_p) = self.get_final_p(next_p)
                     && final_p.x > margin
-                        && final_p.x < self.width - 1 - margin
-                        && final_p.y > margin
-                        && final_p.y < self.height - 1 - margin
+                    && final_p.x < self.width - 1 - margin
+                    && final_p.y > margin
+                    && final_p.y < self.height - 1 - margin
+                {
+                    let mut can_move = true;
+                    if final_p != target && self.snake.body_map.contains_key(&final_p) {
+                        can_move = false;
+                    } else if self.obstacles.contains(&final_p)
+                        && boss_kind != BossType::Charger
+                        && boss_kind != BossType::Juggernaut
                     {
-                        let mut can_move = true;
-                        if final_p != target && self.snake.body_map.contains_key(&final_p) {
-                            can_move = false;
-                        } else if self.obstacles.contains(&final_p)
-                            && boss_kind != BossType::Charger
-                            && boss_kind != BossType::Juggernaut
-                        {
-                            can_move = false;
-                        }
+                        can_move = false;
+                    }
 
-                        if can_move {
-                            let tentative_g = current_g.saturating_add(1);
-                            if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
-                                came_from.insert(final_p, current);
-                                g_score.insert(final_p, tentative_g);
+                    if can_move {
+                        let tentative_g = current_g.saturating_add(1);
+                        if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
+                            came_from.insert(final_p, current);
+                            g_score.insert(final_p, tentative_g);
 
-                                if current == start {
-                                    first_step.insert(final_p, d);
-                                } else if let Some(&f_step) = first_step.get(&current) {
-                                    first_step.insert(final_p, f_step);
-                                }
-
-                                open_set.push(AStarState {
-                                    f_score: tentative_g.saturating_add(heuristic(final_p)),
-                                    position: final_p,
-                                });
+                            if current == start {
+                                first_step.insert(final_p, d);
+                            } else if let Some(&f_step) = first_step.get(&current) {
+                                first_step.insert(final_p, f_step);
                             }
+
+                            open_set.push(AStarState {
+                                f_score: tentative_g.saturating_add(heuristic(final_p)),
+                                position: final_p,
+                            });
                         }
                     }
+                }
             }
         }
         None
@@ -5198,8 +5210,14 @@ impl Game {
             if self.mode == GameMode::CaptureTheFlag {
                 self.p1_has_flag = false;
                 self.p2_has_flag = false;
-                self.p1_flag = Some(Point { x: 2, y: self.height / 2 });
-                self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: self.height / 2 });
+                self.p1_flag = Some(Point {
+                    x: 2,
+                    y: self.height / 2,
+                });
+                self.p2_flag = Some(Point {
+                    x: self.width.saturating_sub(3),
+                    y: self.height / 2,
+                });
                 self.respawn();
                 return;
             }
@@ -5208,7 +5226,10 @@ impl Game {
         } else if p1_dead {
             if self.mode == GameMode::CaptureTheFlag {
                 self.p1_has_flag = false;
-                self.p2_flag = Some(Point { x: self.width.saturating_sub(3), y: self.height / 2 });
+                self.p2_flag = Some(Point {
+                    x: self.width.saturating_sub(3),
+                    y: self.height / 2,
+                });
                 self.respawn();
                 return;
             }
@@ -5234,7 +5255,10 @@ impl Game {
         } else if p2_dead {
             if self.mode == GameMode::CaptureTheFlag {
                 self.p2_has_flag = false;
-                self.p1_flag = Some(Point { x: 2, y: self.height / 2 });
+                self.p1_flag = Some(Point {
+                    x: 2,
+                    y: self.height / 2,
+                });
                 self.respawn();
                 return;
             }
@@ -5247,8 +5271,14 @@ impl Game {
         }
 
         if self.mode == GameMode::CaptureTheFlag {
-            let p1_base = Point { x: 2, y: self.height / 2 };
-            let p2_base = Point { x: self.width.saturating_sub(3), y: self.height / 2 };
+            let p1_base = Point {
+                x: 2,
+                y: self.height / 2,
+            };
+            let p2_base = Point {
+                x: self.width.saturating_sub(3),
+                y: self.height / 2,
+            };
 
             // Player 1 logic
             if !self.p1_has_flag && Some(final_head1) == self.p2_flag {
@@ -6377,16 +6407,18 @@ impl Game {
         for &d in &dirs {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && !self.obstacles.contains(&final_p) && self.is_safe_final_p(final_p, 1, 3) {
-                    if final_p == target {
-                        return Some(d);
-                    }
-                    if !visited.contains(&final_p) {
-                        queue.push_back((final_p, 1));
-                        visited.insert(final_p);
-                        first_step.insert(final_p, d);
-                    }
+                && !self.obstacles.contains(&final_p)
+                && self.is_safe_final_p(final_p, 1, 3)
+            {
+                if final_p == target {
+                    return Some(d);
                 }
+                if !visited.contains(&final_p) {
+                    queue.push_back((final_p, 1));
+                    visited.insert(final_p);
+                    first_step.insert(final_p, d);
+                }
+            }
         }
         while let Some((current, dist)) = queue.pop_front() {
             if current == target {
@@ -6396,16 +6428,17 @@ impl Game {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 if let Some(final_p) = self.get_final_p(next_p)
                     && !self.obstacles.contains(&final_p)
-                        && !visited.contains(&final_p)
-                        && self.is_safe_final_p(final_p, dist + 1, 3)
+                    && !visited.contains(&final_p)
+                    && self.is_safe_final_p(final_p, dist + 1, 3)
+                {
+                    visited.insert(final_p);
+                    if !first_step.contains_key(&final_p)
+                        && let Some(&first) = first_step.get(&current)
                     {
-                        visited.insert(final_p);
-                        if !first_step.contains_key(&final_p)
-                            && let Some(&first) = first_step.get(&current) {
-                                first_step.insert(final_p, first);
-                            }
-                        queue.push_back((final_p, dist + 1));
+                        first_step.insert(final_p, first);
                     }
+                    queue.push_back((final_p, dist + 1));
+                }
             }
         }
         None
@@ -6537,6 +6570,9 @@ impl Game {
                 }
             }
             for boss in &self.bosses {
+                if final_p == boss.position {
+                    return false;
+                }
                 if is_time_frozen {
                     if final_p == boss.position {
                         return false;
@@ -6672,7 +6708,10 @@ impl Game {
                                         + u32::from(final_p.y.abs_diff(portal2.y))
                                         + u32::from(portal1.x.abs_diff(boss.position.x))
                                         + u32::from(portal1.y.abs_diff(boss.position.y));
-                                    dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                                    dist = std::cmp::min(
+                                        dist,
+                                        std::cmp::min(dist_via_p1, dist_via_p2),
+                                    );
                                 }
 
                                 // A laser travels 2 tiles per tick.
@@ -6686,6 +6725,9 @@ impl Game {
                 }
             }
             for l in &self.lasers {
+                if final_p == l.position {
+                    return false;
+                }
                 if is_time_frozen {
                     if final_p == l.position {
                         return false;
