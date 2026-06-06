@@ -6775,6 +6775,9 @@ impl Game {
                     }
                 }
             }
+            for t in &self.turrets {
+                if final_p == t.position { return false; }
+            }
             if steps == 1 {
                 let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                 if checking_player == 1 {
@@ -6998,6 +7001,12 @@ impl Game {
             }
             for m in &self.mines {
                 let d = calc_dist(p, *m);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for t in &self.turrets {
+                let d = calc_dist(p, t.position);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 10);
                 }
