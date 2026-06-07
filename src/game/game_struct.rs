@@ -6540,8 +6540,23 @@ impl Game {
                             move_threshold = std::cmp::max(1, move_threshold / 2);
                         }
                         let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                        let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
                             + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                        if let Some((portal1, portal2)) = self.portals {
+                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                + u32::from(final_p.y.abs_diff(portal1.y))
+                                + u32::from(portal2.x.abs_diff(boss.position.x))
+                                + u32::from(portal2.y.abs_diff(boss.position.y));
+                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                + u32::from(final_p.y.abs_diff(portal2.y))
+                                + u32::from(portal1.x.abs_diff(boss.position.x))
+                                + u32::from(portal1.y.abs_diff(boss.position.y));
+                            dist = std::cmp::min(
+                                dist,
+                                std::cmp::min(dist_via_p1, dist_via_p2),
+                            );
+                        }
                         if dist <= moves {
                             juggernaut_will_destroy = true;
                             break;
@@ -6657,8 +6672,23 @@ impl Game {
                         }
                     } else {
                         let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                        let dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                        let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
                             + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                        if let Some((portal1, portal2)) = self.portals {
+                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                + u32::from(final_p.y.abs_diff(portal1.y))
+                                + u32::from(portal2.x.abs_diff(boss.position.x))
+                                + u32::from(portal2.y.abs_diff(boss.position.y));
+                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                + u32::from(final_p.y.abs_diff(portal2.y))
+                                + u32::from(portal1.x.abs_diff(boss.position.x))
+                                + u32::from(portal1.y.abs_diff(boss.position.y));
+                            dist = std::cmp::min(
+                                dist,
+                                std::cmp::min(dist_via_p1, dist_via_p2),
+                            );
+                        }
                         if dist <= moves {
                             if boss.kind == BossType::Juggernaut {
                                 // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
