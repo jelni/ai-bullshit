@@ -39,4 +39,5 @@ pub enum GameState {
     BlackMarket,
     Bank,
     AuctionHouse,
+    Gacha,
 }

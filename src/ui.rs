@@ -57,6 +57,7 @@ pub fn draw<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         GameState::BlackMarket => draw_black_market(game, stdout)?,
         GameState::Bank => draw_bank(game, stdout)?,
         GameState::AuctionHouse => draw_auction_house(game, stdout)?,
+        GameState::Gacha => draw_gacha(game, stdout)?,
     }
 
     stdout.flush()?;
@@ -644,6 +645,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Black Market",
         "Bank",
         "Auction House",
+        "Gacha",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -3739,4 +3741,58 @@ mod auction_tests {
         assert!(output.contains("Coins: 9000"), "Should contain coins");
         assert!(output.contains("> 2. Bid on Rare Theme"), "Should highlight selected option");
     }
+}
+
+pub fn draw_gacha<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
+    let title = "GACHA (PULL FOR RESOURCES)";
+    let title_len = u16::try_from(title.len()).unwrap_or(0);
+
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    stdout
+        .queue(cursor::MoveTo((game.width / 2).saturating_sub(title_len / 2), game.height / 4))?;
+    write!(stdout, "{title}")?;
+
+    let balance_msg = format!("Coins: {}", game.stats.coins);
+    let balance_len = u16::try_from(balance_msg.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::Yellow))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(balance_len / 2),
+        game.height / 4 + 2,
+    ))?;
+    write!(stdout, "{balance_msg}")?;
+
+    let last_pull_msg = if game.death_message.is_empty() {
+        "Press Enter to pull!".to_string()
+    } else {
+        format!("Last Pull: {}", game.death_message)
+    };
+    let last_pull_len = u16::try_from(last_pull_msg.len()).unwrap_or(0);
+    stdout.queue(SetForegroundColor(Color::Magenta))?;
+    stdout.queue(cursor::MoveTo(
+        (game.width / 2).saturating_sub(last_pull_len / 2),
+        game.height / 4 + 4,
+    ))?;
+    write!(stdout, "{last_pull_msg}")?;
+
+    let options = ["1 Pull (100 Coins)", "10 Pulls (1000 Coins)", "Back to Menu"];
+
+    for (i, opt) in options.iter().enumerate() {
+        if i == game.settings_selection {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(opt.len() + 3).unwrap_or(0) / 2),
+                game.height / 4 + 7 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, ">> {opt}")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::White))?;
+            stdout.queue(cursor::MoveTo(
+                (game.width / 2).saturating_sub(u16::try_from(opt.len()).unwrap_or(0) / 2),
+                game.height / 4 + 7 + u16::try_from(i).unwrap_or(0) * 2,
+            ))?;
+            write!(stdout, "{opt}")?;
+        }
+    }
+
+    Ok(())
 }
