@@ -612,6 +612,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Farmstead Mode",
         "PacMan Mode",
         "Capture The Flag Mode",
+        "Bullet Hell Mode",
         "Load Game",
         "Settings",
         "NFT Shop",

@@ -1648,7 +1648,8 @@ impl Game {
             | GameMode::Vampire
             | GameMode::Gravity
             | GameMode::Zombie
-            | GameMode::Farmstead => {
+            | GameMode::Farmstead
+            | GameMode::BulletHell => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2100,7 +2101,8 @@ impl Game {
             | GameMode::Vampire
             | GameMode::Gravity
             | GameMode::Zombie
-            | GameMode::Farmstead => {
+            | GameMode::Farmstead
+            | GameMode::BulletHell => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4610,6 +4612,52 @@ impl Game {
         {
             self.last_obstacle_spawn_time = web_time::Instant::now();
             self.rise_flood();
+        }
+        if self.mode == GameMode::BulletHell {
+            // Give score based on survival time (10 per second via checking elapsed ticks roughly)
+            if self.tick_counter % 10 == 0 {
+                self.score += 1;
+            }
+
+            // Spawn lasers from random edges
+            let difficulty_factor = self.start_time.elapsed().as_secs();
+            // Max out difficulty multiplier at 100 seconds
+            let difficulty_multiplier = std::cmp::min(100, difficulty_factor) / 10 + 1;
+
+            // In BulletHell we spawn multiple lasers per tick depending on survival time
+            let spawn_chance = 0.05 * (difficulty_multiplier as f64);
+
+            if self.rng.gen_bool(spawn_chance) {
+                let margin = self.safe_zone_margin;
+
+                // Randomly pick an edge (0: Top, 1: Bottom, 2: Left, 3: Right)
+                let edge = self.rng.gen_range(0..4);
+                let (spawn_pos, dir) = match edge {
+                    0 => { // Top edge, moving Down
+                        let x = self.rng.gen_range((margin + 1)..(self.width - 1 - margin));
+                        (Point { x, y: margin + 1 }, Direction::Down)
+                    },
+                    1 => { // Bottom edge, moving Up
+                        let x = self.rng.gen_range((margin + 1)..(self.width - 1 - margin));
+                        (Point { x, y: self.height - 2 - margin }, Direction::Up)
+                    },
+                    2 => { // Left edge, moving Right
+                        let y = self.rng.gen_range((margin + 1)..(self.height - 1 - margin));
+                        (Point { x: margin + 1, y }, Direction::Right)
+                    },
+                    _ => { // Right edge, moving Left
+                        let y = self.rng.gen_range((margin + 1)..(self.height - 1 - margin));
+                        (Point { x: self.width - 2 - margin, y }, Direction::Left)
+                    },
+                };
+
+                // Spawn laser (player 3 acts as hostile environmental laser)
+                self.lasers.push(Laser {
+                    position: spawn_pos,
+                    direction: dir,
+                    player: 3,
+                });
+            }
         }
         self.handle_autopilot_moves();
         if let Some(dir) = self.snake.direction_queue.pop_front() {
