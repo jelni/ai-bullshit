@@ -38,4 +38,5 @@ pub enum GameMode {
     Farmstead,
     PacMan,
     CaptureTheFlag,
+    BulletHell,
 }
