@@ -100,6 +100,7 @@ pub struct Game {
     pub p2_has_flag: bool,
     pub p1_score: u32,
     pub p2_score: u32,
+    pub xp_gems: HashSet<Point>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -363,6 +364,7 @@ impl Game {
             p2_has_flag: false,
             p1_score: 0,
             p2_score: 0,
+            xp_gems: HashSet::new(),
         }
     }
     #[must_use]
@@ -588,6 +590,7 @@ impl Game {
             p2_has_flag: self.p2_has_flag,
             p1_score: self.p1_score,
             p2_score: self.p2_score,
+            xp_gems: self.xp_gems.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -710,6 +713,7 @@ impl Game {
                 self.p2_has_flag = state.p2_has_flag;
                 self.p1_score = state.p1_score;
                 self.p2_score = state.p2_score;
+                self.xp_gems = state.xp_gems;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -829,12 +833,20 @@ impl Game {
         reason = "Game loop inherently requires handling multiple states and events"
     )]
     fn manage_goblin(&mut self) {
-        let spawn_chance = if self.time_of_day == crate::game::TimeOfDay::Night {
+        let spawn_chance = if self.mode == GameMode::SnakeSurvivor {
+            0.05 // Spawns frequently in Survivor
+        } else if self.time_of_day == crate::game::TimeOfDay::Night {
             0.02
         } else {
             0.005
         };
-        if self.goblin.is_none() && self.rng.gen_bool(spawn_chance) && self.bosses.is_empty() {
+        let can_spawn = if self.mode == GameMode::SnakeSurvivor {
+            self.goblin.is_none() && self.rng.gen_bool(spawn_chance) // Ignore bosses being empty in survivor
+        } else {
+            self.goblin.is_none() && self.rng.gen_bool(spawn_chance) && self.bosses.is_empty()
+        };
+
+        if can_spawn {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1649,7 +1661,8 @@ impl Game {
             | GameMode::Gravity
             | GameMode::Zombie
             | GameMode::Farmstead
-            | GameMode::BulletHell => {
+            | GameMode::BulletHell
+            | GameMode::SnakeSurvivor => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1997,6 +2010,7 @@ impl Game {
         self.xp_to_next_level = 5;
         self.p1_has_flag = false;
         self.p2_has_flag = false;
+        self.xp_gems.clear();
 
         if self.mode == GameMode::CaptureTheFlag {
             self.p1_flag = Some(Point {
@@ -2102,7 +2116,8 @@ impl Game {
             | GameMode::Gravity
             | GameMode::Zombie
             | GameMode::Farmstead
-            | GameMode::BulletHell => {
+            | GameMode::BulletHell
+            | GameMode::SnakeSurvivor => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2525,6 +2540,7 @@ impl Game {
             self.p2_has_flag = state.p2_has_flag;
             self.p1_score = state.p1_score;
             self.p2_score = state.p2_score;
+            self.xp_gems = state.xp_gems;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2551,6 +2567,7 @@ impl Game {
             InGameUpgrade::HomingLasers,
             InGameUpgrade::DoubleCoins,
             InGameUpgrade::Magnet,
+            InGameUpgrade::Turret,
         ];
 
         self.level_up_options.clear();
@@ -2615,6 +2632,7 @@ impl Game {
             p2_has_flag: self.p2_has_flag,
             p1_score: self.p1_score,
             p2_score: self.p2_score,
+            xp_gems: self.xp_gems.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -2700,6 +2718,8 @@ impl Game {
         if (has_magnet_powerup || has_passive_magnet || has_ring_magnet) && self.rng.gen_bool(0.25)
         {
             let head = self.snake.head();
+
+            // Move food
             let mut best_dist = u16::MAX;
             let mut best_pos = None;
             let current_dist =
@@ -2736,6 +2756,48 @@ impl Game {
             if let Some(new_food_pos) = best_pos {
                 self.food = new_food_pos;
             }
+
+            // Move xp gems
+            let mut new_gems = HashSet::new();
+            for gem in &self.xp_gems {
+                let mut best_gem_dist = u16::MAX;
+                let mut best_gem_pos = *gem;
+                let current_gem_dist = gem.x.abs_diff(head.x).saturating_add(gem.y.abs_diff(head.y));
+
+                // Only attract gems if they are somewhat close (e.g. within 15 units)
+                if current_gem_dist < 15 {
+                    for &d in &dirs {
+                        let next_p = Self::calculate_next_head_dir(*gem, d);
+                        let margin = if self.mode == GameMode::BattleRoyale {
+                            self.safe_zone_margin
+                        } else {
+                            0
+                        };
+                        if next_p.x <= margin
+                            || next_p.x >= self.width - 1 - margin
+                            || next_p.y <= margin
+                            || next_p.y >= self.height - 1 - margin
+                        {
+                            continue;
+                        }
+                        if self.obstacles.contains(&next_p) || self.snake.body_map.contains_key(&next_p) {
+                            continue;
+                        }
+                        if let Some(p2) = &self.player2
+                            && p2.body_map.contains_key(&next_p)
+                        {
+                            continue;
+                        }
+                        let dist = next_p.x.abs_diff(head.x).saturating_add(next_p.y.abs_diff(head.y));
+                        if dist < current_gem_dist && dist < best_gem_dist {
+                            best_gem_dist = dist;
+                            best_gem_pos = next_p;
+                        }
+                    }
+                }
+                new_gems.insert(best_gem_pos);
+            }
+            self.xp_gems = new_gems;
         }
     }
     fn manage_crops(&mut self) {
@@ -2920,6 +2982,85 @@ impl Game {
         }
 
         self.update_stock_market();
+    }
+
+    fn handle_survivor_auto_fire(&mut self) {
+        if self.mode != GameMode::SnakeSurvivor {
+            return;
+        }
+        let laser_speed_level = self.in_game_upgrades.get(&InGameUpgrade::LaserSpeed).copied().unwrap_or(0);
+        let fire_rate = 15u32.saturating_sub(laser_speed_level * 2).max(5);
+
+        if self.tick_counter % fire_rate == 0 {
+            let mut nearest_dist = u32::MAX;
+            let mut target_dir = None;
+            let head = self.snake.head();
+
+            // Find nearest enemy
+            for boss in &self.bosses {
+                let dist = u32::from(head.x.abs_diff(boss.position.x)) + u32::from(head.y.abs_diff(boss.position.y));
+                if dist < nearest_dist {
+                    nearest_dist = dist;
+                    if boss.position.x == head.x && boss.position.y < head.y {
+                        target_dir = Some(Direction::Up);
+                    } else if boss.position.x == head.x && boss.position.y > head.y {
+                        target_dir = Some(Direction::Down);
+                    } else if boss.position.y == head.y && boss.position.x < head.x {
+                        target_dir = Some(Direction::Left);
+                    } else if boss.position.y == head.y && boss.position.x > head.x {
+                        target_dir = Some(Direction::Right);
+                    } else {
+                        // Diagonal approximation: shoot along the longer axis distance
+                        let dx = i32::from(boss.position.x) - i32::from(head.x);
+                        let dy = i32::from(boss.position.y) - i32::from(head.y);
+                        if dx.abs() > dy.abs() {
+                            target_dir = Some(if dx > 0 { Direction::Right } else { Direction::Left });
+                        } else {
+                            target_dir = Some(if dy > 0 { Direction::Down } else { Direction::Up });
+                        }
+                    }
+                }
+            }
+            if let Some(goblin) = &self.goblin {
+                let dist = u32::from(head.x.abs_diff(goblin.position.x)) + u32::from(head.y.abs_diff(goblin.position.y));
+                if dist < nearest_dist {
+                    let dx = i32::from(goblin.position.x) - i32::from(head.x);
+                    let dy = i32::from(goblin.position.y) - i32::from(head.y);
+                    if dx.abs() > dy.abs() {
+                        target_dir = Some(if dx > 0 { Direction::Right } else { Direction::Left });
+                    } else {
+                        target_dir = Some(if dy > 0 { Direction::Down } else { Direction::Up });
+                    }
+                }
+            }
+
+            if let Some(dir) = target_dir {
+                // Ensure we don't shoot more lasers than we're allowed
+                let active_lasers = self.lasers.iter().filter(|l| l.player == 1).count();
+                let mut max_lasers = 3 + usize::from(self.stats.upgrade_laser_capacity);
+                if self.skin == '👾' {
+                    max_lasers += 5;
+                }
+
+                // Allow at least 1 laser to always fire in survivor mode if capacity is reached
+                if active_lasers < max_lasers || active_lasers < 10 {
+                    let laser_pos = Self::calculate_next_head_dir(head, dir);
+                    let margin = if self.mode == GameMode::BattleRoyale { self.safe_zone_margin } else { 0 };
+
+                    if laser_pos.x > margin
+                        && laser_pos.x < self.width - 1 - margin
+                        && laser_pos.y > margin
+                        && laser_pos.y < self.height - 1 - margin
+                    {
+                        self.lasers.push(Laser {
+                            position: laser_pos,
+                            direction: dir,
+                            player: 1,
+                        });
+                    }
+                }
+            }
+        }
     }
 
     fn update_stock_market(&mut self) {
@@ -3125,11 +3266,15 @@ impl Game {
         }
         let max_bosses = if self.mode == GameMode::BossRush {
             1 + (self.campaign_level / 3)
+        } else if self.mode == GameMode::SnakeSurvivor {
+            3 + (self.player_level / 2) // More bosses spawn as you level up
         } else {
             1
         };
         let should_spawn_boss = if self.mode == GameMode::BossRush {
             self.bosses.len() < usize::try_from(max_bosses).unwrap_or(1)
+        } else if self.mode == GameMode::SnakeSurvivor {
+            self.bosses.len() < usize::try_from(max_bosses).unwrap_or(1) && self.rng.gen_bool(0.02)
         } else {
             (self.mode == GameMode::SinglePlayer
                 || self.mode == GameMode::DailyChallenge
@@ -3159,20 +3304,28 @@ impl Game {
                 } else {
                     10
                 };
-                let kind = match self.rng.gen_range(0..12) {
-                    0 => BossType::Shooter,
-                    1 => BossType::Charger,
-                    2 => BossType::Spawner,
-                    3 => BossType::Teleporter,
-                    4 => BossType::Splitter,
-                    5 => BossType::Necromancer,
-                    6 => BossType::Trapper,
-                    7 => BossType::Puffer,
-                    8 => BossType::Juggernaut,
-                    9 => BossType::Dragon,
-                    10 => BossType::Mage,
-                    11 => BossType::Gorgon,
-                    _ => BossType::Mimic,
+                let kind = if self.mode == GameMode::SnakeSurvivor {
+                    match self.rng.gen_range(0..3) {
+                        0 => BossType::Charger, // Mostly chargers/zombies
+                        1 => BossType::Charger,
+                        _ => BossType::Shooter,
+                    }
+                } else {
+                    match self.rng.gen_range(0..12) {
+                        0 => BossType::Shooter,
+                        1 => BossType::Charger,
+                        2 => BossType::Spawner,
+                        3 => BossType::Teleporter,
+                        4 => BossType::Splitter,
+                        5 => BossType::Necromancer,
+                        6 => BossType::Trapper,
+                        7 => BossType::Puffer,
+                        8 => BossType::Juggernaut,
+                        9 => BossType::Dragon,
+                        10 => BossType::Mage,
+                        11 => BossType::Gorgon,
+                        _ => BossType::Mimic,
+                    }
                 };
                 self.bosses.push(Boss {
                     position: pos,
@@ -3925,6 +4078,10 @@ impl Game {
                                 crate::game::beep();
                             }
 
+                            if self.mode == GameMode::SnakeSurvivor {
+                                self.xp_gems.insert(boss.position);
+                            }
+
                             if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                 let half_max = boss.max_health / 2;
                                 let child1_pos = Point {
@@ -4241,6 +4398,7 @@ impl Game {
                     self.spawn_floating_text(x, y, text, color);
                 }
                 if self.goblin.is_some_and(|goblin| laser.position == goblin.position) {
+                    let gob_pos = self.goblin.unwrap().position;
                     self.goblin = None;
                     if !is_piercing {
                         destroyed = true;
@@ -4266,6 +4424,9 @@ impl Game {
                         crate::color::Color::Yellow,
                         '$',
                     );
+                    if self.mode == GameMode::SnakeSurvivor {
+                        self.xp_gems.insert(gob_pos);
+                    }
                     beep();
                     if destroyed {
                         break;
@@ -4292,6 +4453,10 @@ impl Game {
                                 path: Vec::new(),
                             });
                             crate::game::beep();
+                        }
+
+                        if self.mode == GameMode::SnakeSurvivor {
+                            self.xp_gems.insert(dead_boss.position);
                         }
 
                         if dead_boss.kind == BossType::Splitter && dead_boss.max_health > 5 {
@@ -4659,6 +4824,8 @@ impl Game {
                 });
             }
         }
+        self.handle_survivor_auto_fire();
+
         self.handle_autopilot_moves();
         if let Some(dir) = self.snake.direction_queue.pop_front() {
             self.snake.direction = dir;
@@ -4882,6 +5049,7 @@ impl Game {
         let hit_goblin2 =
             final_head2_opt.is_some_and(|fh2| self.goblin.is_some_and(|g| fh2 == g.position));
         if hit_goblin1 || hit_goblin2 {
+            let gob_pos = self.goblin.unwrap().position;
             self.goblin = None;
             let multiplier = if self.skin == '₿' {
                 2
@@ -4908,6 +5076,9 @@ impl Game {
                 final_head2_opt.map_or(0.0, |fh| f32::from(fh.y))
             };
             self.spawn_particles(spawn_x, spawn_y, 50, crate::color::Color::Yellow, '$');
+            if self.mode == GameMode::SnakeSurvivor {
+                self.xp_gems.insert(gob_pos);
+            }
             beep();
         }
         let hit_mine1 = self.mines.contains(&final_head1);
@@ -5039,6 +5210,10 @@ impl Game {
                                         });
                                         crate::game::beep();
                                     }
+
+                        if self.mode == GameMode::SnakeSurvivor {
+                            self.xp_gems.insert(boss.position);
+                        }
 
                                     if boss.kind == BossType::Splitter && boss.max_health > 5 {
                                         let half_max = boss.max_health / 2;
@@ -5366,6 +5541,35 @@ impl Game {
         self.process_egg_collision(final_head1);
         if let Some(final_head2) = final_head2_opt {
             self.process_egg_collision(final_head2);
+        }
+
+        if self.mode == GameMode::SnakeSurvivor {
+            if self.xp_gems.contains(&final_head1) {
+                self.xp_gems.remove(&final_head1);
+                self.gain_xp(10);
+                self.spawn_particles(
+                    f32::from(final_head1.x),
+                    f32::from(final_head1.y),
+                    10,
+                    crate::color::Color::Cyan,
+                    '+',
+                );
+                crate::game::beep();
+            }
+            if let Some(final_head2) = final_head2_opt {
+                if self.xp_gems.contains(&final_head2) {
+                    self.xp_gems.remove(&final_head2);
+                    self.gain_xp(10);
+                    self.spawn_particles(
+                        f32::from(final_head2.x),
+                        f32::from(final_head2.y),
+                        10,
+                        crate::color::Color::Cyan,
+                        '+',
+                    );
+                    crate::game::beep();
+                }
+            }
         }
 
         if let Some((_, mut timer)) = self.stats.incubator

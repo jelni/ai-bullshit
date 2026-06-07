@@ -614,6 +614,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "PacMan Mode",
         "Capture The Flag Mode",
         "Bullet Hell Mode",
+        "Snake Survivor Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1639,6 +1640,15 @@ fn draw_entities<W: Write>(
         if is_visible(ebox.x, ebox.y) {
             stdout.queue(cursor::MoveTo(ebox.x, ebox.y))?;
             write!(stdout, "E")?;
+        }
+    }
+
+    // Draw xp_gems
+    stdout.queue(SetForegroundColor(Color::Cyan))?;
+    for gem in &game.xp_gems {
+        if is_visible(gem.x, gem.y) {
+            stdout.queue(cursor::MoveTo(gem.x, gem.y))?;
+            write!(stdout, "♦")?;
         }
     }
 

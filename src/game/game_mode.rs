@@ -39,4 +39,5 @@ pub enum GameMode {
     PacMan,
     CaptureTheFlag,
     BulletHell,
+    SnakeSurvivor,
 }
