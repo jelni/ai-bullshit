@@ -323,6 +323,7 @@ fn handle_key_event(code: KeyCode, game: &mut Game, _stdout: &mut Stdout) -> Key
         GameState::BlackMarket => handle_black_market_input(code, game),
         GameState::Bank => handle_bank_input(code, game),
         GameState::AuctionHouse => handle_auction_house_input(code, game),
+        GameState::Gacha => handle_gacha_input(code, game),
     };
 
     if should_continue {
@@ -611,6 +612,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             67 => {
+                game.state = GameState::Gacha;
+                game.settings_selection = 0;
+            },
+            68 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -620,11 +625,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 67;
+                game.menu_selection = 68;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 67 {
+            if game.menu_selection < 68 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
@@ -2503,4 +2508,87 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
         _ => {},
     }
     true
+}
+
+fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
+    match code {
+        KeyCode::Char('q' | 'Q') | KeyCode::Esc | KeyCode::Backspace => {
+            game.state = GameState::Menu;
+        },
+        KeyCode::Up | KeyCode::Char('w' | 'W') => {
+            if game.settings_selection > 0 {
+                game.settings_selection -= 1;
+            } else {
+                game.settings_selection = 2;
+            }
+        },
+        KeyCode::Down | KeyCode::Char('s' | 'S') => {
+            if game.settings_selection < 2 {
+                game.settings_selection += 1;
+            } else {
+                game.settings_selection = 0;
+            }
+        },
+        KeyCode::Enter | KeyCode::Char(' ') => match game.settings_selection {
+            0 => {
+                // 1 Pull for 100
+                if game.stats.coins >= 100 {
+                    game.stats.coins -= 100;
+                    do_gacha_pulls(game, 1);
+                    crate::game::beep();
+                    game.save_stats();
+                } else {
+                    game.death_message = "Not enough coins!".to_string();
+                }
+            },
+            1 => {
+                // 10 Pulls for 1000
+                if game.stats.coins >= 1000 {
+                    game.stats.coins -= 1000;
+                    do_gacha_pulls(game, 10);
+                    crate::game::beep();
+                    game.save_stats();
+                } else {
+                    game.death_message = "Not enough coins!".to_string();
+                }
+            },
+            2 => {
+                // Leave
+                game.state = GameState::Menu;
+                game.death_message = String::new();
+            },
+            _ => {},
+        },
+        _ => {},
+    }
+    true
+}
+
+fn do_gacha_pulls(game: &mut Game, pulls: u32) {
+    use rand::Rng;
+    use crate::game::Resource;
+
+    let mut pulled_items = Vec::new();
+
+    for _ in 0..pulls {
+        let roll = game.rng.gen_range(0..100);
+        let resource = if roll < 50 {
+            Resource::Wood
+        } else if roll < 80 {
+            Resource::Iron
+        } else if roll < 95 {
+            Resource::Gold
+        } else {
+            Resource::Diamond
+        };
+
+        *game.stats.inventory.entry(resource).or_insert(0) += 1;
+        pulled_items.push(format!("{:?}", resource));
+    }
+
+    if pulls == 1 {
+        game.death_message = format!("You got: {}", pulled_items[0]);
+    } else {
+        game.death_message = format!("You got {} items!", pulls);
+    }
 }
