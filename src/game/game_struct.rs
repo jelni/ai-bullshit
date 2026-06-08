@@ -2404,11 +2404,11 @@ impl Game {
                             }
                         }
                         if let Some((dir, path)) =
-                            self.astar_search(start, current_dir, &targets, 4, Some(i))
+                            self.astar_search(start, current_dir, &targets, 4)
                         {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
-                        } else if let Some(dir) = self.flood_fill_fallback(start, current_dir, 4, Some(i)) {
+                        } else if let Some(dir) = self.flood_fill_fallback(start, current_dir, 4) {
                             self.bots_autopilot_paths[i].clear();
                             self.bots[i].direction_queue.push_back(dir);
                         }
@@ -6660,7 +6660,7 @@ impl Game {
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
                 && !self.obstacles.contains(&final_p)
-                && self.is_safe_final_p(final_p, 1, 3, None)
+                && self.is_safe_final_p(final_p, 1, 3)
             {
                 if final_p == target {
                     return Some(d);
@@ -6681,7 +6681,7 @@ impl Game {
                 if let Some(final_p) = self.get_final_p(next_p)
                     && !self.obstacles.contains(&final_p)
                     && !visited.contains(&final_p)
-                    && self.is_safe_final_p(final_p, dist + 1, 3, None)
+                    && self.is_safe_final_p(final_p, dist + 1, 3)
                 {
                     visited.insert(final_p);
                     if !first_step.contains_key(&final_p)
@@ -6697,7 +6697,7 @@ impl Game {
     }
     #[must_use]
     #[expect(clippy::too_many_lines)]
-    pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8, checking_bot_idx: Option<usize>) -> bool {
+    pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
         let is_invincible = self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::Invincibility
@@ -6820,10 +6820,7 @@ impl Game {
                 } else if checking_player == 4 {
                     // Check against other bots' possible next moves to avoid head-on collisions in bot vs bot
                     let mut other_bots_count = 0;
-                    for (i, b) in self.bots.iter().enumerate() {
-                        if Some(i) == checking_bot_idx {
-                            continue;
-                        }
+                    for b in &self.bots {
                         for &d in &dirs {
                             let b_next_head = Self::calculate_next_head_dir(b.head(), d);
                             if let Some(final_b_next) = self.get_final_p(b_next_head)
@@ -6834,7 +6831,7 @@ impl Game {
                             }
                         }
                     }
-                    if other_bots_count >= 1 {
+                    if other_bots_count > 1 {
                         return false;
                     }
                 }
@@ -7018,19 +7015,60 @@ impl Game {
                         return false;
                     }
                 } else {
-                    let dx = i32::from(final_p.x) - i32::from(l.position.x);
-                    let dy = i32::from(final_p.y) - i32::from(l.position.y);
-                    let on_ray = match l.direction {
-                        Direction::Up => dx == 0 && dy <= 0,
-                        Direction::Down => dx == 0 && dy >= 0,
-                        Direction::Left => dy == 0 && dx <= 0,
-                        Direction::Right => dy == 0 && dx >= 0,
+                    let check_laser_threat = |laser_pos: Point, dist_offset: u32| -> bool {
+                        let dx = i32::from(final_p.x) - i32::from(laser_pos.x);
+                        let dy = i32::from(final_p.y) - i32::from(laser_pos.y);
+                        let on_ray = match l.direction {
+                            Direction::Up => dx == 0 && dy <= 0,
+                            Direction::Down => dx == 0 && dy >= 0,
+                            Direction::Left => dy == 0 && dx <= 0,
+                            Direction::Right => dy == 0 && dx >= 0,
+                        };
+                        if on_ray {
+                            let d = u32::try_from(dx.abs().max(dy.abs())).unwrap_or(0) + dist_offset;
+                            let step_dist = u32::from(steps) * 2;
+                            if step_dist.abs_diff(d) <= 2 {
+                                return true;
+                            }
+                        }
+                        false
                     };
-                    if on_ray {
-                        let d = u16::try_from(dx.abs().max(dy.abs())).unwrap_or(0);
-                        let step_dist = u32::from(steps) * 2;
-                        if step_dist.abs_diff(u32::from(d)) <= 2 {
-                            return false;
+
+                    if check_laser_threat(l.position, 0) {
+                        return false;
+                    }
+
+                    if let Some((portal1, portal2)) = self.portals {
+                        // Check if laser hits portal1 and exits portal2
+                        let p1_dx = i32::from(portal1.x) - i32::from(l.position.x);
+                        let p1_dy = i32::from(portal1.y) - i32::from(l.position.y);
+                        let hits_p1 = match l.direction {
+                            Direction::Up => p1_dx == 0 && p1_dy <= 0,
+                            Direction::Down => p1_dx == 0 && p1_dy >= 0,
+                            Direction::Left => p1_dy == 0 && p1_dx <= 0,
+                            Direction::Right => p1_dy == 0 && p1_dx >= 0,
+                        };
+                        if hits_p1 {
+                            let dist_to_p1 = u32::try_from(p1_dx.abs().max(p1_dy.abs())).unwrap_or(0);
+                            if check_laser_threat(portal2, dist_to_p1) {
+                                return false;
+                            }
+                        }
+
+                        // Check if laser hits portal2 and exits portal1
+                        let p2_dx = i32::from(portal2.x) - i32::from(l.position.x);
+                        let p2_dy = i32::from(portal2.y) - i32::from(l.position.y);
+                        let hits_p2 = match l.direction {
+                            Direction::Up => p2_dx == 0 && p2_dy <= 0,
+                            Direction::Down => p2_dx == 0 && p2_dy >= 0,
+                            Direction::Left => p2_dy == 0 && p2_dx <= 0,
+                            Direction::Right => p2_dy == 0 && p2_dx >= 0,
+                        };
+                        if hits_p2 {
+                            let dist_to_p2 = u32::try_from(p2_dx.abs().max(p2_dy.abs())).unwrap_or(0);
+                            if check_laser_threat(portal1, dist_to_p2) {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -7088,10 +7126,7 @@ impl Game {
                 } else if checking_player == 4 {
                     // Check against other bots' possible next moves to avoid head-on collisions in bot vs bot
                     let mut other_bots_count = 0;
-                    for (i, b) in self.bots.iter().enumerate() {
-                        if Some(i) == checking_bot_idx {
-                            continue;
-                        }
+                    for b in &self.bots {
                         // Assuming the bot checking has head distance > 1 from `b` head usually
                         // We check if final_p could be reached by this bot.
                         for &d in &dirs {
@@ -7104,7 +7139,10 @@ impl Game {
                             }
                         }
                     }
-                    if other_bots_count >= 1 {
+                    // Since the current bot is in self.bots, its own possible next moves
+                    // will include `final_p` (which is what we are evaluating).
+                    // So `other_bots_count` will be at least 1. If it's > 1, another bot can also move here.
+                    if other_bots_count > 1 {
                         return false;
                     }
                 }
@@ -7130,12 +7168,12 @@ impl Game {
         if let Some(merchant) = self.merchant {
             targets.push(merchant);
         }
-        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1, None) {
+        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
         }
         self.autopilot_path.clear();
-        self.flood_fill_fallback(start, current_dir, 1, None)
+        self.flood_fill_fallback(start, current_dir, 1)
     }
     pub fn calculate_p2_autopilot_move(&mut self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
@@ -7153,12 +7191,12 @@ impl Game {
             if let Some(goblin) = &self.goblin {
                 targets.push(goblin.position);
             }
-            if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2, None) {
+            if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
                 self.p2_autopilot_path = path;
                 return Some(dir);
             }
             self.p2_autopilot_path.clear();
-            self.flood_fill_fallback(start, current_dir, 2, None)
+            self.flood_fill_fallback(start, current_dir, 2)
         } else {
             None
         }
@@ -7170,7 +7208,6 @@ impl Game {
         current_dir: Direction,
         targets: &[Point],
         checking_player: u8,
-        checking_bot_idx: Option<usize>,
     ) -> Option<(Direction, Vec<Point>)> {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
@@ -7211,8 +7248,8 @@ impl Game {
                         }
                     }
                 }
-                for (i, bot) in self.bots.iter().enumerate() {
-                    if Some(i) == checking_bot_idx {
+                for bot in &self.bots {
+                    if bot.head() == start {
                         continue;
                     }
                     for part in &bot.body {
@@ -7255,8 +7292,8 @@ impl Game {
                         }
                     }
                 }
-                for (i, bot) in self.bots.iter().enumerate() {
-                    if Some(i) == checking_bot_idx {
+                for bot in &self.bots {
+                    if bot.head() == start {
                         continue;
                     }
                     for part in &bot.body {
@@ -7352,7 +7389,7 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player, checking_bot_idx)
+                && self.is_safe_final_p(final_p, 1, checking_player)
             {
                 let cost = 1;
                 g_score.insert(final_p, cost);
@@ -7387,7 +7424,7 @@ impl Game {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 let tentative_g = current_g.saturating_add(1);
                 if let Some(final_p) = self.get_final_p(next_p)
-                    && self.is_safe_final_p(final_p, tentative_g, checking_player, checking_bot_idx)
+                    && self.is_safe_final_p(final_p, tentative_g, checking_player)
                     && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
                 {
                     came_from.insert(final_p, current);
@@ -7412,7 +7449,6 @@ impl Game {
         start: Point,
         current_dir: Direction,
         checking_player: u8,
-        checking_bot_idx: Option<usize>,
     ) -> Option<Direction> {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut best_dir = None;
@@ -7423,7 +7459,7 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player, checking_bot_idx)
+                && self.is_safe_final_p(final_p, 1, checking_player)
             {
                 let mut visited = std::collections::HashSet::new();
                 let mut queue: std::collections::VecDeque<(Point, u16)> =
@@ -7441,7 +7477,7 @@ impl Game {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
                         let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
-                            && self.is_safe_final_p(valid_p, next_steps, checking_player, checking_bot_idx)
+                            && self.is_safe_final_p(valid_p, next_steps, checking_player)
                             && !visited.contains(&valid_p)
                         {
                             visited.insert(valid_p);

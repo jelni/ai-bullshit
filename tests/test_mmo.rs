@@ -60,7 +60,6 @@ fn test_mmo_bots_avoid_each_other() {
         },
         1,
         4,
-        None
     );
     assert!(
         !is_safe,
