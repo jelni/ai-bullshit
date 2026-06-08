@@ -36,6 +36,6 @@ fn test_is_safe_final_p_boss_portals() {
     // distance via portal = 2.
     // 2 <= 5 is true. Thus it's not safe.
 
-    let is_safe = game.is_safe_final_p(Point { x: 17, y: 18 }, 5, 1);
+    let is_safe = game.is_safe_final_p(Point { x: 17, y: 18 }, 5, 1, None);
     assert!(!is_safe, "Final point should not be safe due to portal proximity to boss");
 }
