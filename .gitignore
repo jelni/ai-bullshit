@@ -16,3 +16,6 @@ highscore*.txt
 # Patches and orig
 *.diff
 *.orig
+test_output.txt
+test.log
+test_output.log
