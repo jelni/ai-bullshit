@@ -53,5 +53,6 @@ pub struct HistoryState {
     pub p2_has_flag: bool,
     pub p1_score: u32,
     pub p2_score: u32,
+    pub koth_zone: Option<Point>,
     pub xp_gems: HashSet<Point>,
 }

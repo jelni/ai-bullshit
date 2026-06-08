@@ -1,0 +1,8 @@
+--- src/game/game_mode.rs
++++ src/game/game_mode.rs
+@@ -37,4 +37,5 @@
+     CaptureTheFlag,
+     BulletHell,
+     SnakeSurvivor,
++    KingOfTheHill,
+ }

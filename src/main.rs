@@ -507,19 +507,27 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             37 => {
+                game.mode = game::GameMode::KingOfTheHill;
+                game.reset();
+            },
+            38 => {
+                game.mode = game::GameMode::KingOfTheHill;
+                game.reset();
+            },
+            38 => {
                 let _ = game.load_game();
             },
-            38 => game.state = GameState::Settings,
-            39 => game.state = GameState::NftShop,
-            40 => game.state = GameState::SkillTree,
-            41 => game.state = GameState::Stats,
-            42 => game.state = GameState::Achievements,
-            43 => game.state = GameState::Help,
-            44 => {
+            39 => game.state = GameState::Settings,
+            40 => game.state = GameState::NftShop,
+            41 => game.state = GameState::SkillTree,
+            42 => game.state = GameState::Stats,
+            43 => game.state = GameState::Achievements,
+            44 => game.state = GameState::Help,
+            47 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            45 => {
+            47 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -527,7 +535,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            46 => {
+            47 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },

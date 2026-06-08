@@ -113,6 +113,7 @@ pub struct SaveState {
     pub p1_score: u32,
     #[serde(default)]
     pub p2_score: u32,
+    pub koth_zone: Option<Point>,
     #[serde(default)]
     pub xp_gems: HashSet<Point>,
 }

@@ -100,6 +100,7 @@ pub struct Game {
     pub p2_has_flag: bool,
     pub p1_score: u32,
     pub p2_score: u32,
+    pub koth_zone: Option<Point>,
     pub xp_gems: HashSet<Point>,
 }
 impl Game {
@@ -364,6 +365,7 @@ impl Game {
             p2_has_flag: false,
             p1_score: 0,
             p2_score: 0,
+            koth_zone: None,
             xp_gems: HashSet::new(),
         }
     }
@@ -590,6 +592,7 @@ impl Game {
             p2_has_flag: self.p2_has_flag,
             p1_score: self.p1_score,
             p2_score: self.p2_score,
+            koth_zone: self.koth_zone,
             xp_gems: self.xp_gems.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
@@ -713,6 +716,7 @@ impl Game {
                 self.p2_has_flag = state.p2_has_flag;
                 self.p1_score = state.p1_score;
                 self.p2_score = state.p2_score;
+                self.koth_zone = state.koth_zone;
                 self.xp_gems = state.xp_gems;
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
@@ -1662,7 +1666,8 @@ impl Game {
             | GameMode::Zombie
             | GameMode::Farmstead
             | GameMode::BulletHell
-            | GameMode::SnakeSurvivor => {
+            | GameMode::SnakeSurvivor
+            | GameMode::KingOfTheHill => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1723,6 +1728,8 @@ impl Game {
                 || self.mode == GameMode::Flood
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
+                || self.mode == GameMode::KingOfTheHill
+                || self.mode == GameMode::KingOfTheHill
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2025,6 +2032,22 @@ impl Game {
             self.p1_flag = None;
             self.p2_flag = None;
         }
+
+        if self.mode == GameMode::KingOfTheHill {
+            self.koth_zone = Some(Point { x: start_x, y: start_y });
+            self.p1_score = 0;
+            self.p2_score = 0;
+        } else {
+            self.koth_zone = None;
+        }
+
+        if self.mode == GameMode::KingOfTheHill {
+            self.koth_zone = Some(Point { x: start_x, y: start_y });
+            self.p1_score = 0;
+            self.p2_score = 0;
+        } else {
+            self.koth_zone = None;
+        }
         // Score is kept across respawns, but reset on full game reset
         self.p1_score = 0;
         self.p2_score = 0;
@@ -2117,7 +2140,8 @@ impl Game {
             | GameMode::Zombie
             | GameMode::Farmstead
             | GameMode::BulletHell
-            | GameMode::SnakeSurvivor => {
+            | GameMode::SnakeSurvivor
+            | GameMode::KingOfTheHill => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2632,6 +2656,7 @@ impl Game {
             p2_has_flag: self.p2_has_flag,
             p1_score: self.p1_score,
             p2_score: self.p2_score,
+            koth_zone: self.koth_zone,
             xp_gems: self.xp_gems.clone(),
         };
         self.history.push_back(state);
@@ -5465,6 +5490,8 @@ impl Game {
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
+                || self.mode == GameMode::KingOfTheHill
+                || self.mode == GameMode::KingOfTheHill
             {
                 self.handle_death("You Died!");
             } else {
@@ -5530,7 +5557,75 @@ impl Game {
             }
         }
 
+
+        if self.mode == GameMode::KingOfTheHill {
+            if let Some(koth_pos) = self.koth_zone {
+                let mut p1_in_zone = false;
+                let mut p2_in_zone = false;
+
+                if final_head1.x >= koth_pos.x.saturating_sub(1) && final_head1.x <= koth_pos.x + 1 &&
+                   final_head1.y >= koth_pos.y.saturating_sub(1) && final_head1.y <= koth_pos.y + 1 {
+                    p1_in_zone = true;
+                }
+                if let Some(fh2) = final_head2_opt {
+                    if fh2.x >= koth_pos.x.saturating_sub(1) && fh2.x <= koth_pos.x + 1 &&
+                       fh2.y >= koth_pos.y.saturating_sub(1) && fh2.y <= koth_pos.y + 1 {
+                        p2_in_zone = true;
+                    }
+                }
+
+                if p1_in_zone && !p2_in_zone {
+                    self.score += 1;
+                    self.p1_score += 1;
+                } else if p2_in_zone && !p1_in_zone {
+                    self.p2_score += 1;
+                }
+
+                if self.tick_counter % 50 == 0 {
+                    let margin = 2;
+                    if let Some(new_zone) = Self::get_random_empty_point(self.width, self.height, &self.snake, |_| false, &mut self.rng, margin) {
+                        self.koth_zone = Some(new_zone);
+                    }
+                }
+            }
+        }
+
+
+        if self.mode == GameMode::KingOfTheHill {
+            if let Some(koth_pos) = self.koth_zone {
+                let mut p1_in_zone = false;
+                let mut p2_in_zone = false;
+
+                if final_head1.x >= koth_pos.x.saturating_sub(1) && final_head1.x <= koth_pos.x + 1 &&
+                   final_head1.y >= koth_pos.y.saturating_sub(1) && final_head1.y <= koth_pos.y + 1 {
+                    p1_in_zone = true;
+                }
+                if let Some(fh2) = final_head2_opt {
+                    if fh2.x >= koth_pos.x.saturating_sub(1) && fh2.x <= koth_pos.x + 1 &&
+                       fh2.y >= koth_pos.y.saturating_sub(1) && fh2.y <= koth_pos.y + 1 {
+                        p2_in_zone = true;
+                    }
+                }
+
+                if p1_in_zone && !p2_in_zone {
+                    self.score += 1;
+                    self.p1_score += 1;
+                } else if p2_in_zone && !p1_in_zone {
+                    self.p2_score += 1;
+                }
+
+                if self.tick_counter % 50 == 0 {
+                    let margin = 2;
+                    if let Some(new_zone) = Self::get_random_empty_point(self.width, self.height, &self.snake, |_| false, &mut self.rng, margin) {
+                        self.koth_zone = Some(new_zone);
+                    }
+                }
+            }
+        }
+
         self.process_power_up_collision(final_head1);
+
+
         if let Some(final_head2) = final_head2_opt {
             self.process_power_up_collision(final_head2);
         }
@@ -6996,8 +7091,8 @@ impl Game {
                                     );
                                 }
 
-                                // A laser travels 2 tiles per tick.
-                                let laser_reach = shoots * 2;
+                                // A laser travels 2 tiles per tick. Add a small buffer for safety.
+                                let laser_reach = shoots * 2 + 1;
                                 if dist <= laser_reach {
                                     return false;
                                 }

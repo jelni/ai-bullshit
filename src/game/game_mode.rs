@@ -40,4 +40,5 @@ pub enum GameMode {
     CaptureTheFlag,
     BulletHell,
     SnakeSurvivor,
+    KingOfTheHill,
 }
