@@ -1386,3 +1386,40 @@ fn test_bfs_pathfind_uses_portals() {
     assert!(reached, "BFS should reach the target using portals");
     assert!(path_len < 10, "Path should be short, indicating it used the portal");
 }
+
+#[test]
+fn test_is_safe_final_p_laser_portals() {
+    let mut game = Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
+
+    let portal1 = crate::snake::Point { x: 5, y: 5 };
+    let portal2 = crate::snake::Point { x: 15, y: 15 };
+    game.portals = Some((portal1, portal2));
+
+    let laser = crate::game::Laser {
+        position: crate::snake::Point { x: 5, y: 2 },
+        direction: crate::snake::Direction::Down, player: 1,
+    };
+    game.lasers.push(laser);
+
+    // Laser at (5, 2) going Down.
+    // At step 1, laser is at (5, 4).
+    // At step 2, laser is at (5, 6), meaning it went through portal1 (5, 5) and is now emerging from portal2 (15, 15).
+    // Let's check safety around portal2.
+
+    let test_point_before_portal = crate::snake::Point { x: 5, y: 4 };
+    assert!(!game.is_safe_final_p(test_point_before_portal, 1, 1), "Point directly in front of laser should be unsafe");
+
+    let test_point_after_portal = crate::snake::Point { x: 15, y: 16 };
+    // Laser enters portal1 (5,5) when dy=3, which is 1.5 ticks. At step 2, it is at (15,16)
+    assert!(!game.is_safe_final_p(test_point_after_portal, 2, 1), "Point after portal should be unsafe at step 2");
+
+    let safe_point = crate::snake::Point { x: 15, y: 10 };
+    assert!(game.is_safe_final_p(safe_point, 1, 1), "Point far from portal should be safe");
+}

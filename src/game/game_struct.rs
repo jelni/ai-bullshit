@@ -7018,19 +7018,60 @@ impl Game {
                         return false;
                     }
                 } else {
-                    let dx = i32::from(final_p.x) - i32::from(l.position.x);
-                    let dy = i32::from(final_p.y) - i32::from(l.position.y);
-                    let on_ray = match l.direction {
-                        Direction::Up => dx == 0 && dy <= 0,
-                        Direction::Down => dx == 0 && dy >= 0,
-                        Direction::Left => dy == 0 && dx <= 0,
-                        Direction::Right => dy == 0 && dx >= 0,
+                    let check_laser_threat = |laser_pos: Point, dist_offset: u32| -> bool {
+                        let dx = i32::from(final_p.x) - i32::from(laser_pos.x);
+                        let dy = i32::from(final_p.y) - i32::from(laser_pos.y);
+                        let on_ray = match l.direction {
+                            Direction::Up => dx == 0 && dy <= 0,
+                            Direction::Down => dx == 0 && dy >= 0,
+                            Direction::Left => dy == 0 && dx <= 0,
+                            Direction::Right => dy == 0 && dx >= 0,
+                        };
+                        if on_ray {
+                            let d = u32::try_from(dx.abs().max(dy.abs())).unwrap_or(0) + dist_offset;
+                            let step_dist = u32::from(steps) * 2;
+                            if step_dist.abs_diff(d) <= 2 {
+                                return true;
+                            }
+                        }
+                        false
                     };
-                    if on_ray {
-                        let d = u16::try_from(dx.abs().max(dy.abs())).unwrap_or(0);
-                        let step_dist = u32::from(steps) * 2;
-                        if step_dist.abs_diff(u32::from(d)) <= 2 {
-                            return false;
+
+                    if check_laser_threat(l.position, 0) {
+                        return false;
+                    }
+
+                    if let Some((portal1, portal2)) = self.portals {
+                        // Check if laser hits portal1 and exits portal2
+                        let p1_dx = i32::from(portal1.x) - i32::from(l.position.x);
+                        let p1_dy = i32::from(portal1.y) - i32::from(l.position.y);
+                        let hits_p1 = match l.direction {
+                            Direction::Up => p1_dx == 0 && p1_dy <= 0,
+                            Direction::Down => p1_dx == 0 && p1_dy >= 0,
+                            Direction::Left => p1_dy == 0 && p1_dx <= 0,
+                            Direction::Right => p1_dy == 0 && p1_dx >= 0,
+                        };
+                        if hits_p1 {
+                            let dist_to_p1 = u32::try_from(p1_dx.abs().max(p1_dy.abs())).unwrap_or(0);
+                            if check_laser_threat(portal2, dist_to_p1) {
+                                return false;
+                            }
+                        }
+
+                        // Check if laser hits portal2 and exits portal1
+                        let p2_dx = i32::from(portal2.x) - i32::from(l.position.x);
+                        let p2_dy = i32::from(portal2.y) - i32::from(l.position.y);
+                        let hits_p2 = match l.direction {
+                            Direction::Up => p2_dx == 0 && p2_dy <= 0,
+                            Direction::Down => p2_dx == 0 && p2_dy >= 0,
+                            Direction::Left => p2_dy == 0 && p2_dx <= 0,
+                            Direction::Right => p2_dy == 0 && p2_dx >= 0,
+                        };
+                        if hits_p2 {
+                            let dist_to_p2 = u32::try_from(p2_dx.abs().max(p2_dy.abs())).unwrap_or(0);
+                            if check_laser_threat(portal1, dist_to_p2) {
+                                return false;
+                            }
                         }
                     }
                 }
