@@ -7223,6 +7223,11 @@ impl Game {
         if let Some(merchant) = self.merchant {
             targets.push(merchant);
         }
+        if self.mode == GameMode::KingOfTheHill {
+            if let Some(koth_pos) = self.koth_zone {
+                targets.push(koth_pos);
+            }
+        }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
@@ -7245,6 +7250,11 @@ impl Game {
             }
             if let Some(goblin) = &self.goblin {
                 targets.push(goblin.position);
+            }
+            if self.mode == GameMode::KingOfTheHill {
+                if let Some(koth_pos) = self.koth_zone {
+                    targets.push(koth_pos);
+                }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
                 self.p2_autopilot_path = path;
