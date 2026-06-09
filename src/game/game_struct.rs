@@ -2069,11 +2069,14 @@ impl Game {
         if self.mode == GameMode::MassiveMultiplayer
             || self.mode == GameMode::Tron
             || self.mode == GameMode::Zombie
+            || self.mode == GameMode::KingOfTheHill
         {
             let margin = self.safe_zone_margin;
             let count = if self.mode == GameMode::MassiveMultiplayer {
                 50
             } else if self.mode == GameMode::Tron {
+                3
+            } else if self.mode == GameMode::KingOfTheHill {
                 3
             } else {
                 1
@@ -2395,6 +2398,7 @@ impl Game {
             if self.mode == GameMode::MassiveMultiplayer
                 || self.mode == GameMode::Tron
                 || self.mode == GameMode::Zombie
+                || self.mode == GameMode::KingOfTheHill
             {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
@@ -2417,6 +2421,11 @@ impl Game {
                             }
                             if let Some(goblin) = &self.goblin {
                                 targets.push(goblin.position);
+                            }
+                            if self.mode == GameMode::KingOfTheHill {
+                                if let Some(koth_pos) = self.koth_zone {
+                                    targets.push(koth_pos);
+                                }
                             }
                         }
                         if let Some((dir, path)) =
@@ -5572,6 +5581,27 @@ impl Game {
                     self.p2_score += 1;
                 }
 
+                let mut bot_in_zone = false;
+                for bot in &self.bots {
+                    let bh = bot.head();
+                    if bh.x >= koth_pos.x.saturating_sub(1) && bh.x <= koth_pos.x + 1 &&
+                       bh.y >= koth_pos.y.saturating_sub(1) && bh.y <= koth_pos.y + 1 {
+                        bot_in_zone = true;
+                        break;
+                    }
+                }
+
+                // In KingOfTheHill, bots in the zone act as blockers preventing players from scoring
+                // Let's negate player scores if bots are also in the zone
+                if bot_in_zone {
+                    if p1_in_zone && !p2_in_zone {
+                        self.score = self.score.saturating_sub(1);
+                        self.p1_score = self.p1_score.saturating_sub(1);
+                    } else if p2_in_zone && !p1_in_zone {
+                        self.p2_score = self.p2_score.saturating_sub(1);
+                    }
+                }
+
                 if self.tick_counter % 50 == 0 {
                     let margin = 2;
                     if let Some(new_zone) = Self::get_random_empty_point(self.width, self.height, &self.snake, |_| false, &mut self.rng, margin) {
@@ -6840,7 +6870,7 @@ impl Game {
                 if meteor.position == final_p
                     || (meteor.position.x == final_p.x
                         && meteor.position.y <= final_p.y
-                        && meteor.position.y + steps >= final_p.y)
+                        && meteor.position.y + u16::from(steps) >= final_p.y)
                 {
                     return false;
                 }
@@ -7126,6 +7156,11 @@ impl Game {
                             }
                         }
                     }
+                }
+            }
+            if let Some(col) = self.lightning_column {
+                if final_p.x == col {
+                    return false;
                 }
             }
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
