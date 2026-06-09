@@ -615,6 +615,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Capture The Flag Mode",
         "Bullet Hell Mode",
         "Snake Survivor Mode",
+        "King Of The Hill Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
