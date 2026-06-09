@@ -1729,7 +1729,6 @@ impl Game {
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
-                || self.mode == GameMode::KingOfTheHill
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2041,13 +2040,6 @@ impl Game {
             self.koth_zone = None;
         }
 
-        if self.mode == GameMode::KingOfTheHill {
-            self.koth_zone = Some(Point { x: start_x, y: start_y });
-            self.p1_score = 0;
-            self.p2_score = 0;
-        } else {
-            self.koth_zone = None;
-        }
         // Score is kept across respawns, but reset on full game reset
         self.p1_score = 0;
         self.p2_score = 0;
@@ -5491,7 +5483,6 @@ impl Game {
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
-                || self.mode == GameMode::KingOfTheHill
             {
                 self.handle_death("You Died!");
             } else {
@@ -5591,37 +5582,6 @@ impl Game {
         }
 
 
-        if self.mode == GameMode::KingOfTheHill {
-            if let Some(koth_pos) = self.koth_zone {
-                let mut p1_in_zone = false;
-                let mut p2_in_zone = false;
-
-                if final_head1.x >= koth_pos.x.saturating_sub(1) && final_head1.x <= koth_pos.x + 1 &&
-                   final_head1.y >= koth_pos.y.saturating_sub(1) && final_head1.y <= koth_pos.y + 1 {
-                    p1_in_zone = true;
-                }
-                if let Some(fh2) = final_head2_opt {
-                    if fh2.x >= koth_pos.x.saturating_sub(1) && fh2.x <= koth_pos.x + 1 &&
-                       fh2.y >= koth_pos.y.saturating_sub(1) && fh2.y <= koth_pos.y + 1 {
-                        p2_in_zone = true;
-                    }
-                }
-
-                if p1_in_zone && !p2_in_zone {
-                    self.score += 1;
-                    self.p1_score += 1;
-                } else if p2_in_zone && !p1_in_zone {
-                    self.p2_score += 1;
-                }
-
-                if self.tick_counter % 50 == 0 {
-                    let margin = 2;
-                    if let Some(new_zone) = Self::get_random_empty_point(self.width, self.height, &self.snake, |_| false, &mut self.rng, margin) {
-                        self.koth_zone = Some(new_zone);
-                    }
-                }
-            }
-        }
 
         self.process_power_up_collision(final_head1);
 
