@@ -7228,6 +7228,16 @@ impl Game {
                 targets.push(koth_pos);
             }
         }
+        if self.mode == GameMode::CaptureTheFlag {
+            if self.p1_has_flag {
+                targets.push(Point {
+                    x: 2,
+                    y: self.height / 2,
+                });
+            } else if let Some(p2_flag) = self.p2_flag {
+                targets.push(p2_flag);
+            }
+        }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
@@ -7254,6 +7264,16 @@ impl Game {
             if self.mode == GameMode::KingOfTheHill {
                 if let Some(koth_pos) = self.koth_zone {
                     targets.push(koth_pos);
+                }
+            }
+            if self.mode == GameMode::CaptureTheFlag {
+                if self.p2_has_flag {
+                    targets.push(Point {
+                        x: self.width.saturating_sub(3),
+                        y: self.height / 2,
+                    });
+                } else if let Some(p1_flag) = self.p1_flag {
+                    targets.push(p1_flag);
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
