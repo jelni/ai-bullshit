@@ -4372,13 +4372,30 @@ impl Game {
                     }
                     laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
                 }
-                if laser.position.x <= margin
-                    || laser.position.x >= self.width - 1 - margin
-                    || laser.position.y <= margin
-                    || laser.position.y >= self.height - 1 - margin
-                {
-                    destroyed = true;
-                    break;
+                if self.mode == GameMode::Dodgeball {
+                    if laser.position.x <= margin {
+                        if laser.direction == Direction::Left { laser.direction = Direction::Right; }
+                        laser.position.x = margin + 1;
+                    } else if laser.position.x >= self.width - 1 - margin {
+                        if laser.direction == Direction::Right { laser.direction = Direction::Left; }
+                        laser.position.x = self.width - 2 - margin;
+                    }
+                    if laser.position.y <= margin {
+                        if laser.direction == Direction::Up { laser.direction = Direction::Down; }
+                        laser.position.y = margin + 1;
+                    } else if laser.position.y >= self.height - 1 - margin {
+                        if laser.direction == Direction::Down { laser.direction = Direction::Up; }
+                        laser.position.y = self.height - 2 - margin;
+                    }
+                } else {
+                    if laser.position.x <= margin
+                        || laser.position.x >= self.width - 1 - margin
+                        || laser.position.y <= margin
+                        || laser.position.y >= self.height - 1 - margin
+                    {
+                        destroyed = true;
+                        break;
+                    }
                 }
                 if self.obstacles.contains(&laser.position) {
                     self.obstacles.remove(&laser.position);
