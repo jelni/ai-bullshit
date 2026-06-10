@@ -41,4 +41,5 @@ pub enum GameMode {
     BulletHell,
     SnakeSurvivor,
     KingOfTheHill,
+    Dodgeball,
 }
