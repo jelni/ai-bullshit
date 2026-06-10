@@ -1667,7 +1667,7 @@ impl Game {
             | GameMode::Farmstead
             | GameMode::BulletHell
             | GameMode::SnakeSurvivor
-            | GameMode::KingOfTheHill => {
+            | GameMode::KingOfTheHill | GameMode::Dodgeball => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2136,7 +2136,7 @@ impl Game {
             | GameMode::Farmstead
             | GameMode::BulletHell
             | GameMode::SnakeSurvivor
-            | GameMode::KingOfTheHill => {
+            | GameMode::KingOfTheHill | GameMode::Dodgeball => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
