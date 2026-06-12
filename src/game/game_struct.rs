@@ -102,6 +102,8 @@ pub struct Game {
     pub p2_score: u32,
     pub koth_zone: Option<Point>,
     pub xp_gems: HashSet<Point>,
+    pub flow_field: Option<std::collections::HashMap<Point, crate::snake::Direction>>,
+    pub flow_field_targets: Vec<Point>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -367,6 +369,8 @@ impl Game {
             p2_score: 0,
             koth_zone: None,
             xp_gems: HashSet::new(),
+            flow_field: None,
+            flow_field_targets: Vec::new(),
         }
     }
     #[must_use]
@@ -718,6 +722,8 @@ impl Game {
                 self.p2_score = state.p2_score;
                 self.koth_zone = state.koth_zone;
                 self.xp_gems = state.xp_gems;
+                self.flow_field = None;
+                self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
                 self.ghost_snake = None;
@@ -2017,6 +2023,8 @@ impl Game {
         self.p1_has_flag = false;
         self.p2_has_flag = false;
         self.xp_gems.clear();
+        self.flow_field = None;
+        self.flow_field_targets.clear();
 
         if self.mode == GameMode::CaptureTheFlag {
             self.p1_flag = Some(Point {
@@ -2404,6 +2412,32 @@ impl Game {
                     if self.bots[i].direction_queue.is_empty() {
                         let start = self.bots[i].head();
                         let current_dir = self.bots[i].direction;
+
+                        // Use flow field for MassiveMultiplayer and Zombie to save performance
+                        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
+                            if let Some(flow_field) = &self.flow_field {
+                                if let Some(&dir) = flow_field.get(&start) {
+
+                            let is_opp = match (current_dir, dir) {
+                                (Direction::Up, Direction::Down) | (Direction::Down, Direction::Up) |
+                                (Direction::Left, Direction::Right) | (Direction::Right, Direction::Left) => true,
+                                _ => false,
+                            };
+
+                            let next_head = Self::calculate_next_head_dir(start, dir);
+                            if !is_opp {
+                                if let Some(final_p) = self.get_final_p(next_head) {
+                                    if self.is_safe_final_p(final_p, 1, 4) {
+                                        self.bots_autopilot_paths[i].clear();
+                                        self.bots[i].direction_queue.push_back(dir);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                         let mut targets = if self.mode == GameMode::Zombie {
                             vec![self.snake.head()]
                         } else {
@@ -3008,6 +3042,40 @@ impl Game {
         }
 
         self.update_stock_market();
+
+        if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
+            let targets = if self.mode == GameMode::Zombie {
+                vec![self.snake.head()]
+            } else {
+                let mut t = vec![self.food];
+                if let Some((bp, _)) = self.bonus_food {
+                    t.push(bp);
+                }
+                if let Some(pu) = &self.power_up {
+                    if pu.activation_time.is_none() {
+                        t.push(pu.location);
+                    }
+                }
+                if let Some(goblin) = &self.goblin {
+                    t.push(goblin.position);
+                }
+                if self.mode == GameMode::KingOfTheHill {
+                    if let Some(koth_pos) = self.koth_zone {
+                        t.push(koth_pos);
+                    }
+                }
+                t
+            };
+
+            let mut needs_update = self.flow_field.is_none() || self.flow_field_targets != targets;
+            if self.mode == GameMode::Zombie && self.tick_counter % 5 != 0 && self.flow_field.is_some() {
+                needs_update = false; // throttle update for zombie mode
+            }
+            if needs_update {
+                self.flow_field = Some(crate::game::generate_flow_field(self, &targets));
+                self.flow_field_targets = targets;
+            }
+        }
     }
 
     fn handle_survivor_auto_fire(&mut self) {
