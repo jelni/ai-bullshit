@@ -1,5 +1,5 @@
-use snake_game::game::{Game, GameMode, Theme, Difficulty, generate_flow_field};
-use snake_game::snake::{Point, Direction, Snake};
+use snake_game::game::{Difficulty, Game, GameMode, Theme, generate_flow_field};
+use snake_game::snake::{Direction, Point, Snake};
 
 #[test]
 fn test_flow_field_avoids_obstacles() {
@@ -8,14 +8,23 @@ fn test_flow_field_avoids_obstacles() {
 
     // Create a wall
     for x in 8..=12 {
-        game.obstacles.insert(Point { x, y: 10 });
+        game.obstacles.insert(Point {
+            x,
+            y: 10,
+        });
     }
 
-    let target = Point { x: 10, y: 15 };
+    let target = Point {
+        x: 10,
+        y: 15,
+    };
     let flow_field = generate_flow_field(&game, &[target]);
 
     // Verify that the start point (10, 5) points around the wall and not through it
-    let start = Point { x: 10, y: 5 };
+    let start = Point {
+        x: 10,
+        y: 5,
+    };
 
     // Follow the flow field to see if we reach the target
     let mut current = start;
@@ -43,15 +52,33 @@ fn test_flow_field_handles_portals() {
     game.obstacles.clear();
 
     for x in 0..20 {
-        game.obstacles.insert(Point { x, y: 10 });
+        game.obstacles.insert(Point {
+            x,
+            y: 10,
+        });
     }
 
-    game.portals = Some((Point { x: 5, y: 5 }, Point { x: 5, y: 15 }));
+    game.portals = Some((
+        Point {
+            x: 5,
+            y: 5,
+        },
+        Point {
+            x: 5,
+            y: 15,
+        },
+    ));
 
-    let target = Point { x: 5, y: 17 };
+    let target = Point {
+        x: 5,
+        y: 17,
+    };
     let flow_field = generate_flow_field(&game, &[target]);
 
-    let start = Point { x: 5, y: 3 };
+    let start = Point {
+        x: 5,
+        y: 3,
+    };
     let mut current = start;
     let mut reached = false;
     let mut steps = 0;
@@ -92,7 +119,10 @@ fn test_flow_field_updates_in_game() {
     let initial_targets = game.flow_field_targets.clone();
 
     // Change food
-    game.food = Point { x: 1, y: 1 };
+    game.food = Point {
+        x: 1,
+        y: 1,
+    };
     game.update();
 
     assert_ne!(initial_targets, game.flow_field_targets, "Flow field targets should update");

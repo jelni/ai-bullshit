@@ -8,10 +8,16 @@ fn test_bot_targets_koth_zone() {
     game.obstacles.clear();
 
     // Set koth_zone
-    game.koth_zone = Some(Point { x: 2, y: 2 });
+    game.koth_zone = Some(Point {
+        x: 2,
+        y: 2,
+    });
 
     // Set snake
-    game.snake = Snake::new(Point { x: 5, y: 2 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 2,
+    });
     game.snake.direction = Direction::Left;
 
     // Calculate path
@@ -26,10 +32,16 @@ fn test_bot_p2_targets_koth_zone() {
     game.obstacles.clear();
 
     // Set koth_zone
-    game.koth_zone = Some(Point { x: 2, y: 2 });
+    game.koth_zone = Some(Point {
+        x: 2,
+        y: 2,
+    });
 
     // Set p2
-    let mut p2 = Snake::new(Point { x: 5, y: 2 });
+    let mut p2 = Snake::new(Point {
+        x: 5,
+        y: 2,
+    });
     p2.direction = Direction::Left;
     game.player2 = Some(p2);
 
@@ -46,10 +58,16 @@ fn test_bot_targets_koth_zone_bots() {
     game.bots.clear();
 
     // Set koth_zone
-    game.koth_zone = Some(Point { x: 2, y: 2 });
+    game.koth_zone = Some(Point {
+        x: 2,
+        y: 2,
+    });
 
     // Set bot
-    let mut bot = Snake::new(Point { x: 5, y: 2 });
+    let mut bot = Snake::new(Point {
+        x: 5,
+        y: 2,
+    });
     bot.direction = Direction::Left;
     game.bots.push(bot);
     game.bots_autopilot_paths.push(vec![]);
