@@ -70,6 +70,8 @@ pub use meteor::*;
 pub use misc::*;
 pub use particle::*;
 pub mod bestiary;
+pub mod flow_field;
+pub use flow_field::*;
 pub mod floating_text;
 pub mod quest;
 pub use floating_text::FloatingText;
