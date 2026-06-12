@@ -1923,8 +1923,8 @@ fn draw_entities<W: Write>(
     }
 
     // Draw King of the Hill zone
-    if game.mode == crate::game::GameMode::KingOfTheHill {
-        if let Some(koth_pos) = game.koth_zone {
+    if game.mode == crate::game::GameMode::KingOfTheHill
+        && let Some(koth_pos) = game.koth_zone {
             stdout.queue(SetForegroundColor(Color::Yellow))?;
             for y in koth_pos.y.saturating_sub(1)..=koth_pos.y.saturating_add(1) {
                 for x in koth_pos.x.saturating_sub(1)..=koth_pos.x.saturating_add(1) {
@@ -1935,7 +1935,6 @@ fn draw_entities<W: Write>(
                 }
             }
         }
-    }
 
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food
@@ -2144,7 +2143,9 @@ fn draw_base_status<W: Write>(
     bot_str: &str,
     combo_str: &str,
 ) -> io::Result<()> {
-    if game.mode == crate::game::GameMode::CaptureTheFlag || game.mode == crate::game::GameMode::KingOfTheHill {
+    if game.mode == crate::game::GameMode::CaptureTheFlag
+        || game.mode == crate::game::GameMode::KingOfTheHill
+    {
         write!(
             stdout,
             "P1 Score: {} | P2 Score: {} | Mana: {}/{} | {:?}{}{}",

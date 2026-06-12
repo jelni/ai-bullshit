@@ -2577,8 +2577,8 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
 }
 
 fn do_gacha_pulls(game: &mut Game, pulls: u32) {
-    use rand::Rng;
     use crate::game::Resource;
+    use rand::Rng;
 
     let mut pulled_items = Vec::new();
 
@@ -2595,12 +2595,12 @@ fn do_gacha_pulls(game: &mut Game, pulls: u32) {
         };
 
         *game.stats.inventory.entry(resource).or_insert(0) += 1;
-        pulled_items.push(format!("{:?}", resource));
+        pulled_items.push(format!("{resource:?}"));
     }
 
     if pulls == 1 {
         game.death_message = format!("You got: {}", pulled_items[0]);
     } else {
-        game.death_message = format!("You got {} items!", pulls);
+        game.death_message = format!("You got {pulls} items!");
     }
 }
