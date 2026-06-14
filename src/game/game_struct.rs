@@ -7426,13 +7426,12 @@ impl Game {
             }
         if self.mode == GameMode::CaptureTheFlag {
             if self.p1_has_flag {
-                targets.insert(
-                    0,
+                targets = vec![
                     Point {
                         x: 2,
                         y: self.height / 2,
                     },
-                );
+                ];
             } else if let Some(p2_flag) = self.p2_flag {
                 targets.insert(0, p2_flag);
             }
@@ -7466,13 +7465,12 @@ impl Game {
                 }
             if self.mode == GameMode::CaptureTheFlag {
                 if self.p2_has_flag {
-                    targets.insert(
-                        0,
+                    targets = vec![
                         Point {
                             x: self.width.saturating_sub(3),
                             y: self.height / 2,
                         },
-                    );
+                    ];
                 } else if let Some(p1_flag) = self.p1_flag {
                     targets.insert(0, p1_flag);
                 }
