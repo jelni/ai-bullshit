@@ -405,7 +405,7 @@ mod tests {
         }
     }
     #[test]
-    fn test_bfs_pathfind() {
+    fn test_astar_pathfind() {
         let mut game = Game::new(
             20,
             20,
@@ -429,7 +429,7 @@ mod tests {
             x: 10,
             y: 15,
         };
-        let dir = game.bfs_pathfind(start, target);
+        let dir = game.astar_pathfind(start, target);
         assert!(dir.is_some(), "BFS should find a path around the wall");
         let mut current = start;
         let mut reached = false;
@@ -438,7 +438,7 @@ mod tests {
                 reached = true;
                 break;
             }
-            if let Some(next_dir) = game.bfs_pathfind(current, target) {
+            if let Some(next_dir) = game.astar_pathfind(current, target) {
                 current = Game::calculate_next_head_dir(current, next_dir);
                 assert!(!game.obstacles.contains(&current), "Path should not hit obstacles");
             } else {
@@ -1330,7 +1330,7 @@ fn test_mage_boss_attack() {
     assert!(power_up.activation_time.is_some(), "TimeFreeze should be activated");
 }
 #[test]
-fn test_bfs_pathfind_uses_portals() {
+fn test_astar_pathfind_uses_portals() {
     let mut game =
         Game::new(20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
     game.obstacles.clear();
@@ -1370,7 +1370,7 @@ fn test_bfs_pathfind_uses_portals() {
             reached = true;
             break;
         }
-        if let Some(next_dir) = game.bfs_pathfind(current, target) {
+        if let Some(next_dir) = game.astar_pathfind(current, target) {
             let next_p = Game::calculate_next_head_dir(current, next_dir);
             if let Some(final_p) = game.get_final_p(next_p) {
                 current = final_p;

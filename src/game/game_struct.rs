@@ -904,7 +904,7 @@ impl Game {
             if goblin.move_timer >= 2 {
                 goblin.move_timer = 0;
                 let target = self.food;
-                if let Some(dir) = self.bfs_pathfind(goblin.position, target) {
+                if let Some(dir) = self.astar_pathfind(goblin.position, target) {
                     let next_pos = Self::calculate_next_head_dir(goblin.position, dir);
                     let margin = if self.mode == GameMode::BattleRoyale {
                         self.safe_zone_margin
@@ -2924,8 +2924,8 @@ impl Game {
                     CompanionType::Fighter | CompanionType::Healer => self.snake.head(),
                 };
 
-                // We use bfs_pathfind directly for companions so they don't get restricted by 'neck' turns
-                if let Some(dir) = self.bfs_pathfind(comp.position, target) {
+                // We use astar_pathfind directly for companions so they don't get restricted by 'neck' turns
+                if let Some(dir) = self.astar_pathfind(comp.position, target) {
                     let next_pos = Self::calculate_next_head_dir(comp.position, dir);
                     if next_pos.x > margin
                         && next_pos.x < self.width - 1 - margin
@@ -3502,7 +3502,7 @@ impl Game {
                         };
                         let dir_opt = self
                             .get_boss_path(boss.position, target_pos, boss.kind)
-                            .or_else(|| self.bfs_pathfind(boss.position, target_pos));
+                            .or_else(|| self.astar_pathfind(boss.position, target_pos));
                         if let Some(dir) = dir_opt {
                             let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             let margin = if self.mode == GameMode::BattleRoyale {
@@ -3879,7 +3879,7 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bfs_pathfind(boss.position, target_pos) {
+                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -3958,7 +3958,7 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bfs_pathfind(boss.position, target_pos) {
+                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4045,7 +4045,7 @@ impl Game {
                             boss.move_timer += 1;
                             if boss.move_timer >= move_threshold {
                                 boss.move_timer = 0;
-                                if let Some(dir) = self.bfs_pathfind(boss.position, target_pos) {
+                                if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
                                     let next_pos =
                                         Self::calculate_next_head_dir(boss.position, dir);
                                     let margin = if self.mode == GameMode::BattleRoyale {
@@ -6892,47 +6892,83 @@ impl Game {
         }
     }
     #[must_use]
-    pub fn bfs_pathfind(&self, start: Point, target: Point) -> Option<Direction> {
-        let mut queue = std::collections::VecDeque::new();
-        let mut visited = HashSet::new();
+    pub fn astar_pathfind(&self, start: Point, target: Point) -> Option<Direction> {
+        let mut open_set = std::collections::BinaryHeap::new();
+        let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
-        queue.push_back((start, 0));
-        visited.insert(start);
-        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
-        for &d in &dirs {
-            let next_p = Self::calculate_next_head_dir(start, d);
-            if let Some(final_p) = self.get_final_p(next_p)
-                && !self.obstacles.contains(&final_p)
-                && self.is_safe_final_p(final_p, 1, 3)
+
+        g_score.insert(start, 0u16);
+
+        let calc_dist = |p1: Point, p2: Point| -> u16 {
+            let mut dx = p1.x.abs_diff(p2.x);
+            let mut dy = p1.y.abs_diff(p2.y);
+            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
             {
-                if final_p == target {
-                    return Some(d);
-                }
-                if !visited.contains(&final_p) {
-                    queue.push_back((final_p, 1));
-                    visited.insert(final_p);
-                    first_step.insert(final_p, d);
-                }
+                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
             }
-        }
-        while let Some((current, dist)) = queue.pop_front() {
+            dx.saturating_add(dy)
+        };
+
+        let heuristic = |p: Point| -> u16 {
+            let dist_direct = calc_dist(p, target);
+            if let Some((portal1, portal2)) = self.portals {
+                let dist_via_portal1 =
+                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target));
+                let dist_via_portal2 =
+                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target));
+                std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+            } else {
+                dist_direct
+            }
+        };
+
+        open_set.push(AStarState {
+            f_score: heuristic(start),
+            position: start,
+        });
+
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+
+        let mut iterations = 0;
+        while let Some(AStarState {
+            position: current,
+            ..
+        }) = open_set.pop()
+        {
+            iterations += 1;
+            if iterations > 3000 {
+                break; // Prevent infinite loops
+            }
             if current == target {
                 return first_step.get(&current).copied();
             }
+
+            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
+
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
+                let tentative_g = current_g.saturating_add(1);
+
                 if let Some(final_p) = self.get_final_p(next_p)
                     && !self.obstacles.contains(&final_p)
-                    && !visited.contains(&final_p)
-                    && self.is_safe_final_p(final_p, dist + 1, 3)
+                    && self.is_safe_final_p(final_p, tentative_g, 3)
+                    && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
                 {
-                    visited.insert(final_p);
-                    if !first_step.contains_key(&final_p)
-                        && let Some(&first) = first_step.get(&current)
-                    {
+                    if final_p == target {
+                        // Optimally return if target reached
+                        return first_step.get(&current).copied().or(Some(d));
+                    }
+                    g_score.insert(final_p, tentative_g);
+                    if current == start {
+                        first_step.insert(final_p, d);
+                    } else if let Some(&first) = first_step.get(&current) {
                         first_step.insert(final_p, first);
                     }
-                    queue.push_back((final_p, dist + 1));
+                    open_set.push(AStarState {
+                        f_score: tentative_g.saturating_add(heuristic(final_p)),
+                        position: final_p,
+                    });
                 }
             }
         }
