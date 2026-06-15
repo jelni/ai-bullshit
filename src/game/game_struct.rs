@@ -3435,7 +3435,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..12) {
+                    match self.rng.gen_range(0..13) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3448,6 +3448,7 @@ impl Game {
                         9 => BossType::Dragon,
                         10 => BossType::Mage,
                         11 => BossType::Gorgon,
+                        12 => BossType::VampireLord,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4065,6 +4066,80 @@ impl Game {
                             }
                         } else {
                             boss.move_timer = 0;
+                        }
+                    } else if boss.kind == BossType::VampireLord {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            2
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            let dist = i32::from(target_pos.x).abs_diff(i32::from(boss.position.x))
+                                + i32::from(target_pos.y).abs_diff(i32::from(boss.position.y));
+
+                            // Steal life if adjacent
+                            if dist <= 2 {
+                                if self.lives >= 1 {
+                                    self.lives = self.lives.saturating_sub(1);
+                                    boss.health = std::cmp::min(boss.max_health, boss.health + 5);
+                                    self.spawn_particles(
+                                        f32::from(boss.position.x),
+                                        f32::from(boss.position.y),
+                                        20,
+                                        crate::color::Color::Red,
+                                        '+',
+                                    );
+                                    beep();
+
+                                    // Teleport away after stealing life
+                                    let margin = self.safe_zone_margin + 5;
+                                    let avoid = |p: &Point| {
+                                        self.obstacles.contains(p) || self.snake.body_map.contains_key(p)
+                                    };
+                                    if let Some(pos) = Self::get_random_empty_point(
+                                        self.width,
+                                        self.height,
+                                        &self.snake,
+                                        avoid,
+                                        &mut self.rng,
+                                        margin,
+                                    ) {
+                                        boss.position = pos;
+                                        boss.state_timer = 15;
+                                    }
+                                }
+                            } else if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
+                                let next_pos =
+                                    Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                    && !self.obstacles.contains(&next_pos)
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
                         }
                     }
                 }

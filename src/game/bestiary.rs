@@ -104,5 +104,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "A creature with a petrifying gaze."
             }
         },
+        BossType::VampireLord => {
+            if kills >= 5 {
+                "An ancient lord of the night. It actively hunts you down, draining your life force to heal itself."
+            } else {
+                "Steals life and heals itself."
+            }
+        },
     }
 }
