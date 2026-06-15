@@ -7269,9 +7269,20 @@ impl Game {
                                     );
                                 }
 
-                                // A laser travels 2 tiles per tick. Add a small buffer for safety.
-                                let laser_reach = shoots * 2 + 1;
-                                if dist <= laser_reach {
+                                // A laser travels 2 tiles per tick.
+                                // It takes the laser roughly `dist / 2` ticks to reach `final_p`.
+                                // We are evaluating the safety of `final_p` at `t = active_steps`.
+                                // A laser hits this tile at `t` if `t % shoot_threshold == dist / 2`.
+                                // So we check if `active_steps` is close to the expected arrival time of any laser fired.
+                                // We add a small buffer for safety.
+                                let expected_arrival_mod = (dist / 2) % shoot_threshold;
+                                let step_mod = (active_steps + u32::from(boss.shoot_timer)) % shoot_threshold;
+
+                                let diff = step_mod.abs_diff(expected_arrival_mod);
+                                let true_diff = std::cmp::min(diff, shoot_threshold.saturating_sub(diff));
+
+                                if true_diff <= 2 {
+                                    // A laser will be here at around the time we arrive.
                                     return false;
                                 }
                             }
