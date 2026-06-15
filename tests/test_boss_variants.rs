@@ -321,3 +321,43 @@ fn test_gorgon_turns_food_to_stone() {
     assert!(game.obstacles.contains(&food_pos), "Food should be turned into an obstacle by Gorgon");
     assert_ne!(game.food, food_pos, "A new food should have been spawned");
 }
+
+#[test]
+fn test_vampire_lord_steals_life() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
+    game.snake.direction = Direction::Right;
+
+    // Set initial lives to 3
+    game.lives = 3;
+
+    // Place VampireLord adjacent to the snake
+    game.bosses.push(Boss {
+        position: Point {
+            x: 6,
+            y: 5,
+        },
+        health: 5,
+        max_health: 10,
+        move_timer: 2, // Ready to act
+        shoot_timer: 0,
+        kind: BossType::VampireLord,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+
+    // Check life drain and teleport
+    assert_eq!(game.lives, 2, "Vampire Lord should drain 1 life from the player");
+    assert_eq!(game.bosses[0].health, 10, "Vampire Lord should heal itself by 5");
+    assert_ne!(
+        game.bosses[0].position,
+        Point { x: 6, y: 5 },
+        "Vampire Lord should teleport away after stealing life"
+    );
+}

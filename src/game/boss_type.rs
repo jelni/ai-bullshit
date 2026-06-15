@@ -17,4 +17,5 @@ pub enum BossType {
     Dragon,
     Mage,
     Gorgon,
+    VampireLord,
 }

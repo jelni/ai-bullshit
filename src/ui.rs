@@ -1891,6 +1891,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Green))?;
                     write!(stdout, "G")?;
                 },
+                crate::game::BossType::VampireLord => {
+                    stdout.queue(SetForegroundColor(Color::Red))?;
+                    write!(stdout, "V")?;
+                },
             }
         }
     }
