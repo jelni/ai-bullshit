@@ -68,7 +68,7 @@ fn test_bot_targets_koth_zone_bots() {
         x: 5,
         y: 2,
     });
-    bot.direction = Direction::Left;
+    bot.direction = Direction::Up; // Ensure it needs to turn left
     game.bots.push(bot);
     game.bots_autopilot_paths.push(vec![]);
 
