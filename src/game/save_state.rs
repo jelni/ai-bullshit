@@ -116,6 +116,10 @@ pub struct SaveState {
     pub koth_zone: Option<Point>,
     #[serde(default)]
     pub xp_gems: HashSet<Point>,
+    #[serde(default)]
+    pub dungeon_grid: std::collections::HashMap<(i32, i32), crate::game::dungeon::DungeonRoom>,
+    #[serde(default)]
+    pub current_room_coords: (i32, i32),
 }
 
 #[must_use]

@@ -514,6 +514,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Dodgeball;
                 game.reset();
             },
+            39 => {
+                game.mode = game::GameMode::DungeonCrawler;
+                game.reset();
+            },
             40 => {
                 let _ = game.load_game();
             },

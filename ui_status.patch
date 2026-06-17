@@ -1,0 +1,28 @@
+--- src/ui.rs
++++ src/ui.rs
+@@ -2162,6 +2162,25 @@
+             bot_str,
+             combo_str
+         )?;
++    } else if game.mode == crate::game::GameMode::DungeonCrawler {
++        let room_status = if let Some(room) = game.dungeon_grid.get(&game.current_room_coords) {
++            if room.cleared { "(Cleared)" } else { "(Uncleared)" }
++        } else { "" };
++        write!(
++            stdout,
++            "Score: {} | Lives: {} | Room: {},{} {} | Lvl: {} | XP: {}/{} | {:?}{}{}",
++            game.score,
++            game.lives,
++            game.current_room_coords.0,
++            game.current_room_coords.1,
++            room_status,
++            game.player_level,
++            game.xp,
++            game.xp_to_next_level,
++            game.difficulty,
++            bot_str,
++            combo_str
++        )?;
+     } else if game.mode == crate::game::GameMode::Campaign {
+         write!(
+             stdout,

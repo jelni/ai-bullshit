@@ -1,0 +1,34 @@
+--- src/game/game_struct.rs
++++ src/game/game_struct.rs
+@@ -3230,6 +3230,22 @@
+             self.stats.stock_prices.insert(stock, new_price);
+         }
+     }
++
++    pub fn is_door(&self, p: Point) -> bool {
++        if self.mode != GameMode::DungeonCrawler || self.dungeon_grid.is_empty() {
++            return false;
++        }
++        if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
++            let is_north = p.x == self.width / 2 && p.y == 0 && room.north_door;
++            let is_south = p.x == self.width / 2 && p.y == self.height - 1 && room.south_door;
++            let is_west = p.x == 0 && p.y == self.height / 2 && room.west_door;
++            let is_east = p.x == self.width - 1 && p.y == self.height / 2 && room.east_door;
++
++            return is_north || is_south || is_west || is_east;
++        }
++        false
++    }
++
+     pub fn load_dungeon_room(&mut self) {
+         self.obstacles.clear();
+         self.bosses.clear();
+@@ -7046,6 +7062,8 @@
+             && self.mode != GameMode::BattleRoyale
+         {
+             Some(self.calculate_wrapped_head(p))
++        } else if self.mode == GameMode::DungeonCrawler && self.is_door(p) {
++            Some(p) // allow door traversal
+         } else {
+             let margin = if self.mode == GameMode::BattleRoyale {
+                 self.safe_zone_margin

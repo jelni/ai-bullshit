@@ -116,3 +116,4 @@ pub use stock::Stock;
 pub use vehicle::Vehicle;
 pub mod spell;
 pub use spell::SpellType;
+pub mod dungeon;

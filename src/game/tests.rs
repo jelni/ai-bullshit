@@ -1442,3 +1442,26 @@ fn test_is_safe_final_p_laser_portals() {
     };
     assert!(game.is_safe_final_p(safe_point, 1, 1), "Point far from portal should be safe");
 }
+
+#[test]
+fn test_dungeon_crawler_generation_and_loading() {
+    let mut game = Game::new(
+        40,
+        40,
+        false,
+        'O',
+        crate::game::Theme::Dark,
+        crate::game::Difficulty::Normal,
+    );
+    game.mode = GameMode::DungeonCrawler;
+    game.reset();
+
+    // Verify grid is populated
+    assert!(!game.dungeon_grid.is_empty());
+
+    // Verify room is loaded (either obstacles or bosses/equipment present)
+    assert!(game.obstacles.len() > 0 || game.bosses.len() > 0 || game.equipment_boxes.len() > 0);
+
+    let current_room = game.dungeon_grid.get(&game.current_room_coords).unwrap();
+    assert_eq!(current_room.r_type, crate::game::dungeon::DungeonRoomType::Start);
+}

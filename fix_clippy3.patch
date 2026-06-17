@@ -1,0 +1,10 @@
+--- src/game/dungeon.rs
++++ src/game/dungeon.rs
+@@ -34,6 +34,7 @@
+     }
+ }
+
++#[expect(clippy::missing_panics_doc)]
+ pub fn generate_dungeon(
+     level: u32,
+     rng: &mut rand::rngs::StdRng,

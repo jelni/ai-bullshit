@@ -1,0 +1,20 @@
+--- src/ui.rs
++++ src/ui.rs
+@@ -1445,6 +1445,15 @@
+         }
+     }
+
++    if game.mode == crate::game::GameMode::DungeonCrawler {
++        stdout.queue(SetForegroundColor(Color::Cyan))?;
++        for y in 0..game.height {
++            for x in 0..game.width {
++                if game.is_door(crate::snake::Point { x, y }) {
++                    stdout.queue(cursor::MoveTo(x, y))?;
++                    write!(stdout, " ")?; // Show open door
++                }
++            }
++        }
++    }
++
+     Ok(())
+ }
