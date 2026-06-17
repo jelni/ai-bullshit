@@ -42,4 +42,5 @@ pub enum GameMode {
     SnakeSurvivor,
     KingOfTheHill,
     Dodgeball,
+    DungeonCrawler,
 }

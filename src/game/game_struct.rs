@@ -104,6 +104,8 @@ pub struct Game {
     pub xp_gems: HashSet<Point>,
     pub flow_field: Option<std::collections::HashMap<Point, crate::snake::Direction>>,
     pub flow_field_targets: Vec<Point>,
+    pub dungeon_grid: std::collections::HashMap<(i32, i32), crate::game::dungeon::DungeonRoom>,
+    pub current_room_coords: (i32, i32),
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -371,6 +373,8 @@ impl Game {
             xp_gems: HashSet::new(),
             flow_field: None,
             flow_field_targets: Vec::new(),
+            dungeon_grid: std::collections::HashMap::new(),
+            current_room_coords: (0, 0),
         }
     }
     #[must_use]
@@ -598,6 +602,8 @@ impl Game {
             p2_score: self.p2_score,
             koth_zone: self.koth_zone,
             xp_gems: self.xp_gems.clone(),
+            dungeon_grid: self.dungeon_grid.clone(),
+            current_room_coords: self.current_room_coords,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -722,6 +728,8 @@ impl Game {
                 self.p2_score = state.p2_score;
                 self.koth_zone = state.koth_zone;
                 self.xp_gems = state.xp_gems;
+                self.dungeon_grid = state.dungeon_grid;
+                self.current_room_coords = state.current_room_coords;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1674,7 +1682,8 @@ impl Game {
             | GameMode::BulletHell
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
-            | GameMode::Dodgeball => {
+            | GameMode::Dodgeball
+            | GameMode::DungeonCrawler => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1837,6 +1846,12 @@ impl Game {
             self.ghost_snake = None;
         }
         self.is_sprinting = false;
+
+        if self.mode == GameMode::DungeonCrawler && self.dungeon_grid.is_empty() {
+            self.dungeon_grid = crate::game::dungeon::generate_dungeon(self.campaign_level, &mut self.rng);
+            self.current_room_coords = (0, 0);
+        }
+
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2119,6 +2134,7 @@ impl Game {
         let start_y = self.height / 2;
         match self.mode {
             GameMode::SinglePlayer
+            | GameMode::DungeonCrawler
             | GameMode::Campaign
             | GameMode::TimeAttack
             | GameMode::Speedrun
@@ -3049,6 +3065,47 @@ impl Game {
 
         self.update_stock_market();
 
+        if self.mode == GameMode::DungeonCrawler && self.is_door(self.snake.head()) {
+            let head = self.snake.head();
+            let mut new_head = head;
+
+            if head.y == 0 { // North door
+                self.current_room_coords.1 -= 1;
+                new_head.y = self.height - 2;
+            } else if head.y == self.height - 1 { // South door
+                self.current_room_coords.1 += 1;
+                new_head.y = 1;
+            } else if head.x == 0 { // West door
+                self.current_room_coords.0 -= 1;
+                new_head.x = self.width - 2;
+            } else if head.x == self.width - 1 { // East door
+                self.current_room_coords.0 += 1;
+                new_head.x = 1;
+            }
+
+            self.load_dungeon_room();
+            self.snake.move_to(new_head, false);
+            // Coil up
+            self.snake.body.truncate(1);
+            self.snake.rebuild_map();
+        }
+
+        if self.mode == GameMode::DungeonCrawler
+            && let Some(room) = self.dungeon_grid.get_mut(&self.current_room_coords)
+                && !room.cleared && self.bosses.is_empty() {
+                    room.cleared = true;
+                    crate::game::beep(); // Play sound
+
+                    // Remove door blockers
+                    let to_remove: Vec<Point> = self.obstacles.iter().copied().filter(|p| {
+                        p.x == 0 || p.x == self.width - 1 || p.y == 0 || p.y == self.height - 1
+                    }).collect();
+
+                    for p in to_remove {
+                        self.obstacles.remove(&p);
+                    }
+                }
+
         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
             let targets = if self.mode == GameMode::Zombie {
                 vec![self.snake.head()]
@@ -3215,6 +3272,103 @@ impl Game {
             self.stats.stock_prices.insert(stock, new_price);
         }
     }
+
+    #[must_use]
+    pub fn is_door(&self, p: Point) -> bool {
+        if self.mode != GameMode::DungeonCrawler || self.dungeon_grid.is_empty() {
+            return false;
+        }
+        if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+            let is_north = p.x == self.width / 2 && p.y == 0 && room.north_door;
+            let is_south = p.x == self.width / 2 && p.y == self.height - 1 && room.south_door;
+            let is_west = p.x == 0 && p.y == self.height / 2 && room.west_door;
+            let is_east = p.x == self.width - 1 && p.y == self.height / 2 && room.east_door;
+
+            return is_north || is_south || is_west || is_east;
+        }
+        false
+    }
+
+    pub fn load_dungeon_room(&mut self) {
+        self.obstacles.clear();
+        self.bosses.clear();
+        self.resources.clear();
+        self.equipment_boxes.clear();
+
+        let room = self.dungeon_grid.get(&self.current_room_coords).unwrap().clone();
+
+        // Generate walls with holes for doors
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if x == 0 || x == self.width - 1 || y == 0 || y == self.height - 1 {
+                    let is_door = (x == self.width / 2 && y == 0 && room.north_door)
+                        || (x == self.width / 2 && y == self.height - 1 && room.south_door)
+                        || (x == 0 && y == self.height / 2 && room.west_door)
+                        || (x == self.width - 1 && y == self.height / 2 && room.east_door);
+
+                    let is_door_padding =
+                           (y == 0 && room.north_door && (x == self.width/2 - 1 || x == self.width/2 + 1))
+                        || (y == self.height - 1 && room.south_door && (x == self.width/2 - 1 || x == self.width/2 + 1))
+                        || (x == 0 && room.west_door && (y == self.height/2 - 1 || y == self.height/2 + 1))
+                        || (x == self.width - 1 && room.east_door && (y == self.height/2 - 1 || y == self.height/2 + 1));
+
+                    if !is_door && !is_door_padding {
+                        self.obstacles.insert(Point { x, y });
+                    }
+                }
+            }
+        }
+
+        // Add inner obstacles and entities based on room type and if it's cleared
+        if !room.cleared {
+            let center = Point { x: self.width / 2, y: self.height / 2 };
+            match room.r_type {
+                crate::game::dungeon::DungeonRoomType::Normal => {
+                    use rand::Rng;
+                    for _ in 0..self.rng.gen_range(1..=3) {
+                        if let Some(pos) = Self::get_random_empty_point(self.width, self.height, &self.snake, |p| self.obstacles.contains(p) || self.snake.body_map.contains_key(p), &mut self.rng, 2) {
+                            self.bosses.push(Boss {
+                                position: pos,
+                                health: 5,
+                                max_health: 5,
+                                move_timer: 0,
+                                shoot_timer: 0,
+                                kind: crate::game::BossType::Shooter,
+                                state_timer: 0,
+                            });
+                        }
+                    }
+                },
+                crate::game::dungeon::DungeonRoomType::Boss => {
+                    self.bosses.push(Boss {
+                                position: center,
+                                health: 30,
+                                max_health: 30,
+                                move_timer: 0,
+                                shoot_timer: 0,
+                                kind: crate::game::BossType::Juggernaut,
+                                state_timer: 0,
+                    });
+                },
+                crate::game::dungeon::DungeonRoomType::Treasure => {
+                    self.equipment_boxes.push(center);
+                },
+                _ => {}
+            }
+        }
+
+        // Close doors if there are enemies
+        if !self.bosses.is_empty() {
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    if x == 0 || x == self.width - 1 || y == 0 || y == self.height - 1 {
+                        self.obstacles.insert(Point { x, y });
+                    }
+                }
+            }
+        }
+    }
+
     #[must_use]
     pub fn get_boss_path(
         &self,
@@ -6949,6 +7103,8 @@ impl Game {
             && self.mode != GameMode::BattleRoyale
         {
             Some(self.calculate_wrapped_head(p))
+        } else if self.mode == GameMode::DungeonCrawler && self.is_door(p) {
+            Some(p) // allow door traversal
         } else {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin

@@ -617,6 +617,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Snake Survivor Mode",
         "King Of The Hill Mode",
         "Dodgeball Mode",
+        "Dungeon Crawler Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1441,6 +1442,18 @@ fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> i
         }
     }
 
+    if game.mode == crate::game::GameMode::DungeonCrawler {
+        stdout.queue(SetForegroundColor(Color::Cyan))?;
+        for y in 0..game.height {
+            for x in 0..game.width {
+                if game.is_door(crate::snake::Point { x, y }) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, " ")?; // Show open door by blanking it
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -2157,6 +2170,23 @@ fn draw_base_status<W: Write>(
             game.p2_score,
             game.mana,
             game.max_mana,
+            game.difficulty,
+            bot_str,
+            combo_str
+        )?;
+    } else if game.mode == crate::game::GameMode::DungeonCrawler {
+        let room_status = game.dungeon_grid.get(&game.current_room_coords).map_or("", |room| if room.cleared { "(Cleared)" } else { "(Uncleared)" });
+        write!(
+            stdout,
+            "Score: {} | Lives: {} | Room: {},{} {} | Lvl: {} | XP: {}/{} | {:?}{}{}",
+            game.score,
+            game.lives,
+            game.current_room_coords.0,
+            game.current_room_coords.1,
+            room_status,
+            game.player_level,
+            game.xp,
+            game.xp_to_next_level,
             game.difficulty,
             bot_str,
             combo_str

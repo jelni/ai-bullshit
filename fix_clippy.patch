@@ -1,0 +1,40 @@
+--- src/game/dungeon.rs
++++ src/game/dungeon.rs
+@@ -11,6 +11,7 @@
+ }
+
+ #[derive(Serialize, Deserialize, Clone, Debug)]
++#[expect(clippy::struct_excessive_bools)]
+ pub struct DungeonRoom {
+     pub r_type: DungeonRoomType,
+     pub cleared: bool,
+@@ -20,6 +21,7 @@
+     pub west_door: bool,
+ }
+
+ impl DungeonRoom {
++    #[must_use]
+     pub const fn new(r_type: DungeonRoomType) -> Self {
+         Self {
+             r_type,
+@@ -32,6 +34,7 @@
+     }
+ }
+
++#[expect(clippy::missing_panics_doc)]
+ pub fn generate_dungeon(
+     level: u32,
+     rng: &mut rand::rngs::StdRng,
+--- src/ui.rs
++++ src/ui.rs
+@@ -2175,9 +2175,7 @@
+             combo_str
+         )?;
+     } else if game.mode == crate::game::GameMode::DungeonCrawler {
+-        let room_status = if let Some(room) = game.dungeon_grid.get(&game.current_room_coords) {
+-            if room.cleared { "(Cleared)" } else { "(Uncleared)" }
+-        } else { "" };
++        let room_status = game.dungeon_grid.get(&game.current_room_coords).map_or("", |room| if room.cleared { "(Cleared)" } else { "(Uncleared)" });
+         write!(
+             stdout,
+             "Score: {} | Lives: {} | Room: {},{} {} | Lvl: {} | XP: {}/{} | {:?}{}{}",

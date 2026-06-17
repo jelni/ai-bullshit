@@ -1,0 +1,32 @@
+--- src/game/game_struct.rs
++++ src/game/game_struct.rs
+@@ -3065,6 +3065,30 @@
+         self.update_stock_market();
+
++        if self.mode == GameMode::DungeonCrawler && self.is_door(self.snake.head()) {
++            let head = self.snake.head();
++            let mut new_head = head;
++
++            if head.y == 0 { // North door
++                self.current_room_coords.1 -= 1;
++                new_head.y = self.height - 2;
++            } else if head.y == self.height - 1 { // South door
++                self.current_room_coords.1 += 1;
++                new_head.y = 1;
++            } else if head.x == 0 { // West door
++                self.current_room_coords.0 -= 1;
++                new_head.x = self.width - 2;
++            } else if head.x == self.width - 1 { // East door
++                self.current_room_coords.0 += 1;
++                new_head.x = 1;
++            }
++
++            self.load_dungeon_room();
++            self.snake.move_to(new_head, false);
++            // Coil up
++            self.snake.body.truncate(1);
++            self.snake.rebuild_map();
++        }
++
+         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
+             let targets = if self.mode == GameMode::Zombie {

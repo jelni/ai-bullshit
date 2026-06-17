@@ -1,0 +1,45 @@
+--- src/game/game_struct.rs
++++ src/game/game_struct.rs
+@@ -1071,7 +1071,8 @@
+             | GameMode::Farmstead
+             | GameMode::BulletHell
+             | GameMode::SnakeSurvivor
+             | GameMode::KingOfTheHill
+-            | GameMode::Dodgeball => {
++            | GameMode::Dodgeball
++            | GameMode::DungeonCrawler => {
+                 self.snake = Snake::new(Point {
+                     x: start_x,
+                     y: start_y,
+@@ -1134,7 +1135,8 @@
+                 || self.mode == GameMode::Flood
+                 || self.mode == GameMode::Vampire
+                 || self.mode == GameMode::Gravity
+-                || self.mode == GameMode::KingOfTheHill
++                || self.mode == GameMode::KingOfTheHill
++                || self.mode == GameMode::DungeonCrawler
+             {
+                 p.x == start_x && p.y == start_y - 1
+             } else {
+@@ -1164,7 +1166,8 @@
+             || self.mode == GameMode::Mirror
+             || self.mode == GameMode::Flood
+             || self.mode == GameMode::Vampire
+             || self.mode == GameMode::Gravity
++            || self.mode == GameMode::DungeonCrawler
+         {
+             &self.snake
+         } else {
+@@ -1254,6 +1257,11 @@
+             }
+             let body_map = self.snake.body_map.clone();
+             self.obstacles.retain(|p| !body_map.contains_key(p));
++        } else if self.mode == GameMode::DungeonCrawler {
++            self.dungeon_grid = crate::game::dungeon::generate_dungeon(self.campaign_level, &mut self.rng);
++            self.current_room_coords = (0, 0);
++            self.load_dungeon_room();
++            let body_map = self.snake.body_map.clone();
++            self.obstacles.retain(|p| !body_map.contains_key(p));
+         } else {
+             let mut obstacles = HashSet::new();
+             for _ in 0..obs_count {
