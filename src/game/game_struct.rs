@@ -7702,6 +7702,28 @@ impl Game {
             && let Some(koth_pos) = self.koth_zone {
                 targets.push(koth_pos);
             }
+        if self.mode == GameMode::DungeonCrawler {
+            if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+                if room.cleared {
+                    if room.north_door {
+                        targets.insert(0, Point { x: self.width / 2, y: 0 });
+                    }
+                    if room.south_door {
+                        targets.insert(0, Point { x: self.width / 2, y: self.height - 1 });
+                    }
+                    if room.west_door {
+                        targets.insert(0, Point { x: 0, y: self.height / 2 });
+                    }
+                    if room.east_door {
+                        targets.insert(0, Point { x: self.width - 1, y: self.height / 2 });
+                    }
+                } else {
+                    for boss in &self.bosses {
+                        targets.push(boss.position);
+                    }
+                }
+            }
+        }
         if self.mode == GameMode::CaptureTheFlag {
             if self.p1_has_flag {
                 targets = vec![
@@ -7741,6 +7763,28 @@ impl Game {
                 && let Some(koth_pos) = self.koth_zone {
                     targets.push(koth_pos);
                 }
+            if self.mode == GameMode::DungeonCrawler {
+                if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+                    if room.cleared {
+                        if room.north_door {
+                            targets.insert(0, Point { x: self.width / 2, y: 0 });
+                        }
+                        if room.south_door {
+                            targets.insert(0, Point { x: self.width / 2, y: self.height - 1 });
+                        }
+                        if room.west_door {
+                            targets.insert(0, Point { x: 0, y: self.height / 2 });
+                        }
+                        if room.east_door {
+                            targets.insert(0, Point { x: self.width - 1, y: self.height / 2 });
+                        }
+                    } else {
+                        for boss in &self.bosses {
+                            targets.push(boss.position);
+                        }
+                    }
+                }
+            }
             if self.mode == GameMode::CaptureTheFlag {
                 if self.p2_has_flag {
                     targets = vec![
