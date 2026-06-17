@@ -7719,7 +7719,7 @@ impl Game {
                     }
                 } else {
                     for boss in &self.bosses {
-                        targets.push(boss.position);
+                        targets.insert(0, boss.position);
                     }
                 }
             }
@@ -7780,7 +7780,7 @@ impl Game {
                         }
                     } else {
                         for boss in &self.bosses {
-                            targets.push(boss.position);
+                            targets.insert(0, boss.position);
                         }
                     }
                 }

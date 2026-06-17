@@ -1,9 +1,0 @@
---- src/game/history_state.rs
-+++ src/game/history_state.rs
-@@ -53,6 +53,7 @@
-     pub p2_score: u32,
-     #[serde(default)]
-     pub koth_zone: Option<Point>,
-+    #[allow(dead_code)] // Ensure the field is allowed if not used
-     pub xp_gems: std::collections::HashSet<Point>,
- }
