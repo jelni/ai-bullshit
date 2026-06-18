@@ -1417,6 +1417,7 @@ fn test_is_safe_final_p_laser_portals() {
     // At step 2, laser is at (5, 6), meaning it went through portal1 (5, 5) and is now emerging from portal2 (15, 15).
     // Let's check safety around portal2.
 
+    game.obstacles.clear();
     let test_point_before_portal = crate::snake::Point {
         x: 5,
         y: 4,

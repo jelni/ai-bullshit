@@ -18,4 +18,5 @@ pub enum BossType {
     Mage,
     Gorgon,
     VampireLord,
+    Kraken,
 }

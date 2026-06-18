@@ -9,6 +9,7 @@ fn test_bot_dungeon_crawler_uncleared_room_targets_boss() {
     game.snake = snake_game::snake::Snake::new(Point { x: 5, y: 5 });
     game.snake.direction = snake_game::snake::Direction::Right;
 
+    game.obstacles.clear();
     // Place a boss
     game.bosses.push(snake_game::game::Boss {
         position: Point { x: 10, y: 5 },
