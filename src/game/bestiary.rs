@@ -111,5 +111,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Steals life and heals itself."
             }
         },
+        &BossType::Kraken => {
+            if kills == 0 {
+                "???"
+            } else {
+                "Kraken\nMonstrous denizen of the deep.\nPulls you towards its grasping tentacles."
+            }
+        },
     }
 }

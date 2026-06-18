@@ -3589,7 +3589,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..13) {
+                    match self.rng.gen_range(0..14) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3603,6 +3603,7 @@ impl Game {
                         10 => BossType::Mage,
                         11 => BossType::Gorgon,
                         12 => BossType::VampireLord,
+                        13 => BossType::Kraken,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4220,6 +4221,73 @@ impl Game {
                             }
                         } else {
                             boss.move_timer = 0;
+                        }
+                    } else if boss.kind == BossType::Kraken {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            2
+                        };
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+
+                            // Kraken pulls the snake towards itself
+                            let head = self.snake.head();
+                            let dx = i32::from(boss.position.x) - i32::from(head.x);
+                            let dy = i32::from(boss.position.y) - i32::from(head.y);
+
+                            let mut pull_dir = None;
+                            if dx.abs() > dy.abs() {
+                                if dx > 0 {
+                                    pull_dir = Some(crate::snake::Direction::Right);
+                                } else if dx < 0 {
+                                    pull_dir = Some(crate::snake::Direction::Left);
+                                }
+                            } else {
+                                if dy > 0 {
+                                    pull_dir = Some(crate::snake::Direction::Down);
+                                } else if dy < 0 {
+                                    pull_dir = Some(crate::snake::Direction::Up);
+                                }
+                            }
+
+                            if let Some(dir) = pull_dir {
+                                // Simulate snake being pulled 1 tile towards Kraken occasionally
+                                if self.rng.gen_bool(0.1) {
+                                    self.snake.direction_queue.push_back(dir);
+                                }
+                            }
+
+                            // Move towards target
+                            let mut next_pos = boss.position;
+                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
+                                next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            }
+
+                            let kraken_margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+
+                            if next_pos.x > kraken_margin
+                                && next_pos.x < self.width - 1 - kraken_margin
+                                && next_pos.y > kraken_margin
+                                && next_pos.y < self.height - 1 - kraken_margin
+                            {
+                                boss.position = next_pos;
+                            }
                         }
                     } else if boss.kind == BossType::VampireLord {
                         let mut move_threshold = if self.mode == GameMode::BossRush {

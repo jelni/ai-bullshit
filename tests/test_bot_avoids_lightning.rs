@@ -22,6 +22,7 @@ fn test_bot_avoids_lightning() {
     game.weather = game::Weather::Storm;
     game.lightning_column = Some(6);
 
+    game.obstacles.clear();
     // Request a move
     let next_move = game.calculate_autopilot_move();
 
