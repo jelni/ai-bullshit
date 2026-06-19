@@ -31,7 +31,7 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
                 game.stats.claimed_battle_pass_tiers.push(tier);
 
                 // Determine reward based on tier
-                if tier % 10 == 0 {
+                if tier.is_multiple_of(10) {
                     // Big reward (Skin or Theme)
                     if tier == 50 {
                         if !game.stats.unlocked_skins.contains(&'🚀') {
@@ -40,7 +40,7 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
                     } else {
                         game.stats.coins += 5000;
                     }
-                } else if tier % 5 == 0 {
+                } else if tier.is_multiple_of(5) {
                     game.stats.coins += 2000;
                 } else {
                     game.stats.coins += 500;
