@@ -1,5 +1,5 @@
 use snake_game::game::{Difficulty, Game, GameMode, Theme, generate_flow_field};
-use snake_game::snake::{Direction, Point, Snake};
+use snake_game::snake::Point;
 
 #[test]
 fn test_flow_field_avoids_obstacles() {
@@ -93,7 +93,7 @@ fn test_flow_field_handles_portals() {
             if let Some(final_p) = game.get_final_p(next_p) {
                 current = final_p;
                 steps += 1;
-                println!("Step {}: pos {:?} dir {:?}", steps, final_p, d);
+                println!("Step {steps}: pos {final_p:?} dir {d:?}");
             } else {
                 break;
             }

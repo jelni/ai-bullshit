@@ -19,7 +19,7 @@ fn test_kraken_pulls_snake() {
         state_timer: 0,
     });
 
-    let initial_head = game.snake.head();
+    let _initial_head = game.snake.head();
 
     // Ensure snake doesn't move forward continuously for normal reasons
     // By giving it a dummy power-up or pausing updates? No, `Game::update` moves the snake if auto_pilot is off and it's time to move.
@@ -27,7 +27,7 @@ fn test_kraken_pulls_snake() {
     // Let's just track the direction. Kraken alters input via `game.handle_input`.
     // We can observe `game.snake.direction` or `game.snake.direction_queue` getting modified by Kraken!
 
-    let initial_dir = game.snake.direction;
+    let _initial_dir = game.snake.direction;
 
     // Tick enough times to trigger pull
     let mut pulled = false;

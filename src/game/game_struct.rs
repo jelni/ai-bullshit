@@ -4223,7 +4223,7 @@ impl Game {
                             boss.move_timer = 0;
                         }
                     } else if boss.kind == BossType::Kraken {
-                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                        let move_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
                                 1,
                                 3_u8.saturating_sub(
@@ -7770,9 +7770,13 @@ impl Game {
             && let Some(koth_pos) = self.koth_zone {
                 targets.push(koth_pos);
             }
-        if self.mode == GameMode::DungeonCrawler {
-            if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
-                if room.cleared {
+        if self.mode == GameMode::DungeonCrawler
+            && let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+                if !room.cleared {
+                    for boss in &self.bosses {
+                        targets.insert(0, boss.position);
+                    }
+                } else {
                     if room.north_door {
                         targets.insert(0, Point { x: self.width / 2, y: 0 });
                     }
@@ -7785,13 +7789,8 @@ impl Game {
                     if room.east_door {
                         targets.insert(0, Point { x: self.width - 1, y: self.height / 2 });
                     }
-                } else {
-                    for boss in &self.bosses {
-                        targets.insert(0, boss.position);
-                    }
                 }
             }
-        }
         if self.mode == GameMode::CaptureTheFlag {
             if self.p1_has_flag {
                 targets = vec![
@@ -7831,8 +7830,8 @@ impl Game {
                 && let Some(koth_pos) = self.koth_zone {
                     targets.push(koth_pos);
                 }
-            if self.mode == GameMode::DungeonCrawler {
-                if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+            if self.mode == GameMode::DungeonCrawler
+                && let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
                     if room.cleared {
                         if room.north_door {
                             targets.insert(0, Point { x: self.width / 2, y: 0 });
@@ -7852,7 +7851,6 @@ impl Game {
                         }
                     }
                 }
-            }
             if self.mode == GameMode::CaptureTheFlag {
                 if self.p2_has_flag {
                     targets = vec![

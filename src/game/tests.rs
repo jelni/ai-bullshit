@@ -1316,8 +1316,8 @@ fn test_mage_boss_attack() {
 
     assert_eq!(game.meteors.len(), 1, "Mage should spawn a meteor");
     assert!(
-        (game.meteors[0].position.x as i32 - player_pos.x as i32).abs() <= 1
-            && (game.meteors[0].position.y as i32 - player_pos.y as i32).abs() <= 1,
+        (i32::from(game.meteors[0].position.x) - i32::from(player_pos.x)).abs() <= 1
+            && (i32::from(game.meteors[0].position.y) - i32::from(player_pos.y)).abs() <= 1,
         "Meteor should spawn at or near player position"
     );
     assert!(game.power_up.is_some(), "Mage should trigger a time freeze power up");
@@ -1461,7 +1461,7 @@ fn test_dungeon_crawler_generation_and_loading() {
     assert!(!game.dungeon_grid.is_empty());
 
     // Verify room is loaded (either obstacles or bosses/equipment present)
-    assert!(game.obstacles.len() > 0 || game.bosses.len() > 0 || game.equipment_boxes.len() > 0);
+    assert!(!game.obstacles.is_empty() || !game.bosses.is_empty() || !game.equipment_boxes.is_empty());
 
     let current_room = game.dungeon_grid.get(&game.current_room_coords).unwrap();
     assert_eq!(current_room.r_type, crate::game::dungeon::DungeonRoomType::Start);
