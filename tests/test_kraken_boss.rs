@@ -32,10 +32,6 @@ fn test_kraken_pulls_snake() {
     // Tick enough times to trigger pull
     let mut pulled = false;
     for _ in 0..100 {
-        // Kraken has move_threshold = 2. It takes 2 calls to process_game_state to tick the boss move timer.
-        // Let's just call update and see if the direction changes.
-        // Wait, snake will move forward automatically but that doesn't change `game.snake.direction` queue unless Kraken pulls.
-        // If Kraken pulls, it calls `handle_input`, which pushes a new direction into `direction_queue`.
         game.update();
         if !game.snake.direction_queue.is_empty() {
             // Kraken forced an input!

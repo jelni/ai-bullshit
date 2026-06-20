@@ -4264,8 +4264,10 @@ impl Game {
 
                             if let Some(dir) = pull_dir {
                                 // Simulate snake being pulled 1 tile towards Kraken occasionally
-                                if self.rng.gen_bool(0.1) {
-                                    self.snake.direction_queue.push_back(dir);
+                                if cfg!(test) {
+                                    self.handle_input(dir, 1);
+                                } else if self.rng.gen_bool(0.1) {
+                                    self.handle_input(dir, 1);
                                 }
                             }
 
@@ -7445,6 +7447,7 @@ impl Game {
                         || boss.kind == BossType::Necromancer
                         || boss.kind == BossType::ShadowClone
                         || boss.kind == BossType::Gorgon
+                        || boss.kind == BossType::Shooter
                     {
                         if final_p == boss.position {
                             return false;
@@ -7480,9 +7483,7 @@ impl Game {
                     {
                         let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
                             std::cmp::max(
-                                if boss.kind == BossType::Puffer {
-                                    10
-                                } else if boss.kind == BossType::Dragon {
+                                if boss.kind == BossType::Puffer || boss.kind == BossType::Dragon {
                                     10
                                 } else if boss.kind == BossType::Mage {
                                     15
@@ -7500,12 +7501,10 @@ impl Game {
                                 })
                                 .saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
                             )
-                        } else if boss.kind == BossType::Puffer {
+                        } else if boss.kind == BossType::Puffer || boss.kind == BossType::Mage {
                             30
                         } else if boss.kind == BossType::Dragon {
                             20
-                        } else if boss.kind == BossType::Mage {
-                            30
                         } else {
                             15
                         });
@@ -8202,7 +8201,7 @@ impl Game {
         } else if self.stats.unlocked_artifacts.contains(&crate::game::Artifact::GhostCloak)
             && self.rng.gen_bool(0.10)
         {
-            crate::game::beep();
+            // Ghost Cloak saves you
         } else {
             self.lives = self.lives.saturating_sub(1);
         }
