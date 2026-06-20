@@ -18,6 +18,10 @@ fn test_bot_avoids_turrets() {
     });
     game.snake.direction = Direction::Right;
 
+    // Ensure the player is far away, so it doesn't try to move towards player
+    // Autopilot moves towards targets: food, etc.
+    game.food = Point { x: 10, y: 5 };
+
     // Place a turret directly in front of the bot
     game.turrets.push(Turret {
         position: Point {
@@ -30,7 +34,7 @@ fn test_bot_avoids_turrets() {
     // The bot should change direction to avoid the turret
     let next_dir = game.calculate_autopilot_move();
 
-    assert!(next_dir.is_some());
+    assert!(next_dir.is_some(), "Autopilot should find a move");
     // It should not go Right into the turret
     assert_ne!(next_dir.unwrap(), Direction::Right);
 }
