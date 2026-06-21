@@ -4302,11 +4302,9 @@ impl Game {
 
                             if let Some(dir) = pull_dir {
                                 // Simulate snake being pulled 1 tile towards Kraken occasionally
-                                if cfg!(test) {
-                                    self.handle_input(dir, 1);
+                                if self.rng.gen_bool(0.1) || cfg!(test) {
+                                    // For Kraken, we force the queue bypassing handle_input limits
                                     self.snake.direction_queue.push_back(dir);
-                                } else if self.rng.gen_bool(0.1) {
-                                    self.handle_input(dir, 1);
                                 }
                             }
 

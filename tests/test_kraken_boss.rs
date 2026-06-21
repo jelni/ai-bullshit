@@ -39,7 +39,7 @@ fn test_kraken_pulls_snake() {
     let mut pulled = false;
     for _ in 0..100 {
         game.update();
-        if !game.snake.direction_queue.is_empty() {
+        if game.snake.direction != _initial_dir {
             // Kraken forced an input!
             pulled = true;
             break;
