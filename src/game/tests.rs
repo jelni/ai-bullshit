@@ -1446,14 +1446,8 @@ fn test_is_safe_final_p_laser_portals() {
 
 #[test]
 fn test_dungeon_crawler_generation_and_loading() {
-    let mut game = Game::new(
-        40,
-        40,
-        false,
-        'O',
-        crate::game::Theme::Dark,
-        crate::game::Difficulty::Normal,
-    );
+    let mut game =
+        Game::new(40, 40, false, 'O', crate::game::Theme::Dark, crate::game::Difficulty::Normal);
     game.mode = GameMode::DungeonCrawler;
     game.reset();
 
@@ -1461,7 +1455,9 @@ fn test_dungeon_crawler_generation_and_loading() {
     assert!(!game.dungeon_grid.is_empty());
 
     // Verify room is loaded (either obstacles or bosses/equipment present)
-    assert!(!game.obstacles.is_empty() || !game.bosses.is_empty() || !game.equipment_boxes.is_empty());
+    assert!(
+        !game.obstacles.is_empty() || !game.bosses.is_empty() || !game.equipment_boxes.is_empty()
+    );
 
     let current_room = game.dungeon_grid.get(&game.current_room_coords).unwrap();
     assert_eq!(current_room.r_type, crate::game::dungeon::DungeonRoomType::Start);

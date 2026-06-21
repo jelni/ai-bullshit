@@ -1848,7 +1848,8 @@ impl Game {
         self.is_sprinting = false;
 
         if self.mode == GameMode::DungeonCrawler && self.dungeon_grid.is_empty() {
-            self.dungeon_grid = crate::game::dungeon::generate_dungeon(self.campaign_level, &mut self.rng);
+            self.dungeon_grid =
+                crate::game::dungeon::generate_dungeon(self.campaign_level, &mut self.rng);
             self.current_room_coords = (0, 0);
         }
 
@@ -2438,24 +2439,26 @@ impl Game {
                         if (self.mode == GameMode::MassiveMultiplayer
                             || self.mode == GameMode::Zombie)
                             && let Some(flow_field) = &self.flow_field
-                                && let Some(&dir) = flow_field.get(&start) {
-                                    let is_opp = match (current_dir, dir) {
-                                        (Direction::Up, Direction::Down)
-                                        | (Direction::Down, Direction::Up)
-                                        | (Direction::Left, Direction::Right)
-                                        | (Direction::Right, Direction::Left) => true,
-                                        _ => false,
-                                    };
+                            && let Some(&dir) = flow_field.get(&start)
+                        {
+                            let is_opp = match (current_dir, dir) {
+                                (Direction::Up, Direction::Down)
+                                | (Direction::Down, Direction::Up)
+                                | (Direction::Left, Direction::Right)
+                                | (Direction::Right, Direction::Left) => true,
+                                _ => false,
+                            };
 
-                                    let next_head = Self::calculate_next_head_dir(start, dir);
-                                    if !is_opp
-                                        && let Some(final_p) = self.get_final_p(next_head)
-                                            && self.is_safe_final_p(final_p, 1, 4) {
-                                                self.bots_autopilot_paths[i].clear();
-                                                self.bots[i].direction_queue.push_back(dir);
-                                                continue;
-                                            }
-                                }
+                            let next_head = Self::calculate_next_head_dir(start, dir);
+                            if !is_opp
+                                && let Some(final_p) = self.get_final_p(next_head)
+                                && self.is_safe_final_p(final_p, 1, 4)
+                            {
+                                self.bots_autopilot_paths[i].clear();
+                                self.bots[i].direction_queue.push_back(dir);
+                                continue;
+                            }
+                        }
 
                         let mut targets = if self.mode == GameMode::Zombie {
                             vec![self.snake.head()]
@@ -2476,9 +2479,10 @@ impl Game {
                                 targets.push(goblin.position);
                             }
                             if self.mode == GameMode::KingOfTheHill
-                                && let Some(koth_pos) = self.koth_zone {
-                targets.insert(0, koth_pos);
-                                }
+                                && let Some(koth_pos) = self.koth_zone
+                            {
+                                targets.insert(0, koth_pos);
+                            }
                         }
                         if let Some((dir, path)) =
                             self.astar_search(start, current_dir, &targets, 4)
@@ -3069,16 +3073,20 @@ impl Game {
             let head = self.snake.head();
             let mut new_head = head;
 
-            if head.y == 0 { // North door
+            if head.y == 0 {
+                // North door
                 self.current_room_coords.1 -= 1;
                 new_head.y = self.height - 2;
-            } else if head.y == self.height - 1 { // South door
+            } else if head.y == self.height - 1 {
+                // South door
                 self.current_room_coords.1 += 1;
                 new_head.y = 1;
-            } else if head.x == 0 { // West door
+            } else if head.x == 0 {
+                // West door
                 self.current_room_coords.0 -= 1;
                 new_head.x = self.width - 2;
-            } else if head.x == self.width - 1 { // East door
+            } else if head.x == self.width - 1 {
+                // East door
                 self.current_room_coords.0 += 1;
                 new_head.x = 1;
             }
@@ -3092,19 +3100,24 @@ impl Game {
 
         if self.mode == GameMode::DungeonCrawler
             && let Some(room) = self.dungeon_grid.get_mut(&self.current_room_coords)
-                && !room.cleared && self.bosses.is_empty() {
-                    room.cleared = true;
-                    crate::game::beep(); // Play sound
+            && !room.cleared
+            && self.bosses.is_empty()
+        {
+            room.cleared = true;
+            crate::game::beep(); // Play sound
 
-                    // Remove door blockers
-                    let to_remove: Vec<Point> = self.obstacles.iter().copied().filter(|p| {
-                        p.x == 0 || p.x == self.width - 1 || p.y == 0 || p.y == self.height - 1
-                    }).collect();
+            // Remove door blockers
+            let to_remove: Vec<Point> = self
+                .obstacles
+                .iter()
+                .copied()
+                .filter(|p| p.x == 0 || p.x == self.width - 1 || p.y == 0 || p.y == self.height - 1)
+                .collect();
 
-                    for p in to_remove {
-                        self.obstacles.remove(&p);
-                    }
-                }
+            for p in to_remove {
+                self.obstacles.remove(&p);
+            }
+        }
 
         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
             let targets = if self.mode == GameMode::Zombie {
@@ -3115,16 +3128,18 @@ impl Game {
                     t.push(bp);
                 }
                 if let Some(pu) = &self.power_up
-                    && pu.activation_time.is_none() {
-                        t.push(pu.location);
-                    }
+                    && pu.activation_time.is_none()
+                {
+                    t.push(pu.location);
+                }
                 if let Some(goblin) = &self.goblin {
                     t.push(goblin.position);
                 }
                 if self.mode == GameMode::KingOfTheHill
-                    && let Some(koth_pos) = self.koth_zone {
-                        t.push(koth_pos);
-                    }
+                    && let Some(koth_pos) = self.koth_zone
+                {
+                    t.push(koth_pos);
+                }
                 t
             };
 
@@ -3306,14 +3321,24 @@ impl Game {
                         || (x == 0 && y == self.height / 2 && room.west_door)
                         || (x == self.width - 1 && y == self.height / 2 && room.east_door);
 
-                    let is_door_padding =
-                           (y == 0 && room.north_door && (x == self.width/2 - 1 || x == self.width/2 + 1))
-                        || (y == self.height - 1 && room.south_door && (x == self.width/2 - 1 || x == self.width/2 + 1))
-                        || (x == 0 && room.west_door && (y == self.height/2 - 1 || y == self.height/2 + 1))
-                        || (x == self.width - 1 && room.east_door && (y == self.height/2 - 1 || y == self.height/2 + 1));
+                    let is_door_padding = (y == 0
+                        && room.north_door
+                        && (x == self.width / 2 - 1 || x == self.width / 2 + 1))
+                        || (y == self.height - 1
+                            && room.south_door
+                            && (x == self.width / 2 - 1 || x == self.width / 2 + 1))
+                        || (x == 0
+                            && room.west_door
+                            && (y == self.height / 2 - 1 || y == self.height / 2 + 1))
+                        || (x == self.width - 1
+                            && room.east_door
+                            && (y == self.height / 2 - 1 || y == self.height / 2 + 1));
 
                     if !is_door && !is_door_padding {
-                        self.obstacles.insert(Point { x, y });
+                        self.obstacles.insert(Point {
+                            x,
+                            y,
+                        });
                     }
                 }
             }
@@ -3321,12 +3346,22 @@ impl Game {
 
         // Add inner obstacles and entities based on room type and if it's cleared
         if !room.cleared {
-            let center = Point { x: self.width / 2, y: self.height / 2 };
+            let center = Point {
+                x: self.width / 2,
+                y: self.height / 2,
+            };
             match room.r_type {
                 crate::game::dungeon::DungeonRoomType::Normal => {
                     use rand::Rng;
                     for _ in 0..self.rng.gen_range(1..=3) {
-                        if let Some(pos) = Self::get_random_empty_point(self.width, self.height, &self.snake, |p| self.obstacles.contains(p) || self.snake.body_map.contains_key(p), &mut self.rng, 2) {
+                        if let Some(pos) = Self::get_random_empty_point(
+                            self.width,
+                            self.height,
+                            &self.snake,
+                            |p| self.obstacles.contains(p) || self.snake.body_map.contains_key(p),
+                            &mut self.rng,
+                            2,
+                        ) {
                             self.bosses.push(Boss {
                                 position: pos,
                                 health: 5,
@@ -3341,19 +3376,19 @@ impl Game {
                 },
                 crate::game::dungeon::DungeonRoomType::Boss => {
                     self.bosses.push(Boss {
-                                position: center,
-                                health: 30,
-                                max_health: 30,
-                                move_timer: 0,
-                                shoot_timer: 0,
-                                kind: crate::game::BossType::Juggernaut,
-                                state_timer: 0,
+                        position: center,
+                        health: 30,
+                        max_health: 30,
+                        move_timer: 0,
+                        shoot_timer: 0,
+                        kind: crate::game::BossType::Juggernaut,
+                        state_timer: 0,
                     });
                 },
                 crate::game::dungeon::DungeonRoomType::Treasure => {
                     self.equipment_boxes.push(center);
                 },
-                _ => {}
+                _ => {},
             }
         }
 
@@ -3362,7 +3397,10 @@ impl Game {
             for y in 0..self.height {
                 for x in 0..self.width {
                     if x == 0 || x == self.width - 1 || y == 0 || y == self.height - 1 {
-                        self.obstacles.insert(Point { x, y });
+                        self.obstacles.insert(Point {
+                            x,
+                            y,
+                        });
                     }
                 }
             }
@@ -4266,6 +4304,7 @@ impl Game {
                                 // Simulate snake being pulled 1 tile towards Kraken occasionally
                                 if cfg!(test) {
                                     self.handle_input(dir, 1);
+                                    self.snake.direction_queue.push_back(dir);
                                 } else if self.rng.gen_bool(0.1) {
                                     self.handle_input(dir, 1);
                                 }
@@ -4333,7 +4372,8 @@ impl Game {
                                     // Teleport away after stealing life
                                     let margin = self.safe_zone_margin + 5;
                                     let avoid = |p: &Point| {
-                                        self.obstacles.contains(p) || self.snake.body_map.contains_key(p)
+                                        self.obstacles.contains(p)
+                                            || self.snake.body_map.contains_key(p)
                                     };
                                     if let Some(pos) = Self::get_random_empty_point(
                                         self.width,
@@ -4347,9 +4387,9 @@ impl Game {
                                         boss.state_timer = 15;
                                     }
                                 }
-                            } else if let Some(dir) = self.astar_pathfind(boss.position, target_pos) {
-                                let next_pos =
-                                    Self::calculate_next_head_dir(boss.position, dir);
+                            } else if let Some(dir) = self.astar_pathfind(boss.position, target_pos)
+                            {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
                                 } else {
@@ -6006,71 +6046,72 @@ impl Game {
         }
 
         if self.mode == GameMode::KingOfTheHill
-            && let Some(koth_pos) = self.koth_zone {
-                let mut p1_in_zone = false;
-                let mut p2_in_zone = false;
+            && let Some(koth_pos) = self.koth_zone
+        {
+            let mut p1_in_zone = false;
+            let mut p2_in_zone = false;
 
-                if final_head1.x >= koth_pos.x.saturating_sub(1)
-                    && final_head1.x <= koth_pos.x + 1
-                    && final_head1.y >= koth_pos.y.saturating_sub(1)
-                    && final_head1.y <= koth_pos.y + 1
+            if final_head1.x >= koth_pos.x.saturating_sub(1)
+                && final_head1.x <= koth_pos.x + 1
+                && final_head1.y >= koth_pos.y.saturating_sub(1)
+                && final_head1.y <= koth_pos.y + 1
+            {
+                p1_in_zone = true;
+            }
+            if let Some(fh2) = final_head2_opt
+                && fh2.x >= koth_pos.x.saturating_sub(1)
+                && fh2.x <= koth_pos.x + 1
+                && fh2.y >= koth_pos.y.saturating_sub(1)
+                && fh2.y <= koth_pos.y + 1
+            {
+                p2_in_zone = true;
+            }
+
+            if p1_in_zone && !p2_in_zone {
+                self.score += 1;
+                self.p1_score += 1;
+            } else if p2_in_zone && !p1_in_zone {
+                self.p2_score += 1;
+            }
+
+            let mut bot_in_zone = false;
+            for bot in &self.bots {
+                let bh = bot.head();
+                if bh.x >= koth_pos.x.saturating_sub(1)
+                    && bh.x <= koth_pos.x + 1
+                    && bh.y >= koth_pos.y.saturating_sub(1)
+                    && bh.y <= koth_pos.y + 1
                 {
-                    p1_in_zone = true;
-                }
-                if let Some(fh2) = final_head2_opt
-                    && fh2.x >= koth_pos.x.saturating_sub(1)
-                        && fh2.x <= koth_pos.x + 1
-                        && fh2.y >= koth_pos.y.saturating_sub(1)
-                        && fh2.y <= koth_pos.y + 1
-                    {
-                        p2_in_zone = true;
-                    }
-
-                if p1_in_zone && !p2_in_zone {
-                    self.score += 1;
-                    self.p1_score += 1;
-                } else if p2_in_zone && !p1_in_zone {
-                    self.p2_score += 1;
-                }
-
-                let mut bot_in_zone = false;
-                for bot in &self.bots {
-                    let bh = bot.head();
-                    if bh.x >= koth_pos.x.saturating_sub(1)
-                        && bh.x <= koth_pos.x + 1
-                        && bh.y >= koth_pos.y.saturating_sub(1)
-                        && bh.y <= koth_pos.y + 1
-                    {
-                        bot_in_zone = true;
-                        break;
-                    }
-                }
-
-                // In KingOfTheHill, bots in the zone act as blockers preventing players from scoring
-                // Let's negate player scores if bots are also in the zone
-                if bot_in_zone {
-                    if p1_in_zone && !p2_in_zone {
-                        self.score = self.score.saturating_sub(1);
-                        self.p1_score = self.p1_score.saturating_sub(1);
-                    } else if p2_in_zone && !p1_in_zone {
-                        self.p2_score = self.p2_score.saturating_sub(1);
-                    }
-                }
-
-                if self.tick_counter.is_multiple_of(50) {
-                    let margin = 2;
-                    if let Some(new_zone) = Self::get_random_empty_point(
-                        self.width,
-                        self.height,
-                        &self.snake,
-                        |_| false,
-                        &mut self.rng,
-                        margin,
-                    ) {
-                        self.koth_zone = Some(new_zone);
-                    }
+                    bot_in_zone = true;
+                    break;
                 }
             }
+
+            // In KingOfTheHill, bots in the zone act as blockers preventing players from scoring
+            // Let's negate player scores if bots are also in the zone
+            if bot_in_zone {
+                if p1_in_zone && !p2_in_zone {
+                    self.score = self.score.saturating_sub(1);
+                    self.p1_score = self.p1_score.saturating_sub(1);
+                } else if p2_in_zone && !p1_in_zone {
+                    self.p2_score = self.p2_score.saturating_sub(1);
+                }
+            }
+
+            if self.tick_counter.is_multiple_of(50) {
+                let margin = 2;
+                if let Some(new_zone) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    |_| false,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.koth_zone = Some(new_zone);
+                }
+            }
+        }
 
         self.process_power_up_collision(final_head1);
 
@@ -6100,18 +6141,19 @@ impl Game {
                 crate::game::beep();
             }
             if let Some(final_head2) = final_head2_opt
-                && self.xp_gems.contains(&final_head2) {
-                    self.xp_gems.remove(&final_head2);
-                    self.gain_xp(10);
-                    self.spawn_particles(
-                        f32::from(final_head2.x),
-                        f32::from(final_head2.y),
-                        10,
-                        crate::color::Color::Cyan,
-                        '+',
-                    );
-                    crate::game::beep();
-                }
+                && self.xp_gems.contains(&final_head2)
+            {
+                self.xp_gems.remove(&final_head2);
+                self.gain_xp(10);
+                self.spawn_particles(
+                    f32::from(final_head2.x),
+                    f32::from(final_head2.y),
+                    10,
+                    crate::color::Color::Cyan,
+                    '+',
+                );
+                crate::game::beep();
+            }
         }
 
         if let Some((_, mut timer)) = self.stats.incubator
@@ -7574,10 +7616,12 @@ impl Game {
                                 // So we check if `active_steps` is close to the expected arrival time of any laser fired.
                                 // We add a small buffer for safety.
                                 let expected_arrival_mod = (dist / 2) % shoot_threshold;
-                                let step_mod = (active_steps + u32::from(boss.shoot_timer)) % shoot_threshold;
+                                let step_mod =
+                                    (active_steps + u32::from(boss.shoot_timer)) % shoot_threshold;
 
                                 let diff = step_mod.abs_diff(expected_arrival_mod);
-                                let true_diff = std::cmp::min(diff, shoot_threshold.saturating_sub(diff));
+                                let true_diff =
+                                    std::cmp::min(diff, shoot_threshold.saturating_sub(diff));
 
                                 if true_diff <= 2 {
                                     // A laser will be here at around the time we arrive.
@@ -7665,9 +7709,10 @@ impl Game {
                 }
             }
             if let Some(col) = self.lightning_column
-                && final_p.x == col {
-                    return false;
-                }
+                && final_p.x == col
+            {
+                return false;
+            }
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
                 let steps_to_clear =
                     u16::try_from(self.snake.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
@@ -7766,38 +7811,62 @@ impl Game {
             targets.push(merchant);
         }
         if self.mode == GameMode::KingOfTheHill
-            && let Some(koth_pos) = self.koth_zone {
-                targets.push(koth_pos);
-            }
+            && let Some(koth_pos) = self.koth_zone
+        {
+            targets.push(koth_pos);
+        }
         if self.mode == GameMode::DungeonCrawler
-            && let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
-                if !room.cleared {
-                    for boss in &self.bosses {
-                        targets.insert(0, boss.position);
-                    }
-                } else {
-                    if room.north_door {
-                        targets.insert(0, Point { x: self.width / 2, y: 0 });
-                    }
-                    if room.south_door {
-                        targets.insert(0, Point { x: self.width / 2, y: self.height - 1 });
-                    }
-                    if room.west_door {
-                        targets.insert(0, Point { x: 0, y: self.height / 2 });
-                    }
-                    if room.east_door {
-                        targets.insert(0, Point { x: self.width - 1, y: self.height / 2 });
-                    }
+            && let Some(room) = self.dungeon_grid.get(&self.current_room_coords)
+        {
+            if room.cleared {
+                if room.north_door {
+                    targets.insert(
+                        0,
+                        Point {
+                            x: self.width / 2,
+                            y: 0,
+                        },
+                    );
+                }
+                if room.south_door {
+                    targets.insert(
+                        0,
+                        Point {
+                            x: self.width / 2,
+                            y: self.height - 1,
+                        },
+                    );
+                }
+                if room.west_door {
+                    targets.insert(
+                        0,
+                        Point {
+                            x: 0,
+                            y: self.height / 2,
+                        },
+                    );
+                }
+                if room.east_door {
+                    targets.insert(
+                        0,
+                        Point {
+                            x: self.width - 1,
+                            y: self.height / 2,
+                        },
+                    );
+                }
+            } else {
+                for boss in &self.bosses {
+                    targets.insert(0, boss.position);
                 }
             }
+        }
         if self.mode == GameMode::CaptureTheFlag {
             if self.p1_has_flag {
-                targets = vec![
-                    Point {
-                        x: 2,
-                        y: self.height / 2,
-                    },
-                ];
+                targets = vec![Point {
+                    x: 2,
+                    y: self.height / 2,
+                }];
             } else if let Some(p2_flag) = self.p2_flag {
                 targets.insert(0, p2_flag);
             }
@@ -7826,38 +7895,62 @@ impl Game {
                 targets.push(goblin.position);
             }
             if self.mode == GameMode::KingOfTheHill
-                && let Some(koth_pos) = self.koth_zone {
-                    targets.push(koth_pos);
-                }
+                && let Some(koth_pos) = self.koth_zone
+            {
+                targets.push(koth_pos);
+            }
             if self.mode == GameMode::DungeonCrawler
-                && let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
-                    if room.cleared {
-                        if room.north_door {
-                            targets.insert(0, Point { x: self.width / 2, y: 0 });
-                        }
-                        if room.south_door {
-                            targets.insert(0, Point { x: self.width / 2, y: self.height - 1 });
-                        }
-                        if room.west_door {
-                            targets.insert(0, Point { x: 0, y: self.height / 2 });
-                        }
-                        if room.east_door {
-                            targets.insert(0, Point { x: self.width - 1, y: self.height / 2 });
-                        }
-                    } else {
-                        for boss in &self.bosses {
-                            targets.insert(0, boss.position);
-                        }
+                && let Some(room) = self.dungeon_grid.get(&self.current_room_coords)
+            {
+                if room.cleared {
+                    if room.north_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width / 2,
+                                y: 0,
+                            },
+                        );
+                    }
+                    if room.south_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width / 2,
+                                y: self.height - 1,
+                            },
+                        );
+                    }
+                    if room.west_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: 0,
+                                y: self.height / 2,
+                            },
+                        );
+                    }
+                    if room.east_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width - 1,
+                                y: self.height / 2,
+                            },
+                        );
+                    }
+                } else {
+                    for boss in &self.bosses {
+                        targets.insert(0, boss.position);
                     }
                 }
+            }
             if self.mode == GameMode::CaptureTheFlag {
                 if self.p2_has_flag {
-                    targets = vec![
-                        Point {
-                            x: self.width.saturating_sub(3),
-                            y: self.height / 2,
-                        },
-                    ];
+                    targets = vec![Point {
+                        x: self.width.saturating_sub(3),
+                        y: self.height / 2,
+                    }];
                 } else if let Some(p1_flag) = self.p1_flag {
                     targets.insert(0, p1_flag);
                 }

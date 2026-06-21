@@ -1,6 +1,6 @@
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use rand::Rng;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DungeonRoomType {
@@ -79,20 +79,20 @@ pub fn generate_dungeon(
             (0, -1) => {
                 room1.north_door = true;
                 room2.south_door = true;
-            }
+            },
             (0, 1) => {
                 room1.south_door = true;
                 room2.north_door = true;
-            }
+            },
             (1, 0) => {
                 room1.east_door = true;
                 room2.west_door = true;
-            }
+            },
             (-1, 0) => {
                 room1.west_door = true;
                 room2.east_door = true;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         grid.insert(pos, room1);
@@ -102,22 +102,22 @@ pub fn generate_dungeon(
     }
 
     // Designate Boss and Treasure rooms (furthest from start)
-    let mut sorted_by_dist: Vec<((i32, i32), u32)> = grid
-        .keys()
-        .map(|&(x, y)| ((x, y), x.unsigned_abs() + y.unsigned_abs()))
-        .collect();
+    let mut sorted_by_dist: Vec<((i32, i32), u32)> =
+        grid.keys().map(|&(x, y)| ((x, y), x.unsigned_abs() + y.unsigned_abs())).collect();
     sorted_by_dist.sort_by_key(|&(_, d)| std::cmp::Reverse(d));
 
     if let Some(&((bx, by), _)) = sorted_by_dist.first()
-        && let Some(r) = grid.get_mut(&(bx, by)) {
-            r.r_type = DungeonRoomType::Boss;
-        }
+        && let Some(r) = grid.get_mut(&(bx, by))
+    {
+        r.r_type = DungeonRoomType::Boss;
+    }
 
     if sorted_by_dist.len() > 1
         && let Some(&((tx, ty), _)) = sorted_by_dist.get(1)
-            && let Some(r) = grid.get_mut(&(tx, ty)) {
-                r.r_type = DungeonRoomType::Treasure;
-            }
+        && let Some(r) = grid.get_mut(&(tx, ty))
+    {
+        r.r_type = DungeonRoomType::Treasure;
+    }
 
     grid
 }

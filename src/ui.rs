@@ -1446,7 +1446,10 @@ fn draw_borders<W: Write>(game: &Game, stdout: &mut W, border_color: Color) -> i
         stdout.queue(SetForegroundColor(Color::Cyan))?;
         for y in 0..game.height {
             for x in 0..game.width {
-                if game.is_door(crate::snake::Point { x, y }) {
+                if game.is_door(crate::snake::Point {
+                    x,
+                    y,
+                }) {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, " ")?; // Show open door by blanking it
                 }
@@ -1945,17 +1948,18 @@ fn draw_entities<W: Write>(
 
     // Draw King of the Hill zone
     if game.mode == crate::game::GameMode::KingOfTheHill
-        && let Some(koth_pos) = game.koth_zone {
-            stdout.queue(SetForegroundColor(Color::Yellow))?;
-            for y in koth_pos.y.saturating_sub(1)..=koth_pos.y.saturating_add(1) {
-                for x in koth_pos.x.saturating_sub(1)..=koth_pos.x.saturating_add(1) {
-                    if is_visible(x, y) {
-                        stdout.queue(cursor::MoveTo(x, y))?;
-                        write!(stdout, "▒")?;
-                    }
+        && let Some(koth_pos) = game.koth_zone
+    {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        for y in koth_pos.y.saturating_sub(1)..=koth_pos.y.saturating_add(1) {
+            for x in koth_pos.x.saturating_sub(1)..=koth_pos.x.saturating_add(1) {
+                if is_visible(x, y) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "▒")?;
                 }
             }
         }
+    }
 
     // Draw bonus food
     if let Some((bonus_p, _)) = game.bonus_food
@@ -2179,7 +2183,13 @@ fn draw_base_status<W: Write>(
             combo_str
         )?;
     } else if game.mode == crate::game::GameMode::DungeonCrawler {
-        let room_status = game.dungeon_grid.get(&game.current_room_coords).map_or("", |room| if room.cleared { "(Cleared)" } else { "(Uncleared)" });
+        let room_status = game.dungeon_grid.get(&game.current_room_coords).map_or("", |room| {
+            if room.cleared {
+                "(Cleared)"
+            } else {
+                "(Uncleared)"
+            }
+        });
         write!(
             stdout,
             "Score: {} | Lives: {} | Room: {},{} {} | Lvl: {} | XP: {}/{} | {:?}{}{}",
