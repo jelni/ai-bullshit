@@ -36,6 +36,7 @@ fn test_kraken_pulls_snake() {
     let _initial_dir = game.snake.direction;
 
     // Tick enough times to trigger pull
+    game.state = game::GameState::Playing;
     let mut pulled = false;
     for _ in 0..100 {
         game.update();
