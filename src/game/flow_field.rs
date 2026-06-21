@@ -77,10 +77,12 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
                 if !flow_field.contains_key(&final_prev) && !targets.contains(&final_prev) {
                     let next_from_prev = Game::calculate_next_head_dir(final_prev, d);
                     if let Some(final_curr_test) = game.get_final_p(next_from_prev)
-                        && final_curr_test == curr && !game.obstacles.contains(&final_prev) {
-                            flow_field.insert(final_prev, d);
-                            queue.push_back((final_prev, dist + 1));
-                        }
+                        && final_curr_test == curr
+                        && !game.obstacles.contains(&final_prev)
+                    {
+                        flow_field.insert(final_prev, d);
+                        queue.push_back((final_prev, dist + 1));
+                    }
                 }
             }
         }

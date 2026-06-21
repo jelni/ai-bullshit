@@ -20,7 +20,10 @@ fn test_bot_avoids_turrets() {
 
     // Ensure the player is far away, so it doesn't try to move towards player
     // Autopilot moves towards targets: food, etc.
-    game.food = Point { x: 10, y: 5 };
+    game.food = Point {
+        x: 10,
+        y: 5,
+    };
 
     // Place a turret directly in front of the bot
     game.turrets.push(Turret {

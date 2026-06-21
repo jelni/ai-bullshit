@@ -357,7 +357,10 @@ fn test_vampire_lord_steals_life() {
     assert_eq!(game.bosses[0].health, 10, "Vampire Lord should heal itself by 5");
     assert_ne!(
         game.bosses[0].position,
-        Point { x: 6, y: 5 },
+        Point {
+            x: 6,
+            y: 5
+        },
         "Vampire Lord should teleport away after stealing life"
     );
 }

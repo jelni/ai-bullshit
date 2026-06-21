@@ -5,12 +5,18 @@ fn test_kraken_pulls_snake() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
 
-    game.snake = snake::Snake::new(snake::Point { x: 5, y: 5 });
+    game.snake = snake::Snake::new(snake::Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = snake::Direction::Right;
 
     // Spawn Kraken
     game.bosses.push(game::Boss {
-        position: snake::Point { x: 15, y: 5 },
+        position: snake::Point {
+            x: 15,
+            y: 5,
+        },
         health: 100,
         max_health: 100,
         move_timer: 0,
