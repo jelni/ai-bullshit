@@ -2385,12 +2385,13 @@ impl Game {
                 return steps <= 5;
             }
             if player == 1 {
-                if self.snake.body_map.contains_key(&current_pos) {
+                if self.snake.body_map.contains_key(&current_pos) && head != current_pos {
                     return false;
                 }
             } else if player == 2
                 && let Some(p2) = &self.player2
                 && p2.body_map.contains_key(&current_pos)
+                && head != current_pos
             {
                 return false;
             }
