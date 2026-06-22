@@ -1294,7 +1294,9 @@ fn test_artifact_ghost_cloak() {
 #[test]
 fn test_mage_boss_attack() {
     use crate::game::{BossType, Difficulty, GameMode, PowerUpType, Theme};
+    use rand::SeedableRng;
     let mut game = crate::game::Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
+    game.rng = rand::rngs::StdRng::seed_from_u64(0);
     game.mode = GameMode::BossRush; // To predictably trigger the shoot_timer based on campaign_level
 
     game.bosses.push(crate::game::Boss {
