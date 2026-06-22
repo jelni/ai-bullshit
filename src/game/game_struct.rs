@@ -2621,6 +2621,7 @@ impl Game {
             self.p2_has_flag = state.p2_has_flag;
             self.p1_score = state.p1_score;
             self.p2_score = state.p2_score;
+            self.koth_zone = state.koth_zone;
             self.xp_gems = state.xp_gems;
         }
     }
