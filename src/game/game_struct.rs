@@ -3479,10 +3479,10 @@ impl Game {
 
                 // When moving we need to get the final point (which resolves portals)
                 if let Some(final_p) = self.get_final_p(next_p)
-                    && final_p.x > margin
-                    && final_p.x < self.width - 1 - margin
-                    && final_p.y > margin
-                    && final_p.y < self.height - 1 - margin
+                    && final_p.x >= margin
+                    && final_p.x <= self.width - 1 - margin
+                    && final_p.y >= margin
+                    && final_p.y <= self.height - 1 - margin
                 {
                     let mut can_move = true;
                     if final_p != target && self.snake.body_map.contains_key(&final_p) {
