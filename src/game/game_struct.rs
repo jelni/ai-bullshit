@@ -4241,7 +4241,8 @@ impl Game {
                             boss.move_timer += 1;
                             if boss.move_timer >= move_threshold {
                                 boss.move_timer = 0;
-                                if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                                if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3)
+                                {
                                     let next_pos =
                                         Self::calculate_next_head_dir(boss.position, dir);
                                     let margin = if self.mode == GameMode::BattleRoyale {
@@ -4387,7 +4388,8 @@ impl Game {
                                         boss.state_timer = 15;
                                     }
                                 }
-                            } else if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3)
+                            } else if let Some(dir) =
+                                self.astar_pathfind(boss.position, target_pos, 3)
                             {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
@@ -7461,176 +7463,195 @@ impl Game {
                 }
             }
             for boss in &self.bosses {
-                if final_p == boss.position {
-                    return false;
-                }
-                if is_time_frozen {
+                let is_dungeon_uncleared = self.mode == GameMode::DungeonCrawler
+                    && !self
+                        .dungeon_grid
+                        .get(&self.current_room_coords)
+                        .map_or(false, |r| r.cleared);
+                if !(is_dungeon_uncleared && final_p == boss.position) {
                     if final_p == boss.position {
                         return false;
                     }
-                } else if checking_player != 3
-                    && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX)
-                {
-                    let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
-                        std::cmp::max(
-                            1,
-                            3_u8.saturating_sub(
-                                u8::try_from(self.campaign_level).unwrap_or(255) / 5,
-                            ),
-                        )
-                    } else {
-                        2
-                    });
-                    if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
-                        move_threshold = std::cmp::max(1, move_threshold / 2);
-                    }
-                    if boss.health <= boss.max_health / 2 {
-                        move_threshold = std::cmp::max(1, move_threshold / 2);
-                    }
-                    let active_steps = u32::from(steps).saturating_sub(u32::from(boss.state_timer));
-                    if boss.kind == BossType::Teleporter
-                        || boss.kind == BossType::Spawner
-                        || boss.kind == BossType::Trapper
-                        || boss.kind == BossType::Necromancer
-                        || boss.kind == BossType::ShadowClone
-                        || boss.kind == BossType::Gorgon
-                        || boss.kind == BossType::Shooter
-                    {
+                    if is_time_frozen {
                         if final_p == boss.position {
                             return false;
                         }
-                    } else {
-                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                        let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                            + u32::from(final_p.y.abs_diff(boss.position.y));
-
-                        if let Some((portal1, portal2)) = self.portals {
-                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                + u32::from(final_p.y.abs_diff(portal1.y))
-                                + u32::from(portal2.x.abs_diff(boss.position.x))
-                                + u32::from(portal2.y.abs_diff(boss.position.y));
-                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                + u32::from(final_p.y.abs_diff(portal2.y))
-                                + u32::from(portal1.x.abs_diff(boss.position.x))
-                                + u32::from(portal1.y.abs_diff(boss.position.y));
-                            dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                    } else if checking_player != 3
+                        && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX)
+                    {
+                        let mut move_threshold = u32::from(if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            2
+                        });
+                        if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
                         }
-                        if dist <= moves {
-                            if boss.kind == BossType::Juggernaut {
-                                // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        let active_steps =
+                            u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                        if boss.kind == BossType::Teleporter
+                            || boss.kind == BossType::Spawner
+                            || boss.kind == BossType::Trapper
+                            || boss.kind == BossType::Necromancer
+                            || boss.kind == BossType::ShadowClone
+                            || boss.kind == BossType::Gorgon
+                            || boss.kind == BossType::Shooter
+                        {
+                            if final_p == boss.position {
                                 return false;
                             }
-                            return false;
-                        }
-                    }
-                    if boss.kind == BossType::Shooter
-                        || boss.kind == BossType::Puffer
-                        || boss.kind == BossType::Dragon
-                        || boss.kind == BossType::Mage
-                    {
-                        let mut shoot_threshold = u32::from(if self.mode == GameMode::BossRush {
-                            std::cmp::max(
-                                if boss.kind == BossType::Puffer || boss.kind == BossType::Dragon {
-                                    10
-                                } else if boss.kind == BossType::Mage {
-                                    15
-                                } else {
-                                    5
-                                },
-                                (if boss.kind == BossType::Puffer {
-                                    30_u8
-                                } else if boss.kind == BossType::Dragon {
-                                    20_u8
-                                } else if boss.kind == BossType::Mage {
-                                    30_u8
-                                } else {
-                                    15_u8
-                                })
-                                .saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)),
-                            )
-                        } else if boss.kind == BossType::Puffer || boss.kind == BossType::Mage {
-                            30
-                        } else if boss.kind == BossType::Dragon {
-                            20
                         } else {
-                            15
-                        });
-                        if boss.health <= boss.max_health / 2 {
-                            shoot_threshold = std::cmp::max(
-                                if boss.kind == BossType::Puffer {
-                                    5
-                                } else if boss.kind == BossType::Dragon {
-                                    2
-                                } else if boss.kind == BossType::Mage {
-                                    5
-                                } else {
-                                    1
-                                },
-                                shoot_threshold / 2,
-                            );
+                            let moves =
+                                (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                            let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                                + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                            if let Some((portal1, portal2)) = self.portals {
+                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                    + u32::from(final_p.y.abs_diff(portal1.y))
+                                    + u32::from(portal2.x.abs_diff(boss.position.x))
+                                    + u32::from(portal2.y.abs_diff(boss.position.y));
+                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                    + u32::from(final_p.y.abs_diff(portal2.y))
+                                    + u32::from(portal1.x.abs_diff(boss.position.x))
+                                    + u32::from(portal1.y.abs_diff(boss.position.y));
+                                dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                            }
+                            if dist <= moves {
+                                if boss.kind == BossType::Juggernaut {
+                                    // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
+                                    return false;
+                                }
+                                return false;
+                            }
                         }
-                        let shoots = (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
-                        if shoots > 0 {
-                            if boss.kind == BossType::Mage {
-                                // The mage will spawn a meteor exactly at the target's current head.
-                                // So if we are considering staying at or moving to a point that is the same as
-                                // the CURRENT head of the player/bot being targeted, it's dangerous.
-                                // However, the meteor takes 15 ticks to hit.
-                                // This is an immediate prediction: "Where will the mage shoot?"
-                                // We know it shoots at self.snake.head() or decoy.
-                                let target_pos = if let Some((decoy_pos, _)) = self.decoy {
-                                    decoy_pos
+                        if boss.kind == BossType::Shooter
+                            || boss.kind == BossType::Puffer
+                            || boss.kind == BossType::Dragon
+                            || boss.kind == BossType::Mage
+                        {
+                            let mut shoot_threshold =
+                                u32::from(if self.mode == GameMode::BossRush {
+                                    std::cmp::max(
+                                        if boss.kind == BossType::Puffer
+                                            || boss.kind == BossType::Dragon
+                                        {
+                                            10
+                                        } else if boss.kind == BossType::Mage {
+                                            15
+                                        } else {
+                                            5
+                                        },
+                                        (if boss.kind == BossType::Puffer {
+                                            30_u8
+                                        } else if boss.kind == BossType::Dragon {
+                                            20_u8
+                                        } else if boss.kind == BossType::Mage {
+                                            30_u8
+                                        } else {
+                                            15_u8
+                                        })
+                                        .saturating_sub(
+                                            u8::try_from(self.campaign_level).unwrap_or(255),
+                                        ),
+                                    )
+                                } else if boss.kind == BossType::Puffer
+                                    || boss.kind == BossType::Mage
+                                {
+                                    30
+                                } else if boss.kind == BossType::Dragon {
+                                    20
                                 } else {
-                                    // Depending on checking_player we might want to be more specific,
-                                    // but self.snake.head() is standard targeting.
-                                    self.snake.head()
-                                };
+                                    15
+                                });
+                            if boss.health <= boss.max_health / 2 {
+                                shoot_threshold = std::cmp::max(
+                                    if boss.kind == BossType::Puffer {
+                                        5
+                                    } else if boss.kind == BossType::Dragon {
+                                        2
+                                    } else if boss.kind == BossType::Mage {
+                                        5
+                                    } else {
+                                        1
+                                    },
+                                    shoot_threshold / 2,
+                                );
+                            }
+                            let shoots =
+                                (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
+                            if shoots > 0 {
+                                if boss.kind == BossType::Mage {
+                                    // The mage will spawn a meteor exactly at the target's current head.
+                                    // So if we are considering staying at or moving to a point that is the same as
+                                    // the CURRENT head of the player/bot being targeted, it's dangerous.
+                                    // However, the meteor takes 15 ticks to hit.
+                                    // This is an immediate prediction: "Where will the mage shoot?"
+                                    // We know it shoots at self.snake.head() or decoy.
+                                    let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                        decoy_pos
+                                    } else {
+                                        // Depending on checking_player we might want to be more specific,
+                                        // but self.snake.head() is standard targeting.
+                                        self.snake.head()
+                                    };
 
-                                // We don't know the exact time it will take for the bot to reach `final_p`.
-                                // If `final_p` IS the target_pos, a meteor is about to be spawned there.
-                                // Better to avoid `target_pos` right now to ensure the bot paths away from it.
-                                if final_p == target_pos {
-                                    return false;
-                                }
-                            } else if final_p.x == boss.position.x || final_p.y == boss.position.y {
-                                // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
-                                // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
-                                // Only consider it unsafe if within the same column/row AND fairly close.
-                                let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                                    + u32::from(final_p.y.abs_diff(boss.position.y));
+                                    // We don't know the exact time it will take for the bot to reach `final_p`.
+                                    // If `final_p` IS the target_pos, a meteor is about to be spawned there.
+                                    // Better to avoid `target_pos` right now to ensure the bot paths away from it.
+                                    if final_p == target_pos {
+                                        return false;
+                                    }
+                                } else if final_p.x == boss.position.x
+                                    || final_p.y == boss.position.y
+                                {
+                                    // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
+                                    // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
+                                    // Only consider it unsafe if within the same column/row AND fairly close.
+                                    let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                                        + u32::from(final_p.y.abs_diff(boss.position.y));
 
-                                if let Some((portal1, portal2)) = self.portals {
-                                    let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                        + u32::from(final_p.y.abs_diff(portal1.y))
-                                        + u32::from(portal2.x.abs_diff(boss.position.x))
-                                        + u32::from(portal2.y.abs_diff(boss.position.y));
-                                    let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                        + u32::from(final_p.y.abs_diff(portal2.y))
-                                        + u32::from(portal1.x.abs_diff(boss.position.x))
-                                        + u32::from(portal1.y.abs_diff(boss.position.y));
-                                    dist = std::cmp::min(
-                                        dist,
-                                        std::cmp::min(dist_via_p1, dist_via_p2),
-                                    );
-                                }
+                                    if let Some((portal1, portal2)) = self.portals {
+                                        let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                            + u32::from(final_p.y.abs_diff(portal1.y))
+                                            + u32::from(portal2.x.abs_diff(boss.position.x))
+                                            + u32::from(portal2.y.abs_diff(boss.position.y));
+                                        let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                            + u32::from(final_p.y.abs_diff(portal2.y))
+                                            + u32::from(portal1.x.abs_diff(boss.position.x))
+                                            + u32::from(portal1.y.abs_diff(boss.position.y));
+                                        dist = std::cmp::min(
+                                            dist,
+                                            std::cmp::min(dist_via_p1, dist_via_p2),
+                                        );
+                                    }
 
-                                // A laser travels 2 tiles per tick.
-                                // It takes the laser roughly `dist / 2` ticks to reach `final_p`.
-                                // We are evaluating the safety of `final_p` at `t = active_steps`.
-                                // A laser hits this tile at `t` if `t % shoot_threshold == dist / 2`.
-                                // So we check if `active_steps` is close to the expected arrival time of any laser fired.
-                                // We add a small buffer for safety.
-                                let expected_arrival_mod = (dist / 2) % shoot_threshold;
-                                let step_mod =
-                                    (active_steps + u32::from(boss.shoot_timer)) % shoot_threshold;
+                                    // A laser travels 2 tiles per tick.
+                                    // It takes the laser roughly `dist / 2` ticks to reach `final_p`.
+                                    // We are evaluating the safety of `final_p` at `t = active_steps`.
+                                    // A laser hits this tile at `t` if `t % shoot_threshold == dist / 2`.
+                                    // So we check if `active_steps` is close to the expected arrival time of any laser fired.
+                                    // We add a small buffer for safety.
+                                    let expected_arrival_mod = (dist / 2) % shoot_threshold;
+                                    let step_mod = (active_steps + u32::from(boss.shoot_timer))
+                                        % shoot_threshold;
 
-                                let diff = step_mod.abs_diff(expected_arrival_mod);
-                                let true_diff =
-                                    std::cmp::min(diff, shoot_threshold.saturating_sub(diff));
+                                    let diff = step_mod.abs_diff(expected_arrival_mod);
+                                    let true_diff =
+                                        std::cmp::min(diff, shoot_threshold.saturating_sub(diff));
 
-                                if true_diff <= 2 {
-                                    // A laser will be here at around the time we arrive.
-                                    return false;
+                                    if true_diff <= 2 {
+                                        // A laser will be here at around the time we arrive.
+                                        return false;
+                                    }
                                 }
                             }
                         }
@@ -8173,11 +8194,17 @@ impl Game {
                 });
             }
         }
+        let mut iterations = 0;
         while let Some(AStarState {
             position: current,
             ..
         }) = open_set.pop()
         {
+            iterations += 1;
+            if iterations > 3000 {
+                break; // Prevent infinite loops
+            }
+
             if targets.contains(&current) {
                 let mut path = vec![current];
                 let mut curr = current;
