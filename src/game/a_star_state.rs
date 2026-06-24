@@ -1,6 +1,7 @@
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct AStarState {
     pub f_score: u16,
+    pub tie_breaker: u64,
     pub position: crate::snake::Point,
 }
 impl Ord for AStarState {
@@ -8,6 +9,7 @@ impl Ord for AStarState {
         other
             .f_score
             .cmp(&self.f_score)
+            .then_with(|| other.tie_breaker.cmp(&self.tie_breaker))
             .then_with(|| other.position.x.cmp(&self.position.x))
             .then_with(|| other.position.y.cmp(&self.position.y))
     }
