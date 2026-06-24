@@ -7904,7 +7904,7 @@ impl Game {
                     y: self.height / 2,
                 }];
             } else if let Some(p2_flag) = self.p2_flag {
-                targets.insert(0, p2_flag);
+                targets = vec![p2_flag];
             }
         }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
@@ -7933,7 +7933,7 @@ impl Game {
             if self.mode == GameMode::KingOfTheHill
                 && let Some(koth_pos) = self.koth_zone
             {
-                targets.push(koth_pos);
+                targets.insert(0, koth_pos);
             }
             if self.mode == GameMode::DungeonCrawler
                 && let Some(room) = self.dungeon_grid.get(&self.current_room_coords)
@@ -7988,7 +7988,7 @@ impl Game {
                         y: self.height / 2,
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
-                    targets.insert(0, p1_flag);
+                    targets = vec![p1_flag];
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
