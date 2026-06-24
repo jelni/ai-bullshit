@@ -7849,7 +7849,7 @@ impl Game {
         if self.mode == GameMode::KingOfTheHill
             && let Some(koth_pos) = self.koth_zone
         {
-            targets.push(koth_pos);
+            targets.insert(0, koth_pos);
         }
         if self.mode == GameMode::DungeonCrawler
             && let Some(room) = self.dungeon_grid.get(&self.current_room_coords)
