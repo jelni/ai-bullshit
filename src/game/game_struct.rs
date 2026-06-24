@@ -3420,6 +3420,7 @@ impl Game {
         let mut g_score = std::collections::HashMap::new();
         let mut came_from = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
+        let mut tie_breaker_counter = 0u64;
 
         g_score.insert(start, 0u16);
 
@@ -3447,8 +3448,10 @@ impl Game {
             }
         };
 
+        tie_breaker_counter += 1;
         open_set.push(AStarState {
             f_score: heuristic(start),
+            tie_breaker: tie_breaker_counter,
             position: start,
         });
 
@@ -3507,8 +3510,10 @@ impl Game {
                                 first_step.insert(final_p, f_step);
                             }
 
+                            tie_breaker_counter += 1;
                             open_set.push(AStarState {
                                 f_score: tentative_g.saturating_add(heuristic(final_p)),
+                                tie_breaker: tie_breaker_counter,
                                 position: final_p,
                             });
                         }
@@ -7246,6 +7251,7 @@ impl Game {
         let mut open_set = std::collections::BinaryHeap::new();
         let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
+        let mut tie_breaker_counter = 0u64;
 
         g_score.insert(start, 0u16);
 
@@ -7273,8 +7279,10 @@ impl Game {
             }
         };
 
+        tie_breaker_counter += 1;
         open_set.push(AStarState {
             f_score: heuristic(start),
+            tie_breaker: tie_breaker_counter,
             position: start,
         });
 
@@ -7315,8 +7323,10 @@ impl Game {
                     } else if let Some(&first) = first_step.get(&current) {
                         first_step.insert(final_p, first);
                     }
+                    tie_breaker_counter += 1;
                     open_set.push(AStarState {
                         f_score: tentative_g.saturating_add(heuristic(final_p)),
+                        tie_breaker: tie_breaker_counter,
                         position: final_p,
                     });
                 }
@@ -8003,6 +8013,7 @@ impl Game {
         let mut g_score = std::collections::HashMap::new();
         let mut first_step = std::collections::HashMap::new();
         let mut came_from = std::collections::HashMap::new();
+        let mut tie_breaker_counter = 0u64;
         g_score.insert(start, 0);
         let heuristic = |p: Point| -> u16 {
             let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
@@ -8188,8 +8199,10 @@ impl Game {
                 g_score.insert(final_p, cost);
                 first_step.insert(final_p, d);
                 came_from.insert(final_p, start);
+                tie_breaker_counter += 1;
                 open_set.push(AStarState {
                     f_score: cost + heuristic(final_p),
+                    tie_breaker: tie_breaker_counter,
                     position: final_p,
                 });
             }
@@ -8235,8 +8248,10 @@ impl Game {
                             .get(&current)
                             .expect("current should be present in first_step mapping"),
                     );
+                    tie_breaker_counter += 1;
                     open_set.push(AStarState {
                         f_score: tentative_g.saturating_add(heuristic(final_p)),
+                        tie_breaker: tie_breaker_counter,
                         position: final_p,
                     });
                 }
