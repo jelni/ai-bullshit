@@ -7514,6 +7514,8 @@ impl Game {
                             || boss.kind == BossType::ShadowClone
                             || boss.kind == BossType::Gorgon
                             || boss.kind == BossType::Shooter
+                            || boss.kind == BossType::VampireLord
+                            || boss.kind == BossType::Kraken
                         {
                             if final_p == boss.position {
                                 return false;
