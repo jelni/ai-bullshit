@@ -1,0 +1,37 @@
+<<<<<<< SEARCH
+        // Portal 1 right next to boss, Portal 2 right next to target
+        game.portals = Some((
+            snake::Point {
+                x: 2,
+                y: 1,
+            },
+            snake::Point {
+                x: 17,
+                y: 18,
+            },
+        ));
+
+        let boss_kind = game::BossType::Shooter;
+
+        let path_end = game.get_boss_path(start, target, boss_kind);
+
+        assert_eq!(path_end, Some(snake::Direction::Right));
+=======
+        // Portal 1 right next to boss, Portal 2 right next to target
+        game.portals = Some((
+            snake::Point {
+                x: 2,
+                y: 1,
+            },
+            snake::Point {
+                x: 17,
+                y: 18,
+            },
+        ));
+
+        let boss_kind = game::BossType::Shooter;
+
+        let path_end = game.get_boss_path(start, target, boss_kind);
+
+        assert_eq!(path_end, Some(snake::Direction::Right));
+>>>>>>> REPLACE
