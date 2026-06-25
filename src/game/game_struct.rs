@@ -3482,7 +3482,12 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                if let Some(final_p) = self.get_final_p(next_p)
+                let final_p = if boss_kind == BossType::Teleporter {
+                    Some(next_p)
+                } else {
+                    self.get_final_p(next_p)
+                };
+                if let Some(final_p) = final_p
                     && final_p.x >= margin
                     && final_p.x <= self.width - 1 - margin
                     && final_p.y >= margin
@@ -7477,7 +7482,7 @@ impl Game {
                     && !self
                         .dungeon_grid
                         .get(&self.current_room_coords)
-                        .map_or(false, |r| r.cleared);
+                        .is_some_and(|r| r.cleared);
                 if !(is_dungeon_uncleared && final_p == boss.position) {
                     if final_p == boss.position {
                         return false;

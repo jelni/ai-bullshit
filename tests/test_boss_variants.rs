@@ -342,7 +342,7 @@ fn test_vampire_lord_steals_life() {
         },
         health: 5,
         max_health: 10,
-        move_timer: 2, // Ready to act
+        move_timer: 1, // Ready to act
         shoot_timer: 0,
         kind: BossType::VampireLord,
         state_timer: 0,
