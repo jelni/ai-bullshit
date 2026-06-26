@@ -3494,7 +3494,7 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                let mut final_p = self.get_final_p(next_p);
+                let mut final_p = if let Some((portal1, portal2)) = self.portals { if next_p == portal1 { Some(portal2) } else if next_p == portal2 { Some(portal1) } else { self.get_final_p(next_p) } } else { self.get_final_p(next_p) };
                 if boss_kind == BossType::Teleporter && final_p.is_none() {
                     final_p = Some(next_p);
                 }
