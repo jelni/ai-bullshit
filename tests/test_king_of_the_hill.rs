@@ -12,6 +12,11 @@ fn test_bot_targets_koth_zone() {
         x: 2,
         y: 2,
     });
+    // Set food far away to avoid bot targeting it instead
+    game.food = Point {
+        x: 19,
+        y: 19,
+    };
 
     // Set snake
     game.snake = Snake::new(Point {
@@ -36,6 +41,11 @@ fn test_bot_p2_targets_koth_zone() {
         x: 2,
         y: 2,
     });
+    // Set food far away to avoid bot targeting it instead
+    game.food = Point {
+        x: 19,
+        y: 19,
+    };
 
     // Set p2
     let mut p2 = Snake::new(Point {
@@ -62,6 +72,11 @@ fn test_bot_targets_koth_zone_bots() {
         x: 2,
         y: 2,
     });
+    // Set food far away to avoid bot targeting it instead
+    game.food = Point {
+        x: 19,
+        y: 19,
+    };
 
     // Set bot
     let mut bot = Snake::new(Point {
