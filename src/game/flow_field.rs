@@ -113,7 +113,9 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
                             }
                         }
                     }
-                    if !is_dynamic_obstacle && game.goblin.as_ref().is_some_and(|g| g.position == final_prev) {
+                    if !is_dynamic_obstacle
+                        && game.goblin.as_ref().is_some_and(|g| g.position == final_prev)
+                    {
                         is_dynamic_obstacle = true;
                     }
 

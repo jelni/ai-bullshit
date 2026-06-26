@@ -131,13 +131,16 @@ fn test_flow_field_updates_in_game() {
 #[test]
 fn test_flow_field_avoids_entities() {
     use snake_game::game::{Boss, BossType, Laser};
-use snake_game::snake::Direction;
+    use snake_game::snake::Direction;
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
     game.obstacles.clear();
 
     // Create a boss at (10, 10)
     game.bosses.push(Boss {
-        position: Point { x: 10, y: 10 },
+        position: Point {
+            x: 10,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         kind: BossType::Juggernaut,
@@ -148,17 +151,29 @@ use snake_game::snake::Direction;
 
     // Create a laser at (10, 11)
     game.lasers.push(Laser {
-        position: Point { x: 10, y: 11 },
+        position: Point {
+            x: 10,
+            y: 11,
+        },
         direction: Direction::Down,
         player: 3,
     });
 
-    let target = Point { x: 10, y: 15 };
+    let target = Point {
+        x: 10,
+        y: 15,
+    };
     let flow_field = generate_flow_field(&game, &[target]);
 
     // Ensure the flow field does not route through the boss
-    let boss_point = Point { x: 10, y: 10 };
-    let laser_point = Point { x: 10, y: 11 };
+    let boss_point = Point {
+        x: 10,
+        y: 10,
+    };
+    let laser_point = Point {
+        x: 10,
+        y: 11,
+    };
 
     // The flow field should not have an entry mapping from the boss or laser positions
     // since they act as static obstacles.
@@ -166,7 +181,10 @@ use snake_game::snake::Direction;
     assert!(!flow_field.contains_key(&laser_point), "Flow field should not route through a laser");
 
     // Check path routes around it
-    let start = Point { x: 10, y: 5 };
+    let start = Point {
+        x: 10,
+        y: 5,
+    };
     let mut current = start;
     let mut reached = false;
 
