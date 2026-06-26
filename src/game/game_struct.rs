@@ -2373,13 +2373,23 @@ impl Game {
                 return true;
             }
             if player == 1 {
+                if self.snake.body_map.contains_key(&current_pos) {
+                    return false;
+                }
                 if let Some(p2) = &self.player2
                     && p2.body_map.contains_key(&current_pos)
                 {
                     return true;
                 }
-            } else if player == 2 && self.snake.body_map.contains_key(&current_pos) {
-                return true;
+            } else if player == 2 {
+                if let Some(p2) = &self.player2
+                    && p2.body_map.contains_key(&current_pos)
+                {
+                    return false;
+                }
+                if self.snake.body_map.contains_key(&current_pos) {
+                    return true;
+                }
             }
             if self.obstacles.contains(&current_pos) {
                 return steps <= 5;
@@ -7858,45 +7868,49 @@ impl Game {
         {
             targets.insert(0, koth_pos);
         }
-        if self.mode == GameMode::DungeonCrawler
-            && let Some(room) = self.dungeon_grid.get(&self.current_room_coords)
-        {
-            if room.cleared {
-                if room.north_door {
-                    targets.insert(
-                        0,
-                        Point {
-                            x: self.width / 2,
-                            y: 0,
-                        },
-                    );
-                }
-                if room.south_door {
-                    targets.insert(
-                        0,
-                        Point {
-                            x: self.width / 2,
-                            y: self.height - 1,
-                        },
-                    );
-                }
-                if room.west_door {
-                    targets.insert(
-                        0,
-                        Point {
-                            x: 0,
-                            y: self.height / 2,
-                        },
-                    );
-                }
-                if room.east_door {
-                    targets.insert(
-                        0,
-                        Point {
-                            x: self.width - 1,
-                            y: self.height / 2,
-                        },
-                    );
+        if self.mode == GameMode::DungeonCrawler {
+            if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
+                if room.cleared {
+                    if room.north_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width / 2,
+                                y: 0,
+                            },
+                        );
+                    }
+                    if room.south_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width / 2,
+                                y: self.height - 1,
+                            },
+                        );
+                    }
+                    if room.west_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: 0,
+                                y: self.height / 2,
+                            },
+                        );
+                    }
+                    if room.east_door {
+                        targets.insert(
+                            0,
+                            Point {
+                                x: self.width - 1,
+                                y: self.height / 2,
+                            },
+                        );
+                    }
+                } else {
+                    for boss in &self.bosses {
+                        targets.insert(0, boss.position);
+                    }
                 }
             } else {
                 for boss in &self.bosses {
