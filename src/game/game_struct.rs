@@ -7498,7 +7498,10 @@ impl Game {
             for boss in &self.bosses {
                 let is_dungeon_uncleared = self.mode == GameMode::DungeonCrawler
                     && !self.dungeon_grid.get(&self.current_room_coords).is_some_and(|r| r.cleared);
-                if !(is_dungeon_uncleared && final_p == boss.position) {
+                if is_dungeon_uncleared && final_p == boss.position {
+                    continue;
+                }
+                if true {
                     if final_p == boss.position {
                         return false;
                     }

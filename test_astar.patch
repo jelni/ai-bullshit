@@ -1,0 +1,10 @@
+<<<<<<< SEARCH
+    let next_move = game.calculate_autopilot_move();
+
+    assert_eq!(next_move, Some(snake_game::snake::Direction::Right));
+=======
+    println!("Food at {:?}", game.food);
+    let next_move = game.calculate_autopilot_move();
+
+    assert_eq!(next_move, Some(snake_game::snake::Direction::Right));
+>>>>>>> REPLACE

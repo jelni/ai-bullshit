@@ -1,0 +1,34 @@
+<<<<<<< SEARCH
+            for boss in &self.bosses {
+                let is_dungeon_uncleared = self.mode == GameMode::DungeonCrawler
+                    && !self.dungeon_grid.get(&self.current_room_coords).is_some_and(|r| r.cleared);
+                if !(is_dungeon_uncleared && final_p == boss.position) {
+                    if final_p == boss.position {
+                        return false;
+                    }
+                    if is_time_frozen {
+                        if final_p == boss.position {
+                            return false;
+                        }
+                    } else if checking_player != 3
+                        && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX)
+                    {
+=======
+            for boss in &self.bosses {
+                let is_dungeon_uncleared = self.mode == GameMode::DungeonCrawler
+                    && !self.dungeon_grid.get(&self.current_room_coords).is_some_and(|r| r.cleared);
+                if is_dungeon_uncleared && final_p == boss.position {
+                    continue;
+                }
+                if true {
+                    if final_p == boss.position {
+                        return false;
+                    }
+                    if is_time_frozen {
+                        if final_p == boss.position {
+                            return false;
+                        }
+                    } else if checking_player != 3
+                        && boss.state_timer < u8::try_from(steps).unwrap_or(u8::MAX)
+                    {
+>>>>>>> REPLACE
