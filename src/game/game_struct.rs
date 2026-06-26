@@ -3652,7 +3652,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..15) {
+                    match self.rng.gen_range(0..16) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3668,6 +3668,7 @@ impl Game {
                         12 => BossType::VampireLord,
                         13 => BossType::Kraken,
                         14 => BossType::Phantom,
+                        15 => BossType::Alchemist,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4355,6 +4356,82 @@ impl Game {
                                 && next_pos.y < self.height - 1 - kraken_margin
                             {
                                 boss.position = next_pos;
+                            }
+                        }
+                    } else if boss.kind == BossType::Alchemist {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            3
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                    && !self.obstacles.contains(&next_pos)
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
+                        }
+
+                        let mut drop_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                10,
+                                30_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            20
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            drop_threshold = std::cmp::max(5, drop_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= drop_threshold {
+                            boss.shoot_timer = 0;
+                            if self.poison_food.is_none() {
+                                let avoid = |p: &Point| {
+                                    self.obstacles.contains(p)
+                                        || *p == self.food
+                                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                                };
+                                if let Some(poison) = Self::get_random_empty_point(
+                                    self.width,
+                                    self.height,
+                                    &self.snake,
+                                    avoid,
+                                    &mut self.rng,
+                                    self.safe_zone_margin,
+                                ) {
+                                    self.poison_food = Some((poison, web_time::Instant::now()));
+                                    beep();
+                                }
                             }
                         }
                     } else if boss.kind == BossType::VampireLord {
@@ -7536,6 +7613,7 @@ impl Game {
                             || boss.kind == BossType::Shooter
                             || boss.kind == BossType::VampireLord
                             || boss.kind == BossType::Kraken
+                            || boss.kind == BossType::Alchemist
                         {
                             if final_p == boss.position {
                                 return false;

@@ -364,3 +364,44 @@ fn test_vampire_lord_steals_life() {
         "Vampire Lord should teleport away after stealing life"
     );
 }
+
+#[test]
+fn test_alchemist_drops_poison() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 20,
+        kind: snake_game::game::BossType::Alchemist,
+        state_timer: 0,
+    });
+    game.snake.move_to(snake_game::snake::Point { x: 18, y: 18 }, false);
+
+    assert!(game.poison_food.is_none());
+
+    game.update();
+
+    // shoot_timer was 20, the threshold is 20, so it will shoot and reset to 0
+    // wait, we need to make sure the target position logic isn't messing with update
+    // run update multiple times
+    game.state = snake_game::game::GameState::Playing;
+    for _ in 0..25 {
+        game.update();
+        if game.poison_food.is_some() {
+            break;
+        }
+    }
+    assert!(game.poison_food.is_some());
+}
