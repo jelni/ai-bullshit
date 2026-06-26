@@ -125,5 +125,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Moves through obstacles."
             }
         },
+        BossType::Alchemist => {
+            if kills >= 5 {
+                "A mad scientist who randomly tosses explosive and poisonous concoctions."
+            } else {
+                "Drops poison food."
+            }
+        },
     }
 }
