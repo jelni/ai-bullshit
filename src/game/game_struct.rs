@@ -3511,6 +3511,7 @@ impl Game {
                     } else if self.obstacles.contains(&final_p)
                         && boss_kind != BossType::Charger
                         && boss_kind != BossType::Juggernaut
+                        && boss_kind != BossType::Phantom
                     {
                         can_move = false;
                     }
@@ -3651,7 +3652,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..14) {
+                    match self.rng.gen_range(0..15) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3666,6 +3667,7 @@ impl Game {
                         11 => BossType::Gorgon,
                         12 => BossType::VampireLord,
                         13 => BossType::Kraken,
+                        14 => BossType::Phantom,
                         _ => BossType::Mimic,
                     }
                 };
@@ -3757,6 +3759,8 @@ impl Game {
                                             '*',
                                         );
                                         beep();
+                                    } else if boss.kind == BossType::Phantom {
+                                        boss.position = next_pos;
                                     }
                                 } else {
                                     let old_pos = boss.position;
