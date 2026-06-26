@@ -3448,10 +3448,12 @@ impl Game {
         let heuristic = |p: Point| -> u16 {
             let dist_direct = calc_dist(p, target);
             if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 =
-                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target)).saturating_add(1);
-                let dist_via_portal2 =
-                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target)).saturating_add(1);
+                let dist_via_portal1 = calc_dist(p, portal1)
+                    .saturating_add(calc_dist(portal2, target))
+                    .saturating_add(1);
+                let dist_via_portal2 = calc_dist(p, portal2)
+                    .saturating_add(calc_dist(portal1, target))
+                    .saturating_add(1);
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
@@ -3492,11 +3494,11 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                let final_p = if boss_kind == BossType::Teleporter {
-                    Some(next_p)
-                } else {
-                    self.get_final_p(next_p)
-                };
+                let mut final_p = self.get_final_p(next_p);
+                if boss_kind == BossType::Teleporter && final_p.is_none() {
+                    final_p = Some(next_p);
+                }
+
                 if let Some(final_p) = final_p
                     && final_p.x >= margin
                     && final_p.x <= self.width - 1 - margin
@@ -7284,10 +7286,12 @@ impl Game {
         let heuristic = |p: Point| -> u16 {
             let dist_direct = calc_dist(p, target);
             if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 =
-                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target)).saturating_add(1);
-                let dist_via_portal2 =
-                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target)).saturating_add(1);
+                let dist_via_portal1 = calc_dist(p, portal1)
+                    .saturating_add(calc_dist(portal2, target))
+                    .saturating_add(1);
+                let dist_via_portal2 = calc_dist(p, portal2)
+                    .saturating_add(calc_dist(portal1, target))
+                    .saturating_add(1);
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
@@ -7489,10 +7493,7 @@ impl Game {
             }
             for boss in &self.bosses {
                 let is_dungeon_uncleared = self.mode == GameMode::DungeonCrawler
-                    && !self
-                        .dungeon_grid
-                        .get(&self.current_room_coords)
-                        .is_some_and(|r| r.cleared);
+                    && !self.dungeon_grid.get(&self.current_room_coords).is_some_and(|r| r.cleared);
                 if !(is_dungeon_uncleared && final_p == boss.position) {
                     if final_p == boss.position {
                         return false;
