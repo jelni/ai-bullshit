@@ -6330,7 +6330,12 @@ impl Game {
         for (i, bot) in old_bots.into_iter().enumerate() {
             if !bots_to_remove.contains(&i) {
                 let mut b = bot;
-                b.move_to(final_bot_heads[i].1, bots_grow[i]);
+                // Since eating food may spawn new bots during update_tick and process_food_collision,
+                // final_bot_heads may not cover the newly added bots at the end of the array.
+                // We only move bots that existed at the start of the tick.
+                if i < final_bot_heads.len() {
+                    b.move_to(final_bot_heads[i].1, bots_grow[i]);
+                }
                 alive_bots.push(b);
                 alive_paths.push(std::mem::take(&mut old_paths[i]));
             }
