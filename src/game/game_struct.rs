@@ -3494,10 +3494,22 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                let mut final_p = self.get_final_p(next_p);
-                if boss_kind == BossType::Teleporter && final_p.is_none() {
-                    final_p = Some(next_p);
-                }
+                let final_p = if boss_kind == BossType::Teleporter {
+                    let wrapped = self.calculate_wrapped_head(next_p);
+                    if let Some((portal1, portal2)) = self.portals {
+                        if wrapped == portal1 {
+                            Some(portal2)
+                        } else if wrapped == portal2 {
+                            Some(portal1)
+                        } else {
+                            Some(wrapped)
+                        }
+                    } else {
+                        Some(wrapped)
+                    }
+                } else {
+                    self.get_final_p(next_p)
+                };
 
                 if let Some(final_p) = final_p
                     && final_p.x >= margin
