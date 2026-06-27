@@ -2372,38 +2372,18 @@ impl Game {
             {
                 return true;
             }
-            if player == 1 {
-                if self.snake.body_map.contains_key(&current_pos) {
-                    return false;
-                }
-                if let Some(p2) = &self.player2
-                    && p2.body_map.contains_key(&current_pos)
-                {
-                    return true;
-                }
-            } else if player == 2 {
-                if let Some(p2) = &self.player2
-                    && p2.body_map.contains_key(&current_pos)
-                {
-                    return false;
-                }
-                if self.snake.body_map.contains_key(&current_pos) {
-                    return true;
-                }
+            if player == 1 && self.snake.body_map.contains_key(&current_pos) {
+                return false;
+            } else if player == 2 && let Some(p2) = &self.player2 && p2.body_map.contains_key(&current_pos) {
+                return false;
+            }
+            if player == 1 && let Some(p2) = &self.player2 && p2.body_map.contains_key(&current_pos) {
+                return true;
+            } else if player == 2 && self.snake.body_map.contains_key(&current_pos) {
+                return true;
             }
             if self.obstacles.contains(&current_pos) {
                 return steps <= 5;
-            }
-            if player == 1 {
-                if self.snake.body_map.contains_key(&current_pos) && head != current_pos {
-                    return false;
-                }
-            } else if player == 2
-                && let Some(p2) = &self.player2
-                && p2.body_map.contains_key(&current_pos)
-                && head != current_pos
-            {
-                return false;
             }
             current_pos = Self::calculate_next_head_dir(current_pos, dir);
         }
@@ -7969,6 +7949,7 @@ impl Game {
             targets.insert(0, koth_pos);
         }
         if self.mode == GameMode::DungeonCrawler {
+            targets.clear();
             if let Some(room) = self.dungeon_grid.get(&self.current_room_coords) {
                 if room.cleared {
                     if room.north_door {
