@@ -3717,7 +3717,14 @@ impl Game {
                             .get_boss_path(boss.position, target_pos, boss.kind)
                             .or_else(|| self.astar_pathfind(boss.position, target_pos, 3));
                         if let Some(dir) = dir_opt {
-                            let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            let raw_next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                            let next_pos = if self.portals.is_some_and(|(p1, _)| p1 == raw_next_pos) {
+                                self.portals.unwrap().1
+                            } else if self.portals.is_some_and(|(_, p2)| p2 == raw_next_pos) {
+                                self.portals.unwrap().0
+                            } else {
+                                raw_next_pos
+                            };
                             let margin = if self.mode == GameMode::BattleRoyale {
                                 self.safe_zone_margin
                             } else {
