@@ -29,5 +29,10 @@ fn test_flow_field_uses_portals() {
     let flow_field = game::generate_flow_field(&game, &[target]);
 
     // Path should point to portal
+
+    // Since the flow field traverses backwards, depending on how it pushes portal candidates,
+    // it might map it differently depending on exact distances. The test checks if flow field uses portals correctly.
+    // If we're at (1, 1), target is (18, 18), and Portal 1 is at (2, 1), the optimal move is Right towards Portal 1.
     assert_eq!(flow_field.get(&start), Some(&snake::Direction::Right));
+
 }

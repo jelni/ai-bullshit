@@ -912,7 +912,7 @@ impl Game {
             if goblin.move_timer >= 2 {
                 goblin.move_timer = 0;
                 let target = self.food;
-                if let Some(dir) = self.astar_pathfind(goblin.position, target, 3) {
+                if let Some(dir) = self.bot_smart_pathfind(goblin.position, target, 3) {
                     let next_pos = Self::calculate_next_head_dir(goblin.position, dir);
                     let margin = if self.mode == GameMode::BattleRoyale {
                         self.safe_zone_margin
@@ -2937,7 +2937,7 @@ impl Game {
                 };
 
                 // We use astar_pathfind directly for companions so they don't get restricted by 'neck' turns
-                if let Some(dir) = self.astar_pathfind(comp.position, target, 3) {
+                if let Some(dir) = self.bot_smart_pathfind(comp.position, target, 3) {
                     let next_pos = Self::calculate_next_head_dir(comp.position, dir);
                     if next_pos.x > margin
                         && next_pos.x < self.width - 1 - margin
@@ -3715,7 +3715,7 @@ impl Game {
                         };
                         let dir_opt = self
                             .get_boss_path(boss.position, target_pos, boss.kind)
-                            .or_else(|| self.astar_pathfind(boss.position, target_pos, 3));
+                            .or_else(|| self.bot_smart_pathfind(boss.position, target_pos, 3));
                         if let Some(dir) = dir_opt {
                             let raw_next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             let next_pos = if self.portals.is_some_and(|(p1, _)| p1 == raw_next_pos) {
@@ -4101,7 +4101,7 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4180,7 +4180,7 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4267,7 +4267,7 @@ impl Game {
                             boss.move_timer += 1;
                             if boss.move_timer >= move_threshold {
                                 boss.move_timer = 0;
-                                if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3)
+                                if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
                                 {
                                     let next_pos =
                                         Self::calculate_next_head_dir(boss.position, dir);
@@ -4339,7 +4339,7 @@ impl Game {
 
                             // Move towards target
                             let mut next_pos = boss.position;
-                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
                                 next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             }
 
@@ -4379,7 +4379,7 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.astar_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4491,7 +4491,7 @@ impl Game {
                                     }
                                 }
                             } else if let Some(dir) =
-                                self.astar_pathfind(boss.position, target_pos, 3)
+                                self.bot_smart_pathfind(boss.position, target_pos, 3)
                             {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
@@ -7343,6 +7343,22 @@ impl Game {
             }
         }
     }
+
+
+
+    #[must_use]
+    #[allow(clippy::collapsible_if)]
+    pub fn bot_smart_pathfind(&self, start: Point, target: Point, checking_player: u8) -> Option<Direction> {
+        if self.flow_field_targets.contains(&target) && self.mode != crate::game::GameMode::CaptureTheFlag {
+            if let Some(flow_field) = &self.flow_field {
+                if let Some(&dir) = flow_field.get(&start) {
+                    return Some(dir);
+                }
+            }
+        }
+        self.astar_pathfind(start, target, checking_player)
+    }
+
     #[must_use]
     pub fn astar_pathfind(
         &self,
