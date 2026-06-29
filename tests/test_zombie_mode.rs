@@ -7,8 +7,14 @@ fn test_zombie_mode_spawns_zombie_on_eat() {
     game.mode = game::GameMode::Zombie;
 
     // Place snake and food
-    game.snake = snake::Snake::new(snake::Point { x: 5, y: 5 });
-    game.food = snake::Point { x: 6, y: 5 };
+    game.snake = snake::Snake::new(snake::Point {
+        x: 5,
+        y: 5,
+    });
+    game.food = snake::Point {
+        x: 6,
+        y: 5,
+    };
     game.snake.direction = snake::Direction::Right;
 
     // Clear initial bots if any (must be done after generating game, which might add them)
@@ -45,11 +51,17 @@ fn test_zombie_targets_player() {
     game.bots_autopilot_paths.clear();
 
     // Place snake
-    game.snake = snake::Snake::new(snake::Point { x: 2, y: 2 });
+    game.snake = snake::Snake::new(snake::Point {
+        x: 2,
+        y: 2,
+    });
     game.snake.direction = snake::Direction::Right; // moving away or standing still
 
     // Place zombie bot
-    let bot_pos = snake::Point { x: 10, y: 10 };
+    let bot_pos = snake::Point {
+        x: 10,
+        y: 10,
+    };
     game.bots.push(snake::Snake::new(bot_pos));
     game.bots_autopilot_paths.push(Vec::new());
 

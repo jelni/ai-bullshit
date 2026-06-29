@@ -377,7 +377,10 @@ fn test_alchemist_drops_poison() {
     );
 
     game.bosses.clear();
-    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 10,
@@ -387,7 +390,13 @@ fn test_alchemist_drops_poison() {
         kind: snake_game::game::BossType::Alchemist,
         state_timer: 0,
     });
-    game.snake.move_to(snake_game::snake::Point { x: 18, y: 18 }, false);
+    game.snake.move_to(
+        snake_game::snake::Point {
+            x: 18,
+            y: 18,
+        },
+        false,
+    );
 
     assert!(game.poison_food.is_none());
 

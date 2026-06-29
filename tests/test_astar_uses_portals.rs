@@ -34,5 +34,4 @@ fn test_flow_field_uses_portals() {
     // it might map it differently depending on exact distances. The test checks if flow field uses portals correctly.
     // If we're at (1, 1), target is (18, 18), and Portal 1 is at (2, 1), the optimal move is Right towards Portal 1.
     assert_eq!(flow_field.get(&start), Some(&snake::Direction::Right));
-
 }
