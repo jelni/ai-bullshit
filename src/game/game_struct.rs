@@ -2374,10 +2374,16 @@ impl Game {
             }
             if player == 1 && self.snake.body_map.contains_key(&current_pos) {
                 return false;
-            } else if player == 2 && let Some(p2) = &self.player2 && p2.body_map.contains_key(&current_pos) {
+            } else if player == 2
+                && let Some(p2) = &self.player2
+                && p2.body_map.contains_key(&current_pos)
+            {
                 return false;
             }
-            if player == 1 && let Some(p2) = &self.player2 && p2.body_map.contains_key(&current_pos) {
+            if player == 1
+                && let Some(p2) = &self.player2
+                && p2.body_map.contains_key(&current_pos)
+            {
                 return true;
             } else if player == 2 && self.snake.body_map.contains_key(&current_pos) {
                 return true;
@@ -3718,7 +3724,8 @@ impl Game {
                             .or_else(|| self.bot_smart_pathfind(boss.position, target_pos, 3));
                         if let Some(dir) = dir_opt {
                             let raw_next_pos = Self::calculate_next_head_dir(boss.position, dir);
-                            let next_pos = if self.portals.is_some_and(|(p1, _)| p1 == raw_next_pos) {
+                            let next_pos = if self.portals.is_some_and(|(p1, _)| p1 == raw_next_pos)
+                            {
                                 self.portals.unwrap().1
                             } else if self.portals.is_some_and(|(_, p2)| p2 == raw_next_pos) {
                                 self.portals.unwrap().0
@@ -4101,7 +4108,8 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4180,7 +4188,8 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4267,7 +4276,8 @@ impl Game {
                             boss.move_timer += 1;
                             if boss.move_timer >= move_threshold {
                                 boss.move_timer = 0;
-                                if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                                if let Some(dir) =
+                                    self.bot_smart_pathfind(boss.position, target_pos, 3)
                                 {
                                     let next_pos =
                                         Self::calculate_next_head_dir(boss.position, dir);
@@ -4339,7 +4349,8 @@ impl Game {
 
                             // Move towards target
                             let mut next_pos = boss.position;
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
                                 next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             }
 
@@ -4379,7 +4390,8 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -4418,7 +4430,10 @@ impl Game {
                                     self.obstacles.contains(p)
                                         || *p == self.food
                                         || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
-                                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                                        || self
+                                            .power_up
+                                            .as_ref()
+                                            .is_some_and(|pu| *p == pu.location)
                                 };
                                 if let Some(poison) = Self::get_random_empty_point(
                                     self.width,
@@ -7344,12 +7359,17 @@ impl Game {
         }
     }
 
-
-
     #[must_use]
     #[allow(clippy::collapsible_if)]
-    pub fn bot_smart_pathfind(&self, start: Point, target: Point, checking_player: u8) -> Option<Direction> {
-        if self.flow_field_targets.contains(&target) && self.mode != crate::game::GameMode::CaptureTheFlag {
+    pub fn bot_smart_pathfind(
+        &self,
+        start: Point,
+        target: Point,
+        checking_player: u8,
+    ) -> Option<Direction> {
+        if self.flow_field_targets.contains(&target)
+            && self.mode != crate::game::GameMode::CaptureTheFlag
+        {
             if let Some(flow_field) = &self.flow_field {
                 if let Some(&dir) = flow_field.get(&start) {
                     return Some(dir);
@@ -8028,8 +8048,11 @@ impl Game {
                     x: 2,
                     y: self.height / 2,
                 }];
-            } else if let Some(p2_flag) = self.p2_flag {
-                targets = vec![p2_flag];
+            } else {
+                targets = vec![self.p2_flag.unwrap_or_else(|| Point {
+                    x: self.width.saturating_sub(3),
+                    y: self.height / 2,
+                })];
             }
         }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
@@ -8112,8 +8135,11 @@ impl Game {
                         x: self.width.saturating_sub(3),
                         y: self.height / 2,
                     }];
-                } else if let Some(p1_flag) = self.p1_flag {
-                    targets = vec![p1_flag];
+                } else {
+                    targets = vec![self.p1_flag.unwrap_or_else(|| Point {
+                        x: 2,
+                        y: self.height / 2,
+                    })];
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
