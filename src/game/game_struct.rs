@@ -7654,6 +7654,7 @@ impl Game {
                             || boss.kind == BossType::VampireLord
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
+                            || boss.kind == BossType::Phantom
                         {
                             if final_p == boss.position {
                                 return false;
