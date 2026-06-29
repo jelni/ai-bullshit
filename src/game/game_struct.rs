@@ -7655,6 +7655,9 @@ impl Game {
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
                             || boss.kind == BossType::Phantom
+                            || boss.kind == BossType::Puffer
+                            || boss.kind == BossType::Dragon
+                            || boss.kind == BossType::Mage
                         {
                             if final_p == boss.position {
                                 return false;
