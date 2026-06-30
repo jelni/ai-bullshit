@@ -6360,7 +6360,10 @@ impl Game {
         if let Some(mut ghost) = self.ghost_snake.take() {
             if let Some(ghost_dir) = self.ghost_moves.pop_front() {
                 ghost.direction = ghost_dir;
-                let next_ghost_head = Self::calculate_next_head_dir(ghost.head(), ghost_dir);
+                let mut next_ghost_head = Self::calculate_next_head_dir(ghost.head(), ghost_dir);
+                if let Some(final_ghost_head) = self.get_final_p(next_ghost_head) {
+                    next_ghost_head = final_ghost_head;
+                }
                 ghost.move_to(next_ghost_head, false);
             }
             self.ghost_snake = Some(ghost);
