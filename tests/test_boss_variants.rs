@@ -1,3 +1,4 @@
+use rand::SeedableRng;
 use snake_game::game::{Boss, BossType, Difficulty, Game, Theme};
 use snake_game::snake::{Direction, Point, Snake};
 
@@ -11,6 +12,7 @@ fn test_charger_moves_faster() {
     game.snake.direction = Direction::Right;
 
     // Charger Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 9,
@@ -61,6 +63,7 @@ fn test_juggernaut_destroys_obstacles() {
     game.obstacles.insert(obstacle_pos);
 
     // Juggernaut Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: initial_pos,
         health: 10,
@@ -93,6 +96,7 @@ fn test_spawner_drops_mines() {
     game.snake.direction = Direction::Right;
 
     // Spawner Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 9,
@@ -134,6 +138,7 @@ fn test_teleporter_boss_moves() {
         y: 5,
     };
     // Teleporter Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: initial_pos,
         health: 10,
@@ -163,6 +168,7 @@ fn test_splitter_boss_splits_on_death() {
     game.state = snake_game::game::GameState::Playing;
 
     // Splitter Boss with health 1 and max_health 10
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 10,
@@ -225,6 +231,7 @@ fn test_necromancer_summons_goblin() {
     game.snake.direction = Direction::Right;
 
     // Necromancer Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 9,
@@ -264,6 +271,7 @@ fn test_shadowclone_moves_towards_snake() {
     game.snake.direction = Direction::Right;
 
     // ShadowClone Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 7,
@@ -300,6 +308,7 @@ fn test_gorgon_turns_food_to_stone() {
     let food_pos = game.food;
 
     // Gorgon Boss
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 9,
@@ -335,6 +344,7 @@ fn test_vampire_lord_steals_life() {
     game.lives = 3;
 
     // Place VampireLord adjacent to the snake
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: Point {
             x: 6,
@@ -381,6 +391,7 @@ fn test_alchemist_drops_poison() {
         x: 5,
         y: 5,
     };
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 10,
