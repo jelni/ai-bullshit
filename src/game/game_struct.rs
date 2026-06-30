@@ -4259,7 +4259,7 @@ impl Game {
                         };
                         let dist_x = i32::from(target_pos.x).abs_diff(i32::from(boss.position.x));
                         let dist_y = i32::from(target_pos.y).abs_diff(i32::from(boss.position.y));
-                        if dist_x <= 3 && dist_y <= 3 {
+                        if dist_x + dist_y <= 3 {
                             let mut move_threshold = if self.mode == GameMode::BossRush {
                                 std::cmp::max(
                                     1,
@@ -7652,6 +7652,7 @@ impl Game {
                             || boss.kind == BossType::Trapper
                             || boss.kind == BossType::Necromancer
                             || boss.kind == BossType::ShadowClone
+                            || boss.kind == BossType::Mimic
                             || boss.kind == BossType::Gorgon
                             || boss.kind == BossType::Shooter
                             || boss.kind == BossType::VampireLord

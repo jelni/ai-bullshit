@@ -3,6 +3,32 @@ use snake_game::game::{Boss, BossType, Difficulty, Game, Theme};
 use snake_game::snake::{Direction, Point, Snake};
 
 #[test]
+fn test_mimic_mimics_decoy() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+
+    // Mimic only moves if within 3 distance
+    let initial_pos = Point { x: 7, y: 5 };
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
+    game.bosses.push(Boss {
+        position: initial_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 0,
+        kind: BossType::Mimic,
+        state_timer: 0,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    game.update();
+
+    assert_ne!(game.bosses[0].position, initial_pos);
+}
+
+#[test]
 fn test_charger_moves_faster() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
     game.snake = Snake::new(Point {
