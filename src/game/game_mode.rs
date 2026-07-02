@@ -43,4 +43,5 @@ pub enum GameMode {
     KingOfTheHill,
     Dodgeball,
     DungeonCrawler,
+    Chaos,
 }

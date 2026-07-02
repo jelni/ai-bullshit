@@ -1,3 +1,4 @@
+#![allow(clippy::missing_errors_doc)]
 use std::io::{self, Write};
 
 use crossterm::{
@@ -618,6 +619,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "King Of The Hill Mode",
         "Dodgeball Mode",
         "Dungeon Crawler Mode",
+        "Chaos Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -3327,7 +3329,7 @@ fn draw_artifact_shrine<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()>
         }))?;
         stdout.queue(cursor::MoveTo(
             (game.width / 2).saturating_sub(u16::try_from(line.len()).unwrap_or(0) / 2),
-            game.height / 2 - 3 + (i as u16) * 2,
+            game.height / 2 - 3 + u16::try_from(i).unwrap_or(0) * 2,
         ))?;
         write!(stdout, "{line}")?;
     }

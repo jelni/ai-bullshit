@@ -1,3 +1,4 @@
+#![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Companion, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser,
     Meteor, Point, PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level,
