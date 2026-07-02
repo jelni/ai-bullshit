@@ -1,3 +1,4 @@
+#![allow(clippy::missing_panics_doc)]
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,8 +73,8 @@ pub fn generate_dungeon(
         current_rooms.push(new_pos);
 
         // Connect the rooms
-        let mut room1 = grid.get(&pos).unwrap().clone();
-        let mut room2 = grid.get(&new_pos).unwrap().clone();
+        let mut room1 = grid.get(&pos).expect("Dungeon grid pos should be valid").clone();
+        let mut room2 = grid.get(&new_pos).expect("Dungeon grid next pos should be valid").clone();
 
         match dir {
             (0, -1) => {

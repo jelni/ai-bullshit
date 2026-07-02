@@ -1,3 +1,5 @@
+#![allow(clippy::trivially_copy_pass_by_ref)]
+#![allow(clippy::too_many_lines)]
 use crate::game::BossType;
 
 #[must_use]

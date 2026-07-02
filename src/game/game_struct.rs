@@ -1,3 +1,6 @@
+#![allow(clippy::missing_panics_doc, clippy::match_like_matches_macro)]
+#![allow(clippy::useless_let_if_seq, clippy::unnecessary_lazy_evaluations, clippy::match_wildcard_for_single_variants, clippy::collection_is_never_read, clippy::if_same_then_else, clippy::match_same_arms)]
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss, clippy::too_many_lines, clippy::similar_names)]
 use super::{
     AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
@@ -1683,7 +1686,7 @@ impl Game {
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
             | GameMode::Dodgeball
-            | GameMode::DungeonCrawler => {
+            | GameMode::DungeonCrawler | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2166,7 +2169,7 @@ impl Game {
             | GameMode::BulletHell
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
-            | GameMode::Dodgeball => {
+            | GameMode::Dodgeball | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2761,7 +2764,7 @@ impl Game {
         }
     }
     pub fn apply_gravity(&mut self) {
-        if self.mode != GameMode::Gravity {
+        if self.mode != GameMode::Gravity && self.mode != GameMode::Chaos {
             return;
         }
         if self.rng.gen_bool(0.2) {
@@ -3552,6 +3555,27 @@ impl Game {
                 crate::game::TimeOfDay::Day => crate::game::TimeOfDay::Night,
                 crate::game::TimeOfDay::Night => crate::game::TimeOfDay::Day,
             };
+        }
+
+
+        if self.mode == GameMode::Chaos {
+            if self.tick_counter.is_multiple_of(100) {
+                let weather_types = [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm];
+                self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
+            }
+            if self.tick_counter.is_multiple_of(500) {
+                let mut p = self.snake.head();
+                p.x = p.x.saturating_add(5);
+                self.bosses.push(Boss {
+                    position: p,
+                    health: 10,
+                    max_health: 10,
+                    move_timer: 0,
+                    shoot_timer: 0,
+                    kind: BossType::Shooter,
+                    state_timer: 0,
+                });
+            }
         }
 
         self.save_history_state();
@@ -7363,7 +7387,7 @@ impl Game {
     }
 
     #[must_use]
-    #[allow(clippy::collapsible_if)]
+    #[expect(clippy::collapsible_if)]
     pub fn bot_smart_pathfind(
         &self,
         start: Point,
