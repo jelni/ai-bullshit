@@ -3664,8 +3664,10 @@ impl Game {
             ) {
                 let boss_health = if self.mode == GameMode::BossRush {
                     10 + self.campaign_level * 5
+                } else if self.mode == GameMode::Campaign {
+                    10 + self.campaign_level * 2
                 } else {
-                    10
+                    10 + (self.bosses.len() as u32) * 2
                 };
                 let kind = if self.mode == GameMode::SnakeSurvivor {
                     match self.rng.gen_range(0..3) {
