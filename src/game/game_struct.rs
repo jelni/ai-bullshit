@@ -8378,7 +8378,7 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player)
+                && self.is_safe_final_p(final_p, 1, checking_player) && !self.obstacles.contains(&final_p)
             {
                 let cost = 1;
                 g_score.insert(final_p, cost);
@@ -8421,7 +8421,7 @@ impl Game {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 let tentative_g = current_g.saturating_add(1);
                 if let Some(final_p) = self.get_final_p(next_p)
-                    && (self.is_safe_final_p(final_p, tentative_g, checking_player)
+                    && (self.is_safe_final_p(final_p, tentative_g, checking_player) && !self.obstacles.contains(&final_p)
                         || (targets.contains(&final_p) && tentative_g > 1))
                     && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
                 {
