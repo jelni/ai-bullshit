@@ -6107,11 +6107,13 @@ impl Game {
             return;
         } else if p1_dead {
             if self.mode == GameMode::CaptureTheFlag {
-                self.p1_has_flag = false;
-                self.p2_flag = Some(Point {
-                    x: self.width.saturating_sub(3),
-                    y: self.height / 2,
-                });
+                if self.p1_has_flag {
+                    self.p1_has_flag = false;
+                    self.p2_flag = Some(Point {
+                        x: self.width.saturating_sub(3),
+                        y: self.height / 2,
+                    });
+                }
                 self.respawn();
                 return;
             }
@@ -6137,11 +6139,13 @@ impl Game {
             return;
         } else if p2_dead {
             if self.mode == GameMode::CaptureTheFlag {
-                self.p2_has_flag = false;
-                self.p1_flag = Some(Point {
-                    x: 2,
-                    y: self.height / 2,
-                });
+                if self.p2_has_flag {
+                    self.p2_has_flag = false;
+                    self.p1_flag = Some(Point {
+                        x: 2,
+                        y: self.height / 2,
+                    });
+                }
                 self.respawn();
                 return;
             }

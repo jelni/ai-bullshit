@@ -3,7 +3,7 @@ use crate::snake::{Direction, Point};
 use std::collections::{HashMap, VecDeque};
 
 #[must_use]
-#[expect(clippy::too_many_lines, reason = "Flow field generation requires complex checks")]
+// #[expect(clippy::too_many_lines, reason = "Flow field generation requires complex checks")]
 pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Direction> {
     let mut flow_field = HashMap::new();
     let mut queue = VecDeque::new();
