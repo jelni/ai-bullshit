@@ -79,53 +79,9 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
 
                 if !flow_field.contains_key(&final_prev) && !targets.contains(&final_prev) {
                     let next_from_prev = Game::calculate_next_head_dir(final_prev, d);
-                    let mut is_dynamic_obstacle = false;
-                    for boss in &game.bosses {
-                        if boss.position == final_prev {
-                            is_dynamic_obstacle = true;
-                            break;
-                        }
-                    }
-                    if !is_dynamic_obstacle {
-                        for laser in &game.lasers {
-                            if laser.position == final_prev {
-                                is_dynamic_obstacle = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !is_dynamic_obstacle && game.mines.contains(&final_prev) {
-                        is_dynamic_obstacle = true;
-                    }
-                    if !is_dynamic_obstacle {
-                        for meteor in &game.meteors {
-                            if meteor.position == final_prev {
-                                is_dynamic_obstacle = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !is_dynamic_obstacle && game.black_hole.is_some_and(|bh| bh == final_prev) {
-                        is_dynamic_obstacle = true;
-                    }
-                    if !is_dynamic_obstacle {
-                        for turret in &game.turrets {
-                            if turret.position == final_prev {
-                                is_dynamic_obstacle = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !is_dynamic_obstacle
-                        && game.goblin.as_ref().is_some_and(|g| g.position == final_prev)
-                    {
-                        is_dynamic_obstacle = true;
-                    }
-
                     if let Some(final_curr_test) = game.get_final_p(next_from_prev)
                         && final_curr_test == curr
-                        && !game.obstacles.contains(&final_prev)
-                        && !is_dynamic_obstacle
+                        && game.is_safe_final_p(final_prev, dist + 1, 3)
                     {
                         flow_field.insert(final_prev, d);
                         queue.push_back((final_prev, dist + 1));
