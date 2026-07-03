@@ -8082,11 +8082,15 @@ impl Game {
                     x: 2,
                     y: self.height / 2,
                 }];
+            } else if let Some(p2_flag) = self.p2_flag {
+                targets = vec![p2_flag];
+            } else if let Some(p2) = &self.player2 {
+                targets = vec![p2.head()];
             } else {
-                targets = vec![self.p2_flag.unwrap_or_else(|| Point {
+                targets = vec![Point {
                     x: self.width.saturating_sub(3),
                     y: self.height / 2,
-                })];
+                }];
             }
         }
         if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
@@ -8169,11 +8173,10 @@ impl Game {
                         x: self.width.saturating_sub(3),
                         y: self.height / 2,
                     }];
+                } else if let Some(p1_flag) = self.p1_flag {
+                    targets = vec![p1_flag];
                 } else {
-                    targets = vec![self.p1_flag.unwrap_or_else(|| Point {
-                        x: 2,
-                        y: self.height / 2,
-                    })];
+                    targets = vec![self.snake.head()];
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
