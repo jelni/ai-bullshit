@@ -2365,6 +2365,9 @@ impl Game {
             && current_pos.y < self.height - 1 - margin
         {
             steps += 1;
+            if let Some(final_p) = self.get_final_p(current_pos) {
+                current_pos = final_p;
+            }
             for boss in &self.bosses {
                 if boss.position == current_pos {
                     return true;
@@ -3483,22 +3486,7 @@ impl Game {
                 };
 
                 // When moving we need to get the final point (which resolves portals)
-                let final_p = if boss_kind == BossType::Teleporter {
-                    let wrapped = self.calculate_wrapped_head(next_p);
-                    if let Some((portal1, portal2)) = self.portals {
-                        if wrapped == portal1 {
-                            Some(portal2)
-                        } else if wrapped == portal2 {
-                            Some(portal1)
-                        } else {
-                            Some(wrapped)
-                        }
-                    } else {
-                        Some(wrapped)
-                    }
-                } else {
-                    self.get_final_p(next_p)
-                };
+                let final_p = self.get_final_p(next_p);
 
                 if let Some(final_p) = final_p
                     && final_p.x >= margin
