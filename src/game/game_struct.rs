@@ -3438,8 +3438,55 @@ impl Game {
         };
 
         let heuristic = |p: Point| -> u16 {
+            let mut penalty = 0u16;
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+            for m in &self.mines {
+                let d = calc_dist(p, *m);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for t in &self.turrets {
+                let d = calc_dist(p, t.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            if let Some(bh) = self.black_hole {
+                let d = calc_dist(p, bh);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+            if let Some(col) = self.lightning_column {
+                let dx = p.x.abs_diff(col);
+                if dx < 3 {
+                    penalty = penalty.saturating_add((3 - dx) * 50);
+                }
+            }
+            for m in &self.meteors {
+                let dx = p.x.abs_diff(m.position.x);
+                if dx < 2 && p.y >= m.position.y {
+                    let dy = p.y.abs_diff(m.position.y);
+                    if dy < 10 {
+                        penalty = penalty.saturating_add((10 - dy) * 5);
+                    }
+                }
+            }
+            if let Some((pf_p, _)) = self.poison_food {
+                let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+
             let dist_direct = calc_dist(p, target);
-            if let Some((portal1, portal2)) = self.portals {
+            let base_dist = if let Some((portal1, portal2)) = self.portals {
                 let dist_via_portal1 = calc_dist(p, portal1)
                     .saturating_add(calc_dist(portal2, target))
                     .saturating_add(1);
@@ -3449,7 +3496,8 @@ impl Game {
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
-            }
+            };
+            base_dist.saturating_add(penalty)
         };
 
         tie_breaker_counter += 1;
