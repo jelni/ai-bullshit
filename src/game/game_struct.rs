@@ -4563,6 +4563,13 @@ impl Game {
                                         &mut self.rng,
                                         margin,
                                     ) {
+                                        self.spawn_particles(
+                                            f32::from(boss.position.x),
+                                            f32::from(boss.position.y),
+                                            20,
+                                            crate::color::Color::Magenta,
+                                            '*',
+                                        );
                                         boss.position = pos;
                                         boss.state_timer = 15;
                                     }
@@ -4988,7 +4995,15 @@ impl Game {
                             }
                         }
                     }
-                    laser.position = Self::calculate_next_head_dir(laser.position, laser.direction);
+                    let mut next_pos = Self::calculate_next_head_dir(laser.position, laser.direction);
+                    if let Some((p1, p2)) = self.portals {
+                        if next_pos == p1 {
+                            next_pos = p2;
+                        } else if next_pos == p2 {
+                            next_pos = p1;
+                        }
+                    }
+                    laser.position = next_pos;
                 }
                 if self.mode == GameMode::Dodgeball {
                     if laser.position.x <= margin {
