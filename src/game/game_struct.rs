@@ -5013,15 +5013,18 @@ impl Game {
                         }
                         laser.position.y = self.height - 2 - margin;
                     }
-                } else if laser.position.x <= margin
-                    || laser.position.x >= self.width - 1 - margin
-                    || laser.position.y <= margin
-                    || laser.position.y >= self.height - 1 - margin
+                }
+
+                if self.mode != GameMode::Dodgeball
+                    && (laser.position.x <= margin
+                        || laser.position.x >= self.width - 1 - margin
+                        || laser.position.y <= margin
+                        || laser.position.y >= self.height - 1 - margin)
                 {
                     destroyed = true;
                     break;
                 }
-                if self.obstacles.contains(&laser.position) {
+                if self.mode != GameMode::Dodgeball && self.obstacles.contains(&laser.position) {
                     self.obstacles.remove(&laser.position);
                     if !is_piercing {
                         destroyed = true;
