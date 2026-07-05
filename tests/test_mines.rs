@@ -127,6 +127,7 @@ fn test_bot_avoids_mines() {
         y: 5,
     });
 
+    game.obstacles.clear();
     // Request a move
     let next_move = game.calculate_autopilot_move();
 

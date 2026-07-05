@@ -8516,7 +8516,7 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player)
+                && self.is_safe_final_p(final_p, 1, checking_player) && !self.obstacles.contains(&final_p)
             {
                 let mut visited = std::collections::HashSet::new();
                 let mut queue: std::collections::VecDeque<(Point, u16)> =
@@ -8534,7 +8534,7 @@ impl Game {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
                         let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
-                            && self.is_safe_final_p(valid_p, next_steps, checking_player)
+                            && self.is_safe_final_p(valid_p, next_steps, checking_player) && !self.obstacles.contains(&valid_p)
                             && !visited.contains(&valid_p)
                         {
                             visited.insert(valid_p);
