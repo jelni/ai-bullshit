@@ -3554,6 +3554,9 @@ impl Game {
                     }
 
                     if can_move {
+                        if final_p == target {
+                            return first_step.get(&current).copied().or(Some(d));
+                        }
                         let tentative_g = current_g.saturating_add(1);
                         if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
                             came_from.insert(final_p, current);
