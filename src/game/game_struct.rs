@@ -6428,7 +6428,11 @@ impl Game {
                 // final_bot_heads may not cover the newly added bots at the end of the array.
                 // We only move bots that existed at the start of the tick.
                 if i < final_bot_heads.len() {
-                    b.move_to(final_bot_heads[i].1, bots_grow[i]);
+                    let mut final_head = final_bot_heads[i].1;
+                    if let Some(wrapped) = self.get_final_p(final_head) {
+                        final_head = wrapped;
+                    }
+                    b.move_to(final_head, bots_grow[i]);
                 }
                 alive_bots.push(b);
                 alive_paths.push(std::mem::take(&mut old_paths[i]));
@@ -7738,7 +7742,7 @@ impl Game {
                             || boss.kind == BossType::VampireLord
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
-                            || boss.kind == BossType::Phantom
+
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
