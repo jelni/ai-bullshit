@@ -3493,10 +3493,10 @@ impl Game {
             if self.snake.body_map.contains_key(&p) {
                 penalty = penalty.saturating_add(100);
             }
-            if let Some(snake2) = &self.player2 {
-                if snake2.body_map.contains_key(&p) {
-                    penalty = penalty.saturating_add(100);
-                }
+            if let Some(snake2) = &self.player2
+                && snake2.body_map.contains_key(&p)
+            {
+                penalty = penalty.saturating_add(100);
             }
             for bot in &self.bots {
                 if bot.body_map.contains_key(&p) {
