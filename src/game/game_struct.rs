@@ -3493,9 +3493,7 @@ impl Game {
             if self.snake.body_map.contains_key(&p) {
                 penalty = penalty.saturating_add(100);
             }
-            if let Some(snake2) = &self.player2
-                && snake2.body_map.contains_key(&p)
-            {
+            if self.player2.as_ref().is_some_and(|snake2| snake2.body_map.contains_key(&p)) {
                 penalty = penalty.saturating_add(100);
             }
             for bot in &self.bots {
@@ -8032,6 +8030,9 @@ impl Game {
                 if final_p == t.position {
                     return false;
                 }
+            }
+            if self.black_hole.is_some_and(|bh| final_p == bh) {
+                return false;
             }
             if steps == 1 {
                 let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
