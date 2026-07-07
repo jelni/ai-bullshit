@@ -3547,7 +3547,12 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::BossType::Puffer,
         crate::game::BossType::Juggernaut,
         crate::game::BossType::Dragon,
+        crate::game::BossType::Mage,
+        crate::game::BossType::Gorgon,
+        crate::game::BossType::VampireLord,
+        crate::game::BossType::Kraken,
         crate::game::BossType::Alchemist,
+        crate::game::BossType::Phantom,
     ];
 
     for (i, boss) in bosses.iter().enumerate() {
