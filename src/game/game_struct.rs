@@ -8033,6 +8033,9 @@ impl Game {
                     return false;
                 }
             }
+            if self.black_hole.is_some_and(|bh| final_p == bh) {
+                return false;
+            }
             if steps == 1 {
                 let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                 if checking_player == 1 {
