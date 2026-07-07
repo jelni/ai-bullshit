@@ -2230,7 +2230,7 @@ const fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
             game.state = GameState::Menu;
         },
         KeyCode::Up | KeyCode::Char('w' | 'W') => {
-            let total_bosses = 12;
+            let total_bosses = 18;
             if game.settings_selection > 0 {
                 game.settings_selection -= 1;
             } else {
@@ -2238,7 +2238,7 @@ const fn handle_bestiary_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            let total_bosses = 12;
+            let total_bosses = 18;
             if game.settings_selection < total_bosses - 1 {
                 game.settings_selection += 1;
             } else {
