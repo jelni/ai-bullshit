@@ -12,6 +12,7 @@ fn test_meteor_spawning_and_falling() {
         snake_game::game::Difficulty::Normal,
     );
 
+    game.obstacles.clear();
     game.meteors.clear();
 
     // Force a meteor to spawn
