@@ -1,6 +1,19 @@
 #![allow(clippy::missing_panics_doc, clippy::match_like_matches_macro)]
-#![allow(clippy::useless_let_if_seq, clippy::unnecessary_lazy_evaluations, clippy::match_wildcard_for_single_variants, clippy::collection_is_never_read, clippy::if_same_then_else, clippy::match_same_arms)]
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss, clippy::too_many_lines, clippy::similar_names)]
+#![allow(
+    clippy::useless_let_if_seq,
+    clippy::unnecessary_lazy_evaluations,
+    clippy::match_wildcard_for_single_variants,
+    clippy::collection_is_never_read,
+    clippy::if_same_then_else,
+    clippy::match_same_arms
+)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::too_many_lines,
+    clippy::similar_names
+)]
 use super::{
     AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
@@ -1686,7 +1699,8 @@ impl Game {
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
             | GameMode::Dodgeball
-            | GameMode::DungeonCrawler | GameMode::Chaos => {
+            | GameMode::DungeonCrawler
+            | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2169,7 +2183,8 @@ impl Game {
             | GameMode::BulletHell
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
-            | GameMode::Dodgeball | GameMode::Chaos => {
+            | GameMode::Dodgeball
+            | GameMode::Chaos => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3613,10 +3628,10 @@ impl Game {
             };
         }
 
-
         if self.mode == GameMode::Chaos {
             if self.tick_counter.is_multiple_of(100) {
-                let weather_types = [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm];
+                let weather_types =
+                    [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm];
                 self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
             }
             if self.tick_counter.is_multiple_of(500) {
@@ -5015,7 +5030,8 @@ impl Game {
                             }
                         }
                     }
-                    let mut next_pos = Self::calculate_next_head_dir(laser.position, laser.direction);
+                    let mut next_pos =
+                        Self::calculate_next_head_dir(laser.position, laser.direction);
                     if let Some((p1, p2)) = self.portals {
                         if next_pos == p1 {
                             next_pos = p2;
@@ -7512,6 +7528,127 @@ impl Game {
         };
 
         let heuristic = |p: Point| -> u16 {
+            let mut penalty = 0u16;
+            if checking_player == 1 {
+                if let Some(p2) = &self.player2 {
+                    for part in &p2.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            } else if checking_player == 2 {
+                for part in &self.snake.body {
+                    let d = calc_dist(p, *part);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            } else if checking_player == 3 {
+                for part in &self.snake.body {
+                    let d = calc_dist(p, *part);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                if let Some(p2) = &self.player2 {
+                    for part in &p2.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            }
+            for boss in &self.bosses {
+                if target == boss.position {
+                    continue;
+                }
+                let d = calc_dist(p, boss.position);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+            if let Some((pf, _)) = self.poison_food {
+                let d = calc_dist(p, pf);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+            for m in &self.mines {
+                let d = calc_dist(p, *m);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for t in &self.turrets {
+                let d = calc_dist(p, t.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            if let Some(bh) = self.black_hole {
+                let d = calc_dist(p, bh);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+            if let Some(col) = self.lightning_column {
+                let dx = p.x.abs_diff(col);
+                if dx < 3 {
+                    penalty = penalty.saturating_add((3 - dx) * 50);
+                }
+            }
+            for m in &self.meteors {
+                let dx = p.x.abs_diff(m.position.x);
+                if dx < 2 && p.y >= m.position.y {
+                    let dy = p.y.abs_diff(m.position.y);
+                    if dy < 10 {
+                        penalty = penalty.saturating_add((10 - dy) * 5);
+                    }
+                }
+            }
+
             let dist_direct = calc_dist(p, target);
             if let Some((portal1, portal2)) = self.portals {
                 let dist_via_portal1 = calc_dist(p, portal1)
@@ -7521,8 +7658,9 @@ impl Game {
                     .saturating_add(calc_dist(portal1, target))
                     .saturating_add(1);
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
+                    .saturating_add(penalty)
             } else {
-                dist_direct
+                dist_direct.saturating_add(penalty)
             }
         };
 
@@ -7762,7 +7900,6 @@ impl Game {
                             || boss.kind == BossType::VampireLord
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
-
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
@@ -8462,7 +8599,8 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player) && !self.obstacles.contains(&final_p)
+                && self.is_safe_final_p(final_p, 1, checking_player)
+                && !self.obstacles.contains(&final_p)
             {
                 let cost = 1;
                 g_score.insert(final_p, cost);
@@ -8505,7 +8643,8 @@ impl Game {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 let tentative_g = current_g.saturating_add(1);
                 if let Some(final_p) = self.get_final_p(next_p)
-                    && (self.is_safe_final_p(final_p, tentative_g, checking_player) && !self.obstacles.contains(&final_p)
+                    && (self.is_safe_final_p(final_p, tentative_g, checking_player)
+                        && !self.obstacles.contains(&final_p)
                         || (targets.contains(&final_p) && tentative_g > 1))
                     && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
                 {
@@ -8543,7 +8682,8 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
-                && self.is_safe_final_p(final_p, 1, checking_player) && !self.obstacles.contains(&final_p)
+                && self.is_safe_final_p(final_p, 1, checking_player)
+                && !self.obstacles.contains(&final_p)
             {
                 let mut visited = std::collections::HashSet::new();
                 let mut queue: std::collections::VecDeque<(Point, u16)> =
@@ -8561,7 +8701,8 @@ impl Game {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
                         let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
-                            && self.is_safe_final_p(valid_p, next_steps, checking_player) && !self.obstacles.contains(&valid_p)
+                            && self.is_safe_final_p(valid_p, next_steps, checking_player)
+                            && !self.obstacles.contains(&valid_p)
                             && !visited.contains(&valid_p)
                         {
                             visited.insert(valid_p);
