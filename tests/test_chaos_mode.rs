@@ -2,7 +2,8 @@ use snake_game::*;
 
 #[test]
 fn test_chaos_mode_events() {
-    let mut game = game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
     game.mode = game::GameMode::Chaos;
 
     // Clear initial state

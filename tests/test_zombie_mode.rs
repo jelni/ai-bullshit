@@ -75,7 +75,10 @@ fn test_zombie_targets_player() {
     let mut moved = false;
     for _ in 0..15 {
         game.update();
-        if game.bots.is_empty() { continue; } let new_head = game.bots[0].head();
+        if game.bots.is_empty() {
+            continue;
+        }
+        let new_head = game.bots[0].head();
         if new_head != bot_pos {
             moved = true;
             assert!(new_head.x < 10 || new_head.y < 10);

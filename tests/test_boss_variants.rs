@@ -5,11 +5,17 @@ use snake_game::snake::{Direction, Point, Snake};
 #[test]
 fn test_mimic_mimics_decoy() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Mimic only moves if within 3 distance
-    let initial_pos = Point { x: 7, y: 5 };
+    let initial_pos = Point {
+        x: 7,
+        y: 5,
+    };
     game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game.bosses.push(Boss {
         position: initial_pos,
