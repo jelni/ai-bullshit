@@ -3484,6 +3484,25 @@ impl Game {
                     penalty = penalty.saturating_add((4 - d) * 10);
                 }
             }
+            for boss in &self.bosses {
+                let d = calc_dist(p, boss.position);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 15);
+                }
+            }
+            if self.snake.body_map.contains_key(&p) {
+                penalty = penalty.saturating_add(100);
+            }
+            if let Some(snake2) = &self.player2 {
+                if snake2.body_map.contains_key(&p) {
+                    penalty = penalty.saturating_add(100);
+                }
+            }
+            for bot in &self.bots {
+                if bot.body_map.contains_key(&p) {
+                    penalty = penalty.saturating_add(100);
+                }
+            }
 
             let dist_direct = calc_dist(p, target);
             let base_dist = if let Some((portal1, portal2)) = self.portals {
