@@ -7916,6 +7916,7 @@ impl Game {
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
+                            || boss.kind == BossType::Phantom
                         {
                             if final_p == boss.position {
                                 return false;
