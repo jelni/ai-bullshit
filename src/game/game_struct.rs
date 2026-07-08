@@ -3722,7 +3722,7 @@ impl Game {
                 && self.rng.gen_bool(0.005)
         };
         if should_spawn_boss {
-            let margin = self.safe_zone_margin + 5;
+            let margin = self.safe_zone_margin;
             let avoid =
                 |p: &Point| self.obstacles.contains(p) || self.snake.body_map.contains_key(p);
             if let Some(pos) = Self::get_random_empty_point(
@@ -4152,7 +4152,7 @@ impl Game {
                         boss.move_timer += 1;
                         if boss.move_timer >= teleport_threshold {
                             boss.move_timer = 0;
-                            let margin = self.safe_zone_margin + 5;
+                            let margin = self.safe_zone_margin;
                             let avoid = |p: &Point| {
                                 self.obstacles.contains(p) || self.snake.body_map.contains_key(p)
                             };
@@ -4585,7 +4585,7 @@ impl Game {
                                     beep();
 
                                     // Teleport away after stealing life
-                                    let margin = self.safe_zone_margin + 5;
+                                    let margin = self.safe_zone_margin;
                                     let avoid = |p: &Point| {
                                         self.obstacles.contains(p)
                                             || self.snake.body_map.contains_key(p)
