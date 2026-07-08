@@ -409,6 +409,8 @@ impl Game {
             "highscore_century.txt".to_string()
         } else if mode == GameMode::MillenniumChallenge {
             "highscore_millennium.txt".to_string()
+        } else if mode == GameMode::EonChallenge {
+            "highscore_eon.txt".to_string()
         } else {
             format!("highscore_{difficulty:?}.txt").to_lowercase()
         }
@@ -1685,6 +1687,7 @@ impl Game {
             | GameMode::DecadeChallenge
             | GameMode::CenturyChallenge
             | GameMode::MillenniumChallenge
+            | GameMode::EonChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -1846,6 +1849,13 @@ impl Game {
                 .as_secs()
                 / (86400 * 365_000);
             self.rng = rand::rngs::StdRng::seed_from_u64(millennia_since_epoch);
+        } else if self.mode == GameMode::EonChallenge {
+            let eons_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / (86400 * 365_000_000);
+            self.rng = rand::rngs::StdRng::seed_from_u64(eons_since_epoch);
         } else {
             self.rng = rand::rngs::StdRng::from_entropy();
         }
@@ -2170,6 +2180,7 @@ impl Game {
             | GameMode::DecadeChallenge
             | GameMode::CenturyChallenge
             | GameMode::MillenniumChallenge
+            | GameMode::EonChallenge
             | GameMode::FogOfWar
             | GameMode::Evolution
             | GameMode::BossRush
@@ -3717,7 +3728,8 @@ impl Game {
                 || self.mode == GameMode::YearlyChallenge
                 || self.mode == GameMode::DecadeChallenge
                 || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge)
+                || self.mode == GameMode::MillenniumChallenge
+                || self.mode == GameMode::EonChallenge)
                 && self.bosses.is_empty()
                 && self.rng.gen_bool(0.005)
         };
@@ -4888,6 +4900,7 @@ impl Game {
             || self.mode == GameMode::DecadeChallenge
             || self.mode == GameMode::CenturyChallenge
             || self.mode == GameMode::MillenniumChallenge
+            || self.mode == GameMode::EonChallenge
         {
             Duration::from_secs(3)
         } else {
