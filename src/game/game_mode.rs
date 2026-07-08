@@ -25,6 +25,7 @@ pub enum GameMode {
     DecadeChallenge,
     CenturyChallenge,
     MillenniumChallenge,
+    EonChallenge,
     FogOfWar,
     Evolution,
     BossRush,
