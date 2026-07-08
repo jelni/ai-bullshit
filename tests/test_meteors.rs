@@ -12,6 +12,7 @@ fn test_meteor_spawning_and_falling() {
         snake_game::game::Difficulty::Normal,
     );
 
+    game.obstacles.clear();
     game.meteors.clear();
 
     // Force a meteor to spawn
@@ -26,6 +27,7 @@ fn test_meteor_spawning_and_falling() {
     game.state = snake_game::game::GameState::Playing;
 
     // Clear meteors that spawned during update
+    game.obstacles.clear();
     game.meteors.clear();
     game.meteors.push(Meteor {
         position: Point {
