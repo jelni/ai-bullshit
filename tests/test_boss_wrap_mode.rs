@@ -2,7 +2,8 @@ use snake_game::*;
 
 #[test]
 fn test_boss_wrap_mode() {
-    let game = game::Game::new(20, 20, true, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    let mut game = game::Game::new(20, 20, true, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.obstacles.clear();
 
     let start = snake::Point {
         x: 1,
