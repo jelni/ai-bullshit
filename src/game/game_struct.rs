@@ -3594,6 +3594,14 @@ impl Game {
                         && boss_kind != BossType::Phantom
                     {
                         can_move = false;
+                    } else if self.mines.contains(&final_p) {
+                        can_move = false;
+                    } else if self.lasers.iter().any(|l| l.position == final_p) {
+                        can_move = false;
+                    } else if self.lightning_column == Some(final_p.x) {
+                        can_move = false;
+                    } else if self.meteors.iter().any(|m| m.position == final_p) {
+                        can_move = false;
                     }
 
                     if can_move {
