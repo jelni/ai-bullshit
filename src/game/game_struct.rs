@@ -6112,6 +6112,7 @@ impl Game {
         }
         let mut bots_to_remove = std::collections::HashSet::new();
         let mut bots_grow = vec![self.mode == GameMode::Tron; self.bots.len()];
+        let bots_len_start = self.bots.len();
         for (i, final_head, hit_wall) in &final_bot_heads {
             if *hit_wall {
                 bots_to_remove.insert(*i);
@@ -6484,12 +6485,14 @@ impl Game {
                 // Since eating food may spawn new bots during update_tick and process_food_collision,
                 // final_bot_heads may not cover the newly added bots at the end of the array.
                 // We only move bots that existed at the start of the tick.
-                if i < final_bot_heads.len() {
-                    let mut final_head = final_bot_heads[i].1;
-                    if let Some(wrapped) = self.get_final_p(final_head) {
-                        final_head = wrapped;
+                if i < bots_len_start {
+                    if let Some(pos) = final_bot_heads.iter().position(|&(idx, _, _)| idx == i) {
+                        let mut final_head = final_bot_heads[pos].1;
+                        if let Some(wrapped) = self.get_final_p(final_head) {
+                            final_head = wrapped;
+                        }
+                        b.move_to(final_head, bots_grow[i]);
                     }
-                    b.move_to(final_head, bots_grow[i]);
                 }
                 alive_bots.push(b);
                 alive_paths.push(std::mem::take(&mut old_paths[i]));

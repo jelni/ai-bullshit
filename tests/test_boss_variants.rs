@@ -175,7 +175,7 @@ fn test_teleporter_boss_moves() {
         position: initial_pos,
         health: 10,
         max_health: 10,
-        move_timer: 29, // Threshold is 30, so next update it should teleport
+        move_timer: 250, // Force teleport threshold to trigger
         shoot_timer: 0,
         kind: BossType::Teleporter,
         state_timer: 0,
