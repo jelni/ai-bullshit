@@ -5139,7 +5139,7 @@ impl Game {
                 if let Some((x, y, text, color)) = damage_text {
                     self.spawn_floating_text(x, y, text, color);
                 }
-                if self.goblin.is_some_and(|goblin| laser.position == goblin.position) {
+                if self.goblin.as_ref().is_some_and(|goblin| laser.position == goblin.position) {
                     let gob_pos = self.goblin.as_ref().unwrap().position;
                     self.goblin = None;
                     if !is_piercing {
