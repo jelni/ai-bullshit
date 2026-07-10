@@ -7950,7 +7950,7 @@ impl Game {
                         } else {
                             2
                         });
-                        if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
+                        if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut || boss.kind == BossType::Phantom {
                             move_threshold = std::cmp::max(1, move_threshold / 2);
                         }
                         if boss.health <= boss.max_health / 2 {
@@ -7972,7 +7972,6 @@ impl Game {
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
-                            || boss.kind == BossType::Phantom
                         {
                             if final_p == boss.position || (boss.kind == BossType::Shooter && u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y)) <= u32::from(steps)) {
                                 return false;
