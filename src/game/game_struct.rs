@@ -6644,6 +6644,28 @@ impl Game {
                     boss.state_timer = 30;
                 }
             } else if p.p_type == PowerUpType::Nuke {
+                for boss in std::mem::take(&mut self.bosses) {
+                    *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                    self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
+                    if self.rng.gen_bool(0.2) {
+                        self.equipment_boxes.push(boss.position);
+                    }
+                    if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                        self.companion = Some(Companion {
+                            position: boss.position,
+                            kind: crate::game::CompanionType::Fighter,
+                            move_timer: 0,
+                            action_timer: 0,
+                            path: Vec::new(),
+                        });
+                        crate::game::beep();
+                    }
+                    self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                    self.score += 100;
+                    if self.stats.faction.is_some() {
+                        self.stats.faction_rep += 100;
+                    }
+                }
                 self.bosses.clear();
                 self.resources.clear();
                 self.meteors.clear();
