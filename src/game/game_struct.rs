@@ -5393,6 +5393,26 @@ impl Game {
                             crate::color::Color::Magenta,
                             'B',
                         );
+                        self.lasers.push(Laser {
+                            position: boss.position,
+                            direction: Direction::Up,
+                            player: 3,
+                        });
+                        self.lasers.push(Laser {
+                            position: boss.position,
+                            direction: Direction::Down,
+                            player: 3,
+                        });
+                        self.lasers.push(Laser {
+                            position: boss.position,
+                            direction: Direction::Left,
+                            player: 3,
+                        });
+                        self.lasers.push(Laser {
+                            position: boss.position,
+                            direction: Direction::Right,
+                            player: 3,
+                        });
                     } else {
                         next_bosses.push(boss);
                     }
