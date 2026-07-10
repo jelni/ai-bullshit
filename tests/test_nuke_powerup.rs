@@ -16,6 +16,9 @@ fn test_nuke_powerup_destroys_everything() {
     game.snake = Snake::new(Point { x: 10, y: 10 });
     game.snake.direction = Direction::Right;
 
+    // Clear randomly generated obstacles to prevent flakiness
+    game.obstacles.clear();
+
     // Place a Nuke right in front of the snake
     game.power_up = Some(PowerUp {
         p_type: PowerUpType::Nuke,

@@ -19,6 +19,9 @@ fn test_emp_powerup_destroys_mines_lasers_and_stuns_boss() {
     });
     game.snake.direction = Direction::Right;
 
+    // Clear randomly generated obstacles to prevent flakiness
+    game.obstacles.clear();
+
     // Place an Emp right in front of the snake
     game.power_up = Some(PowerUp {
         p_type: PowerUpType::Emp,
