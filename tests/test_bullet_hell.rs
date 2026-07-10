@@ -2,7 +2,7 @@ use snake_game::game::{Difficulty, Game, GameMode, Theme};
 
 #[test]
 fn test_bullet_hell_spawns_lasers() {
-    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    let mut game = Game::new(100, 100, false, 'x', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::BulletHell;
     game.reset();
 

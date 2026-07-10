@@ -3557,7 +3557,7 @@ impl Game {
         }) = open_set.pop()
         {
             iterations += 1;
-            if iterations > 300 {
+            if iterations > 1000 {
                 break;
             }
             if current == target {
