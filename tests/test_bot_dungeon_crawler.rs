@@ -37,7 +37,11 @@ fn test_bot_dungeon_crawler_uncleared_room_targets_boss() {
 
     let next_move = game.calculate_autopilot_move();
 
-    assert!(next_move == Some(snake_game::snake::Direction::Right) || next_move == Some(snake_game::snake::Direction::Up) || next_move == Some(snake_game::snake::Direction::Down)); // The pathfinder may take a zig-zag path to avoid the immediate line of fire or because of prediction logic.
+    assert!(
+        next_move == Some(snake_game::snake::Direction::Right)
+            || next_move == Some(snake_game::snake::Direction::Up)
+            || next_move == Some(snake_game::snake::Direction::Down)
+    ); // The pathfinder may take a zig-zag path to avoid the immediate line of fire or because of prediction logic.
 }
 
 #[test]

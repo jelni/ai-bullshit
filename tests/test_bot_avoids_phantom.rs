@@ -1,4 +1,4 @@
-use snake_game::game::{Boss, BossType, Difficulty, Game, GameState, Theme, GameMode};
+use snake_game::game::{Boss, BossType, Difficulty, Game, GameMode, GameState, Theme};
 use snake_game::snake::Point;
 
 #[test]
@@ -10,11 +10,17 @@ fn test_bot_avoids_phantom() {
     game.auto_pilot = true;
 
     // Place the bot at (10, 10)
-    let bot_pos = Point { x: 10, y: 10 };
+    let bot_pos = Point {
+        x: 10,
+        y: 10,
+    };
     game.snake = snake_game::snake::Snake::new(bot_pos);
 
     // Place a Phantom right next to the bot at (10, 11)
-    let phantom_pos = Point { x: 10, y: 11 };
+    let phantom_pos = Point {
+        x: 10,
+        y: 11,
+    };
     game.bosses.push(Boss {
         position: phantom_pos,
         health: 10,
@@ -32,7 +38,10 @@ fn test_bot_avoids_phantom() {
     // The bot's head is at (10,10). The Phantom is at (10,11).
     // The bot should NOT try to move to (10,11) or stay near the Phantom.
 
-    game.food = Point { x: 10, y: 15 }; // Food is below, near Phantom
+    game.food = Point {
+        x: 10,
+        y: 15,
+    }; // Food is below, near Phantom
 
     let is_safe_10_11 = game.is_safe_final_p(phantom_pos, 1, 1);
     assert!(!is_safe_10_11, "The bot should identify the Phantom's position as unsafe.");

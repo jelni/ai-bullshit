@@ -7950,7 +7950,10 @@ impl Game {
                         } else {
                             2
                         });
-                        if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut || boss.kind == BossType::Phantom {
+                        if boss.kind == BossType::Charger
+                            || boss.kind == BossType::Juggernaut
+                            || boss.kind == BossType::Phantom
+                        {
                             move_threshold = std::cmp::max(1, move_threshold / 2);
                         }
                         if boss.health <= boss.max_health / 2 {
@@ -7958,6 +7961,22 @@ impl Game {
                         }
                         let active_steps =
                             u32::from(steps).saturating_sub(u32::from(boss.state_timer));
+                        let moves = (active_steps + u32::from(boss.move_timer)) / move_threshold;
+                        let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
+                            + u32::from(final_p.y.abs_diff(boss.position.y));
+
+                        if let Some((portal1, portal2)) = self.portals {
+                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
+                                + u32::from(final_p.y.abs_diff(portal1.y))
+                                + u32::from(portal2.x.abs_diff(boss.position.x))
+                                + u32::from(portal2.y.abs_diff(boss.position.y));
+                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
+                                + u32::from(final_p.y.abs_diff(portal2.y))
+                                + u32::from(portal1.x.abs_diff(boss.position.x))
+                                + u32::from(portal1.y.abs_diff(boss.position.y));
+                            dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                        }
+
                         if boss.kind == BossType::Teleporter
                             || boss.kind == BossType::Spawner
                             || boss.kind == BossType::Trapper
@@ -7973,33 +7992,17 @@ impl Game {
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
                         {
-                            if final_p == boss.position || (boss.kind == BossType::Shooter && u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y)) <= u32::from(steps)) {
+                            if final_p == boss.position
+                                || (boss.kind == BossType::Shooter && dist <= moves)
+                            {
                                 return false;
                             }
-                        } else {
-                            let moves =
-                                (active_steps + u32::from(boss.move_timer)) / move_threshold;
-                            let mut dist = u32::from(final_p.x.abs_diff(boss.position.x))
-                                + u32::from(final_p.y.abs_diff(boss.position.y));
-
-                            if let Some((portal1, portal2)) = self.portals {
-                                let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                    + u32::from(final_p.y.abs_diff(portal1.y))
-                                    + u32::from(portal2.x.abs_diff(boss.position.x))
-                                    + u32::from(portal2.y.abs_diff(boss.position.y));
-                                let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                    + u32::from(final_p.y.abs_diff(portal2.y))
-                                    + u32::from(portal1.x.abs_diff(boss.position.x))
-                                    + u32::from(portal1.y.abs_diff(boss.position.y));
-                                dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
-                            }
-                            if dist <= moves {
-                                if boss.kind == BossType::Juggernaut {
-                                    // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
-                                    return false;
-                                }
+                        } else if dist <= moves {
+                            if boss.kind == BossType::Juggernaut {
+                                // Juggernaut can move through obstacles, so we assume any tile within distance could be unsafe
                                 return false;
                             }
+                            return false;
                         }
                         if boss.kind == BossType::Shooter
                             || boss.kind == BossType::Puffer
@@ -8451,7 +8454,13 @@ impl Game {
                 } else {
                     for boss in &self.bosses {
                         // If uncleared, try to move toward the boss but not exact position if possible, maybe add an offset
-                        targets.insert(0, Point { x: boss.position.x.saturating_add(1), y: boss.position.y });
+                        targets.insert(
+                            0,
+                            Point {
+                                x: boss.position.x.saturating_add(1),
+                                y: boss.position.y,
+                            },
+                        );
                     }
                 }
             }
@@ -8462,7 +8471,13 @@ impl Game {
                         y: self.height / 2,
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
-                    targets = vec![Point{ x: p1_flag.x.saturating_add(1), y: p1_flag.y }, p1_flag]; // To move toward it, maybe the path was slightly different due to avoidance
+                    targets = vec![
+                        Point {
+                            x: p1_flag.x.saturating_add(1),
+                            y: p1_flag.y,
+                        },
+                        p1_flag,
+                    ]; // To move toward it, maybe the path was slightly different due to avoidance
                 } else {
                     targets = vec![self.snake.head()];
                 }
