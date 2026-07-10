@@ -6649,6 +6649,9 @@ impl Game {
                 self.meteors.clear();
                 self.mines.clear();
                 self.lasers.clear();
+                self.obstacles.clear();
+                self.poison_food = None;
+                self.bonus_food = None;
             } else if p.p_type == PowerUpType::Teleport {
                 let avoid = |pt: &Point| {
                     self.obstacles.contains(pt)
