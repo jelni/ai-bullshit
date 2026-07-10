@@ -74,7 +74,7 @@ fn test_p2_bot_targets_enemy_flag() {
     });
 
     let move_dir = game.calculate_p2_autopilot_move();
-    assert_ne!(move_dir, Some(Direction::Up));
+    assert_eq!(move_dir, Some(Direction::Left));
 }
 
 #[test]
