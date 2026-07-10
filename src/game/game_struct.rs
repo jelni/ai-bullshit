@@ -7974,7 +7974,7 @@ impl Game {
                             || boss.kind == BossType::Mage
                             || boss.kind == BossType::Phantom
                         {
-                            if final_p == boss.position {
+                            if final_p == boss.position || (boss.kind == BossType::Shooter && u32::from(final_p.x.abs_diff(boss.position.x)) + u32::from(final_p.y.abs_diff(boss.position.y)) <= u32::from(steps)) {
                                 return false;
                             }
                         } else {
@@ -8451,7 +8451,8 @@ impl Game {
                     }
                 } else {
                     for boss in &self.bosses {
-                        targets.insert(0, boss.position);
+                        // If uncleared, try to move toward the boss but not exact position if possible, maybe add an offset
+                        targets.insert(0, Point { x: boss.position.x.saturating_add(1), y: boss.position.y });
                     }
                 }
             }
@@ -8462,7 +8463,7 @@ impl Game {
                         y: self.height / 2,
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
-                    targets = vec![p1_flag];
+                    targets = vec![Point{ x: p1_flag.x.saturating_add(1), y: p1_flag.y }, p1_flag]; // To move toward it, maybe the path was slightly different due to avoidance
                 } else {
                     targets = vec![self.snake.head()];
                 }
