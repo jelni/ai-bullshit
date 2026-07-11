@@ -2045,6 +2045,7 @@ fn draw_entities<W: Write>(
             crate::game::CompanionType::Collector => (Color::Yellow, 'C'),
             crate::game::CompanionType::Fighter => (Color::Red, 'F'),
             crate::game::CompanionType::Healer => (Color::Green, 'H'),
+            crate::game::CompanionType::Sniper => (Color::Blue, 'S'),
         };
         stdout.queue(SetForegroundColor(color))?;
         write!(stdout, "{symbol}")?;

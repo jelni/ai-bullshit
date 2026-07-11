@@ -6,6 +6,7 @@ pub enum CompanionType {
     Collector,
     Fighter,
     Healer,
+    Sniper,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

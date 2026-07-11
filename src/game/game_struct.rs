@@ -2989,7 +2989,7 @@ impl Game {
                         }
                         best_target
                     },
-                    CompanionType::Fighter | CompanionType::Healer => self.snake.head(),
+                    CompanionType::Fighter | CompanionType::Healer | CompanionType::Sniper => self.snake.head(),
                 };
 
                 // We use astar_pathfind directly for companions so they don't get restricted by 'neck' turns
@@ -3064,6 +3064,38 @@ impl Game {
                                 crate::color::Color::Magenta,
                                 '♥',
                             );
+                        }
+                    }
+                },
+                CompanionType::Sniper => {
+                    if comp.action_timer >= 30 {
+                        comp.action_timer = 0;
+                        if let Some(boss) = self.bosses.first() {
+                            let dx = i32::from(boss.position.x) - i32::from(comp.position.x);
+                            let dy = i32::from(boss.position.y) - i32::from(comp.position.y);
+                            if dx == 0 || dy == 0 {
+                                let dir = if dx > 0 {
+                                    Direction::Right
+                                } else if dx < 0 {
+                                    Direction::Left
+                                } else if dy > 0 {
+                                    Direction::Down
+                                } else {
+                                    Direction::Up
+                                };
+                                let laser_pos = Self::calculate_next_head_dir(comp.position, dir);
+                                if laser_pos.x > margin
+                                    && laser_pos.x < self.width - 1 - margin
+                                    && laser_pos.y > margin
+                                    && laser_pos.y < self.height - 1 - margin
+                                {
+                                    spawn_lasers.push(Laser {
+                                        position: laser_pos,
+                                        direction: dir,
+                                        player: 1,
+                                    });
+                                }
+                            }
                         }
                     }
                 },
@@ -6533,6 +6565,7 @@ impl Game {
                     crate::game::CompanionType::Collector,
                     crate::game::CompanionType::Fighter,
                     crate::game::CompanionType::Healer,
+                    crate::game::CompanionType::Sniper,
                 ];
                 let comp = possible_companions[self.rng.gen_range(0..possible_companions.len())];
                 if self.stats.unlocked_companions.contains(&comp) {
