@@ -3836,9 +3836,12 @@ impl Game {
                         } else {
                             self.snake.head()
                         };
-                        let dir_opt = self
-                            .get_boss_path(boss.position, target_pos, boss.kind)
-                            .or_else(|| self.bot_smart_pathfind(boss.position, target_pos, 3));
+                        let dir_opt = self.get_boss_path(boss.position, target_pos, boss.kind);
+                        let dir_opt = if dir_opt.is_none() && boss.kind != BossType::Phantom && boss.kind != BossType::Juggernaut && boss.kind != BossType::Charger {
+                            self.bot_smart_pathfind(boss.position, target_pos, 3)
+                        } else {
+                            dir_opt
+                        };
                         if let Some(dir) = dir_opt {
                             let raw_next_pos = Self::calculate_next_head_dir(boss.position, dir);
                             let next_pos = if self.portals.is_some_and(|(p1, _)| p1 == raw_next_pos)
