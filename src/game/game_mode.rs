@@ -45,4 +45,5 @@ pub enum GameMode {
     Dodgeball,
     DungeonCrawler,
     Chaos,
+    Miner,
 }

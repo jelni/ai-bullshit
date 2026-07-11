@@ -1703,7 +1703,8 @@ impl Game {
             | GameMode::KingOfTheHill
             | GameMode::Dodgeball
             | GameMode::DungeonCrawler
-            | GameMode::Chaos => {
+            | GameMode::Chaos
+            | GameMode::Miner => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1923,7 +1924,7 @@ impl Game {
                     }
                 }
             }
-        } else if self.mode == GameMode::Evolution {
+                } else if self.mode == GameMode::Evolution {
             let fill_probability = 0.2;
             for y in 1..self.height - 1 {
                 for x in 1..self.width - 1 {
@@ -1937,6 +1938,22 @@ impl Game {
             }
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
+        } else if self.mode == GameMode::Miner {
+            let mut obstacles = HashSet::new();
+            for y in 1..self.height - 1 {
+                for x in 1..self.width - 1 {
+                    if self.rng.gen_bool(0.7) {
+                        obstacles.insert(Point { x, y });
+                    }
+                }
+            }
+            self.obstacles = obstacles;
+            let body_map = self.snake.body_map.clone();
+            self.obstacles.retain(|p| !body_map.contains_key(p));
+            if let Some(p2) = &self.player2 {
+                let p2_body_map = p2.body_map.clone();
+                self.obstacles.retain(|p| !p2_body_map.contains_key(p));
+            }
         } else {
             let mut obstacles = HashSet::new();
             for _ in 0..obs_count {
@@ -2195,7 +2212,8 @@ impl Game {
             | GameMode::SnakeSurvivor
             | GameMode::KingOfTheHill
             | GameMode::Dodgeball
-            | GameMode::Chaos => {
+            | GameMode::Chaos
+            | GameMode::Miner => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5728,7 +5746,39 @@ impl Game {
             p1_dead = true;
         }
         if hit_obstacle1 && !is_invincible {
-            if self.skin == '🦍' {
+            if self.mode == GameMode::Miner {
+                self.obstacles.remove(&final_head1);
+                self.spawn_particles(
+                    f32::from(final_head1.x),
+                    f32::from(final_head1.y),
+                    10,
+                    crate::color::Color::DarkGrey,
+                    '*',
+                );
+                crate::game::beep();
+
+                // Chance to drop resource or coins
+                let rand_val = self.rng.gen_range(0..100);
+                if rand_val < 10 {
+                    let res = match self.rng.gen_range(0..100) {
+                        0..=40 => Resource::Wood,
+                        41..=70 => Resource::Iron,
+                        71..=90 => Resource::Gold,
+                        _ => Resource::Diamond,
+                    };
+                    self.resources.insert(final_head1, res);
+                } else if rand_val < 20 {
+                    self.stats.coins += 5;
+                    self.spawn_floating_text(
+                        f32::from(final_head1.x),
+                        f32::from(final_head1.y),
+                        "+5".to_string(),
+                        crate::color::Color::Yellow,
+                    );
+                } else if rand_val < 25 {
+                     self.food = final_head1;
+                }
+            } else if self.skin == '🦍' {
                 self.obstacles.remove(&final_head1);
                 self.spawn_particles(
                     f32::from(final_head1.x),
@@ -5820,7 +5870,43 @@ impl Game {
             p2_dead = true;
         }
         if hit_obstacle2 && !is_invincible {
-            p2_dead = true;
+            if self.mode == GameMode::Miner {
+                if let Some(fh2) = final_head2_opt {
+                    self.obstacles.remove(&fh2);
+                    self.spawn_particles(
+                        f32::from(fh2.x),
+                        f32::from(fh2.y),
+                        10,
+                        crate::color::Color::DarkGrey,
+                        '*',
+                    );
+                    crate::game::beep();
+
+                    // Chance to drop resource or coins
+                    let rand_val = self.rng.gen_range(0..100);
+                    if rand_val < 10 {
+                        let res = match self.rng.gen_range(0..100) {
+                            0..=40 => Resource::Wood,
+                            41..=70 => Resource::Iron,
+                            71..=90 => Resource::Gold,
+                            _ => Resource::Diamond,
+                        };
+                        self.resources.insert(fh2, res);
+                    } else if rand_val < 20 {
+                        self.stats.coins += 5;
+                        self.spawn_floating_text(
+                            f32::from(fh2.x),
+                            f32::from(fh2.y),
+                            "+5".to_string(),
+                            crate::color::Color::Yellow,
+                        );
+                    } else if rand_val < 25 {
+                         self.food = fh2;
+                    }
+                }
+            } else {
+                p2_dead = true;
+            }
         }
         if hit_laser2 && !is_invincible {
             p2_dead = true;
@@ -7818,7 +7904,9 @@ impl Game {
                 })
         });
         if !is_invincible {
-            if self.obstacles.contains(&final_p) {
+            if self.mode == GameMode::Miner && self.obstacles.contains(&final_p) {
+                // In Miner mode, obstacles can be broken, so they are safe to walk into
+            } else if self.obstacles.contains(&final_p) {
                 // Determine if Juggernaut could destroy this obstacle
                 let mut juggernaut_will_destroy = false;
                 for boss in &self.bosses {

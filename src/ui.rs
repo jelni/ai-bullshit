@@ -621,6 +621,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Dodgeball Mode",
         "Dungeon Crawler Mode",
         "Chaos Mode",
+        "Miner Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
