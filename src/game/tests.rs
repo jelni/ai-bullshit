@@ -1467,3 +1467,42 @@ fn test_dungeon_crawler_generation_and_loading() {
     let current_room = game.dungeon_grid.get(&game.current_room_coords).unwrap();
     assert_eq!(current_room.r_type, crate::game::dungeon::DungeonRoomType::Start);
 }
+
+#[test]
+fn test_sniper_companion() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.obstacles.clear();
+
+    // Spawn sniper companion
+    game.companion = Some(Companion {
+        position: Point { x: 5, y: 5 },
+        kind: CompanionType::Sniper,
+        move_timer: 0,
+        action_timer: 29, // action_timer gets += 1 in manage_companion
+        path: Vec::new(),
+    });
+
+    // Spawn boss aligned horizontally
+    game.bosses.push(Boss {
+        position: Point { x: 15, y: 5 },
+        health: 10,
+        max_health: 10,
+        kind: BossType::Shooter, // Juggernaut moves, Shooter does not move immediately
+        move_timer: 0,
+        shoot_timer: 0,
+        state_timer: 0,
+    });
+
+    let lasers_before = game.lasers.len();
+    // In Game::update, game state goes from Menu -> Playing so it updates. Wait, state is Menu by default. Let's set it to Playing.
+    game.state = GameState::Playing;
+
+    // Disable boss movement/logic for the test by clearing it briefly before companion updates?
+    // Actually just use a boss that doesn't move immediately
+
+    // Boss moves BEFORE companion in update_tick. Shooter boss doesn't move immediately.
+    game.update();
+
+    assert!(game.lasers.len() > lasers_before, "Sniper companion should have fired a laser");
+    assert_eq!(game.lasers.last().unwrap().direction, Direction::Right, "Sniper should have fired to the right");
+}
