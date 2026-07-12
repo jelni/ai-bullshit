@@ -3581,11 +3581,9 @@ impl Game {
             let dist_direct = calc_dist(p, target);
             let base_dist = if let Some((portal1, portal2)) = self.portals {
                 let dist_via_portal1 = calc_dist(p, portal1)
-                    .saturating_add(calc_dist(portal2, target))
-                    .saturating_add(1);
+                    .saturating_add(calc_dist(portal2, target));
                 let dist_via_portal2 = calc_dist(p, portal2)
-                    .saturating_add(calc_dist(portal1, target))
-                    .saturating_add(1);
+                    .saturating_add(calc_dist(portal1, target));
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
@@ -5195,6 +5193,9 @@ impl Game {
                 if self.goblin.as_ref().is_some_and(|goblin| laser.position == goblin.position) {
                     let gob_pos = self.goblin.as_ref().unwrap().position;
                     self.goblin = None;
+                    if laser.player != 1 {
+                        continue;
+                    }
                     if !is_piercing {
                         destroyed = true;
                     }
