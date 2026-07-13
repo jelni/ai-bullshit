@@ -8786,6 +8786,51 @@ impl Game {
                     penalty = penalty.saturating_add((3 - dx) * 50);
                 }
             }
+            for boss in &self.bosses {
+                if targets.contains(&boss.position) {
+                    continue;
+                }
+                let d = calc_dist(p, boss.position);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+            if let Some((pf, _)) = self.poison_food {
+                let d = calc_dist(p, pf);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 5);
+                }
+            }
+            for m in &self.mines {
+                let d = calc_dist(p, *m);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            for t in &self.turrets {
+                let d = calc_dist(p, t.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
+            if let Some(bh) = self.black_hole {
+                let d = calc_dist(p, bh);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 10);
+                }
+            }
+            if let Some(col) = self.lightning_column {
+                let dx = p.x.abs_diff(col);
+                if dx < 3 {
+                    penalty = penalty.saturating_add((3 - dx) * 50);
+                }
+            }
             for m in &self.meteors {
                 let dx = p.x.abs_diff(m.position.x);
                 if dx < 2 && p.y >= m.position.y {
