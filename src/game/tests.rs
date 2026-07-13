@@ -1475,7 +1475,10 @@ fn test_sniper_companion() {
 
     // Spawn sniper companion
     game.companion = Some(Companion {
-        position: Point { x: 5, y: 5 },
+        position: Point {
+            x: 5,
+            y: 5,
+        },
         kind: CompanionType::Sniper,
         move_timer: 0,
         action_timer: 29, // action_timer gets += 1 in manage_companion
@@ -1484,7 +1487,10 @@ fn test_sniper_companion() {
 
     // Spawn boss aligned horizontally
     game.bosses.push(Boss {
-        position: Point { x: 15, y: 5 },
+        position: Point {
+            x: 15,
+            y: 5,
+        },
         health: 10,
         max_health: 10,
         kind: BossType::Shooter, // Juggernaut moves, Shooter does not move immediately
@@ -1504,5 +1510,9 @@ fn test_sniper_companion() {
     game.update();
 
     assert!(game.lasers.len() > lasers_before, "Sniper companion should have fired a laser");
-    assert_eq!(game.lasers.last().unwrap().direction, Direction::Right, "Sniper should have fired to the right");
+    assert_eq!(
+        game.lasers.last().unwrap().direction,
+        Direction::Right,
+        "Sniper should have fired to the right"
+    );
 }

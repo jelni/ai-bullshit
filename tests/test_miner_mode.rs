@@ -6,12 +6,18 @@ fn test_miner_mode_breaks_obstacle() {
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
     game.mode = game::GameMode::Miner;
 
-    game.snake = snake::Snake::new(snake::Point { x: 5, y: 5 });
+    game.snake = snake::Snake::new(snake::Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = snake::Direction::Right;
 
     // Clear and place one obstacle to the right
     game.obstacles.clear();
-    let obs_pos = snake::Point { x: 6, y: 5 };
+    let obs_pos = snake::Point {
+        x: 6,
+        y: 5,
+    };
     game.obstacles.insert(obs_pos);
 
     // We also make sure the final head calculation is clear
