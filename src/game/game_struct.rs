@@ -1924,7 +1924,7 @@ impl Game {
                     }
                 }
             }
-                } else if self.mode == GameMode::Evolution {
+        } else if self.mode == GameMode::Evolution {
             let fill_probability = 0.2;
             for y in 1..self.height - 1 {
                 for x in 1..self.width - 1 {
@@ -1943,7 +1943,10 @@ impl Game {
             for y in 1..self.height - 1 {
                 for x in 1..self.width - 1 {
                     if self.rng.gen_bool(0.7) {
-                        obstacles.insert(Point { x, y });
+                        obstacles.insert(Point {
+                            x,
+                            y,
+                        });
                     }
                 }
             }
@@ -2989,7 +2992,9 @@ impl Game {
                         }
                         best_target
                     },
-                    CompanionType::Fighter | CompanionType::Healer | CompanionType::Sniper => self.snake.head(),
+                    CompanionType::Fighter | CompanionType::Healer | CompanionType::Sniper => {
+                        self.snake.head()
+                    },
                 };
 
                 // We use astar_pathfind directly for companions so they don't get restricted by 'neck' turns
@@ -3580,10 +3585,10 @@ impl Game {
 
             let dist_direct = calc_dist(p, target);
             let base_dist = if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 = calc_dist(p, portal1)
-                    .saturating_add(calc_dist(portal2, target));
-                let dist_via_portal2 = calc_dist(p, portal2)
-                    .saturating_add(calc_dist(portal1, target));
+                let dist_via_portal1 =
+                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target));
+                let dist_via_portal2 =
+                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target));
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
@@ -3627,7 +3632,10 @@ impl Game {
                 // When moving we need to get the final point (which resolves portals)
                 let mut final_p = self.get_final_p(next_p);
 
-                if final_p.is_none() && (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale {
+                if final_p.is_none()
+                    && (self.wrap_mode || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
+                {
                     final_p = Some(self.calculate_wrapped_head(next_p));
                 }
 
@@ -3653,6 +3661,10 @@ impl Game {
                     } else if self.lightning_column == Some(final_p.x) {
                         can_move = false;
                     } else if self.meteors.iter().any(|m| m.position == final_p) {
+                        can_move = false;
+                    } else if self.black_hole == Some(final_p) {
+                        can_move = false;
+                    } else if self.poison_food.is_some_and(|(pf, _)| pf == final_p) {
                         can_move = false;
                     }
 
@@ -3889,7 +3901,11 @@ impl Game {
                             self.snake.head()
                         };
                         let dir_opt = self.get_boss_path(boss.position, target_pos, boss.kind);
-                        let dir_opt = if dir_opt.is_none() && boss.kind != BossType::Phantom && boss.kind != BossType::Juggernaut && boss.kind != BossType::Charger {
+                        let dir_opt = if dir_opt.is_none()
+                            && boss.kind != BossType::Phantom
+                            && boss.kind != BossType::Juggernaut
+                            && boss.kind != BossType::Charger
+                        {
                             self.bot_smart_pathfind(boss.position, target_pos, 3)
                         } else {
                             dir_opt
@@ -5813,7 +5829,7 @@ impl Game {
                         crate::color::Color::Yellow,
                     );
                 } else if rand_val < 25 {
-                     self.food = final_head1;
+                    self.food = final_head1;
                 }
             } else if self.skin == '🦍' {
                 self.obstacles.remove(&final_head1);
@@ -5938,7 +5954,7 @@ impl Game {
                             crate::color::Color::Yellow,
                         );
                     } else if rand_val < 25 {
-                         self.food = fh2;
+                        self.food = fh2;
                     }
                 }
             } else {
