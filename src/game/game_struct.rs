@@ -7258,6 +7258,28 @@ impl Game {
             true
         } else {
             self.gain_xp(1);
+
+            if self.mode == GameMode::Zombie {
+                let margin = self.safe_zone_margin;
+                let bot_avoid = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    bot_avoid,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.bots.push(Snake::new(pos));
+                    self.bots_autopilot_paths.push(Vec::new());
+                }
+            }
+
             false
         }
     }
