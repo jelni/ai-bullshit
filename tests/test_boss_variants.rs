@@ -457,3 +457,133 @@ fn test_alchemist_drops_poison() {
     }
     assert!(game.poison_food.is_some());
 }
+
+#[test]
+fn test_dragon_boss_shoots_lasers() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 19, // One tick before threshold (20)
+        kind: snake_game::game::BossType::Dragon,
+        state_timer: 0,
+    });
+    // Set snake position to the right to control direction
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 5 });
+
+    let initial_lasers = game.lasers.len();
+    game.state = snake_game::game::GameState::Playing;
+    game.update();
+
+    assert_eq!(game.lasers.len(), initial_lasers + 3, "Dragon should shoot 3 lasers");
+    // Since snake is to the right, dx > 0 and dy = 0, so direction is Right.
+    // Based on actual positions printed, the lasers should be at (8,5), (8,6), (8,4)
+    // because calculate_next_head_dir computes position depending on speed.
+    let expected_positions = vec![
+        snake_game::snake::Point { x: 8, y: 5 }, // Middle
+        snake_game::snake::Point { x: 8, y: 6 }, // Bottom
+        snake_game::snake::Point { x: 8, y: 4 }, // Top
+    ];
+    let mut actual_positions = Vec::new();
+    for i in initial_lasers..game.lasers.len() {
+        actual_positions.push(game.lasers[i].position);
+    }
+    for expected in expected_positions {
+        assert!(actual_positions.contains(&expected), "Missing laser at {:?}", expected);
+    }
+}
+
+#[test]
+fn test_mage_boss_spawns_meteor_and_powerup() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 29, // One tick before threshold (30)
+        kind: snake_game::game::BossType::Mage,
+        state_timer: 0,
+    });
+    // Set snake position
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 5 });
+
+    let initial_meteors = game.meteors.len();
+    assert!(game.power_up.is_none());
+
+        game.state = snake_game::game::GameState::Playing;
+    game.update();
+
+    assert_eq!(game.meteors.len(), initial_meteors + 1, "Mage should spawn a meteor");
+    assert_eq!(game.meteors.last().unwrap().position, snake_game::snake::Point { x: 10, y: 6 }, "Meteor should be spawned at snake head");
+
+    assert!(game.power_up.is_some(), "Mage should spawn a power up");
+    let power_up = game.power_up.unwrap();
+    assert!(power_up.p_type == snake_game::game::PowerUpType::TimeFreeze, "Power up should be TimeFreeze");
+}
+
+#[test]
+fn test_puffer_boss_moves_and_shoots() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 2, // 1 tick before move threshold (3)
+        shoot_timer: 29, // 1 tick before shoot threshold (30)
+        kind: snake_game::game::BossType::Puffer,
+        state_timer: 0,
+    });
+    // Set snake position to bottom-right to test movement
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 10 });
+
+    let initial_lasers = game.lasers.len();
+
+    game.state = snake_game::game::GameState::Playing;
+    game.update();
+
+    let boss = game.bosses.first().unwrap();
+    // It should have moved towards the snake
+    assert!(boss.position != start_pos, "Puffer boss should move");
+
+    // It should have shot 4 lasers (Up, Down, Left, Right)
+    assert_eq!(game.lasers.len(), initial_lasers + 4, "Puffer boss should shoot 4 lasers");
+
+    // Check lasers originated around the boss's updated position
+
+    // Up is y+1 or y-1? Let's check dirs on the lasers actually spawned
+    let dirs: Vec<_> = game.lasers[initial_lasers..].iter().map(|l| l.direction).collect();
+    assert!(dirs.contains(&snake_game::snake::Direction::Up));
+    assert!(dirs.contains(&snake_game::snake::Direction::Down));
+    assert!(dirs.contains(&snake_game::snake::Direction::Left));
+    assert!(dirs.contains(&snake_game::snake::Direction::Right));
+}
