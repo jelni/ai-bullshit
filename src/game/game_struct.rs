@@ -3714,7 +3714,7 @@ impl Game {
         if self.mode == GameMode::Chaos {
             if self.tick_counter.is_multiple_of(100) {
                 let weather_types =
-                    [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm];
+                    [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm, Weather::Eclipse];
                 self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
             }
             if self.tick_counter.is_multiple_of(500) {
