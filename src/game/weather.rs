@@ -9,4 +9,5 @@ pub enum Weather {
     Tornado,
     Sandstorm,
     Earthquake,
+    Eclipse,
 }

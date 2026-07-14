@@ -1127,6 +1127,21 @@ mod tests {
 
         assert!(changed, "Earthquake should randomly destroy or spawn obstacles");
     }
+
+    #[test]
+    fn test_eclipse_weather() {
+        let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.weather = Weather::Eclipse;
+
+        // Verify that setting Weather::Eclipse doesn't crash the update loop
+        for _ in 0..100 {
+            game.state = GameState::Playing;
+            game.update();
+            game.weather = Weather::Eclipse; // ensure it stays eclipse
+        }
+
+        assert_eq!(game.weather, Weather::Eclipse, "Weather should remain Eclipse");
+    }
 }
 #[cfg(test)]
 mod evolution_tests {

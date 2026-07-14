@@ -376,6 +376,23 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 }
             }
         },
+        crate::game::Weather::Eclipse => {
+            ctx.set_fill_style_str("#444444");
+            for _ in 0..10 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if !game.obstacles.contains(&Point { x, y }) {
+                    ctx.fill_rect(
+                        f64::from(x) * cell_size,
+                        f64::from(y) * cell_size,
+                        cell_size,
+                        cell_size,
+                    );
+                }
+            }
+        },
         _ => {},
     }
 

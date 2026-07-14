@@ -9,7 +9,7 @@ use crossterm::{
 
 use crate::{
     game::{Game, GameState, Weather},
-    snake::Direction,
+    snake::{Direction, Point},
 };
 use rand::{Rng, SeedableRng};
 
@@ -1624,6 +1624,19 @@ fn draw_entities<W: Write>(
                 }
             }
         },
+        Weather::Eclipse => {
+            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if !game.obstacles.contains(&Point { x, y }) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "O")?;
+                }
+            }
+        },
         _ => {},
     }
 
@@ -2391,6 +2404,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Tornado => " | Weather: Tornado",
         crate::game::Weather::Sandstorm => " | Weather: Sandstorm",
         crate::game::Weather::Earthquake => " | Weather: Earthquake",
+        crate::game::Weather::Eclipse => " | Weather: Eclipse",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
