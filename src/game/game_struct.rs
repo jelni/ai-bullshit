@@ -3585,10 +3585,12 @@ impl Game {
 
             let dist_direct = calc_dist(p, target);
             let base_dist = if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 =
-                    calc_dist(p, portal1).saturating_add(calc_dist(portal2, target));
-                let dist_via_portal2 =
-                    calc_dist(p, portal2).saturating_add(calc_dist(portal1, target));
+                let dist_via_portal1 = calc_dist(p, portal1)
+                    .saturating_add(calc_dist(portal2, target))
+                    .saturating_add(1);
+                let dist_via_portal2 = calc_dist(p, portal2)
+                    .saturating_add(calc_dist(portal1, target))
+                    .saturating_add(1);
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
                 dist_direct
@@ -3713,8 +3715,13 @@ impl Game {
 
         if self.mode == GameMode::Chaos {
             if self.tick_counter.is_multiple_of(100) {
-                let weather_types =
-                    [Weather::Clear, Weather::Rain, Weather::Snow, Weather::Sandstorm, Weather::Eclipse];
+                let weather_types = [
+                    Weather::Clear,
+                    Weather::Rain,
+                    Weather::Snow,
+                    Weather::Sandstorm,
+                    Weather::Eclipse,
+                ];
                 self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
             }
             if self.tick_counter.is_multiple_of(500) {
