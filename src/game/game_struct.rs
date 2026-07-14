@@ -2488,7 +2488,7 @@ impl Game {
                         // Use flow field for MassiveMultiplayer and Zombie to save performance
                         if (self.mode == GameMode::MassiveMultiplayer
                             || self.mode == GameMode::Zombie)
-                            && let Some(flow_field) = &self.flow_field
+                            && let Some(flow_field) = self.flow_field.as_ref()
                             && let Some(&dir) = flow_field.get(&start)
                         {
                             let is_opp = match (current_dir, dir) {

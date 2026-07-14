@@ -27,10 +27,14 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
             let mut candidates = vec![Game::calculate_next_head_dir(curr, opposite)];
             if let Some((p1, p2)) = game.portals {
                 if curr == p2 {
-                    candidates.push(Game::calculate_next_head_dir(p1, opposite));
+                    for pd in &dirs {
+                        candidates.push(Game::calculate_next_head_dir(p1, *pd));
+                    }
                 }
                 if curr == p1 {
-                    candidates.push(Game::calculate_next_head_dir(p2, opposite));
+                    for pd in &dirs {
+                        candidates.push(Game::calculate_next_head_dir(p2, *pd));
+                    }
                 }
             }
 
