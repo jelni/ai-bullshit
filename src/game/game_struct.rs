@@ -8425,52 +8425,6 @@ impl Game {
             if self.black_hole.is_some_and(|bh| final_p == bh) {
                 return false;
             }
-            if steps == 1 {
-                let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
-                if checking_player == 1 {
-                    if let Some(p2) = &self.player2 {
-                        for &d in &dirs {
-                            let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
-                            if let Some(final_p2_next) = self.get_final_p(p2_next_head)
-                                && final_p == final_p2_next
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                } else if checking_player == 2 {
-                    for &d in &dirs {
-                        let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
-                        if let Some(final_p1_next) = self.get_final_p(p1_next_head)
-                            && final_p == final_p1_next
-                        {
-                            return false;
-                        }
-                    }
-                } else if checking_player == 4 {
-                    // Check against other bots' possible next moves to avoid head-on collisions in bot vs bot
-                    let mut other_bots_count = 0;
-                    for b in &self.bots {
-                        // Assuming the bot checking has head distance > 1 from `b` head usually
-                        // We check if final_p could be reached by this bot.
-                        for &d in &dirs {
-                            let b_next_head = Self::calculate_next_head_dir(b.head(), d);
-                            if let Some(final_b_next) = self.get_final_p(b_next_head)
-                                && final_p == final_b_next
-                            {
-                                other_bots_count += 1;
-                                break; // counted for this bot
-                            }
-                        }
-                    }
-                    // Since the current bot is in self.bots, its own possible next moves
-                    // will include `final_p` (which is what we are evaluating).
-                    // So `other_bots_count` will be at least 1. If it's > 1, another bot can also move here.
-                    if other_bots_count > 1 {
-                        return false;
-                    }
-                }
-            }
         }
         true
     }
