@@ -4017,29 +4017,29 @@ impl Game {
                             let mut spawn_positions = vec![laser_pos];
                             match dir {
                                 Direction::Up | Direction::Down => {
-                                    let mut p1 = laser_pos;
+                                    let mut p1 = boss.position;
                                     if p1.x < self.width.saturating_sub(1) {
                                         p1.x = p1.x.saturating_add(1);
-                                        spawn_positions.push(p1);
+                                        spawn_positions.push(Self::calculate_next_head_dir(p1, dir));
                                     }
 
-                                    let mut p2 = laser_pos;
+                                    let mut p2 = boss.position;
                                     if p2.x > 0 {
                                         p2.x = p2.x.saturating_sub(1);
-                                        spawn_positions.push(p2);
+                                        spawn_positions.push(Self::calculate_next_head_dir(p2, dir));
                                     }
                                 },
                                 Direction::Left | Direction::Right => {
-                                    let mut p1 = laser_pos;
+                                    let mut p1 = boss.position;
                                     if p1.y < self.height.saturating_sub(1) {
                                         p1.y = p1.y.saturating_add(1);
-                                        spawn_positions.push(p1);
+                                        spawn_positions.push(Self::calculate_next_head_dir(p1, dir));
                                     }
 
-                                    let mut p2 = laser_pos;
+                                    let mut p2 = boss.position;
                                     if p2.y > 0 {
                                         p2.y = p2.y.saturating_sub(1);
-                                        spawn_positions.push(p2);
+                                        spawn_positions.push(Self::calculate_next_head_dir(p2, dir));
                                     }
                                 },
                             }
