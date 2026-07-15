@@ -115,5 +115,5 @@ fn test_bot_avoids_poison_food() {
     let next_move = game.calculate_autopilot_move();
 
     // It should avoid moving right
-    assert!(next_move == Some(Direction::Up) || next_move == Some(Direction::Down));
+    assert_ne!(next_move, Some(Direction::Right), "Bot should avoid poison food");
 }

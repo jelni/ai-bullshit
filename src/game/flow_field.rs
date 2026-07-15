@@ -52,28 +52,40 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
 
             if game.wrap_mode || game.mode == crate::game::GameMode::Zen {
                 if curr.x == 1 && opposite == Direction::Left {
-                    candidates.push((Point {
-                        x: game.width - 2,
-                        y: curr.y,
-                    }, d));
+                    candidates.push((
+                        Point {
+                            x: game.width - 2,
+                            y: curr.y,
+                        },
+                        d,
+                    ));
                 }
                 if curr.x == game.width - 2 && opposite == Direction::Right {
-                    candidates.push((Point {
-                        x: 1,
-                        y: curr.y,
-                    }, d));
+                    candidates.push((
+                        Point {
+                            x: 1,
+                            y: curr.y,
+                        },
+                        d,
+                    ));
                 }
                 if curr.y == 1 && opposite == Direction::Up {
-                    candidates.push((Point {
-                        x: curr.x,
-                        y: game.height - 2,
-                    }, d));
+                    candidates.push((
+                        Point {
+                            x: curr.x,
+                            y: game.height - 2,
+                        },
+                        d,
+                    ));
                 }
                 if curr.y == game.height - 2 && opposite == Direction::Down {
-                    candidates.push((Point {
-                        x: curr.x,
-                        y: 1,
-                    }, d));
+                    candidates.push((
+                        Point {
+                            x: curr.x,
+                            y: 1,
+                        },
+                        d,
+                    ));
                 }
             }
 

@@ -3562,7 +3562,7 @@ impl Game {
             if let Some((pf_p, _)) = self.poison_food {
                 let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 40);
                 }
             }
             for boss in &self.bosses {
@@ -4020,41 +4020,48 @@ impl Game {
                                     let mut p1 = boss.position;
                                     if p1.x < self.width.saturating_sub(1) {
                                         p1.x = p1.x.saturating_add(1);
-                                        spawn_positions.push(Self::calculate_next_head_dir(p1, dir));
+                                        spawn_positions
+                                            .push(Self::calculate_next_head_dir(p1, dir));
                                     }
 
                                     let mut p2 = boss.position;
                                     if p2.x > 0 {
                                         p2.x = p2.x.saturating_sub(1);
-                                        spawn_positions.push(Self::calculate_next_head_dir(p2, dir));
+                                        spawn_positions
+                                            .push(Self::calculate_next_head_dir(p2, dir));
                                     }
                                 },
                                 Direction::Left | Direction::Right => {
                                     let mut p1 = boss.position;
                                     if p1.y < self.height.saturating_sub(1) {
                                         p1.y = p1.y.saturating_add(1);
-                                        spawn_positions.push(Self::calculate_next_head_dir(p1, dir));
+                                        spawn_positions
+                                            .push(Self::calculate_next_head_dir(p1, dir));
                                     }
 
                                     let mut p2 = boss.position;
                                     if p2.y > 0 {
                                         p2.y = p2.y.saturating_sub(1);
-                                        spawn_positions.push(Self::calculate_next_head_dir(p2, dir));
+                                        spawn_positions
+                                            .push(Self::calculate_next_head_dir(p2, dir));
                                     }
                                 },
                             }
 
                             for pos in spawn_positions {
-                                if pos.x > margin
-                                    && pos.x < self.width - 1 - margin
-                                    && pos.y > margin
-                                    && pos.y < self.height - 1 - margin
-                                {
-                                    new_lasers.push(Laser {
-                                        position: pos,
-                                        direction: dir,
-                                        player: 3,
-                                    });
+                                let final_pos = self.get_final_p(pos);
+                                if let Some(p) = final_pos {
+                                    if p.x > margin
+                                        && p.x < self.width - 1 - margin
+                                        && p.y > margin
+                                        && p.y < self.height - 1 - margin
+                                    {
+                                        new_lasers.push(Laser {
+                                            position: p,
+                                            direction: dir,
+                                            player: 3,
+                                        });
+                                    }
                                 }
                             }
                             beep();
@@ -4355,16 +4362,19 @@ impl Game {
                                 [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                             for &dir in &dirs {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
-                                if laser_pos.x > margin
-                                    && laser_pos.x < self.width - 1 - margin
-                                    && laser_pos.y > margin
-                                    && laser_pos.y < self.height - 1 - margin
-                                {
-                                    new_lasers.push(Laser {
-                                        position: laser_pos,
-                                        direction: dir,
-                                        player: 3, // 3 means boss/neutral laser
-                                    });
+                                let final_pos = self.get_final_p(laser_pos);
+                                if let Some(p) = final_pos {
+                                    if p.x > margin
+                                        && p.x < self.width - 1 - margin
+                                        && p.y > margin
+                                        && p.y < self.height - 1 - margin
+                                    {
+                                        new_lasers.push(Laser {
+                                            position: p,
+                                            direction: dir,
+                                            player: 3, // 3 means boss/neutral laser
+                                        });
+                                    }
                                 }
                             }
                             beep();
@@ -7238,6 +7248,8 @@ impl Game {
                 || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                 || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
         };
+        let spawn_zombie = self.mode == GameMode::Zombie;
+
         if let Some(new_food) = Self::get_random_empty_point(
             self.width,
             self.height,
@@ -7249,19 +7261,18 @@ impl Game {
             self.food = new_food;
             self.gain_xp(1);
 
-            if self.mode == GameMode::Zombie {
+            if spawn_zombie {
                 let margin = self.safe_zone_margin;
-                let bot_avoid = |p: &Point| {
-                    self.obstacles.contains(p)
-                        || self.snake.body_map.contains_key(p)
-                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
-                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
-                };
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
                     self.height,
                     &self.snake,
-                    bot_avoid,
+                    |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    },
                     &mut self.rng,
                     margin,
                 ) {
@@ -7274,19 +7285,18 @@ impl Game {
         } else {
             self.gain_xp(1);
 
-            if self.mode == GameMode::Zombie {
+            if spawn_zombie {
                 let margin = self.safe_zone_margin;
-                let bot_avoid = |p: &Point| {
-                    self.obstacles.contains(p)
-                        || self.snake.body_map.contains_key(p)
-                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
-                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
-                };
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
                     self.height,
                     &self.snake,
-                    bot_avoid,
+                    |p: &Point| {
+                        self.obstacles.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    },
                     &mut self.rng,
                     margin,
                 ) {
@@ -7855,7 +7865,7 @@ impl Game {
             if let Some((pf, _)) = self.poison_food {
                 let d = calc_dist(p, pf);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 40);
                 }
             }
             for l in &self.lasers {
@@ -8744,7 +8754,7 @@ impl Game {
             if let Some((pf, _)) = self.poison_food {
                 let d = calc_dist(p, pf);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 40);
                 }
             }
             for l in &self.lasers {
@@ -8789,7 +8799,7 @@ impl Game {
             if let Some((pf, _)) = self.poison_food {
                 let d = calc_dist(p, pf);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 40);
                 }
             }
             for l in &self.lasers {

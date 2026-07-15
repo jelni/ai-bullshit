@@ -1631,7 +1631,10 @@ fn draw_entities<W: Write>(
                     rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
                 let y =
                     rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
-                if !game.obstacles.contains(&Point { x, y }) {
+                if !game.obstacles.contains(&Point {
+                    x,
+                    y,
+                }) {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, "O")?;
                 }
