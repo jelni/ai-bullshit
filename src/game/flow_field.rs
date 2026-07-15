@@ -28,12 +28,24 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
             if let Some((p1, p2)) = game.portals {
                 if curr == p2 {
                     for pd in &dirs {
-                        candidates.push(Game::calculate_next_head_dir(p1, *pd));
+                        let opp = match pd {
+                            Direction::Up => Direction::Down,
+                            Direction::Down => Direction::Up,
+                            Direction::Left => Direction::Right,
+                            Direction::Right => Direction::Left,
+                        };
+                        candidates.push(Game::calculate_next_head_dir(p1, opp));
                     }
                 }
                 if curr == p1 {
                     for pd in &dirs {
-                        candidates.push(Game::calculate_next_head_dir(p2, *pd));
+                        let opp = match pd {
+                            Direction::Up => Direction::Down,
+                            Direction::Down => Direction::Up,
+                            Direction::Left => Direction::Right,
+                            Direction::Right => Direction::Left,
+                        };
+                        candidates.push(Game::calculate_next_head_dir(p2, opp));
                     }
                 }
             }
