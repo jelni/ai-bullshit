@@ -99,5 +99,5 @@ fn test_p2_bot_returns_flag_to_base() {
     game.p1_flag = None;
 
     let move_dir = game.calculate_p2_autopilot_move();
-    assert_ne!(move_dir, Some(Direction::Up));
+    assert_eq!(move_dir, Some(Direction::Right), "P2 should move right to return flag to base");
 }

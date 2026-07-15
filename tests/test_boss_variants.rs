@@ -469,7 +469,10 @@ fn test_dragon_boss_shoots_lasers() {
         snake_game::game::Difficulty::Normal,
     );
     game.bosses.clear();
-    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 10,
@@ -480,7 +483,10 @@ fn test_dragon_boss_shoots_lasers() {
         state_timer: 0,
     });
     // Set snake position to the right to control direction
-    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 5 });
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point {
+        x: 10,
+        y: 5,
+    });
 
     let initial_lasers = game.lasers.len();
     game.state = snake_game::game::GameState::Playing;
@@ -491,9 +497,18 @@ fn test_dragon_boss_shoots_lasers() {
     // Based on actual positions printed, the lasers should be at (8,5), (8,6), (8,4)
     // because calculate_next_head_dir computes position depending on speed.
     let expected_positions = vec![
-        snake_game::snake::Point { x: 8, y: 5 }, // Middle
-        snake_game::snake::Point { x: 8, y: 6 }, // Bottom
-        snake_game::snake::Point { x: 8, y: 4 }, // Top
+        snake_game::snake::Point {
+            x: 8,
+            y: 5,
+        }, // Middle
+        snake_game::snake::Point {
+            x: 8,
+            y: 6,
+        }, // Bottom
+        snake_game::snake::Point {
+            x: 8,
+            y: 4,
+        }, // Top
     ];
     let mut actual_positions = Vec::new();
     for i in initial_lasers..game.lasers.len() {
@@ -515,7 +530,10 @@ fn test_mage_boss_spawns_meteor_and_powerup() {
         snake_game::game::Difficulty::Normal,
     );
     game.bosses.clear();
-    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 10,
@@ -526,20 +544,33 @@ fn test_mage_boss_spawns_meteor_and_powerup() {
         state_timer: 0,
     });
     // Set snake position
-    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 5 });
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point {
+        x: 10,
+        y: 5,
+    });
 
     let initial_meteors = game.meteors.len();
     assert!(game.power_up.is_none());
 
-        game.state = snake_game::game::GameState::Playing;
+    game.state = snake_game::game::GameState::Playing;
     game.update();
 
     assert_eq!(game.meteors.len(), initial_meteors + 1, "Mage should spawn a meteor");
-    assert_eq!(game.meteors.last().unwrap().position, snake_game::snake::Point { x: 10, y: 6 }, "Meteor should be spawned at snake head");
+    assert_eq!(
+        game.meteors.last().unwrap().position,
+        snake_game::snake::Point {
+            x: 10,
+            y: 6
+        },
+        "Meteor should be spawned at snake head"
+    );
 
     assert!(game.power_up.is_some(), "Mage should spawn a power up");
     let power_up = game.power_up.unwrap();
-    assert!(power_up.p_type == snake_game::game::PowerUpType::TimeFreeze, "Power up should be TimeFreeze");
+    assert!(
+        power_up.p_type == snake_game::game::PowerUpType::TimeFreeze,
+        "Power up should be TimeFreeze"
+    );
 }
 
 #[test]
@@ -553,18 +584,24 @@ fn test_puffer_boss_moves_and_shoots() {
         snake_game::game::Difficulty::Normal,
     );
     game.bosses.clear();
-    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 10,
         max_health: 10,
-        move_timer: 2, // 1 tick before move threshold (3)
+        move_timer: 2,   // 1 tick before move threshold (3)
         shoot_timer: 29, // 1 tick before shoot threshold (30)
         kind: snake_game::game::BossType::Puffer,
         state_timer: 0,
     });
     // Set snake position to bottom-right to test movement
-    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point { x: 10, y: 10 });
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point {
+        x: 10,
+        y: 10,
+    });
 
     let initial_lasers = game.lasers.len();
 

@@ -383,7 +383,10 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                     rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
                 let y =
                     rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
-                if !game.obstacles.contains(&Point { x, y }) {
+                if !game.obstacles.contains(&Point {
+                    x,
+                    y,
+                }) {
                     ctx.fill_rect(
                         f64::from(x) * cell_size,
                         f64::from(y) * cell_size,
