@@ -5280,10 +5280,11 @@ impl Game {
                 }
                 if self.goblin.as_ref().is_some_and(|goblin| laser.position == goblin.position) {
                     let gob_pos = self.goblin.as_ref().unwrap().position;
-                    self.goblin = None;
                     if laser.player != 1 {
-                        continue;
+                        destroyed = true;
+                        break;
                     }
+                    self.goblin = None;
                     if !is_piercing {
                         destroyed = true;
                     }
