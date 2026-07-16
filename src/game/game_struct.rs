@@ -4072,10 +4072,10 @@ impl Game {
                             for pos in spawn_positions {
                                 let final_pos = self.get_final_p(pos);
                                 if let Some(p) = final_pos
-                                    && p.x > margin
-                                    && p.x < self.width - 1 - margin
-                                    && p.y > margin
-                                    && p.y < self.height - 1 - margin
+                                    && p.x >= margin
+                                    && p.x < self.width - margin
+                                    && p.y >= margin
+                                    && p.y < self.height - margin
                                 {
                                     new_lasers.push(Laser {
                                         position: p,
