@@ -8713,7 +8713,11 @@ impl Game {
                         p1_flag,
                     ]; // To move toward it, maybe the path was slightly different due to avoidance
                 } else {
-                    targets = vec![self.snake.head()];
+                    if let Some(player2) = &self.player2 {
+                        targets = vec![player2.head()];
+                    } else {
+                        targets = vec![self.snake.head()]; // Fallback, though player2 should exist here
+                    }
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
