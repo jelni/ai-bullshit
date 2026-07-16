@@ -4050,18 +4050,17 @@ impl Game {
 
                             for pos in spawn_positions {
                                 let final_pos = self.get_final_p(pos);
-                                if let Some(p) = final_pos {
-                                    if p.x > margin
-                                        && p.x < self.width - 1 - margin
-                                        && p.y > margin
-                                        && p.y < self.height - 1 - margin
-                                    {
-                                        new_lasers.push(Laser {
-                                            position: p,
-                                            direction: dir,
-                                            player: 3,
-                                        });
-                                    }
+                                if let Some(p) = final_pos
+                                    && p.x > margin
+                                    && p.x < self.width - 1 - margin
+                                    && p.y > margin
+                                    && p.y < self.height - 1 - margin
+                                {
+                                    new_lasers.push(Laser {
+                                        position: p,
+                                        direction: dir,
+                                        player: 3,
+                                    });
                                 }
                             }
                             beep();
@@ -4363,18 +4362,17 @@ impl Game {
                             for &dir in &dirs {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let final_pos = self.get_final_p(laser_pos);
-                                if let Some(p) = final_pos {
-                                    if p.x > margin
-                                        && p.x < self.width - 1 - margin
-                                        && p.y > margin
-                                        && p.y < self.height - 1 - margin
-                                    {
-                                        new_lasers.push(Laser {
-                                            position: p,
-                                            direction: dir,
-                                            player: 3, // 3 means boss/neutral laser
-                                        });
-                                    }
+                                if let Some(p) = final_pos
+                                    && p.x > margin
+                                    && p.x < self.width - 1 - margin
+                                    && p.y > margin
+                                    && p.y < self.height - 1 - margin
+                                {
+                                    new_lasers.push(Laser {
+                                        position: p,
+                                        direction: dir,
+                                        player: 3, // 3 means boss/neutral laser
+                                    });
                                 }
                             }
                             beep();
