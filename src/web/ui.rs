@@ -43,7 +43,12 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 } else {
                     ctx.set_fill_style_str("#333300");
                 }
-                ctx.fill_rect(f64::from(pt.x) * cell_size, f64::from(pt.y) * cell_size, cell_size, cell_size);
+                ctx.fill_rect(
+                    f64::from(pt.x) * cell_size,
+                    f64::from(pt.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
             }
         }
     }

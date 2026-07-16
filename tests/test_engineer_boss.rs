@@ -1,4 +1,4 @@
-use snake_game::game::{Boss, BossType, Game, GameMode, GameState, Difficulty};
+use snake_game::game::{Boss, BossType, Difficulty, Game, GameMode, GameState};
 use snake_game::snake::Point;
 
 #[test]
@@ -9,7 +9,10 @@ fn test_engineer_boss_spawns_turrets() {
     game.bosses.clear();
     game.turrets.clear();
 
-    let engineer_pos = Point { x: 15, y: 15 };
+    let engineer_pos = Point {
+        x: 15,
+        y: 15,
+    };
     game.bosses.push(Boss {
         position: engineer_pos,
         health: 100,
