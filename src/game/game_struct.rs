@@ -4346,10 +4346,10 @@ impl Game {
                                 } else {
                                     0
                                 };
-                                if next_pos.x > margin
-                                    && next_pos.x < self.width - 1 - margin
-                                    && next_pos.y > margin
-                                    && next_pos.y < self.height - 1 - margin
+                                if next_pos.x >= margin
+                                    && next_pos.x < self.width - margin
+                                    && next_pos.y >= margin
+                                    && next_pos.y < self.height - margin
                                     && !self.obstacles.contains(&next_pos)
                                 {
                                     boss.position = next_pos;
@@ -4384,10 +4384,10 @@ impl Game {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let final_pos = self.get_final_p(laser_pos);
                                 if let Some(p) = final_pos
-                                    && p.x > margin
-                                    && p.x < self.width - 1 - margin
-                                    && p.y > margin
-                                    && p.y < self.height - 1 - margin
+                                    && p.x >= margin
+                                    && p.x < self.width - margin
+                                    && p.y >= margin
+                                    && p.y < self.height - margin
                                 {
                                     new_lasers.push(Laser {
                                         position: p,
@@ -6740,7 +6740,8 @@ impl Game {
             }
             for (i, bot) in self.bots.iter().enumerate() {
                 // Bots get ids starting from 3
-                self.painted_tiles.insert(bot.head(), u8::try_from(i).unwrap_or(255).saturating_add(3));
+                self.painted_tiles
+                    .insert(bot.head(), u8::try_from(i).unwrap_or(255).saturating_add(3));
             }
 
             if self.match_time > 0 {
@@ -8361,8 +8362,12 @@ impl Game {
                                     if final_p == target_pos {
                                         return false;
                                     }
-                                } else if final_p.x == boss.position.x
-                                    || final_p.y == boss.position.y
+                                } else if boss.kind != BossType::Dragon
+                                    && (final_p.x == boss.position.x
+                                        || final_p.y == boss.position.y)
+                                    || (boss.kind == BossType::Dragon
+                                        && (final_p.x.abs_diff(boss.position.x) <= 1
+                                            || final_p.y.abs_diff(boss.position.y) <= 1))
                                 {
                                     // A boss shoots lasers in 4 directions, meaning any point on the same X or Y axis *might* be hit,
                                     // but blocking the ENTIRE axis makes the bot fail to pathfind around the boss entirely if it's far.
@@ -8712,12 +8717,10 @@ impl Game {
                         },
                         p1_flag,
                     ]; // To move toward it, maybe the path was slightly different due to avoidance
+                } else if let Some(player2) = &self.player2 {
+                    targets = vec![player2.head()];
                 } else {
-                    if let Some(player2) = &self.player2 {
-                        targets = vec![player2.head()];
-                    } else {
-                        targets = vec![self.snake.head()]; // Fallback, though player2 should exist here
-                    }
+                    targets = vec![self.snake.head()]; // Fallback, though player2 should exist here
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
