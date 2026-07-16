@@ -122,6 +122,8 @@ pub struct Game {
     pub flow_field_targets: Vec<Point>,
     pub dungeon_grid: std::collections::HashMap<(i32, i32), crate::game::dungeon::DungeonRoom>,
     pub current_room_coords: (i32, i32),
+    pub painted_tiles: std::collections::HashMap<Point, u8>,
+    pub match_time: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -391,6 +393,8 @@ impl Game {
             flow_field_targets: Vec::new(),
             dungeon_grid: std::collections::HashMap::new(),
             current_room_coords: (0, 0),
+            painted_tiles: std::collections::HashMap::new(),
+            match_time: 0,
         }
     }
     #[must_use]
@@ -622,6 +626,8 @@ impl Game {
             xp_gems: self.xp_gems.clone(),
             dungeon_grid: self.dungeon_grid.clone(),
             current_room_coords: self.current_room_coords,
+            painted_tiles: self.painted_tiles.clone(),
+            match_time: self.match_time,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -748,6 +754,8 @@ impl Game {
                 self.xp_gems = state.xp_gems;
                 self.dungeon_grid = state.dungeon_grid;
                 self.current_room_coords = state.current_room_coords;
+                self.painted_tiles = state.painted_tiles;
+                self.match_time = state.match_time;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1704,7 +1712,8 @@ impl Game {
             | GameMode::Dodgeball
             | GameMode::DungeonCrawler
             | GameMode::Chaos
-            | GameMode::Miner => {
+            | GameMode::Miner
+            | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2141,10 +2150,14 @@ impl Game {
         }
 
         self.crops.clear();
+        self.painted_tiles.clear();
+        self.match_time = 1000;
+
         if self.mode == GameMode::MassiveMultiplayer
             || self.mode == GameMode::Tron
             || self.mode == GameMode::Zombie
             || self.mode == GameMode::KingOfTheHill
+            || self.mode == GameMode::TurfWar
         {
             let margin = self.safe_zone_margin;
             let count = if self.mode == GameMode::MassiveMultiplayer {
@@ -2152,6 +2165,8 @@ impl Game {
             } else if self.mode == GameMode::Tron {
                 3
             } else if self.mode == GameMode::KingOfTheHill {
+                3
+            } else if self.mode == GameMode::TurfWar {
                 3
             } else {
                 1
@@ -2216,7 +2231,8 @@ impl Game {
             | GameMode::KingOfTheHill
             | GameMode::Dodgeball
             | GameMode::Chaos
-            | GameMode::Miner => {
+            | GameMode::Miner
+            | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2673,6 +2689,8 @@ impl Game {
             self.p2_score = state.p2_score;
             self.koth_zone = state.koth_zone;
             self.xp_gems = state.xp_gems;
+            self.painted_tiles = state.painted_tiles;
+            self.match_time = state.match_time;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -2766,6 +2784,8 @@ impl Game {
             p2_score: self.p2_score,
             koth_zone: self.koth_zone,
             xp_gems: self.xp_gems.clone(),
+            painted_tiles: self.painted_tiles.clone(),
+            match_time: self.match_time,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6686,6 +6706,49 @@ impl Game {
         }
         self.bots = alive_bots;
         self.bots_autopilot_paths = alive_paths;
+
+        if self.mode == GameMode::TurfWar {
+            self.painted_tiles.insert(self.snake.head(), 1);
+            if let Some(p2) = &self.player2 {
+                self.painted_tiles.insert(p2.head(), 2);
+            }
+            for (i, bot) in self.bots.iter().enumerate() {
+                // Bots get ids starting from 3
+                self.painted_tiles.insert(bot.head(), u8::try_from(i).unwrap_or(255).saturating_add(3));
+            }
+
+            if self.match_time > 0 {
+                self.match_time -= 1;
+                if self.match_time == 0 {
+                    let mut p1_score = 0;
+                    let mut p2_score = 0;
+                    // Pre-allocate enough space for bot scores (id 3 to say 10)
+                    let mut bot_scores = std::collections::HashMap::new();
+                    for &val in self.painted_tiles.values() {
+                        if val == 1 {
+                            p1_score += 1;
+                        } else if val == 2 {
+                            p2_score += 1;
+                        } else if val >= 3 {
+                            *bot_scores.entry(val).or_insert(0) += 1;
+                        }
+                    }
+                    let mut max_score = p1_score;
+                    let mut winner = "Player 1".to_string();
+                    if p2_score > max_score {
+                        max_score = p2_score;
+                        winner = "Player 2".to_string();
+                    }
+                    for (&bot_id, &score) in &bot_scores {
+                        if score > max_score {
+                            max_score = score;
+                            winner = format!("Bot {}", bot_id - 2);
+                        }
+                    }
+                    self.handle_death(&format!("Time's Up! {winner} Wins!"));
+                }
+            }
+        }
 
         if let Some(mut ghost) = self.ghost_snake.take() {
             if let Some(ghost_dir) = self.ghost_moves.pop_front() {

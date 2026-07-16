@@ -46,4 +46,5 @@ pub enum GameMode {
     DungeonCrawler,
     Chaos,
     Miner,
+    TurfWar,
 }
