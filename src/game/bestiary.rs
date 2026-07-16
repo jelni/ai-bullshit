@@ -134,5 +134,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Drops poison food."
             }
         },
+        BossType::Engineer => {
+            if kills >= 5 {
+                "A brilliant tactician that constructs automated turrets around the battlefield."
+            } else {
+                "Builds turrets."
+            }
+        },
     }
 }

@@ -1966,6 +1966,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkGreen))?;
                     write!(stdout, "A")?;
                 },
+                crate::game::BossType::Engineer => {
+                    stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+                    write!(stdout, "E")?;
+                },
             }
         }
     }
@@ -3596,6 +3600,7 @@ pub fn draw_bestiary<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::BossType::Kraken,
         crate::game::BossType::Alchemist,
         crate::game::BossType::Phantom,
+        crate::game::BossType::Engineer,
     ];
 
     for (i, boss) in bosses.iter().enumerate() {

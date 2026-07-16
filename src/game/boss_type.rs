@@ -21,4 +21,5 @@ pub enum BossType {
     Kraken,
     Alchemist,
     Phantom,
+    Engineer,
 }

@@ -3858,7 +3858,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..16) {
+                    match self.rng.gen_range(0..17) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3875,6 +3875,7 @@ impl Game {
                         13 => BossType::Kraken,
                         14 => BossType::Phantom,
                         15 => BossType::Alchemist,
+                        16 => BossType::Engineer,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4760,6 +4761,30 @@ impl Game {
                                 {
                                     boss.position = next_pos;
                                 }
+                            }
+                        }
+                    } else if boss.kind == BossType::Engineer {
+                        let mut spawn_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                20,
+                                60_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            60
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            spawn_threshold = std::cmp::max(10, spawn_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= spawn_threshold {
+                            boss.shoot_timer = 0;
+                            if self.turrets.len() < 5 {
+                                self.turrets.push(Turret {
+                                    position: boss.position,
+                                    shoot_timer: 0,
+                                });
                             }
                         }
                     }
@@ -8241,6 +8266,7 @@ impl Game {
                             || boss.kind == BossType::VampireLord
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
+                            || boss.kind == BossType::Engineer
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
