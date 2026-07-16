@@ -121,6 +121,10 @@ pub struct SaveState {
     pub dungeon_grid: std::collections::HashMap<(i32, i32), crate::game::dungeon::DungeonRoom>,
     #[serde(default)]
     pub current_room_coords: (i32, i32),
+    #[serde(default)]
+    pub painted_tiles: std::collections::HashMap<Point, u8>,
+    #[serde(default)]
+    pub match_time: u32,
 }
 
 #[must_use]

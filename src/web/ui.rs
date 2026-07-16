@@ -29,6 +29,25 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     ctx.set_fill_style_str("#000000");
     ctx.fill_rect(0.0, 0.0, f64::from(game.width) * cell_size, f64::from(game.height) * cell_size);
 
+    if game.mode == crate::game::GameMode::TurfWar {
+        for (pt, &id) in &game.painted_tiles {
+            if is_visible(f64::from(pt.x), f64::from(pt.y)) {
+                if id == 1 {
+                    ctx.set_fill_style_str("#000033");
+                } else if id == 2 {
+                    ctx.set_fill_style_str("#330033");
+                } else if id == 3 {
+                    ctx.set_fill_style_str("#330000");
+                } else if id == 4 {
+                    ctx.set_fill_style_str("#003300");
+                } else {
+                    ctx.set_fill_style_str("#333300");
+                }
+                ctx.fill_rect(f64::from(pt.x) * cell_size, f64::from(pt.y) * cell_size, cell_size, cell_size);
+            }
+        }
+    }
+
     // Draw borders
     ctx.set_fill_style_str("#555555");
     for y in 0..game.height {

@@ -55,4 +55,6 @@ pub struct HistoryState {
     pub p2_score: u32,
     pub koth_zone: Option<Point>,
     pub xp_gems: HashSet<Point>,
+    pub painted_tiles: std::collections::HashMap<Point, u8>,
+    pub match_time: u32,
 }

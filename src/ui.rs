@@ -622,6 +622,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Dungeon Crawler Mode",
         "Chaos Mode",
         "Miner Mode",
+        "Turf War Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1187,6 +1188,7 @@ fn draw_game<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Drawing background requires handling many themes and modes")]
 fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     let elapsed = usize::try_from(game.start_time.elapsed().as_millis() / 100).unwrap_or(0);
     let margin = if game.mode == crate::game::GameMode::BattleRoyale {
@@ -1273,6 +1275,27 @@ fn draw_background<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             }
         },
         _ => {},
+    }
+
+    if game.mode == crate::game::GameMode::TurfWar {
+        for (pt, &id) in &game.painted_tiles {
+            if pt.x >= min_x && pt.x < max_x && pt.y >= min_y && pt.y < max_y {
+                if id == 1 {
+                    stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::DarkBlue))?;
+                } else if id == 2 {
+                    stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::DarkMagenta))?;
+                } else if id == 3 {
+                    stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::DarkRed))?;
+                } else if id == 4 {
+                    stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::DarkGreen))?;
+                } else {
+                    stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::DarkYellow))?;
+                }
+                stdout.queue(cursor::MoveTo(pt.x, pt.y))?;
+                write!(stdout, " ")?;
+            }
+        }
+        stdout.queue(crossterm::style::SetBackgroundColor(crossterm::style::Color::Reset))?;
     }
 
     Ok(())
