@@ -4,6 +4,7 @@ use std::collections::{HashMap, VecDeque};
 
 #[must_use]
 #[allow(clippy::allow_attributes)]
+#[allow(clippy::too_many_lines)]
 #[allow(unfulfilled_lint_expectations)]
 pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Direction> {
     let mut flow_field = HashMap::new();
