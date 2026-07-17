@@ -8187,6 +8187,38 @@ impl Game {
                             return false;
                         }
                     }
+                } else if checking_player == 3 {
+                    for &d in &dirs {
+                        let p1_next_head = Self::calculate_next_head_dir(self.snake.head(), d);
+                        if let Some(final_p1_next) = self.get_final_p(p1_next_head)
+                            && final_p == final_p1_next
+                        {
+                            return false;
+                        }
+                        if let Some(p2) = &self.player2 {
+                            let p2_next_head = Self::calculate_next_head_dir(p2.head(), d);
+                            if let Some(final_p2_next) = self.get_final_p(p2_next_head)
+                                && final_p == final_p2_next
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                    let mut other_bots_count = 0;
+                    for b in &self.bots {
+                        for &d in &dirs {
+                            let b_next_head = Self::calculate_next_head_dir(b.head(), d);
+                            if let Some(final_b_next) = self.get_final_p(b_next_head)
+                                && final_p == final_b_next
+                            {
+                                other_bots_count += 1;
+                                break;
+                            }
+                        }
+                    }
+                    if other_bots_count > 1 {
+                        return false;
+                    }
                 } else if checking_player == 4 {
                     // Check against other bots' possible next moves to avoid head-on collisions in bot vs bot
                     let mut other_bots_count = 0;
@@ -8710,13 +8742,7 @@ impl Game {
                         y: self.height / 2,
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
-                    targets = vec![
-                        Point {
-                            x: p1_flag.x.saturating_add(1),
-                            y: p1_flag.y,
-                        },
-                        p1_flag,
-                    ]; // To move toward it, maybe the path was slightly different due to avoidance
+                    targets = vec![p1_flag];
                 } else if let Some(player2) = &self.player2 {
                     targets = vec![player2.head()];
                 } else {
