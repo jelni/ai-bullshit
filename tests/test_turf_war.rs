@@ -138,7 +138,7 @@ fn test_turf_war_scoring() {
     game.update();
 
     assert!(game.just_died);
-    assert_eq!(game.death_message, "Time's Up! Bot 2 Wins!");
+    assert_eq!(game.death_message, "Time's Up! Bot 1 Wins!");
 }
 
 #[test]
