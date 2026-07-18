@@ -41,13 +41,15 @@ fn test_bot_returns_flag_to_base() {
         y: 0,
     };
 
-    game.snake = snake_game::snake::Snake::new(Point {
+    let mut snake = snake_game::snake::Snake::new(Point {
         x: 10,
         y: 10,
     });
+    snake.direction = Direction::Up;
+    game.snake = snake;
 
     let move_dir = game.calculate_autopilot_move();
-    assert_ne!(move_dir, Some(Direction::Up));
+    assert_eq!(move_dir, Some(Direction::Left));
 }
 
 #[test]
