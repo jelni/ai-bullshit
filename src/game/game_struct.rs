@@ -3561,7 +3561,7 @@ impl Game {
             if let Some(bh) = self.black_hole {
                 let d = calc_dist(p, bh);
                 if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 10);
+                    penalty = penalty.saturating_add((5 - d) * 100);
                 }
             }
             if let Some(col) = self.lightning_column {
@@ -6734,14 +6734,20 @@ impl Game {
         self.bots_autopilot_paths = alive_paths;
 
         if self.mode == GameMode::TurfWar {
-            self.painted_tiles.insert(self.snake.head(), 1);
+            for segment in &self.snake.body {
+                self.painted_tiles.insert(*segment, 1);
+            }
             if let Some(p2) = &self.player2 {
-                self.painted_tiles.insert(p2.head(), 2);
+                for segment in &p2.body {
+                    self.painted_tiles.insert(*segment, 2);
+                }
             }
             for (i, bot) in self.bots.iter().enumerate() {
                 // Bots get ids starting from 3
-                self.painted_tiles
-                    .insert(bot.head(), u8::try_from(i).unwrap_or(255).saturating_add(3));
+                let bot_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                for segment in &bot.body {
+                    self.painted_tiles.insert(*segment, bot_id);
+                }
             }
 
             if self.match_time > 0 {
