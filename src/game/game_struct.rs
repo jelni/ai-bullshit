@@ -6769,10 +6769,13 @@ impl Game {
                     for (&bot_id, &score) in &bot_scores {
                         if score > max_score {
                             max_score = score;
-                            winner = format!("Bot {}", bot_id - 2);
+                            winner = format!("Bot {}", bot_id.saturating_sub(2));
                         }
                     }
-                    self.handle_death(&format!("Time's Up! {winner} Wins!"));
+                    self.just_died = true;
+                    self.death_message = format!("Time's Up! {winner} Wins!");
+                    self.state = GameState::GameOver;
+                    self.update_high_scores();
                 }
             }
         }
