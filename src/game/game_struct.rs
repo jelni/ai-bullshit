@@ -7817,10 +7817,10 @@ impl Game {
             } else {
                 0
             };
-            if p.x <= margin
-                || p.x >= self.width - 1 - margin
-                || p.y <= margin
-                || p.y >= self.height - 1 - margin
+            if p.x < margin
+                || p.x >= self.width - margin
+                || p.y < margin
+                || p.y >= self.height - margin
             {
                 None
             } else {
