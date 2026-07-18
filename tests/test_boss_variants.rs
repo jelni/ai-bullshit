@@ -468,6 +468,7 @@ fn test_dragon_boss_shoots_lasers() {
         snake_game::game::Theme::Classic,
         snake_game::game::Difficulty::Normal,
     );
+    game.obstacles.clear();
     game.bosses.clear();
     let start_pos = snake_game::snake::Point {
         x: 5,
@@ -529,6 +530,7 @@ fn test_mage_boss_spawns_meteor_and_powerup() {
         snake_game::game::Theme::Classic,
         snake_game::game::Difficulty::Normal,
     );
+    game.obstacles.clear();
     game.bosses.clear();
     let start_pos = snake_game::snake::Point {
         x: 5,
