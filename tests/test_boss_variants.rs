@@ -626,3 +626,54 @@ fn test_puffer_boss_moves_and_shoots() {
     assert!(dirs.contains(&snake_game::snake::Direction::Left));
     assert!(dirs.contains(&snake_game::snake::Direction::Right));
 }
+
+#[test]
+fn test_assassin_moves_fast_towards_player() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+    game.obstacles.clear();
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 0,
+        kind: snake_game::game::BossType::Assassin,
+        state_timer: 0,
+    });
+    // Set snake position
+    game.snake = snake_game::snake::Snake::new(snake_game::snake::Point {
+        x: 10,
+        y: 10,
+    });
+
+    game.state = snake_game::game::GameState::Playing;
+
+    // In one tick, Assassin should move towards player because move_threshold is 1
+    game.update();
+
+    let boss = game.bosses.first().unwrap();
+    assert_ne!(boss.position, start_pos, "Assassin should move towards player immediately");
+
+    let dist_x = i32::from(boss.position.x).abs_diff(10);
+    let dist_y = i32::from(boss.position.y).abs_diff(10);
+
+    let start_dist_x = i32::from(start_pos.x).abs_diff(10);
+    let start_dist_y = i32::from(start_pos.y).abs_diff(10);
+
+    assert!(
+        (dist_x + dist_y) < (start_dist_x + start_dist_y),
+        "Assassin should move closer to the player"
+    );
+}

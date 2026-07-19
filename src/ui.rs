@@ -1892,7 +1892,13 @@ fn draw_entities<W: Write>(
 
     // Draw Bosses
     for boss in &game.bosses {
-        if is_visible(boss.position.x, boss.position.y) {
+        let is_assassin_hidden = boss.kind == crate::game::BossType::Assassin && {
+            let dist_x = i32::from(game.snake.head().x).abs_diff(i32::from(boss.position.x));
+            let dist_y = i32::from(game.snake.head().y).abs_diff(i32::from(boss.position.y));
+            dist_x + dist_y > 5
+        };
+
+        if is_visible(boss.position.x, boss.position.y) && !is_assassin_hidden {
             stdout.queue(cursor::MoveTo(boss.position.x, boss.position.y))?;
             match boss.kind {
                 crate::game::BossType::Shooter => {
@@ -1982,6 +1988,10 @@ fn draw_entities<W: Write>(
                 crate::game::BossType::Engineer => {
                     stdout.queue(SetForegroundColor(Color::DarkYellow))?;
                     write!(stdout, "E")?;
+                },
+                crate::game::BossType::Assassin => {
+                    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+                    write!(stdout, "A")?;
                 },
             }
         }

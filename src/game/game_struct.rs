@@ -3858,7 +3858,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..17) {
+                    match self.rng.gen_range(0..18) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3876,6 +3876,7 @@ impl Game {
                         14 => BossType::Phantom,
                         15 => BossType::Alchemist,
                         16 => BossType::Engineer,
+                        17 => BossType::Assassin,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4397,6 +4398,46 @@ impl Game {
                                 }
                             }
                             beep();
+                        }
+                    } else if boss.kind == BossType::Assassin {
+                        // Assassin moves extremely fast and directly targets the player.
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                2_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            1
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = 1; // Always very fast when damaged
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 5) {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                    && !self.obstacles.contains(&next_pos)
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
                         }
                     } else if boss.kind == BossType::Gorgon {
                         let mut move_threshold = if self.mode == GameMode::BossRush {
@@ -8310,6 +8351,7 @@ impl Game {
                             || boss.kind == BossType::Kraken
                             || boss.kind == BossType::Alchemist
                             || boss.kind == BossType::Engineer
+                            || boss.kind == BossType::Assassin
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage

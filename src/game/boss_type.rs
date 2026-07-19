@@ -22,4 +22,5 @@ pub enum BossType {
     Alchemist,
     Phantom,
     Engineer,
+    Assassin,
 }

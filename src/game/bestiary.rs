@@ -141,5 +141,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Builds turrets."
             }
         },
+        BossType::Assassin => {
+            if kills >= 5 {
+                "A stealthy killer that remains hidden until it is too late."
+            } else {
+                "Fast, invisible, and lethal."
+            }
+        },
     }
 }

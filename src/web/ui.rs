@@ -215,6 +215,16 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     // Draw boss
     for boss in &game.bosses {
+        let is_assassin_hidden = boss.kind == crate::game::BossType::Assassin && {
+            let dist_x = i32::from(game.snake.head().x).abs_diff(i32::from(boss.position.x));
+            let dist_y = i32::from(game.snake.head().y).abs_diff(i32::from(boss.position.y));
+            dist_x + dist_y > 5
+        };
+
+        if is_assassin_hidden {
+            continue;
+        }
+
         match boss.kind {
             crate::game::BossType::Shooter => ctx.set_fill_style_str("#FF00FF"),
             crate::game::BossType::Charger => ctx.set_fill_style_str("#FF0000"),
@@ -234,6 +244,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::Phantom => ctx.set_fill_style_str("#555555"),
             crate::game::BossType::Alchemist => ctx.set_fill_style_str("#006400"),
             crate::game::BossType::Engineer => ctx.set_fill_style_str("#FFD700"),
+            crate::game::BossType::Assassin => ctx.set_fill_style_str("#A9A9A9"), // DarkGray
             crate::game::BossType::Mimic => {
                 let target_pos = if let Some((decoy_pos, _)) = game.decoy {
                     decoy_pos
