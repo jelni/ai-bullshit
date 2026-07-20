@@ -5,6 +5,9 @@ fn test_flow_field_uses_portals() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
 
+    game.snake.body.clear();
+    game.snake.body.push_back(snake::Point { x: 5, y: 5 });
+
     let start = snake::Point {
         x: 1,
         y: 1,
