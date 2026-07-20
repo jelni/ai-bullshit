@@ -6837,7 +6837,9 @@ impl Game {
                         max_score = p2_score;
                         winner = "Player 2".to_string();
                     }
-                    for (&bot_id, &score) in &bot_scores {
+                    let mut sorted_bots: Vec<_> = bot_scores.iter().collect();
+                    sorted_bots.sort_by_key(|&(id, _)| id);
+                    for (&bot_id, &score) in sorted_bots {
                         if score > max_score {
                             max_score = score;
                             winner = format!("Bot {}", bot_id.saturating_sub(2));
