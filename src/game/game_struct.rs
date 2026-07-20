@@ -4422,7 +4422,8 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 5) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 5)
+                            {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -6444,6 +6445,29 @@ impl Game {
                     self.safe_zone_margin,
                 ) {
                     self.food = new_food;
+                    if self.mode == GameMode::Zombie {
+                        let margin = self.safe_zone_margin;
+                        if let Some(pos) = Self::get_random_empty_point(
+                            self.width,
+                            self.height,
+                            &self.snake,
+                            |p: &Point| {
+                                self.obstacles.contains(p)
+                                    || self.snake.body_map.contains_key(p)
+                                    || self
+                                        .player2
+                                        .as_ref()
+                                        .is_some_and(|p2| p2.body_map.contains_key(p))
+                                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                            },
+                            &mut self.rng,
+                            margin,
+                        ) {
+                            self.bots.push(Snake::new(pos));
+                            self.bots_autopilot_paths.push(Vec::new());
+                            bots_grow.push(false);
+                        }
+                    }
                 }
             }
             if self.bonus_food.is_some_and(|(bp, _)| *final_head == bp) {
