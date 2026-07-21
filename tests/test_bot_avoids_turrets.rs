@@ -32,6 +32,7 @@ fn test_bot_avoids_turrets() {
             y: 5,
         },
         shoot_timer: 0,
+        is_enemy: true,
     });
 
     // The bot should change direction to avoid the turret
