@@ -130,6 +130,7 @@ impl Game {
         self.turrets.push(Turret {
             position: self.snake.head(),
             shoot_timer: 0,
+            is_enemy: false,
         });
     }
 
@@ -837,6 +838,21 @@ impl Game {
                     possible_targets.push(meteor.position);
                 }
 
+                if turret.is_enemy {
+                    possible_targets.clear();
+                    for body_part in &self.snake.body {
+                        possible_targets.push(*body_part);
+                    }
+                    if let Some(p2) = &self.player2 {
+                        for body_part in &p2.body {
+                            possible_targets.push(*body_part);
+                        }
+                    }
+                    if let Some((decoy_pos, _)) = self.decoy {
+                        possible_targets.push(decoy_pos);
+                    }
+                }
+
                 for target in possible_targets {
                     if target.x == turret.position.x || target.y == turret.position.y {
                         let dist = u32::from(turret.position.x.abs_diff(target.x))
@@ -864,7 +880,7 @@ impl Game {
                     new_lasers.push(Laser {
                         position: turret.position,
                         direction: dir,
-                        player: 1, // Considered player 1's laser
+                        player: if turret.is_enemy { 3 } else { 1 },
                     });
                 }
             }
@@ -4822,10 +4838,13 @@ impl Game {
                         boss.shoot_timer += 1;
                         if boss.shoot_timer >= spawn_threshold {
                             boss.shoot_timer = 0;
-                            if self.turrets.len() < 5 {
+                            let max_turrets = 5;
+                            let engineer_turrets = self.turrets.iter().filter(|t| t.is_enemy).count();
+                            if engineer_turrets < max_turrets {
                                 self.turrets.push(Turret {
                                     position: boss.position,
                                     shoot_timer: 0,
+                                    is_enemy: true,
                                 });
                             }
                         }

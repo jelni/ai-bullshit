@@ -5,4 +5,6 @@ use serde::{Deserialize, Serialize};
 pub struct Turret {
     pub position: Point,
     pub shoot_timer: u32,
+    #[serde(default)]
+    pub is_enemy: bool,
 }
