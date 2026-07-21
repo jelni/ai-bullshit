@@ -47,6 +47,8 @@ fn test_bot_shoots_p2_in_line_of_sight() {
     game.snake.rebuild_map();
     game.snake.direction = Direction::Down;
 
+    game.obstacles.clear();
+    game.bosses.clear();
     let mut p2 = Snake::new(Point {
         x: 5,
         y: 10,
@@ -139,6 +141,8 @@ fn test_bot_does_not_shoot_itself() {
 
     game.snake.direction = Direction::Right; // Facing x: 6, 7 where the body is at 7
 
+    game.obstacles.clear();
+    game.bosses.clear();
     assert!(!game.should_bot_shoot(1));
 }
 
