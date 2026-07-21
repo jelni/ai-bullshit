@@ -3707,7 +3707,8 @@ impl Game {
                     }
 
                     if can_move {
-                        if final_p == target {
+                        let is_goal = final_p == target || (self.portals.is_some_and(|(p1, p2)| (final_p == p1 && target == p2) || (final_p == p2 && target == p1)));
+                        if is_goal {
                             return first_step.get(&current).copied().or(Some(d));
                         }
                         let tentative_g = current_g.saturating_add(1);
@@ -8741,8 +8742,6 @@ impl Game {
                 }];
             } else if let Some(p2_flag) = self.p2_flag {
                 targets = vec![p2_flag];
-            } else if let Some(p2) = &self.player2 {
-                targets = vec![p2.head()];
             } else {
                 targets = vec![Point {
                     x: self.width.saturating_sub(3),
