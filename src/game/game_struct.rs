@@ -3935,7 +3935,10 @@ impl Game {
                     } else {
                         2
                     };
-                    if boss.kind == BossType::Charger || boss.kind == BossType::Juggernaut {
+                    if boss.kind == BossType::Charger
+                        || boss.kind == BossType::Juggernaut
+                        || boss.kind == BossType::Phantom
+                    {
                         move_threshold = std::cmp::max(1, move_threshold / 2);
                     }
                     if boss.health <= boss.max_health / 2 {
