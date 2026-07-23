@@ -890,7 +890,7 @@ mod tests {
         game_normal.state = GameState::Playing;
         old_lives = game_normal.lives;
         game_normal.update();
-        assert_eq!(game_normal.lives, old_lives - 1, "Normal skin should lose life on wall");
+        assert_eq!(game_normal.lives, old_lives.saturating_sub(1), "Normal skin should lose life on wall");
         assert!(game_normal.obstacles.contains(&target), "Normal skin should not smash wall");
     }
     #[test]

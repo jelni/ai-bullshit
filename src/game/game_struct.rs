@@ -6940,6 +6940,8 @@ impl Game {
                     if p2_score > max_score {
                         max_score = p2_score;
                         winner = "Player 2".to_string();
+                    } else if p2_score == max_score && p2_score > 0 {
+                        winner = format!("{winner} and Player 2");
                     }
                     let mut sorted_bots: Vec<_> = bot_scores.iter().collect();
                     sorted_bots.sort_by_key(|&(id, _)| id);
@@ -6947,6 +6949,8 @@ impl Game {
                         if score > max_score {
                             max_score = score;
                             winner = format!("Bot {}", bot_id.saturating_sub(2));
+                        } else if score == max_score && score > 0 {
+                            winner = format!("{} and Bot {}", winner, bot_id.saturating_sub(2));
                         }
                     }
                     self.just_died = true;
