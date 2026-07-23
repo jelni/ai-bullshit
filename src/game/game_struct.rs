@@ -3897,6 +3897,7 @@ impl Game {
                         15 => BossType::Alchemist,
                         16 => BossType::Engineer,
                         17 => BossType::Assassin,
+                        18 => BossType::TimeWeaver,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4744,6 +4745,83 @@ impl Game {
                                     beep();
                                 }
                             }
+                        }
+                    } else if boss.kind == BossType::TimeWeaver {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            3
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
+                        }
+                        let mut cast_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                20,
+                                50_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255).saturating_mul(2),
+                                ),
+                            )
+                        } else {
+                            50
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            cast_threshold = std::cmp::max(10, cast_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= cast_threshold {
+                            boss.shoot_timer = 0;
+                            // Rewind time!
+                            self.rewind_time();
+                            // To prevent soft-lock, we must reset the timer in the rewound state too,
+                            // otherwise it will just trigger repeatedly on the same tick!
+                            for rewound_boss in &mut self.bosses {
+                                if rewound_boss.kind == BossType::TimeWeaver {
+                                    rewound_boss.shoot_timer = 0;
+                                }
+                            }
+                            self.spawn_particles(
+                                f32::from(boss.position.x),
+                                f32::from(boss.position.y),
+                                50,
+                                crate::color::Color::Magenta,
+                                '~',
+                            );
+                            crate::game::beep();
+                            // Since time was rewound, we should break out of this boss update loop to avoid mutating old state incorrectly,
+                            // or just continue. The history pop has overwritten our bosses array!
+                            // We MUST break here because `self.bosses` just changed under us.
+                            break;
                         }
                     } else if boss.kind == BossType::VampireLord {
                         let mut move_threshold = if self.mode == GameMode::BossRush {

@@ -23,4 +23,5 @@ pub enum BossType {
     Phantom,
     Engineer,
     Assassin,
+    TimeWeaver,
 }

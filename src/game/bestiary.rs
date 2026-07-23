@@ -148,5 +148,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Fast, invisible, and lethal."
             }
         },
+        BossType::TimeWeaver => {
+            if kills >= 5 {
+                "A cosmic entity that can rip the fabric of space-time, rewinding reality."
+            } else {
+                "Rewinds time itself."
+            }
+        },
     }
 }
