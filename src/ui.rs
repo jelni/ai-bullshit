@@ -1993,6 +1993,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkGrey))?;
                     write!(stdout, "A")?;
                 },
+                crate::game::BossType::TimeWeaver => {
+                    stdout.queue(SetForegroundColor(Color::Magenta))?;
+                    write!(stdout, "W")?;
+                },
             }
         }
     }
