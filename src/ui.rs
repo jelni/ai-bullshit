@@ -163,6 +163,7 @@ fn draw_magic_academy<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         (crate::game::SpellType::Blink, "Blink (Teleport 3 steps, 30 Mana)"),
         (crate::game::SpellType::Fireball, "Fireball (Shoot laser, 40 Mana)"),
         (crate::game::SpellType::Shield, "Shield (Invincibility, 60 Mana)"),
+        (crate::game::SpellType::ChainLightning, "Chain Lightning (Bounces to 3 bosses, 45 Mana)"),
     ];
 
     for (i, (spell, desc)) in spells.iter().enumerate() {

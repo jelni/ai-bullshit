@@ -6,6 +6,7 @@ pub enum SpellType {
     Blink,
     Fireball,
     Shield,
+    ChainLightning,
 }
 
 impl SpellType {
@@ -16,6 +17,7 @@ impl SpellType {
             Self::Blink => 30,
             Self::Fireball => 40,
             Self::Shield => 60,
+            Self::ChainLightning => 45,
         }
     }
 }
