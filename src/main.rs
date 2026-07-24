@@ -701,9 +701,10 @@ fn handle_magic_academy_input(code: KeyCode, game: &mut Game) -> bool {
                 crate::game::SpellType::Blink,
                 crate::game::SpellType::Fireball,
                 crate::game::SpellType::Shield,
+                crate::game::SpellType::ChainLightning,
             ];
 
-            if game.settings_selection < 4 {
+            if game.settings_selection < 5 {
                 let spell = spells[game.settings_selection];
                 if game.stats.unlocked_spells.contains(&spell) {
                     game.stats.equipped_spell = Some(spell);
@@ -712,7 +713,7 @@ fn handle_magic_academy_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.unlocked_spells.push(spell);
                     game.stats.equipped_spell = Some(spell);
                 }
-            } else if game.settings_selection == 4 {
+            } else if game.settings_selection == 5 {
                 game.stats.equipped_spell = None;
             }
             game.save_stats();

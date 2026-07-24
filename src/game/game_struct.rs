@@ -205,6 +205,68 @@ impl Game {
                 });
                 crate::game::beep();
             },
+            super::SpellType::ChainLightning => {
+                let mut current_pos = self.snake.head();
+                let mut hit_indices = HashSet::new();
+                for _ in 0..3 {
+                    let mut closest_dist = i32::MAX;
+                    let mut closest_idx = None;
+
+                    for (i, boss) in self.bosses.iter().enumerate() {
+                        if !hit_indices.contains(&i) {
+                            let dist = (i32::from(boss.position.x) - i32::from(current_pos.x)).abs()
+                                + (i32::from(boss.position.y) - i32::from(current_pos.y)).abs();
+                            if dist < closest_dist && dist <= 15 {
+                                closest_dist = dist;
+                                closest_idx = Some(i);
+                            }
+                        }
+                    }
+
+                    if let Some(idx) = closest_idx {
+                        hit_indices.insert(idx);
+                        let boss_pos = self.bosses[idx].position;
+                        self.bosses[idx].health = self.bosses[idx].health.saturating_sub(5);
+                        self.spawn_particles(
+                            f32::from(boss_pos.x),
+                            f32::from(boss_pos.y),
+                            20,
+                            crate::color::Color::Cyan,
+                            '~',
+                        );
+                        current_pos = boss_pos;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Cleanup dead bosses handled by update loop or do it here if needed,
+                // but since bosses die at hp 0 during their tick or damage ticks, it's fine.
+                // Wait, some other spells/weapons instantly clear out bosses if they die.
+                // Let's do a quick retain just in case.
+                let mut to_remove = Vec::new();
+                for &idx in &hit_indices {
+                    if self.bosses[idx].health == 0 {
+                        to_remove.push(idx);
+                    }
+                }
+                to_remove.sort_unstable_by(|a, b| b.cmp(a));
+                for idx in to_remove {
+                    let boss = self.bosses.remove(idx);
+                    self.score += 100;
+                    if self.stats.faction.is_some() {
+                        self.stats.faction_rep += 100;
+                    }
+                    self.spawn_particles(
+                        f32::from(boss.position.x),
+                        f32::from(boss.position.y),
+                        30,
+                        crate::color::Color::Magenta,
+                        'B',
+                    );
+                }
+                crate::game::beep();
+            },
         }
     }
 
