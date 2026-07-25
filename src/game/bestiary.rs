@@ -155,5 +155,19 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Rewinds time itself."
             }
         },
+        BossType::Illusionist => {
+            if kills >= 5 {
+                "Teleports and creates clones of itself to confuse the player."
+            } else {
+                "Creates copies of itself."
+            }
+        },
+        BossType::IllusionClone => {
+            if kills >= 5 {
+                "A fragile clone created by the Illusionist."
+            } else {
+                "A fragile clone."
+            }
+        },
     }
 }

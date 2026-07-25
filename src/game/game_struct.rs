@@ -3960,6 +3960,7 @@ impl Game {
                         16 => BossType::Engineer,
                         17 => BossType::Assassin,
                         18 => BossType::TimeWeaver,
+                        19 => BossType::Illusionist,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4805,6 +4806,163 @@ impl Game {
                                 ) {
                                     self.poison_food = Some((poison, web_time::Instant::now()));
                                     beep();
+                                }
+                            }
+                        }
+                    } else if boss.kind == BossType::Illusionist {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                1,
+                                3_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
+                        } else {
+                            3
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
+                        }
+                        let mut cast_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(
+                                20,
+                                40_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
+                        } else {
+                            40
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            cast_threshold = std::cmp::max(10, cast_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= cast_threshold {
+                            boss.shoot_timer = 0;
+
+                            // Teleport the boss
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+                            let (new_pos_opt, clone_positions) = {
+                                let avoid = |p: &Point| {
+                                    self.obstacles.contains(p)
+                                        || self.snake.body_map.contains_key(p)
+                                };
+                                let new_pos_opt = Self::get_random_empty_point(
+                                    self.width,
+                                    self.height,
+                                    &self.snake,
+                                    avoid,
+                                    &mut self.rng,
+                                    margin,
+                                );
+
+                                let mut clone_positions = Vec::new();
+                                for _ in 0..2 {
+                                    if let Some(clone_pos) = Self::get_random_empty_point(
+                                        self.width,
+                                        self.height,
+                                        &self.snake,
+                                        avoid,
+                                        &mut self.rng,
+                                        margin,
+                                    ) {
+                                        clone_positions.push(clone_pos);
+                                    }
+                                }
+                                (new_pos_opt, clone_positions)
+                            };
+
+                            if let Some(new_pos) = new_pos_opt {
+                                self.spawn_particles(
+                                    f32::from(boss.position.x),
+                                    f32::from(boss.position.y),
+                                    20,
+                                    crate::color::Color::Cyan,
+                                    '*',
+                                );
+                                boss.position = new_pos;
+                                self.spawn_particles(
+                                    f32::from(boss.position.x),
+                                    f32::from(boss.position.y),
+                                    20,
+                                    crate::color::Color::Cyan,
+                                    '*',
+                                );
+                            }
+
+                            for clone_pos in clone_positions {
+                                next_bosses.push(Boss {
+                                    position: clone_pos,
+                                    health: 1,
+                                    max_health: 1,
+                                    move_timer: 0,
+                                    shoot_timer: 0,
+                                    kind: BossType::IllusionClone,
+                                    state_timer: 0,
+                                });
+                                self.spawn_particles(
+                                    f32::from(clone_pos.x),
+                                    f32::from(clone_pos.y),
+                                    10,
+                                    crate::color::Color::Cyan,
+                                    'i',
+                                );
+                            }
+                            beep();
+                        }
+                    } else if boss.kind == BossType::IllusionClone {
+                        let move_threshold = 2; // Fast moving
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                {
+                                    boss.position = next_pos;
                                 }
                             }
                         }
@@ -8558,6 +8716,8 @@ impl Game {
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
+                            || boss.kind == BossType::Illusionist
+                            || boss.kind == BossType::IllusionClone
                         {
                             if final_p == boss.position
                                 || (boss.kind == BossType::Shooter && dist <= moves)

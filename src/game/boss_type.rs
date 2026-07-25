@@ -24,4 +24,6 @@ pub enum BossType {
     Engineer,
     Assassin,
     TimeWeaver,
+    Illusionist,
+    IllusionClone,
 }

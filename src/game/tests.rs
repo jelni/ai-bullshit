@@ -1531,3 +1531,39 @@ fn test_sniper_companion() {
         "Sniper should have fired to the right"
     );
 }
+
+#[test]
+fn test_illusionist_boss_spawns_clones() {
+    let mut game = crate::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
+    game.obstacles.clear();
+    game.bosses.clear();
+
+    let start_pos = crate::snake::Point { x: 5, y: 5 };
+    game.bosses.push(crate::game::Boss {
+        position: start_pos,
+        health: 10,
+        max_health: 10,
+        move_timer: 0,
+        shoot_timer: 39, // One tick before threshold (40)
+        kind: crate::game::BossType::Illusionist,
+        state_timer: 0,
+    });
+
+    game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 5 });
+
+    game.state = crate::game::GameState::Playing;
+    game.update();
+
+    let clones_spawned = game.bosses.iter().filter(|b| b.kind == crate::game::BossType::IllusionClone).count();
+    assert_eq!(clones_spawned, 2, "Illusionist should spawn 2 clones");
+
+    let real_boss = game.bosses.iter().find(|b| b.kind == crate::game::BossType::Illusionist).unwrap();
+    assert_ne!(real_boss.position, start_pos, "Illusionist should teleport");
+}
