@@ -16,4 +16,5 @@ pub enum PowerUpType {
     Decoy,
     Emp,
     Nuke,
+    Invisibility,
 }

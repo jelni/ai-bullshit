@@ -2542,7 +2542,7 @@ impl Game {
         }
         false
     }
-    fn handle_autopilot_moves(&mut self) {
+    pub fn handle_autopilot_moves(&mut self) {
         let delay_bot = self.weather == Weather::Snow && self.rng.gen_bool(0.2);
         if !delay_bot {
             if (self.auto_pilot || self.mode == GameMode::BotVsBot)
@@ -2605,7 +2605,7 @@ impl Game {
                         }
 
                         let mut targets = if self.mode == GameMode::Zombie {
-                            vec![self.snake.head()]
+                            if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
                         } else {
                             vec![self.food]
                         };
@@ -3304,7 +3304,7 @@ impl Game {
 
         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
             let targets = if self.mode == GameMode::Zombie {
-                vec![self.snake.head()]
+                if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
             } else {
                 let mut t = vec![self.food];
                 if let Some((bp, _)) = self.bonus_food {
@@ -7419,6 +7419,12 @@ impl Game {
         }
     }
 
+    pub(crate) fn is_invisible(&self) -> bool {
+        self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Invisibility && p.activation_time.is_some()
+        })
+    }
+
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
         if self.bonus_food.is_some_and(|(bonus_p, _)| final_head == bonus_p) {
             self.spawn_particles(
@@ -7858,7 +7864,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..15) {
+                let p_type = match self.rng.gen_range(0..16) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -7873,6 +7879,7 @@ impl Game {
                     11 => PowerUpType::Decoy,
                     12 => PowerUpType::Emp,
                     13 => PowerUpType::Nuke,
+                    14 => PowerUpType::Invisibility,
                     _ => PowerUpType::ExtraLife,
                 };
                 self.power_up = Some(PowerUp {
@@ -8991,7 +8998,7 @@ impl Game {
                 } else if let Some(player2) = &self.player2 {
                     targets = vec![player2.head()];
                 } else {
-                    targets = vec![self.snake.head()]; // Fallback, though player2 should exist here
+                    targets = if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }; // Fallback, though player2 should exist here
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
