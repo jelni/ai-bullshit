@@ -1998,6 +1998,14 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Magenta))?;
                     write!(stdout, "W")?;
                 },
+                crate::game::BossType::Illusionist => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "I")?;
+                },
+                crate::game::BossType::IllusionClone => {
+                    stdout.queue(SetForegroundColor(Color::Cyan))?;
+                    write!(stdout, "i")?;
+                },
             }
         }
     }
