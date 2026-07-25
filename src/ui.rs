@@ -2006,6 +2006,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Cyan))?;
                     write!(stdout, "i")?;
                 },
+                crate::game::BossType::Wormhole => {
+                    stdout.queue(SetForegroundColor(Color::DarkBlue))?;
+                    write!(stdout, "O")?;
+                },
             }
         }
     }

@@ -26,4 +26,5 @@ pub enum BossType {
     TimeWeaver,
     Illusionist,
     IllusionClone,
+    Wormhole,
 }

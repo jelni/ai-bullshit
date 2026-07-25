@@ -677,3 +677,36 @@ fn test_assassin_moves_fast_towards_player() {
         "Assassin should move closer to the player"
     );
 }
+
+#[test]
+fn test_wormhole_boss_spawns_portals() {
+    let mut game = snake_game::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        snake_game::game::Theme::Classic,
+        snake_game::game::Difficulty::Normal,
+    );
+
+    game.bosses.clear();
+    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    game.bosses.push(snake_game::game::Boss {
+        position: start_pos,
+        health: 5,
+        max_health: 5,
+        move_timer: 0,
+        shoot_timer: 0,
+        kind: snake_game::game::BossType::Wormhole,
+        state_timer: 0,
+    });
+    game.portals = None;
+    game.state = snake_game::game::GameState::Playing;
+
+    // Simulate enough ticks for Wormhole boss to spawn portals (threshold is 20)
+    for _ in 0..20 {
+        game.update();
+    }
+
+    assert!(game.portals.is_some(), "Wormhole boss should have spawned portals");
+}
