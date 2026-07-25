@@ -4472,10 +4472,10 @@ impl Game {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let final_pos = self.get_final_p(laser_pos);
                                 if let Some(p) = final_pos
-                                    && p.x > margin
-                                    && p.x < self.width - 1 - margin
-                                    && p.y > margin
-                                    && p.y < self.height - 1 - margin
+                                    && p.x >= margin
+                                    && p.x < self.width - margin
+                                    && p.y >= margin
+                                    && p.y < self.height - margin
                                 {
                                     new_lasers.push(Laser {
                                         position: p,
