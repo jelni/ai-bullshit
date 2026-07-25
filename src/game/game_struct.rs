@@ -3940,7 +3940,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..18) {
+                    match self.rng.gen_range(0..21) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -3961,6 +3961,7 @@ impl Game {
                         17 => BossType::Assassin,
                         18 => BossType::TimeWeaver,
                         19 => BossType::Illusionist,
+                        20 => BossType::Wormhole,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4963,6 +4964,37 @@ impl Game {
                                     && next_pos.y < self.height - 1 - margin
                                 {
                                     boss.position = next_pos;
+                                }
+                            }
+                        }
+                    } else if boss.kind == BossType::Wormhole {
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= 20 {
+                            boss.shoot_timer = 0;
+                            let avoid = |p: &Point| {
+                                self.obstacles.contains(p)
+                                    || *p == self.food
+                                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                            };
+                            if let Some(portal1) = Self::get_random_empty_point(
+                                self.width,
+                                self.height,
+                                &self.snake,
+                                avoid,
+                                &mut self.rng,
+                                self.safe_zone_margin,
+                            ) {
+                                let avoid2 = |p: &Point| avoid(p) || *p == portal1;
+                                if let Some(portal2) = Self::get_random_empty_point(
+                                    self.width,
+                                    self.height,
+                                    &self.snake,
+                                    avoid2,
+                                    &mut self.rng,
+                                    self.safe_zone_margin,
+                                ) {
+                                    self.portals = Some((portal1, portal2));
                                 }
                             }
                         }
@@ -8718,6 +8750,7 @@ impl Game {
                             || boss.kind == BossType::Mage
                             || boss.kind == BossType::Illusionist
                             || boss.kind == BossType::IllusionClone
+                            || boss.kind == BossType::Wormhole
                         {
                             if final_p == boss.position
                                 || (boss.kind == BossType::Shooter && dist <= moves)

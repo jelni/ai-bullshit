@@ -169,5 +169,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "A fragile clone."
             }
         },
+        BossType::Wormhole => {
+            if kills >= 5 {
+                "Tears the fabric of space, constantly repositioning portals."
+            } else {
+                "Spawns portals randomly."
+            }
+        },
     }
 }
