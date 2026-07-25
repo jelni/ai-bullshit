@@ -2100,6 +2100,10 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "E")?;
             },
+            crate::game::PowerUpType::Invisibility => {
+                stdout.queue(SetForegroundColor(Color::White))?;
+                write!(stdout, "I")?;
+            },
             _ => {
                 stdout.queue(SetForegroundColor(Color::Cyan))?;
                 write!(stdout, "P")?;
@@ -2434,6 +2438,7 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 crate::game::PowerUpType::Decoy => "Decoy",
                 crate::game::PowerUpType::Emp => "Emp",
                 crate::game::PowerUpType::Nuke => "Nuke",
+                crate::game::PowerUpType::Invisibility => "Invisibility",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;

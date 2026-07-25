@@ -218,7 +218,8 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                     | game::PowerUpType::Reverse
                     | game::PowerUpType::Decoy
                     | game::PowerUpType::Emp
-                    | game::PowerUpType::Nuke => {}, // Tick rate unaffected
+                    | game::PowerUpType::Nuke
+                    | game::PowerUpType::Invisibility => {}, // Tick rate unaffected
                 }
             } else {
                 game.power_up = None; // Power-up expired
