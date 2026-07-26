@@ -5688,35 +5688,34 @@ impl Game {
                 }
                 if self.goblin.as_ref().is_some_and(|goblin| laser.position == goblin.position) {
                     let gob_pos = self.goblin.as_ref().unwrap().position;
-                    if laser.player != 1 {
-                        destroyed = true;
-                        break;
-                    }
                     self.goblin = None;
                     if !is_piercing {
                         destroyed = true;
                     }
-                    let multiplier = if self.skin == '₿' {
-                        2
-                    } else {
-                        1
-                    };
-                    self.score += 500;
-                    self.stats.total_score += 500;
-                    self.stats.coins += 500 * multiplier;
-                    self.spawn_floating_text(
-                        f32::from(laser.position.x),
-                        f32::from(laser.position.y),
-                        "+500".to_string(),
-                        crate::color::Color::Yellow,
-                    );
-                    self.spawn_particles(
-                        f32::from(laser.position.x),
-                        f32::from(laser.position.y),
-                        50,
-                        crate::color::Color::Yellow,
-                        '$',
-                    );
+
+                    if laser.player == 1 {
+                        let multiplier = if self.skin == '₿' {
+                            2
+                        } else {
+                            1
+                        };
+                        self.score += 500;
+                        self.stats.total_score += 500;
+                        self.stats.coins += 500 * multiplier;
+                        self.spawn_floating_text(
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            "+500".to_string(),
+                            crate::color::Color::Yellow,
+                        );
+                        self.spawn_particles(
+                            f32::from(laser.position.x),
+                            f32::from(laser.position.y),
+                            50,
+                            crate::color::Color::Yellow,
+                            '$',
+                        );
+                    }
                     if self.mode == GameMode::SnakeSurvivor {
                         self.xp_gems.insert(gob_pos);
                     }
