@@ -2580,8 +2580,17 @@ impl Game {
                         let current_dir = self.bots[i].direction;
 
                         // Use flow field for MassiveMultiplayer and Zombie to save performance
+                        let expected_targets = if self.mode == GameMode::Zombie {
+                            if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
+                        } else {
+                            vec![self.food]
+                        };
+
+                        let flow_field_valid = self.flow_field.is_some() && self.flow_field_targets == expected_targets;
+
                         if (self.mode == GameMode::MassiveMultiplayer
                             || self.mode == GameMode::Zombie)
+                            && flow_field_valid
                             && let Some(flow_field) = self.flow_field.as_ref()
                             && let Some(&dir) = flow_field.get(&start)
                         {
@@ -2604,11 +2613,7 @@ impl Game {
                             }
                         }
 
-                        let mut targets = if self.mode == GameMode::Zombie {
-                            if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
-                        } else {
-                            vec![self.food]
-                        };
+                        let mut targets = expected_targets;
 
                         if self.mode != GameMode::Zombie {
                             if let Some((bf_p, _)) = self.bonus_food {
