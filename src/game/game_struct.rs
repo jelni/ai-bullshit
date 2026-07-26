@@ -4977,13 +4977,18 @@ impl Game {
                                     || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                                     || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
                             };
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
                             if let Some(portal1) = Self::get_random_empty_point(
                                 self.width,
                                 self.height,
                                 &self.snake,
                                 avoid,
                                 &mut self.rng,
-                                self.safe_zone_margin,
+                                margin,
                             ) {
                                 let avoid2 = |p: &Point| avoid(p) || *p == portal1;
                                 if let Some(portal2) = Self::get_random_empty_point(
@@ -4992,7 +4997,7 @@ impl Game {
                                     &self.snake,
                                     avoid2,
                                     &mut self.rng,
-                                    self.safe_zone_margin,
+                                    margin,
                                 ) {
                                     self.portals = Some((portal1, portal2));
                                 }
@@ -8768,6 +8773,7 @@ impl Game {
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
+                            || boss.kind == BossType::Illusionist
                         {
                             let mut shoot_threshold =
                                 u32::from(if self.mode == GameMode::BossRush {
@@ -8778,6 +8784,8 @@ impl Game {
                                             10
                                         } else if boss.kind == BossType::Mage {
                                             15
+                                        } else if boss.kind == BossType::Illusionist {
+                                            20
                                         } else {
                                             5
                                         },
@@ -8787,6 +8795,8 @@ impl Game {
                                             20_u8
                                         } else if boss.kind == BossType::Mage {
                                             30_u8
+                                        } else if boss.kind == BossType::Illusionist {
+                                            40_u8
                                         } else {
                                             15_u8
                                         })
@@ -8800,6 +8810,8 @@ impl Game {
                                     30
                                 } else if boss.kind == BossType::Dragon {
                                     20
+                                } else if boss.kind == BossType::Illusionist {
+                                    40
                                 } else {
                                     15
                                 });
@@ -8811,6 +8823,8 @@ impl Game {
                                         2
                                     } else if boss.kind == BossType::Mage {
                                         5
+                                    } else if boss.kind == BossType::Illusionist {
+                                        10
                                     } else {
                                         1
                                     },
@@ -8820,7 +8834,11 @@ impl Game {
                             let shoots =
                                 (active_steps + u32::from(boss.shoot_timer)) / shoot_threshold;
                             if shoots > 0 {
-                                if boss.kind == BossType::Mage {
+                                if boss.kind == BossType::Illusionist {
+                                    // The illusionist teleports and spawns clones. We shouldn't necessarily avoid its current column/row.
+                                    // Instead, we just know it will do something unpredictable, but the clones spawn at random points.
+                                    // We'll just continue so we don't treat its axes as a laser threat.
+                                } else if boss.kind == BossType::Mage {
                                     // The mage will spawn a meteor exactly at the target's current head.
                                     // So if we are considering staying at or moving to a point that is the same as
                                     // the CURRENT head of the player/bot being targeted, it's dangerous.
