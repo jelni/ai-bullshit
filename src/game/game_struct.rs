@@ -5113,7 +5113,7 @@ impl Game {
                             // Steal life if adjacent
                             if dist <= 2 {
                                 if self.lives >= 1 {
-                                    self.lives = self.lives.saturating_sub(1);
+                                    self.handle_death("Vampire Lord stole your life!");
                                     boss.health = std::cmp::min(boss.max_health, boss.health + 5);
                                     self.spawn_particles(
                                         f32::from(boss.position.x),
