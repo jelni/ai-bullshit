@@ -418,6 +418,7 @@ fn test_alchemist_drops_poison() {
         snake_game::game::Difficulty::Normal,
     );
 
+    game.obstacles.clear();
     game.bosses.clear();
     let start_pos = snake_game::snake::Point {
         x: 5,
@@ -585,6 +586,7 @@ fn test_puffer_boss_moves_and_shoots() {
         snake_game::game::Theme::Classic,
         snake_game::game::Difficulty::Normal,
     );
+    game.obstacles.clear();
     game.bosses.clear();
     let start_pos = snake_game::snake::Point {
         x: 5,
@@ -689,6 +691,7 @@ fn test_wormhole_boss_spawns_portals() {
         snake_game::game::Difficulty::Normal,
     );
 
+    game.obstacles.clear();
     game.bosses.clear();
     let start_pos = snake_game::snake::Point { x: 5, y: 5 };
     game.bosses.push(snake_game::game::Boss {
