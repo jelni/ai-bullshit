@@ -693,7 +693,10 @@ fn test_wormhole_boss_spawns_portals() {
 
     game.obstacles.clear();
     game.bosses.clear();
-    let start_pos = snake_game::snake::Point { x: 5, y: 5 };
+    let start_pos = snake_game::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(snake_game::game::Boss {
         position: start_pos,
         health: 5,

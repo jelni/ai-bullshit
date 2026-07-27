@@ -214,7 +214,8 @@ impl Game {
 
                     for (i, boss) in self.bosses.iter().enumerate() {
                         if !hit_indices.contains(&i) {
-                            let dist = (i32::from(boss.position.x) - i32::from(current_pos.x)).abs()
+                            let dist = (i32::from(boss.position.x) - i32::from(current_pos.x))
+                                .abs()
                                 + (i32::from(boss.position.y) - i32::from(current_pos.y)).abs();
                             if dist < closest_dist && dist <= 15 {
                                 closest_dist = dist;
@@ -942,7 +943,11 @@ impl Game {
                     new_lasers.push(Laser {
                         position: turret.position,
                         direction: dir,
-                        player: if turret.is_enemy { 3 } else { 1 },
+                        player: if turret.is_enemy {
+                            3
+                        } else {
+                            1
+                        },
                     });
                 }
             }
@@ -2581,12 +2586,17 @@ impl Game {
 
                         // Use flow field for MassiveMultiplayer and Zombie to save performance
                         let expected_targets = if self.mode == GameMode::Zombie {
-                            if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
+                            if self.is_invisible() {
+                                vec![self.food]
+                            } else {
+                                vec![self.snake.head()]
+                            }
                         } else {
                             vec![self.food]
                         };
 
-                        let flow_field_valid = self.flow_field.is_some() && self.flow_field_targets == expected_targets;
+                        let flow_field_valid = self.flow_field.is_some()
+                            && self.flow_field_targets == expected_targets;
 
                         if (self.mode == GameMode::MassiveMultiplayer
                             || self.mode == GameMode::Zombie)
@@ -3309,7 +3319,11 @@ impl Game {
 
         if self.mode == GameMode::MassiveMultiplayer || self.mode == GameMode::Zombie {
             let targets = if self.mode == GameMode::Zombie {
-                if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }
+                if self.is_invisible() {
+                    vec![self.food]
+                } else {
+                    vec![self.snake.head()]
+                }
             } else {
                 let mut t = vec![self.food];
                 if let Some((bp, _)) = self.bonus_food {
@@ -3774,7 +3788,10 @@ impl Game {
                     }
 
                     if can_move {
-                        let is_goal = final_p == target || (self.portals.is_some_and(|(p1, p2)| (final_p == p1 && target == p2) || (final_p == p2 && target == p1)));
+                        let is_goal = final_p == target
+                            || (self.portals.is_some_and(|(p1, p2)| {
+                                (final_p == p1 && target == p2) || (final_p == p2 && target == p1)
+                            }));
                         if is_goal {
                             if current == start {
                                 return Some(d);
@@ -4881,6 +4898,7 @@ impl Game {
                                 let avoid = |p: &Point| {
                                     self.obstacles.contains(p)
                                         || self.snake.body_map.contains_key(p)
+                                        || *p == boss.position
                                 };
                                 let new_pos_opt = Self::get_random_empty_point(
                                     self.width,
@@ -4897,7 +4915,16 @@ impl Game {
                                         self.width,
                                         self.height,
                                         &self.snake,
-                                        avoid,
+                                        |p: &Point| {
+                                            avoid(p)
+                                                || *p
+                                                    == new_pos_opt.unwrap_or(Point {
+                                                        x: 0,
+                                                        y: 0,
+                                                    })
+                                                || clone_positions.contains(p)
+                                                || *p == boss.position
+                                        },
                                         &mut self.rng,
                                         margin,
                                     ) {
@@ -5051,7 +5078,9 @@ impl Game {
                             std::cmp::max(
                                 20,
                                 50_u8.saturating_sub(
-                                    u8::try_from(self.campaign_level).unwrap_or(255).saturating_mul(2),
+                                    u8::try_from(self.campaign_level)
+                                        .unwrap_or(255)
+                                        .saturating_mul(2),
                                 ),
                             )
                         } else {
@@ -5129,6 +5158,7 @@ impl Game {
                                     let avoid = |p: &Point| {
                                         self.obstacles.contains(p)
                                             || self.snake.body_map.contains_key(p)
+                                            || *p == boss.position
                                     };
                                     if let Some(pos) = Self::get_random_empty_point(
                                         self.width,
@@ -5186,7 +5216,8 @@ impl Game {
                         if boss.shoot_timer >= spawn_threshold {
                             boss.shoot_timer = 0;
                             let max_turrets = 5;
-                            let engineer_turrets = self.turrets.iter().filter(|t| t.is_enemy).count();
+                            let engineer_turrets =
+                                self.turrets.iter().filter(|t| t.is_enemy).count();
                             if engineer_turrets < max_turrets {
                                 self.turrets.push(Turret {
                                     position: boss.position,
@@ -7619,9 +7650,9 @@ impl Game {
     }
 
     pub(crate) fn is_invisible(&self) -> bool {
-        self.power_up.as_ref().is_some_and(|p| {
-            p.p_type == PowerUpType::Invisibility && p.activation_time.is_some()
-        })
+        self.power_up
+            .as_ref()
+            .is_some_and(|p| p.p_type == PowerUpType::Invisibility && p.activation_time.is_some())
     }
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
@@ -9213,7 +9244,11 @@ impl Game {
                 } else if let Some(player2) = &self.player2 {
                     targets = vec![player2.head()];
                 } else {
-                    targets = if self.is_invisible() { vec![self.food] } else { vec![self.snake.head()] }; // Fallback, though player2 should exist here
+                    targets = if self.is_invisible() {
+                        vec![self.food]
+                    } else {
+                        vec![self.snake.head()]
+                    }; // Fallback, though player2 should exist here
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {

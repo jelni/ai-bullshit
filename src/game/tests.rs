@@ -890,7 +890,11 @@ mod tests {
         game_normal.state = GameState::Playing;
         old_lives = game_normal.lives;
         game_normal.update();
-        assert_eq!(game_normal.lives, old_lives.saturating_sub(1), "Normal skin should lose life on wall");
+        assert_eq!(
+            game_normal.lives,
+            old_lives.saturating_sub(1),
+            "Normal skin should lose life on wall"
+        );
         assert!(game_normal.obstacles.contains(&target), "Normal skin should not smash wall");
     }
     #[test]
@@ -1021,10 +1025,7 @@ mod tests {
         assert!(game.goblin.is_none(), "Goblin should be caught and despawned");
         assert_eq!(game.score, initial_score + 500, "Should get 500 score for catching goblin");
         // just ignore the coin value, we don't care exactly how many we get, only that we get some, to make this test less brittle
-        assert!(
-            game.stats.coins > initial_coins,
-            "Should get coins for catching goblin"
-        );
+        assert!(game.stats.coins > initial_coins, "Should get coins for catching goblin");
     }
     #[test]
     fn test_laser_hits_goblin() {
@@ -1545,7 +1546,10 @@ fn test_illusionist_boss_spawns_clones() {
     game.obstacles.clear();
     game.bosses.clear();
 
-    let start_pos = crate::snake::Point { x: 5, y: 5 };
+    let start_pos = crate::snake::Point {
+        x: 5,
+        y: 5,
+    };
     game.bosses.push(crate::game::Boss {
         position: start_pos,
         health: 10,
@@ -1556,14 +1560,19 @@ fn test_illusionist_boss_spawns_clones() {
         state_timer: 0,
     });
 
-    game.snake = crate::snake::Snake::new(crate::snake::Point { x: 10, y: 5 });
+    game.snake = crate::snake::Snake::new(crate::snake::Point {
+        x: 10,
+        y: 5,
+    });
 
     game.state = crate::game::GameState::Playing;
     game.update();
 
-    let clones_spawned = game.bosses.iter().filter(|b| b.kind == crate::game::BossType::IllusionClone).count();
+    let clones_spawned =
+        game.bosses.iter().filter(|b| b.kind == crate::game::BossType::IllusionClone).count();
     assert_eq!(clones_spawned, 2, "Illusionist should spawn 2 clones");
 
-    let real_boss = game.bosses.iter().find(|b| b.kind == crate::game::BossType::Illusionist).unwrap();
+    let real_boss =
+        game.bosses.iter().find(|b| b.kind == crate::game::BossType::Illusionist).unwrap();
     assert_ne!(real_boss.position, start_pos, "Illusionist should teleport");
 }
