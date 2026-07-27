@@ -69,6 +69,7 @@ fn test_p2_bot_targets_enemy_flag() {
     });
     p2.direction = Direction::Up;
     game.player2 = Some(p2);
+    game.snake = snake_game::snake::Snake::new(Point { x: 0, y: 19 }); // move p1 snake out of the way
 
     game.p1_flag = Some(Point {
         x: 2,
