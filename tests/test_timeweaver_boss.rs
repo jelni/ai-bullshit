@@ -1,5 +1,5 @@
 use snake_game::game::{Boss, BossType, Difficulty, Game, GameMode, GameState, Theme};
-use snake_game::snake::{Point, Direction};
+use snake_game::snake::{Direction, Point};
 
 #[test]
 fn test_timeweaver_boss_rewinds_time() {
@@ -7,7 +7,10 @@ fn test_timeweaver_boss_rewinds_time() {
     game.mode = GameMode::BossRush;
     game.state = GameState::Playing;
 
-    game.snake = snake_game::snake::Snake::new(Point { x: 10, y: 10 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 10,
+    });
     game.snake.direction = Direction::Up;
 
     // Set some history
@@ -15,7 +18,10 @@ fn test_timeweaver_boss_rewinds_time() {
 
     // We add bosses before update so they are part of the state
     game.bosses.push(Boss {
-        position: Point { x: 5, y: 5 },
+        position: Point {
+            x: 5,
+            y: 5,
+        },
         health: 100,
         max_health: 100,
         move_timer: 0,

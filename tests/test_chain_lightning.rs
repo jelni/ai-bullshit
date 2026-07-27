@@ -7,11 +7,17 @@ fn test_chain_lightning_spell() {
     game.mode = GameMode::BossRush;
     game.state = GameState::Playing;
 
-    game.snake = snake_game::snake::Snake::new(Point { x: 10, y: 10 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 10,
+    });
 
     // Boss 1: closest to snake
     let boss1 = Boss {
-        position: Point { x: 12, y: 10 },
+        position: Point {
+            x: 12,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -22,7 +28,10 @@ fn test_chain_lightning_spell() {
 
     // Boss 2: further from snake, closest to boss 1
     let boss2 = Boss {
-        position: Point { x: 14, y: 10 },
+        position: Point {
+            x: 14,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -33,7 +42,10 @@ fn test_chain_lightning_spell() {
 
     // Boss 3: out of range from snake, but close to boss 2
     let boss3 = Boss {
-        position: Point { x: 16, y: 10 },
+        position: Point {
+            x: 16,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -44,7 +56,10 @@ fn test_chain_lightning_spell() {
 
     // Boss 4: in range of boss 3, should be hit (3rd bounce)
     let boss4 = Boss {
-        position: Point { x: 18, y: 10 },
+        position: Point {
+            x: 18,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -55,7 +70,10 @@ fn test_chain_lightning_spell() {
 
     // Boss 5: in range of boss 4, but should not be hit (max 3 bounces)
     let boss5 = Boss {
-        position: Point { x: 19, y: 10 },
+        position: Point {
+            x: 19,
+            y: 10,
+        },
         health: 10,
         max_health: 10,
         move_timer: 0,
@@ -90,10 +108,16 @@ fn test_chain_lightning_spell() {
 #[test]
 fn test_chain_lightning_kills() {
     let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
-    game.snake = snake_game::snake::Snake::new(Point { x: 10, y: 10 });
+    game.snake = snake_game::snake::Snake::new(Point {
+        x: 10,
+        y: 10,
+    });
 
     let boss1 = Boss {
-        position: Point { x: 12, y: 10 },
+        position: Point {
+            x: 12,
+            y: 10,
+        },
         health: 5,
         max_health: 10,
         move_timer: 0,
@@ -110,6 +134,10 @@ fn test_chain_lightning_kills() {
     // Cast spell
     game.cast_spell(SpellType::ChainLightning);
 
-    assert_eq!(game.bosses.len(), initial_boss_count - 1, "Boss should be removed after health hits 0");
+    assert_eq!(
+        game.bosses.len(),
+        initial_boss_count - 1,
+        "Boss should be removed after health hits 0"
+    );
     assert_eq!(game.score, 100, "Should gain 100 score for killing a boss");
 }

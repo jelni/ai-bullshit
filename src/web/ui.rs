@@ -262,7 +262,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::TimeWeaver => ctx.set_fill_style_str("#00FFFF"), // Cyan
             crate::game::BossType::Illusionist => ctx.set_fill_style_str("#FF00FF"), // Magenta
             crate::game::BossType::IllusionClone => ctx.set_fill_style_str("#00FFFF"), // Cyan
-            crate::game::BossType::Wormhole => ctx.set_fill_style_str("#00008B"), // DarkBlue
+            crate::game::BossType::Wormhole => ctx.set_fill_style_str("#00008B"),   // DarkBlue
         }
         if boss.position.x < game.width
             && boss.position.y < game.height

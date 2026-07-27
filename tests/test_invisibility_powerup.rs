@@ -1,6 +1,6 @@
+use snake_game::game::{Difficulty, Game, GameMode, PowerUp, PowerUpType, Theme};
+use snake_game::snake::{Direction, Point, Snake};
 use snake_game::*;
-use snake_game::game::{Game, GameMode, Theme, Difficulty, PowerUpType, PowerUp};
-use snake_game::snake::{Point, Snake, Direction};
 use web_time::SystemTime;
 
 #[test]
@@ -9,18 +9,27 @@ fn test_invisibility_powerup_zombie_ignores_player() {
     game.mode = GameMode::Zombie;
 
     // Place snake
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Place food at the opposite side
-    game.food = Point { x: 18, y: 18 };
+    game.food = Point {
+        x: 18,
+        y: 18,
+    };
 
     // Clear bots
     game.bots.clear();
     game.bots_autopilot_paths.clear();
 
     // Spawn a bot near the player (normally targets the player in Zombie mode)
-    let bot_pos = Point { x: 5, y: 10 };
+    let bot_pos = Point {
+        x: 5,
+        y: 10,
+    };
     game.bots.push(Snake::new(bot_pos));
     game.bots_autopilot_paths.push(Vec::new());
 
@@ -29,12 +38,12 @@ fn test_invisibility_powerup_zombie_ignores_player() {
     // Activate Invisibility
     game.power_up = Some(PowerUp {
         p_type: PowerUpType::Invisibility,
-        location: Point { x: 1, y: 1 }, // doesn't matter, it's already active
+        location: Point {
+            x: 1,
+            y: 1,
+        }, // doesn't matter, it's already active
         activation_time: Some(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
         ),
     });
 
@@ -51,7 +60,10 @@ fn test_invisibility_powerup_zombie_ignores_player() {
     // Check what direction is queued for the bot.
     if let Some(dir) = game.bots[0].direction_queue.pop_front() {
         assert_ne!(dir, Direction::Up, "Bot should not target the invisible player (which is Up)");
-        assert!(dir == Direction::Down || dir == Direction::Right, "Bot should target food (Right/Down)");
+        assert!(
+            dir == Direction::Down || dir == Direction::Right,
+            "Bot should target food (Right/Down)"
+        );
     } else {
         // Fallback for some reason?
     }
