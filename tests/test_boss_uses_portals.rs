@@ -5,6 +5,10 @@ fn test_boss_uses_portals_to_reach_target() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
 
+    game.obstacles.clear();
+    game.mines.clear();
+    game.lasers.clear();
+
     let start = snake::Point {
         x: 1,
         y: 1,
