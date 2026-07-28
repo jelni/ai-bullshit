@@ -2644,7 +2644,7 @@ impl Game {
                             }
                         }
                         if let Some((dir, path)) =
-                            self.astar_search(start, current_dir, &targets, 4)
+                            self.astar_search(start, Some(current_dir), &targets, 4)
                         {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
@@ -8364,215 +8364,8 @@ impl Game {
         target: Point,
         checking_player: u8,
     ) -> Option<Direction> {
-        let mut open_set = std::collections::BinaryHeap::new();
-        let mut g_score = std::collections::HashMap::new();
-        let mut first_step = std::collections::HashMap::new();
-        let mut tie_breaker_counter = 0u64;
-
-        g_score.insert(start, 0u16);
-
-        let calc_dist = |p1: Point, p2: Point| -> u16 {
-            let mut dx = p1.x.abs_diff(p2.x);
-            let mut dy = p1.y.abs_diff(p2.y);
-            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
-            {
-                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
-            }
-            dx.saturating_add(dy)
-        };
-
-        let heuristic = |p: Point| -> u16 {
-            let mut penalty = 0u16;
-            if checking_player == 1 {
-                if let Some(p2) = &self.player2 {
-                    for part in &p2.body {
-                        let d = calc_dist(p, *part);
-                        if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
-                        }
-                    }
-                }
-                for bot in &self.bots {
-                    if bot.head() == start {
-                        continue;
-                    }
-                    for part in &bot.body {
-                        let d = calc_dist(p, *part);
-                        if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
-                        }
-                    }
-                }
-            } else if checking_player == 2 {
-                for part in &self.snake.body {
-                    let d = calc_dist(p, *part);
-                    if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 10);
-                    }
-                }
-                for bot in &self.bots {
-                    if bot.head() == start {
-                        continue;
-                    }
-                    for part in &bot.body {
-                        let d = calc_dist(p, *part);
-                        if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
-                        }
-                    }
-                }
-            } else if checking_player == 3 {
-                for part in &self.snake.body {
-                    let d = calc_dist(p, *part);
-                    if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 10);
-                    }
-                }
-                if let Some(p2) = &self.player2 {
-                    for part in &p2.body {
-                        let d = calc_dist(p, *part);
-                        if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
-                        }
-                    }
-                }
-                for bot in &self.bots {
-                    if bot.head() == start {
-                        continue;
-                    }
-                    for part in &bot.body {
-                        let d = calc_dist(p, *part);
-                        if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
-                        }
-                    }
-                }
-            }
-            for boss in &self.bosses {
-                if target == boss.position {
-                    continue;
-                }
-                let d = calc_dist(p, boss.position);
-                if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 10);
-                }
-            }
-            if let Some((pf, _)) = self.poison_food {
-                let d = calc_dist(p, pf);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 40);
-                }
-            }
-            for l in &self.lasers {
-                let d = calc_dist(p, l.position);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 5);
-                }
-            }
-            for m in &self.mines {
-                let d = calc_dist(p, *m);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
-                }
-            }
-            for t in &self.turrets {
-                let d = calc_dist(p, t.position);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
-                }
-            }
-            if let Some(bh) = self.black_hole {
-                let d = calc_dist(p, bh);
-                if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 10);
-                }
-            }
-            if let Some(col) = self.lightning_column {
-                let dx = p.x.abs_diff(col);
-                if dx < 3 {
-                    penalty = penalty.saturating_add((3 - dx) * 50);
-                }
-            }
-            for m in &self.meteors {
-                let dx = p.x.abs_diff(m.position.x);
-                if dx < 2 && p.y >= m.position.y {
-                    let dy = p.y.abs_diff(m.position.y);
-                    if dy < 10 {
-                        penalty = penalty.saturating_add((10 - dy) * 5);
-                    }
-                }
-            }
-
-            let dist_direct = calc_dist(p, target);
-            if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 = calc_dist(p, portal1)
-                    .saturating_add(calc_dist(portal2, target))
-                    .saturating_add(1);
-                let dist_via_portal2 = calc_dist(p, portal2)
-                    .saturating_add(calc_dist(portal1, target))
-                    .saturating_add(1);
-                std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
-                    .saturating_add(penalty)
-            } else {
-                dist_direct.saturating_add(penalty)
-            }
-        };
-
-        tie_breaker_counter += 1;
-        open_set.push(AStarState {
-            f_score: heuristic(start),
-            tie_breaker: tie_breaker_counter,
-            position: start,
-        });
-
-        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
-
-        let mut iterations = 0;
-        while let Some(AStarState {
-            position: current,
-            ..
-        }) = open_set.pop()
-        {
-            iterations += 1;
-            if iterations > 3000 {
-                break; // Prevent infinite loops
-            }
-            if current == target {
-                return first_step.get(&current).copied();
-            }
-
-            let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
-
-            for &d in &dirs {
-                let next_p = Self::calculate_next_head_dir(current, d);
-                let tentative_g = current_g.saturating_add(1);
-
-                if let Some(final_p) = self.get_final_p(next_p)
-                    && !self.obstacles.contains(&final_p)
-                    && self.is_safe_final_p(final_p, tentative_g, checking_player)
-                    && tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX)
-                {
-                    if final_p == target {
-                        // Optimally return if target reached
-                        return first_step.get(&current).copied().or(Some(d));
-                    }
-                    g_score.insert(final_p, tentative_g);
-                    if current == start {
-                        first_step.insert(final_p, d);
-                    } else if let Some(&first) = first_step.get(&current) {
-                        first_step.insert(final_p, first);
-                    }
-                    tie_breaker_counter += 1;
-                    open_set.push(AStarState {
-                        f_score: tentative_g.saturating_add(heuristic(final_p)),
-                        tie_breaker: tie_breaker_counter,
-                        position: final_p,
-                    });
-                }
-            }
-        }
-        None
+        self.astar_search(start, None, &[target], checking_player)
+            .map(|(dir, _)| dir)
     }
     #[must_use]
     #[expect(clippy::too_many_lines)]
@@ -9177,7 +8970,7 @@ impl Game {
                 }];
             }
         }
-        if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 1) {
+        if let Some((dir, path)) = self.astar_search(start, Some(current_dir), &targets, 1) {
             self.autopilot_path = path;
             return Some(dir);
         }
@@ -9276,7 +9069,7 @@ impl Game {
                     }; // Fallback, though player2 should exist here
                 }
             }
-            if let Some((dir, path)) = self.astar_search(start, current_dir, &targets, 2) {
+            if let Some((dir, path)) = self.astar_search(start, Some(current_dir), &targets, 2) {
                 self.p2_autopilot_path = path;
                 return Some(dir);
             }
@@ -9290,7 +9083,7 @@ impl Game {
     fn astar_search(
         &self,
         start: Point,
-        current_dir: Direction,
+        current_dir: Option<Direction>,
         targets: &[Point],
         checking_player: u8,
     ) -> Option<(Direction, Vec<Point>)> {
@@ -9350,6 +9143,32 @@ impl Game {
                     let d = calc_dist(p, *part);
                     if d < 4 {
                         penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                for bot in &self.bots {
+                    if bot.head() == start {
+                        continue;
+                    }
+                    for part in &bot.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
+                    }
+                }
+            } else if checking_player == 3 {
+                for part in &self.snake.body {
+                    let d = calc_dist(p, *part);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 10);
+                    }
+                }
+                if let Some(p2) = &self.player2 {
+                    for part in &p2.body {
+                        let d = calc_dist(p, *part);
+                        if d < 4 {
+                            penalty = penalty.saturating_add((4 - d) * 10);
+                        }
                     }
                 }
                 for bot in &self.bots {
@@ -9446,21 +9265,17 @@ impl Game {
                     }
                 }
             }
-            if let Some((pf_p, _)) = self.poison_food {
-                let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
-                }
-            }
             targets
                 .iter()
                 .map(|t| {
                     let dist_direct = calc_dist(p, *t);
                     if let Some((portal1, portal2)) = self.portals {
-                        let dist_via_portal1 =
-                            calc_dist(p, portal1).saturating_add(calc_dist(portal2, *t));
-                        let dist_via_portal2 =
-                            calc_dist(p, portal2).saturating_add(calc_dist(portal1, *t));
+                        let dist_via_portal1 = calc_dist(p, portal1)
+                            .saturating_add(calc_dist(portal2, *t))
+                            .saturating_add(1);
+                        let dist_via_portal2 = calc_dist(p, portal2)
+                            .saturating_add(calc_dist(portal1, *t))
+                            .saturating_add(1);
                         std::cmp::min(
                             dist_direct,
                             std::cmp::min(dist_via_portal1, dist_via_portal2),
@@ -9475,7 +9290,9 @@ impl Game {
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
-            if d.is_opposite(current_dir) {
+            if let Some(c_dir) = current_dir
+                && d.is_opposite(c_dir)
+            {
                 continue;
             }
             let next_p = Self::calculate_next_head_dir(start, d);
