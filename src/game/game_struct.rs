@@ -3676,6 +3676,14 @@ impl Game {
                     }
                 }
             }
+            if self.mines.contains(&p) {
+                penalty = penalty.saturating_add(500);
+            }
+            for l in &self.lasers {
+                if l.position == p {
+                    penalty = penalty.saturating_add(500);
+                }
+            }
             if let Some((pf_p, _)) = self.poison_food {
                 let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
                 if d < 4 {
