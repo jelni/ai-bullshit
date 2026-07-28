@@ -7228,25 +7228,42 @@ impl Game {
                         }
                     }
                     let mut max_score = p1_score;
-                    let mut winner = "Player 1".to_string();
                     if p2_score > max_score {
                         max_score = p2_score;
-                        winner = "Player 2".to_string();
-                    } else if p2_score == max_score && p2_score > 0 {
-                        winner = format!("{winner} and Player 2");
+                    }
+                    for &score in bot_scores.values() {
+                        if score > max_score {
+                            max_score = score;
+                        }
+                    }
+                    let mut winners = Vec::new();
+                    if p1_score == max_score && p1_score > 0 {
+                        winners.push("Player 1".to_string());
+                    }
+                    if p2_score == max_score && p2_score > 0 {
+                        winners.push("Player 2".to_string());
                     }
                     let mut sorted_bots: Vec<_> = bot_scores.iter().collect();
                     sorted_bots.sort_by_key(|&(id, _)| id);
                     for (&bot_id, &score) in sorted_bots {
-                        if score > max_score {
-                            max_score = score;
-                            winner = format!("Bot {}", bot_id.saturating_sub(2));
-                        } else if score == max_score && score > 0 {
-                            winner = format!("{} and Bot {}", winner, bot_id.saturating_sub(2));
+                        if score == max_score && score > 0 {
+                            winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
                         }
                     }
                     self.just_died = true;
-                    self.death_message = format!("Time's Up! {winner} Wins!");
+                    if max_score > 0 {
+                        let winner_str = match winners.len().cmp(&1) {
+                            std::cmp::Ordering::Equal => winners[0].clone(),
+                            std::cmp::Ordering::Greater => {
+                                let last = winners.pop().unwrap();
+                                format!("{} and {}", winners.join(", "), last)
+                            }
+                            std::cmp::Ordering::Less => "Nobody".to_string(),
+                        };
+                        self.death_message = format!("Time's Up! {winner_str} Wins!");
+                    } else {
+                        self.death_message = "Time's Up! Nobody Wins!".to_string();
+                    }
                     self.state = GameState::GameOver;
                     self.update_high_scores();
                 }
