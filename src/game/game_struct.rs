@@ -3682,6 +3682,11 @@ impl Game {
             for l in &self.lasers {
                 if l.position == p {
                     penalty = penalty.saturating_add(500);
+                } else {
+                    let d = calc_dist(p, l.position);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 5);
+                    }
                 }
             }
             if let Some((pf_p, _)) = self.poison_food {
@@ -3691,9 +3696,11 @@ impl Game {
                 }
             }
             for boss in &self.bosses {
-                let d = calc_dist(p, boss.position);
-                if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 15);
+                if boss.position != start {
+                    let d = calc_dist(p, boss.position);
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d) * 15);
+                    }
                 }
             }
             if self.snake.body_map.contains_key(&p) {
