@@ -1,9 +1,10 @@
+use snake_game::game::Theme;
 use snake_game::game::{Boss, BossType, Difficulty, Game, GameMode, GameState};
 use snake_game::snake::Point;
 
 #[test]
 fn test_engineer_boss_spawns_turrets() {
-    let mut game = Game::new(30, 30, false, 'X', Default::default(), Difficulty::Normal);
+    let mut game = Game::new(30, 30, false, 'X', Theme::default(), Difficulty::Normal);
     game.mode = GameMode::BossRush;
     game.state = GameState::Playing; // need to set state playing otherwise update does nothing
     game.bosses.clear();
@@ -27,7 +28,7 @@ fn test_engineer_boss_spawns_turrets() {
         game.update();
     }
 
-    assert!(game.turrets.len() >= 1, "Engineer boss should have spawned a turret");
+    assert!(!game.turrets.is_empty(), "Engineer boss should have spawned a turret");
 
     for _ in 0..500 {
         game.update();
