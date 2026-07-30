@@ -3646,7 +3646,7 @@ impl Game {
             for m in &self.mines {
                 let d = calc_dist(p, *m);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 100);
                 }
             }
             for t in &self.turrets {
@@ -3685,7 +3685,7 @@ impl Game {
                 } else {
                     let d = calc_dist(p, l.position);
                     if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 5);
+                        penalty = penalty.saturating_add((4 - d) * 100);
                     }
                 }
             }
@@ -3791,6 +3791,18 @@ impl Game {
                     } else if self.mines.contains(&final_p) {
                         can_move = false;
                     } else if self.lasers.iter().any(|l| l.position == final_p) {
+                        can_move = false;
+                    } else if self.lasers.iter().any(|l| {
+                        // Also avoid moving directly in front of the laser if it's heading towards us.
+                        let mut next_l_pos = l.position;
+                        match l.direction {
+                            Direction::Up => next_l_pos.y = next_l_pos.y.saturating_sub(1),
+                            Direction::Down => next_l_pos.y = next_l_pos.y.saturating_add(1),
+                            Direction::Left => next_l_pos.x = next_l_pos.x.saturating_sub(1),
+                            Direction::Right => next_l_pos.x = next_l_pos.x.saturating_add(1),
+                        }
+                        next_l_pos == final_p
+                    }) {
                         can_move = false;
                     } else if self.lightning_column == Some(final_p.x) {
                         can_move = false;
@@ -9239,7 +9251,7 @@ impl Game {
             for m in &self.mines {
                 let d = calc_dist(p, *m);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add((4 - d) * 100);
                 }
             }
             for t in &self.turrets {

@@ -573,6 +573,7 @@ mod tests {
                 x: 10,
                 y: 10,
             });
+            game.weather = Weather::Tornado;
             game.update();
             if game.food != initial_food
                 && game.food
