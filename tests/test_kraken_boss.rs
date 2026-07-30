@@ -33,14 +33,14 @@ fn test_kraken_pulls_snake() {
     // Let's just track the direction. Kraken alters input via `game.handle_input`.
     // We can observe `game.snake.direction` or `game.snake.direction_queue` getting modified by Kraken!
 
-    let _initial_dir = game.snake.direction;
+    let initial_dir = game.snake.direction;
 
     // Tick enough times to trigger pull
     game.state = game::GameState::Playing;
     let mut pulled = false;
     for _ in 0..100 {
         game.update();
-        if game.snake.direction != _initial_dir {
+        if game.snake.direction != initial_dir {
             // Kraken forced an input!
             pulled = true;
             break;

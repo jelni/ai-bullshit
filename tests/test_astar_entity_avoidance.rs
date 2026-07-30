@@ -42,8 +42,7 @@ fn test_astar_pathfind_avoids_boss() {
     let next_dir = dir_close.unwrap_or(Direction::Up);
     assert!(
         next_dir == Direction::Up || next_dir == Direction::Down,
-        "Bot should steer away from the boss. Got {:?}",
-        next_dir
+        "Bot should steer away from the boss. Got {next_dir:?}"
     );
 }
 
@@ -76,7 +75,6 @@ fn test_astar_pathfind_avoids_laser() {
     // Going Up would put us at (5, 4), dist 3 from laser -> penalty 5
     assert!(
         next_dir == Direction::Up || next_dir == Direction::Down,
-        "Bot should steer away from the laser. Got {:?}",
-        next_dir
+        "Bot should steer away from the laser. Got {next_dir:?}"
     );
 }

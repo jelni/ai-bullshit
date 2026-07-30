@@ -22,7 +22,7 @@ fn handle_battle_pass_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Enter | KeyCode::Char(' ') => {
-            let tier = (game.settings_selection + 1) as u32;
+            let tier = u32::try_from(game.settings_selection + 1).unwrap_or(0);
             let required_xp = tier * 1000;
             if game.stats.battle_pass_xp >= required_xp
                 && !game.stats.claimed_battle_pass_tiers.contains(&tier)

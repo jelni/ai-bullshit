@@ -517,7 +517,7 @@ fn test_dragon_boss_shoots_lasers() {
         actual_positions.push(game.lasers[i].position);
     }
     for expected in expected_positions {
-        assert!(actual_positions.contains(&expected), "Missing laser at {:?}", expected);
+        assert!(actual_positions.contains(&expected), "Missing laser at {expected:?}");
     }
 }
 
