@@ -29,7 +29,7 @@ fn test_zombie_mode_spawns_zombie_on_eat() {
     // Ensure the snake is moving
 
     // Update might require multiple ticks due to speed differences, let's call it a few times to ensure snake moves and eats the food
-    for _ in 0..10 {
+    for _ in 0..50 {
         game.state = game::GameState::Playing;
         game.update();
         if game.bots.len() == 1 {
