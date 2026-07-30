@@ -2623,9 +2623,9 @@ impl Game {
                             }
                         }
 
-                        let mut targets = expected_targets;
+                        let mut targets = expected_targets.clone();
 
-                        if self.mode != GameMode::Zombie {
+                        if self.mode != GameMode::Zombie || self.is_invisible() {
                             if let Some((bf_p, _)) = self.bonus_food {
                                 targets.push(bf_p);
                             }
