@@ -3658,7 +3658,7 @@ impl Game {
             if let Some(bh) = self.black_hole {
                 let d = calc_dist(p, bh);
                 if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 100);
+                    penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
             if let Some(col) = self.lightning_column {

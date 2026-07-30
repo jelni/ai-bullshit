@@ -1,0 +1,7 @@
+Fix: Make the boss avoid black holes and bot avoid invisible players
+
+This patch addresses two issues:
+1. In `get_boss_path`, increased the heuristic penalty for tiles around the `black_hole` from 100 to 1000. This ensures the boss properly avoids pathfinding straight into the black hole.
+2. In `is_invisible`, updated the logic to check `web_time::SystemTime::now()` correctly against the `powerup_duration()`. This fixes a bug where zombie bots would target players who had an active invisibility power-up.
+
+Both changes ensure that tests `test_boss_avoids_black_hole` and `test_invisibility_powerup_zombie_ignores_player` pass successfully.
