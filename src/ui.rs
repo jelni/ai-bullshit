@@ -3064,6 +3064,7 @@ fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         ("Paladin", crate::game::HeroClass::Paladin, "Regenerate Lives"),
         ("Necromancer", crate::game::HeroClass::Necromancer, "Resurrect dead bosses as companions"),
         ("Ranger", crate::game::HeroClass::Ranger, "Start with Sniper Companion"),
+        ("Ninja", crate::game::HeroClass::Ninja, "Pass through walls"),
     ];
 
     for (i, (name, class, desc)) in classes.iter().enumerate() {
@@ -3094,7 +3095,7 @@ fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         write!(stdout, "{line}")?;
     }
 
-    let unequip_prefix = if game.settings_selection == 4 {
+    let unequip_prefix = if game.settings_selection == classes.len() {
         ">> "
     } else {
         "   "

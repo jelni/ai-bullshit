@@ -9,4 +9,5 @@ pub enum HeroClass {
     Paladin,
     Necromancer,
     Ranger,
+    Ninja,
 }
