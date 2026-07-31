@@ -254,17 +254,78 @@ impl Game {
                 to_remove.sort_unstable_by(|a, b| b.cmp(a));
                 for idx in to_remove {
                     let boss = self.bosses.remove(idx);
-                    self.score += 100;
-                    if self.stats.faction.is_some() {
-                        self.stats.faction_rep += 100;
+                    *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                    self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
+                    if self.rng.gen_bool(0.2) {
+                        self.equipment_boxes.push(boss.position);
                     }
-                    self.spawn_particles(
-                        f32::from(boss.position.x),
-                        f32::from(boss.position.y),
-                        30,
-                        crate::color::Color::Magenta,
-                        'B',
-                    );
+                    if self.stats.equipped_class == Some(crate::game::HeroClass::Necromancer) {
+                        self.companion = Some(Companion {
+                            position: boss.position,
+                            kind: crate::game::CompanionType::Fighter,
+                            move_timer: 0,
+                            action_timer: 0,
+                            path: Vec::new(),
+                        });
+                        crate::game::beep();
+                    }
+                    if self.mode == GameMode::SnakeSurvivor {
+                        self.xp_gems.insert(boss.position);
+                    }
+                    if boss.kind == BossType::Splitter && boss.max_health > 5 {
+                        let half_max = boss.max_health / 2;
+                        let child1_pos = Point {
+                            x: boss.position.x.saturating_sub(1).max(1),
+                            y: boss.position.y,
+                        };
+                        let child2_pos = Point {
+                            x: (boss.position.x + 1).min(self.width - 2),
+                            y: boss.position.y,
+                        };
+                        self.bosses.push(Boss {
+                            position: child1_pos,
+                            health: half_max,
+                            max_health: half_max,
+                            move_timer: 0,
+                            shoot_timer: 0,
+                            kind: BossType::Splitter,
+                            state_timer: 0,
+                        });
+                        self.bosses.push(Boss {
+                            position: child2_pos,
+                            health: half_max,
+                            max_health: half_max,
+                            move_timer: 0,
+                            shoot_timer: 0,
+                            kind: BossType::Splitter,
+                            state_timer: 0,
+                        });
+                        self.spawn_particles(
+                            f32::from(boss.position.x),
+                            f32::from(boss.position.y),
+                            30,
+                            crate::color::Color::Magenta,
+                            's',
+                        );
+                    } else {
+                        self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                        if self.mode == GameMode::BossRush {
+                            self.score += 1000 * self.campaign_level;
+                            self.campaign_level += 1;
+                        } else {
+                            self.score += 100;
+                        }
+                        if self.stats.faction.is_some() {
+                            self.stats.faction_rep += 100;
+                        }
+                        self.spawn_particles(
+                            f32::from(boss.position.x),
+                            f32::from(boss.position.y),
+                            30,
+                            crate::color::Color::Magenta,
+                            'B',
+                        );
+                    }
                 }
                 crate::game::beep();
             },
