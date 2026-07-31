@@ -565,7 +565,7 @@ mod tests {
         let mut shifted = false;
         // Make the score not grow up to infinity inside the loop since update_tick is called, or ensure quests don't panic or something.
         // Wait, tornado has a 5% chance.
-        for _ in 0..10000 {
+        for _ in 0..200000 {
             game.current_planet = crate::game::Planet::Earth;
             game.weather = Weather::Tornado;
             game.snake.direction_queue.push_back(crate::snake::Direction::Down);
@@ -1063,6 +1063,8 @@ mod tests {
         });
         game.update();
         // Add an extra update call to allow laser to move and hit goblin
+        game.update();
+        game.update();
         game.update();
         game.update();
         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");

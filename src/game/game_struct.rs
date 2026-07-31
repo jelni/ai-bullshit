@@ -1144,6 +1144,18 @@ impl Game {
                 crate::game::beep();
                 continue;
             }
+            if self.obstacles.contains(&meteor.position) {
+                self.obstacles.remove(&meteor.position);
+                self.spawn_particles(
+                    f32::from(meteor.position.x),
+                    f32::from(meteor.position.y),
+                    40,
+                    crate::color::Color::Red,
+                    'X',
+                );
+                crate::game::beep();
+                continue;
+            }
             if self.mines.contains(&meteor.position) {
                 self.mines.remove(&meteor.position);
                 self.spawn_particles(

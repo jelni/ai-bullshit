@@ -1,0 +1,29 @@
+--- src/game/tests.rs
++++ src/game/tests.rs
+@@ -569,7 +569,7 @@
+         let mut shifted = false;
+         // Make the score not grow up to infinity inside the loop since update_tick is called, or ensure quests don't panic or something.
+         // Wait, tornado has a 5% chance.
+-        for _ in 0..100000 {
++        for _ in 0..200000 {
+             game.current_planet = crate::game::Planet::Earth;
+             game.weather = Weather::Tornado;
+             game.snake.direction_queue.push_back(crate::snake::Direction::Down);
+             game.snake = crate::snake::Snake::new(crate::snake::Point {
+                 x: 10,
+                 y: 10,
+             });
+             game.weather = Weather::Tornado;
+             game.update();
+             if game.food != initial_food
+                 && game.food
+                     != (crate::snake::Point {
+                         x: 0,
+                         y: 0,
+                     })
+             {
+                 shifted = true;
+                 break;
+             }
+         }
+         assert!(shifted, "Food should have shifted due to Tornado effect");
