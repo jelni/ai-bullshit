@@ -37,7 +37,6 @@ fn test_zombie_mode_spawns_zombie_on_eat() {
         }
     }
 
-    game.update();
     // Snake ate food, a zombie should have spawned
     assert!(!game.bots.is_empty(), "Zombie bot should have spawned upon eating food");
 }

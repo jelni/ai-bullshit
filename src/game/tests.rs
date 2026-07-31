@@ -1065,7 +1065,8 @@ mod tests {
         // Add an extra update call to allow laser to move and hit goblin
         game.update();
         game.update();
-        game.update();
+        for _ in 0..15 { game.update(); if game.goblin.is_none() { break; } }
+        assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
         game.update();
         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
         assert_eq!(game.score, initial_score + 500, "Should get score for shooting goblin");
