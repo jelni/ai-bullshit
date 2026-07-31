@@ -3063,6 +3063,7 @@ fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         ("Rogue", crate::game::HeroClass::Rogue, "Dodge Chance"),
         ("Paladin", crate::game::HeroClass::Paladin, "Regenerate Lives"),
         ("Necromancer", crate::game::HeroClass::Necromancer, "Resurrect dead bosses as companions"),
+        ("Ranger", crate::game::HeroClass::Ranger, "Start with Sniper Companion"),
     ];
 
     for (i, (name, class, desc)) in classes.iter().enumerate() {

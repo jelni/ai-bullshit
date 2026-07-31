@@ -418,6 +418,20 @@ impl Game {
         } else {
             None
         };
+        let initial_companion = if stats.equipped_class == Some(crate::game::HeroClass::Ranger) {
+            Some(Companion {
+                position: Point {
+                    x: start_x.saturating_sub(1).max(1),
+                    y: start_y.saturating_sub(1).max(1),
+                },
+                kind: crate::game::CompanionType::Sniper,
+                move_timer: 0,
+                action_timer: 0,
+                path: Vec::new(),
+            })
+        } else {
+            None
+        };
         Self {
             width,
             height,
@@ -490,7 +504,7 @@ impl Game {
             level_up_selection: 0,
             turrets: Vec::new(),
             resources: std::collections::HashMap::new(),
-            companion: None,
+            companion: initial_companion,
             crops: Vec::new(),
             equipment_boxes: Vec::new(),
             last_real_estate_tick: Some(Instant::now()),
@@ -2290,7 +2304,18 @@ impl Game {
         self.bots.clear();
         self.bots_autopilot_paths.clear();
 
-        if let Some(companion_type) = self.stats.equipped_companion {
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Ranger) {
+            self.companion = Some(Companion {
+                position: Point {
+                    x: start_x.saturating_sub(1).max(1),
+                    y: start_y.saturating_sub(1).max(1),
+                },
+                kind: crate::game::CompanionType::Sniper,
+                move_timer: 0,
+                action_timer: 0,
+                path: Vec::new(),
+            });
+        } else if let Some(companion_type) = self.stats.equipped_companion {
             self.companion = Some(Companion {
                 position: Point {
                     x: start_x.saturating_sub(1).max(1),
