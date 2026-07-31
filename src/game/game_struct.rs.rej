@@ -1,5 +1,5 @@
---- src/game/game_struct.rs
-+++ src/game/game_struct.rs
+--- game_struct.rs
++++ game_struct.rs
 @@ -5755,8 +5755,7 @@
                  if let Some((x, y, text, color)) = damage_text {
                      self.spawn_floating_text(x, y, text, color);
@@ -10,4 +10,3 @@
                      self.goblin = None;
                      if !is_piercing {
                          destroyed = true;
-                     }

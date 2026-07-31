@@ -5347,6 +5347,7 @@ impl Game {
                             || self.bots.iter().any(|b| b.body_map.contains_key(p))
                             || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                             || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                            || self.poison_food.is_some_and(|(pp, _)| *p == pp)
                     };
                     if !avoid(&next_p) {
                         self.food = next_p;
@@ -5756,8 +5757,7 @@ impl Game {
                 if let Some((x, y, text, color)) = damage_text {
                     self.spawn_floating_text(x, y, text, color);
                 }
-                if self.goblin.as_ref().is_some_and(|goblin| laser.position == goblin.position) {
-                    let gob_pos = self.goblin.as_ref().unwrap().position;
+                if let Some(gob_pos) = self.goblin.as_ref().map(|g| g.position).filter(|p| *p == laser.position) {
                     self.goblin = None;
                     if !is_piercing {
                         destroyed = true;
