@@ -7715,7 +7715,16 @@ impl Game {
     pub(crate) fn is_invisible(&self) -> bool {
         self.power_up
             .as_ref()
-            .is_some_and(|p| p.p_type == PowerUpType::Invisibility && p.activation_time.is_some())
+            .is_some_and(|p| {
+                p.p_type == PowerUpType::Invisibility && p.activation_time.is_some_and(|time| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(time)
+                        < self.powerup_duration()
+                })
+            })
     }
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
@@ -9294,7 +9303,7 @@ impl Game {
             if let Some(bh) = self.black_hole {
                 let d = calc_dist(p, bh);
                 if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 10);
+                    penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
             if let Some(col) = self.lightning_column {
