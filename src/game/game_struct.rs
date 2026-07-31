@@ -6359,6 +6359,8 @@ impl Game {
         self.apply_magnet();
         self.apply_gravity();
 
+        let bots_len_start_tick = self.bots.len();
+
         // Handle bots movement and check collisions with walls/boundaries
         let mut final_bot_heads = Vec::new();
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|p| {
@@ -6914,7 +6916,7 @@ impl Game {
         }
         let mut bots_to_remove = std::collections::HashSet::new();
         let mut bots_grow = vec![self.mode == GameMode::Tron; self.bots.len()];
-        let bots_len_start = self.bots.len();
+        let bots_len_start = bots_len_start_tick;
         for (i, final_head, hit_wall) in &final_bot_heads {
             if *hit_wall {
                 bots_to_remove.insert(*i);
