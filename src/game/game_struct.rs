@@ -2772,7 +2772,8 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_vehicle
+        }) || self.stats.equipped_class == Some(crate::game::HeroClass::Ninja)
+            || self.stats.equipped_vehicle
             == Some(crate::game::Vehicle::Spaceship);
         let mut hit_wall1 = false;
         let final_head1 = if self.portals.is_some_and(|(p1, _)| p1 == next_head1) {
@@ -8444,7 +8445,8 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_vehicle
+        }) || self.stats.equipped_class == Some(crate::game::HeroClass::Ninja)
+            || self.stats.equipped_vehicle
             == Some(crate::game::Vehicle::Spaceship);
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
