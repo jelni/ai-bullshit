@@ -3650,13 +3650,23 @@ impl Game {
         let heuristic = |p: Point| -> u16 {
             let mut penalty = 0u16;
             for l in &self.lasers {
-                let d = calc_dist(p, l.position);
+                let mut d = calc_dist(p, l.position);
+                if let Some((p1, p2)) = self.portals {
+                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, l.position)).saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, l.position)).saturating_add(1);
+                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
+                }
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 5);
                 }
             }
             for m in &self.mines {
-                let d = calc_dist(p, *m);
+                let mut d = calc_dist(p, *m);
+                if let Some((p1, p2)) = self.portals {
+                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, *m)).saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, *m)).saturating_add(1);
+                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
+                }
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 100);
                 }
@@ -8992,6 +9002,7 @@ impl Game {
             } else if let Some(p2_flag) = self.p2_flag {
                 targets = vec![p2_flag];
             } else {
+                // Return flag to base or defend
                 targets = vec![Point {
                     x: self.width.saturating_sub(3),
                     y: self.height / 2,
@@ -9087,14 +9098,12 @@ impl Game {
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
                     targets = vec![p1_flag];
-                } else if let Some(player2) = &self.player2 {
-                    targets = vec![player2.head()];
                 } else {
-                    targets = if self.is_invisible() {
-                        vec![self.food]
-                    } else {
-                        vec![self.snake.head()]
-                    }; // Fallback, though player2 should exist here
+                    // Go to base or defend
+                    targets = vec![Point {
+                        x: 2,
+                        y: self.height / 2,
+                    }];
                 }
             }
             if let Some((dir, path)) = self.astar_search(start, Some(current_dir), &targets, 2) {
@@ -9243,13 +9252,23 @@ impl Game {
                 if targets.contains(&boss.position) {
                     continue;
                 }
-                let d = calc_dist(p, boss.position);
+                let mut d = calc_dist(p, boss.position);
+                if let Some((p1, p2)) = self.portals {
+                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, boss.position)).saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, boss.position)).saturating_add(1);
+                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
+                }
                 if d < 5 {
                     penalty = penalty.saturating_add((5 - d) * 10);
                 }
             }
             if let Some((pf, _)) = self.poison_food {
-                let d = calc_dist(p, pf);
+                let mut d = calc_dist(p, pf);
+                if let Some((p1, p2)) = self.portals {
+                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, pf)).saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, pf)).saturating_add(1);
+                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
+                }
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 40);
                 }
