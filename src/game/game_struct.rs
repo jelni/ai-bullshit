@@ -5370,7 +5370,7 @@ impl Game {
         self.bosses = next_bosses;
         self.lasers.extend(new_lasers);
         self.lightning_column = None;
-        if self.weather == Weather::Sandstorm && self.rng.gen_bool(0.1) {
+        if self.weather == Weather::Sandstorm && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.1) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -5398,7 +5398,7 @@ impl Game {
                 self.food = new_food;
             }
         }
-        if self.weather == Weather::Earthquake && self.rng.gen_bool(0.05) {
+        if self.weather == Weather::Earthquake && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.05) {
             if !self.obstacles.is_empty() && self.rng.gen_bool(0.5) {
                 if let Some(obs) = self.obstacles.iter().next().copied() {
                     self.obstacles.remove(&obs);
@@ -5422,7 +5422,7 @@ impl Game {
                 }
             }
         }
-        if self.weather == Weather::Tornado && self.rng.gen_bool(0.05) {
+        if self.weather == Weather::Tornado && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.05) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -5463,7 +5463,7 @@ impl Game {
                 _ => Weather::Earthquake,
             };
         }
-        if self.weather == Weather::Storm && self.rng.gen_bool(0.02) {
+        if self.weather == Weather::Storm && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.02) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -7665,20 +7665,49 @@ impl Game {
                 self.stats.unlocked_achievements.push(Achievement::PoisonEater);
                 self.save_stats();
             }
-            self.spawn_particles(
-                f32::from(final_head.x),
-                f32::from(final_head.y),
-                15,
-                crate::color::Color::Magenta,
-                'X',
-            );
-            self.score = self.score.saturating_sub(10);
-            if player == 1 {
-                self.snake.shrink_tail();
-            } else if player == 2
-                && let Some(p2) = &mut self.player2
-            {
-                p2.shrink_tail();
+            if self.stats.equipped_class == Some(crate::game::HeroClass::Druid) {
+                self.spawn_particles(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    15,
+                    crate::color::Color::Green,
+                    '+',
+                );
+                self.score = self.score.saturating_add(50);
+                self.food_eaten_session += 1;
+                // growing logic is handled inside update loop (game.update) but wait, check_poison_food_collision just shrinks tail.
+                // We'll simulate grow by doing a "move_to" in place? Wait, if we grow, it's just adding a block to the tail or not popping.
+                // Actually, growing is handled by returning boolean from process_food_collision, or setting grow flag.
+                // For poison food, we could just duplicate the tail segment to grow.
+                if player == 1 {
+                    if let Some(tail) = self.snake.body.back().copied() {
+                        self.snake.body.push_back(tail);
+                        *self.snake.body_map.entry(tail).or_insert(0) += 1;
+                    }
+                } else if player == 2
+                    && let Some(p2) = &mut self.player2
+                {
+                    if let Some(tail) = p2.body.back().copied() {
+                        p2.body.push_back(tail);
+                        *p2.body_map.entry(tail).or_insert(0) += 1;
+                    }
+                }
+            } else {
+                self.spawn_particles(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    15,
+                    crate::color::Color::Magenta,
+                    'X',
+                );
+                self.score = self.score.saturating_sub(10);
+                if player == 1 {
+                    self.snake.shrink_tail();
+                } else if player == 2
+                    && let Some(p2) = &mut self.player2
+                {
+                    p2.shrink_tail();
+                }
             }
             self.poison_food = None;
             beep();

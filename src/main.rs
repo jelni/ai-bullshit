@@ -1738,11 +1738,11 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
             if game.settings_selection > 0 {
                 game.settings_selection -= 1;
             } else {
-                game.settings_selection = 7;
+                game.settings_selection = 8;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.settings_selection < 7 {
+            if game.settings_selection < 8 {
                 game.settings_selection += 1;
             } else {
                 game.settings_selection = 0;
@@ -1813,6 +1813,15 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                 }
             },
             7 => {
+                if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Druid) {
+                    game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
+                } else if game.stats.coins >= 500 {
+                    game.stats.coins -= 500;
+                    game.stats.unlocked_classes.push(crate::game::HeroClass::Druid);
+                    game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
+                }
+            },
+            8 => {
                 game.stats.equipped_class = None;
             },
             _ => {},
