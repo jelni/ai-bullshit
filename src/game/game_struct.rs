@@ -5432,10 +5432,10 @@ impl Game {
                 let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
                 let dir = dirs[self.rng.gen_range(0..4)];
                 let next_p = Self::calculate_next_head_dir(self.food, dir);
-                if next_p.x > margin
-                    && next_p.x < self.width - 1 - margin
-                    && next_p.y > margin
-                    && next_p.y < self.height - 1 - margin
+                if next_p.x >= margin
+                    && next_p.x < self.width - margin
+                    && next_p.y >= margin
+                    && next_p.y < self.height - margin
                 {
                     let avoid = |p: &Point| {
                         self.obstacles.contains(p)
