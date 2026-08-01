@@ -5248,7 +5248,7 @@ impl Game {
                             // Since time was rewound, we should break out of this boss update loop to avoid mutating old state incorrectly,
                             // or just continue. The history pop has overwritten our bosses array!
                             // We MUST break here because `self.bosses` just changed under us.
-                            break;
+                            return;
                         }
                     } else if boss.kind == BossType::VampireLord {
                         let mut move_threshold = if self.mode == GameMode::BossRush {
