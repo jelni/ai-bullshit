@@ -7686,12 +7686,10 @@ impl Game {
                     }
                 } else if player == 2
                     && let Some(p2) = &mut self.player2
-                {
-                    if let Some(tail) = p2.body.back().copied() {
+                    && let Some(tail) = p2.body.back().copied() {
                         p2.body.push_back(tail);
                         *p2.body_map.entry(tail).or_insert(0) += 1;
                     }
-                }
             } else {
                 self.spawn_particles(
                     f32::from(final_head.x),

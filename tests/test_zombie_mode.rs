@@ -86,6 +86,8 @@ fn test_zombie_targets_player() {
             assert!(new_head.x < 10 || new_head.y < 10);
             break;
         }
+
+        println!("bot pos: {:?} target: {:?}", new_head, game.snake.head());
     }
     assert!(moved);
 }

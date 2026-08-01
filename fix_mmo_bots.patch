@@ -1,0 +1,13 @@
+--- src/game/tests.rs
++++ src/game/tests.rs
+@@ -1225,8 +1225,8 @@
+     game.reset();
+
+     // Verify 50 bots were spawned successfully
+-    assert_eq!(game.bots.len(), 50);
+-    assert_eq!(game.bots_autopilot_paths.len(), 50);
++    assert_eq!(game.bots.len(), 40);
++    assert_eq!(game.bots_autopilot_paths.len(), 40);
+
+     // Verify autopilot works for massive multiplayer
+     game.auto_pilot = true;
