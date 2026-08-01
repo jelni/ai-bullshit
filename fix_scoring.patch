@@ -1,0 +1,26 @@
+--- src/game/game_struct.rs
++++ src/game/game_struct.rs
+@@ -7374,12 +7374,15 @@
+                             max_score = score;
+                         }
+                     }
+                     let mut winners = Vec::new();
+                     if p1_score == max_score && p1_score > 0 {
+                         winners.push("Player 1".to_string());
+                     }
+                     if p2_score == max_score && p2_score > 0 {
+                         winners.push("Player 2".to_string());
+                     }
+-                    let mut sorted_bots: Vec<_> = bot_scores.iter().collect();
++                    let mut sorted_bots: Vec<_> = bot_scores.iter()
++                        .filter(|&(_, &score)| score == max_score && score > 0)
++                        .collect();
+                     sorted_bots.sort_by_key(|&(id, _)| id);
+                     for (&bot_id, &score) in sorted_bots {
+-                        if score == max_score && score > 0 {
+-                            winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
+-                        }
++                        winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
+                     }
+                     self.just_died = true;
+                     if max_score > 0 {

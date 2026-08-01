@@ -1,0 +1,11 @@
+--- src/game/tests.rs
++++ src/game/tests.rs
+@@ -1066,7 +1066,7 @@
+         game.update();
+         for _ in 0..15 { game.update(); if game.goblin.is_none() { break; } }
+         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
+-        println!("goblin status: {:?}", game.goblin);
++        println!("goblin status before second assert: {:?}", game.goblin);
+         game.update();
++        println!("goblin status after game.update(): {:?}", game.goblin);
+         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
