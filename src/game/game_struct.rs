@@ -5868,6 +5868,7 @@ impl Game {
                         destroyed = true;
                     }
 
+                    hit_boss_idx = None; // Reset this so it doesn't try to kill a boss
                     if laser.player == 1 {
                         let multiplier = if self.skin == '₿' {
                             2
