@@ -2783,7 +2783,11 @@ impl Game {
         } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
         {
-            self.calculate_wrapped_head(next_head1)
+            let wrapped = self.calculate_wrapped_head(next_head1);
+            if wrapped != next_head1 {
+                hit_wall1 = false;
+            }
+            wrapped
         } else {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
@@ -2808,7 +2812,11 @@ impl Game {
             } else if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                 && self.mode != GameMode::BattleRoyale
             {
-                self.calculate_wrapped_head(next_head2)
+                let wrapped = self.calculate_wrapped_head(next_head2);
+                if wrapped != next_head2 {
+                    hit_wall2 = false;
+                }
+                wrapped
             } else {
                 let margin = if self.mode == GameMode::BattleRoyale {
                     self.safe_zone_margin
@@ -7107,7 +7115,7 @@ impl Game {
                 self.p1_has_flag = true;
                 self.p2_flag = None;
                 beep();
-            } else if self.p1_has_flag && final_head1 == p1_base {
+            } else if self.p1_has_flag && final_head1 == p1_base && !hit_wall1 && !out_of_bounds1 && !p1_dead {
                 self.p1_score += 1;
                 self.p1_has_flag = false;
                 self.p2_flag = Some(p2_base);
@@ -7120,7 +7128,7 @@ impl Game {
                     self.p2_has_flag = true;
                     self.p1_flag = None;
                     beep();
-                } else if self.p2_has_flag && fh2 == p2_base {
+                } else if self.p2_has_flag && fh2 == p2_base && !hit_wall2 && !p2_dead {
                     self.p2_score += 1;
                     self.p2_has_flag = false;
                     self.p1_flag = Some(p1_base);
