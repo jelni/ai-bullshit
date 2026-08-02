@@ -9138,7 +9138,7 @@ impl Game {
             } else {
                 // Return flag to base or defend
                 targets = vec![Point {
-                    x: self.width.saturating_sub(3),
+                    x: 2,
                     y: self.height / 2,
                 }];
             }
@@ -9235,7 +9235,7 @@ impl Game {
                 } else {
                     // Go to base or defend
                     targets = vec![Point {
-                        x: 2,
+                        x: self.width.saturating_sub(3),
                         y: self.height / 2,
                     }];
                 }
