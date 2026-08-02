@@ -4372,8 +4372,8 @@ impl Game {
                             self.power_up = Some(PowerUp {
                                 p_type: PowerUpType::TimeFreeze,
                                 location: Point {
-                                    x: 0,
-                                    y: 0,
+                                    x: target_pos.x,
+                                    y: target_pos.y,
                                 },
                                 activation_time: Some(
                                     web_time::SystemTime::now()
