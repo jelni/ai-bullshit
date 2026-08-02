@@ -3752,7 +3752,7 @@ impl Game {
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 5);
+                    penalty = penalty.saturating_add((4 - d) * 100);
                 }
             }
             for m in &self.mines {
