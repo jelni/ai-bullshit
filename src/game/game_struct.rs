@@ -5453,9 +5453,9 @@ impl Game {
                 let dir = dirs[self.rng.gen_range(0..4)];
                 let next_p = Self::calculate_next_head_dir(self.food, dir);
                 if next_p.x >= margin
-                    && next_p.x < self.width - margin
+                    && next_p.x < self.width.saturating_sub(margin)
                     && next_p.y >= margin
-                    && next_p.y < self.height - margin
+                    && next_p.y < self.height.saturating_sub(margin)
                 {
                     let avoid = |p: &Point| {
                         self.obstacles.contains(p)
@@ -6941,7 +6941,7 @@ impl Game {
             }
         }
         let mut bots_to_remove = std::collections::HashSet::new();
-        let mut bots_grow = vec![self.mode == GameMode::Tron; self.bots.len()];
+        let mut bots_grow = vec![self.mode == GameMode::Tron; std::cmp::max(self.bots.len(), bots_len_start_tick)];
         let bots_len_start = bots_len_start_tick;
         for (i, final_head, hit_wall) in &final_bot_heads {
             if *hit_wall {
