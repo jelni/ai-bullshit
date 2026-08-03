@@ -2772,9 +2772,9 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_class == Some(crate::game::HeroClass::Ninja)
-            || self.stats.equipped_vehicle
-            == Some(crate::game::Vehicle::Spaceship);
+        }) || self.stats.equipped_class
+            == Some(crate::game::HeroClass::Ninja)
+            || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
         let mut hit_wall1 = false;
         let final_head1 = if self.portals.is_some_and(|(p1, _)| p1 == next_head1) {
             self.portals.unwrap().1
@@ -3747,8 +3747,12 @@ impl Game {
             for l in &self.lasers {
                 let mut d = calc_dist(p, l.position);
                 if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, l.position)).saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, l.position)).saturating_add(1);
+                    let d_via_p1 = calc_dist(p, p1)
+                        .saturating_add(calc_dist(p2, l.position))
+                        .saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2)
+                        .saturating_add(calc_dist(p1, l.position))
+                        .saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
                 if d < 4 {
@@ -3758,8 +3762,10 @@ impl Game {
             for m in &self.mines {
                 let mut d = calc_dist(p, *m);
                 if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, *m)).saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, *m)).saturating_add(1);
+                    let d_via_p1 =
+                        calc_dist(p, p1).saturating_add(calc_dist(p2, *m)).saturating_add(1);
+                    let d_via_p2 =
+                        calc_dist(p, p2).saturating_add(calc_dist(p1, *m)).saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
                 if d < 4 {
@@ -4371,10 +4377,7 @@ impl Game {
 
                             self.power_up = Some(PowerUp {
                                 p_type: PowerUpType::TimeFreeze,
-                                location: Point {
-                                    x: target_pos.x,
-                                    y: target_pos.y,
-                                },
+                                location: target_pos,
                                 activation_time: Some(
                                     web_time::SystemTime::now()
                                         .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -5378,7 +5381,10 @@ impl Game {
         self.bosses = next_bosses;
         self.lasers.extend(new_lasers);
         self.lightning_column = None;
-        if self.weather == Weather::Sandstorm && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.1) {
+        if self.weather == Weather::Sandstorm
+            && self.stats.equipped_class != Some(crate::game::HeroClass::Druid)
+            && self.rng.gen_bool(0.1)
+        {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -5406,7 +5412,10 @@ impl Game {
                 self.food = new_food;
             }
         }
-        if self.weather == Weather::Earthquake && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.05) {
+        if self.weather == Weather::Earthquake
+            && self.stats.equipped_class != Some(crate::game::HeroClass::Druid)
+            && self.rng.gen_bool(0.05)
+        {
             if !self.obstacles.is_empty() && self.rng.gen_bool(0.5) {
                 if let Some(obs) = self.obstacles.iter().next().copied() {
                     self.obstacles.remove(&obs);
@@ -5430,7 +5439,10 @@ impl Game {
                 }
             }
         }
-        if self.weather == Weather::Tornado && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.05) {
+        if self.weather == Weather::Tornado
+            && self.stats.equipped_class != Some(crate::game::HeroClass::Druid)
+            && self.rng.gen_bool(0.05)
+        {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -5471,7 +5483,10 @@ impl Game {
                 _ => Weather::Earthquake,
             };
         }
-        if self.weather == Weather::Storm && self.stats.equipped_class != Some(crate::game::HeroClass::Druid) && self.rng.gen_bool(0.02) {
+        if self.weather == Weather::Storm
+            && self.stats.equipped_class != Some(crate::game::HeroClass::Druid)
+            && self.rng.gen_bool(0.02)
+        {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -5862,7 +5877,9 @@ impl Game {
                 if let Some((x, y, text, color)) = damage_text {
                     self.spawn_floating_text(x, y, text, color);
                 }
-                if let Some(gob_pos) = self.goblin.as_ref().map(|g| g.position).filter(|p| *p == laser.position) {
+                if let Some(gob_pos) =
+                    self.goblin.as_ref().map(|g| g.position).filter(|p| *p == laser.position)
+                {
                     self.goblin = None;
                     if !is_piercing {
                         destroyed = true;
@@ -7116,7 +7133,13 @@ impl Game {
                 self.p1_has_flag = true;
                 self.p2_flag = None;
                 beep();
-            } else if self.p1_has_flag && self.p1_flag == Some(p1_base) && final_head1 == p1_base && !hit_wall1 && !out_of_bounds1 && !p1_dead {
+            } else if self.p1_has_flag
+                && self.p1_flag == Some(p1_base)
+                && final_head1 == p1_base
+                && !hit_wall1
+                && !out_of_bounds1
+                && !p1_dead
+            {
                 self.p1_score += 1;
                 self.p1_has_flag = false;
                 self.p2_flag = Some(p2_base);
@@ -7129,7 +7152,12 @@ impl Game {
                     self.p2_has_flag = true;
                     self.p1_flag = None;
                     beep();
-                } else if self.p2_has_flag && self.p2_flag == Some(p2_base) && fh2 == p2_base && !hit_wall2 && !p2_dead {
+                } else if self.p2_has_flag
+                    && self.p2_flag == Some(p2_base)
+                    && fh2 == p2_base
+                    && !hit_wall2
+                    && !p2_dead
+                {
                     self.p2_score += 1;
                     self.p2_has_flag = false;
                     self.p1_flag = Some(p1_base);
@@ -7401,7 +7429,7 @@ impl Game {
                             std::cmp::Ordering::Greater => {
                                 let last = winners.pop().unwrap();
                                 format!("{} and {}", winners.join(", "), last)
-                            }
+                            },
                             std::cmp::Ordering::Less => "Nobody".to_string(),
                         };
                         self.death_message = format!("Time's Up! {winner_str} Wins!");
@@ -7695,10 +7723,11 @@ impl Game {
                     }
                 } else if player == 2
                     && let Some(p2) = &mut self.player2
-                    && let Some(tail) = p2.body.back().copied() {
-                        p2.body.push_back(tail);
-                        *p2.body_map.entry(tail).or_insert(0) += 1;
-                    }
+                    && let Some(tail) = p2.body.back().copied()
+                {
+                    p2.body.push_back(tail);
+                    *p2.body_map.entry(tail).or_insert(0) += 1;
+                }
             } else {
                 self.spawn_particles(
                     f32::from(final_head.x),
@@ -7838,10 +7867,9 @@ impl Game {
     }
 
     pub(crate) fn is_invisible(&self) -> bool {
-        self.power_up
-            .as_ref()
-            .is_some_and(|p| {
-                p.p_type == PowerUpType::Invisibility && p.activation_time.is_some_and(|time| {
+        self.power_up.as_ref().is_some_and(|p| {
+            p.p_type == PowerUpType::Invisibility
+                && p.activation_time.is_some_and(|time| {
                     web_time::SystemTime::now()
                         .duration_since(web_time::SystemTime::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -7849,7 +7877,7 @@ impl Game {
                         .saturating_sub(time)
                         < self.powerup_duration()
                 })
-            })
+        })
     }
 
     fn check_bonus_food_collision(&mut self, final_head: Point, is_multiplier: bool) -> bool {
@@ -8487,9 +8515,9 @@ impl Game {
                         .saturating_sub(t)
                         < self.powerup_duration()
                 })
-        }) || self.stats.equipped_class == Some(crate::game::HeroClass::Ninja)
-            || self.stats.equipped_vehicle
-            == Some(crate::game::Vehicle::Spaceship);
+        }) || self.stats.equipped_class
+            == Some(crate::game::HeroClass::Ninja)
+            || self.stats.equipped_vehicle == Some(crate::game::Vehicle::Spaceship);
         if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
             && self.mode != GameMode::BattleRoyale
         {
@@ -8541,8 +8569,7 @@ impl Game {
         target: Point,
         checking_player: u8,
     ) -> Option<Direction> {
-        self.astar_search(start, None, &[target], checking_player)
-            .map(|(dir, _)| dir)
+        self.astar_search(start, None, &[target], checking_player).map(|(dir, _)| dir)
     }
     #[must_use]
     #[expect(clippy::too_many_lines)]
@@ -9393,8 +9420,12 @@ impl Game {
                 }
                 let mut d = calc_dist(p, boss.position);
                 if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, boss.position)).saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, boss.position)).saturating_add(1);
+                    let d_via_p1 = calc_dist(p, p1)
+                        .saturating_add(calc_dist(p2, boss.position))
+                        .saturating_add(1);
+                    let d_via_p2 = calc_dist(p, p2)
+                        .saturating_add(calc_dist(p1, boss.position))
+                        .saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
                 if d < 5 {
@@ -9404,8 +9435,10 @@ impl Game {
             if let Some((pf, _)) = self.poison_food {
                 let mut d = calc_dist(p, pf);
                 if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1).saturating_add(calc_dist(p2, pf)).saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2).saturating_add(calc_dist(p1, pf)).saturating_add(1);
+                    let d_via_p1 =
+                        calc_dist(p, p1).saturating_add(calc_dist(p2, pf)).saturating_add(1);
+                    let d_via_p2 =
+                        calc_dist(p, p2).saturating_add(calc_dist(p1, pf)).saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
                 if d < 4 {
