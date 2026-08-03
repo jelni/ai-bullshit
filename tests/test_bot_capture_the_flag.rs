@@ -17,6 +17,10 @@ fn test_bot_targets_enemy_flag() {
         x: 10,
         y: 10,
     });
+    game.player2 = Some(snake_game::snake::Snake::new(Point {
+        x: 19,
+        y: 19,
+    })); // move p2 snake out of the way
     game.p2_flag = Some(Point {
         x: 17,
         y: 10,
