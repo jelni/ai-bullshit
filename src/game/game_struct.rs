@@ -9167,6 +9167,8 @@ impl Game {
                 }];
             } else if let Some(p2_flag) = self.p2_flag {
                 targets = vec![p2_flag];
+            } else if let Some(p1_flag) = self.p1_flag {
+                targets = vec![p1_flag];
             } else {
                 // Return flag to base or defend
                 targets = vec![Point {
@@ -9264,6 +9266,8 @@ impl Game {
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
                     targets = vec![p1_flag];
+                } else if let Some(p2_flag) = self.p2_flag {
+                    targets = vec![p2_flag];
                 } else {
                     // Go to base or defend
                     targets = vec![Point {
