@@ -124,6 +124,7 @@ pub struct Game {
     pub current_room_coords: (i32, i32),
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     pub match_time: u32,
+    pub controls_scrambled_timer: u8,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -534,6 +535,7 @@ impl Game {
             current_room_coords: (0, 0),
             painted_tiles: std::collections::HashMap::new(),
             match_time: 0,
+            controls_scrambled_timer: 0,
         }
     }
     #[must_use]
@@ -2544,8 +2546,17 @@ impl Game {
             }
         }
     }
-    pub fn handle_input(&mut self, dir: Direction, player: u8) {
+    pub fn handle_input(&mut self, mut dir: Direction, player: u8) {
         if player == 1 {
+            if self.controls_scrambled_timer > 0 {
+                dir = match dir {
+                    Direction::Up => Direction::Down,
+                    Direction::Down => Direction::Up,
+                    Direction::Left => Direction::Right,
+                    Direction::Right => Direction::Left,
+                };
+            }
+
             if self.snake.direction_queue.len() >= 2 {
                 return;
             }
@@ -3333,6 +3344,10 @@ impl Game {
     }
 
     pub fn update(&mut self) {
+        if self.controls_scrambled_timer > 0 {
+            self.controls_scrambled_timer -= 1;
+        }
+
         if let Some(last_tick) = self.last_bank_tick {
             if last_tick.elapsed() >= web_time::Duration::from_secs(10) {
                 // Add 5% interest
@@ -4112,7 +4127,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..21) {
+                    match self.rng.gen_range(0..22) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -4134,6 +4149,7 @@ impl Game {
                         18 => BossType::TimeWeaver,
                         19 => BossType::Illusionist,
                         20 => BossType::Wormhole,
+                        21 => BossType::Glitch,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4977,6 +4993,33 @@ impl Game {
                                     self.poison_food = Some((poison, web_time::Instant::now()));
                                     beep();
                                 }
+                            }
+                        }
+                    } else if boss.kind == BossType::Glitch {
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= 20 {
+                            boss.shoot_timer = 0;
+                            self.controls_scrambled_timer = 50;
+                            let avoid = |p: &Point| {
+                                self.obstacles.contains(p)
+                                    || *p == self.food
+                                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                            };
+                            let margin = if self.mode == GameMode::BattleRoyale {
+                                self.safe_zone_margin
+                            } else {
+                                0
+                            };
+                            if let Some(new_pos) = Self::get_random_empty_point(
+                                self.width,
+                                self.height,
+                                &self.snake,
+                                avoid,
+                                &mut self.rng,
+                                margin,
+                            ) {
+                                boss.position = new_pos;
                             }
                         }
                     } else if boss.kind == BossType::Illusionist {

@@ -2010,6 +2010,10 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::DarkBlue))?;
                     write!(stdout, "O")?;
                 },
+                crate::game::BossType::Glitch => {
+                    stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+                    write!(stdout, "G")?;
+                },
             }
         }
     }
