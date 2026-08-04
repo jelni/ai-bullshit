@@ -4,6 +4,7 @@ use snake_game::*;
 fn test_time_freeze_pauses_boss_and_lasers() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.obstacles.clear();
 
     // Give snake the TimeFreeze powerup
     game.power_up = Some(game::PowerUp {
