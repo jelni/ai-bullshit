@@ -7416,7 +7416,7 @@ impl Game {
                         winners.push("Player 2".to_string());
                     }
                     let mut sorted_bots: Vec<_> = bot_scores.iter().collect();
-                    sorted_bots.sort_by_key(|&(id, _)| id);
+                    sorted_bots.sort_by_key(|&(&id, _)| id);
                     for (&bot_id, &score) in sorted_bots {
                         if score == max_score && score > 0 {
                             winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
