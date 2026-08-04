@@ -9520,6 +9520,9 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
+                && (next_p == final_p
+                    || (self.is_safe_final_p(next_p, 1, checking_player)
+                        && !self.obstacles.contains(&next_p)))
                 && self.is_safe_final_p(final_p, 1, checking_player)
                 && !self.obstacles.contains(&final_p)
             {
@@ -9564,6 +9567,9 @@ impl Game {
                 let next_p = Self::calculate_next_head_dir(current, d);
                 let tentative_g = current_g.saturating_add(1);
                 if let Some(final_p) = self.get_final_p(next_p)
+                    && (next_p == final_p
+                        || (self.is_safe_final_p(next_p, tentative_g, checking_player)
+                            && !self.obstacles.contains(&next_p)))
                     && (self.is_safe_final_p(final_p, tentative_g, checking_player)
                         && !self.obstacles.contains(&final_p)
                         || (targets.contains(&final_p) && tentative_g > 1))
@@ -9603,6 +9609,9 @@ impl Game {
             }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
+                && (next_p == final_p
+                    || (self.is_safe_final_p(next_p, 1, checking_player)
+                        && !self.obstacles.contains(&next_p)))
                 && self.is_safe_final_p(final_p, 1, checking_player)
                 && !self.obstacles.contains(&final_p)
             {
@@ -9622,6 +9631,9 @@ impl Game {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
                         let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
+                            && (step_p == valid_p
+                                || (self.is_safe_final_p(step_p, next_steps, checking_player)
+                                    && !self.obstacles.contains(&step_p)))
                             && self.is_safe_final_p(valid_p, next_steps, checking_player)
                             && !self.obstacles.contains(&valid_p)
                             && !visited.contains(&valid_p)
