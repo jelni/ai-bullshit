@@ -176,5 +176,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "Spawns portals randomly."
             }
         },
+        &BossType::Glitch => {
+            if kills > 0 {
+                "A corrupted entity from outside the system. Scrambles controls."
+            } else {
+                "???"
+            }
+        },
     }
 }

@@ -27,4 +27,5 @@ pub enum BossType {
     Illusionist,
     IllusionClone,
     Wormhole,
+    Glitch,
 }
