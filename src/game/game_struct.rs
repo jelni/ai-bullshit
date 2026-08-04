@@ -3855,11 +3855,11 @@ impl Game {
 
             let dist_direct = calc_dist(p, target);
             let base_dist = if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 = calc_dist(p, portal1)
-                    .saturating_add(calc_dist(portal2, target))
-                    .saturating_add(1);
-                let dist_via_portal2 = calc_dist(p, portal2)
+                let dist_via_portal1 = calc_dist(p, portal2)
                     .saturating_add(calc_dist(portal1, target))
+                    .saturating_add(1);
+                let dist_via_portal2 = calc_dist(p, portal1)
+                    .saturating_add(calc_dist(portal2, target))
                     .saturating_add(1);
                 std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
             } else {
@@ -7172,7 +7172,7 @@ impl Game {
             };
 
             // Player 1 logic
-            if !self.p1_has_flag && Some(final_head1) == self.p2_flag {
+            if !self.p1_has_flag && !p1_dead && Some(final_head1) == self.p2_flag {
                 self.p1_has_flag = true;
                 self.p2_flag = None;
                 beep();
@@ -7191,7 +7191,7 @@ impl Game {
 
             // Player 2 logic
             if let Some(fh2) = final_head2_opt {
-                if !self.p2_has_flag && Some(fh2) == self.p1_flag {
+                if !self.p2_has_flag && !p2_dead && Some(fh2) == self.p1_flag {
                     self.p2_has_flag = true;
                     self.p1_flag = None;
                     beep();
@@ -9538,11 +9538,11 @@ impl Game {
                 .map(|t| {
                     let dist_direct = calc_dist(p, *t);
                     if let Some((portal1, portal2)) = self.portals {
-                        let dist_via_portal1 = calc_dist(p, portal1)
-                            .saturating_add(calc_dist(portal2, *t))
-                            .saturating_add(1);
-                        let dist_via_portal2 = calc_dist(p, portal2)
+                        let dist_via_portal1 = calc_dist(p, portal2)
                             .saturating_add(calc_dist(portal1, *t))
+                            .saturating_add(1);
+                        let dist_via_portal2 = calc_dist(p, portal1)
+                            .saturating_add(calc_dist(portal2, *t))
                             .saturating_add(1);
                         std::cmp::min(
                             dist_direct,
