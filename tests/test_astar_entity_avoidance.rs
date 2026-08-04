@@ -78,3 +78,134 @@ fn test_astar_pathfind_avoids_laser() {
         "Bot should steer away from the laser. Got {next_dir:?}"
     );
 }
+
+#[test]
+fn test_astar_avoids_portals_when_unsafe() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.obstacles.clear();
+
+    game.snake.body.clear();
+    game.snake.body.push_back(Point {
+        x: 1,
+        y: 1,
+    });
+    game.snake.direction = Direction::Right;
+
+    let target = Point {
+        x: 18,
+        y: 18,
+    };
+
+    game.portals = Some((
+        Point {
+            x: 2,
+            y: 1,
+        },
+        Point {
+            x: 17,
+            y: 18,
+        },
+    ));
+
+    // add an obstacle at the exit of portal
+    game.obstacles.insert(Point {
+        x: 17,
+        y: 18,
+    });
+
+    let dir = game.astar_pathfind(game.snake.head(), target, 1);
+
+    assert!(dir != Some(Direction::Right), "Bot should avoid portal if exit is unsafe. Got {:?}", dir);
+}
+
+#[test]
+fn test_astar_avoids_portals_when_laser_is_on_exit() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.obstacles.clear();
+
+    game.snake.body.clear();
+    game.snake.body.push_back(Point {
+        x: 1,
+        y: 1,
+    });
+    game.snake.direction = Direction::Right;
+
+    let target = Point {
+        x: 18,
+        y: 18,
+    };
+
+    game.portals = Some((
+        Point {
+            x: 2,
+            y: 1,
+        },
+        Point {
+            x: 17,
+            y: 18,
+        },
+    ));
+
+    // laser aiming at exit
+    game.lasers.push(Laser {
+        position: Point {
+            x: 17,
+            y: 18,
+        },
+        direction: Direction::Up,
+        player: 1,
+    });
+
+    let dir = game.astar_pathfind(game.snake.head(), target, 1);
+
+    assert!(dir != Some(Direction::Right), "Bot should avoid portal if laser is hitting exit. Got {:?}", dir);
+}
+
+#[test]
+fn test_astar_avoids_portals_when_laser_passes_through() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.obstacles.clear();
+
+    game.snake.body.clear();
+    game.snake.body.push_back(Point {
+        x: 1,
+        y: 1,
+    });
+    game.snake.direction = Direction::Right;
+
+    let target = Point {
+        x: 18,
+        y: 18,
+    };
+
+    game.portals = Some((
+        Point {
+            x: 2,
+            y: 1,
+        },
+        Point {
+            x: 17,
+            y: 18,
+        },
+    ));
+
+    // laser aiming at portal 2
+    game.lasers.push(Laser {
+        position: Point {
+            x: 17,
+            y: 16, // travelling down, hits (17,18) in 2 ticks
+        },
+        direction: Direction::Down,
+        player: 1,
+    });
+
+    let dir = game.astar_pathfind(game.snake.head(), target, 1);
+
+    // Portal 1 is at 2,1, so if the laser hits portal 2 at 17,18, it comes OUT of portal 1
+    // Let's see if a_star sees this as dangerous
+    // wait a_star doesn't step simulation, is_safe_final_p does checking.
+    // wait, is_safe_final_p has portal checks for lasers.
+
+    // We expect it to NOT go Right into the portal because it's dangerous
+    assert!(dir != Some(Direction::Right), "Bot should avoid portal if laser will hit it. Got {:?}", dir);
+}
