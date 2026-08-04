@@ -565,6 +565,7 @@ mod tests {
         let mut shifted = false;
         // Make the score not grow up to infinity inside the loop since update_tick is called, or ensure quests don't panic or something.
         // Wait, tornado has a 5% chance.
+        game.rng = rand::rngs::StdRng::seed_from_u64(0);
         for _ in 0..200000 {
             game.current_planet = crate::game::Planet::Earth;
             game.weather = Weather::Tornado;
