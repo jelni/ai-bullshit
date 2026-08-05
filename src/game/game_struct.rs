@@ -6068,9 +6068,9 @@ impl Game {
                             '*',
                         );
                     }
-                    if destroyed {
-                        break;
-                    }
+                }
+                if destroyed {
+                    break;
                 }
                 if laser.player != 1 && self.snake.body_map.contains_key(&laser.position) {
                     if !is_invincible {
