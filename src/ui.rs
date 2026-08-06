@@ -581,6 +581,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     let menu_items = [
         "Single Player",
+        "Hourly Challenge",
         "Daily Challenge",
         "Weekly Challenge",
         "Monthly Challenge",
