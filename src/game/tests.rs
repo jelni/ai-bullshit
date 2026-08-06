@@ -448,6 +448,40 @@ mod tests {
         assert!(reached, "Following BFS should reach target");
     }
     #[test]
+    fn test_hourly_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::HourlyChallenge;
+        game1.reset();
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::HourlyChallenge;
+        game2.reset();
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+        for _ in 0..5 {
+            let next_food = game1.food;
+            game1.snake.move_to(next_food, true);
+            game1.process_food_collision(next_food, false);
+            game2.snake.move_to(next_food, true);
+            game2.process_food_collision(next_food, false);
+            assert_eq!(game1.food, game2.food, "Food generation drifted");
+            assert_eq!(game1.obstacles, game2.obstacles, "Obstacles generation drifted");
+        }
+    }
+    #[test]
     fn test_daily_challenge_determinism() {
         let mut game1 = Game::new(
             20,

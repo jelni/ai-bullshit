@@ -364,193 +364,197 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             1 => {
-                game.mode = game::GameMode::DailyChallenge;
+                game.mode = game::GameMode::HourlyChallenge;
                 game.reset();
             },
             2 => {
-                game.mode = game::GameMode::WeeklyChallenge;
+                game.mode = game::GameMode::DailyChallenge;
                 game.reset();
             },
             3 => {
-                game.mode = game::GameMode::MonthlyChallenge;
+                game.mode = game::GameMode::WeeklyChallenge;
                 game.reset();
             },
             4 => {
-                game.mode = game::GameMode::YearlyChallenge;
+                game.mode = game::GameMode::MonthlyChallenge;
                 game.reset();
             },
             5 => {
-                game.mode = game::GameMode::DecadeChallenge;
+                game.mode = game::GameMode::YearlyChallenge;
                 game.reset();
             },
             6 => {
-                game.mode = game::GameMode::CenturyChallenge;
+                game.mode = game::GameMode::DecadeChallenge;
                 game.reset();
             },
             7 => {
-                game.mode = game::GameMode::MillenniumChallenge;
+                game.mode = game::GameMode::CenturyChallenge;
                 game.reset();
             },
             8 => {
-                game.mode = game::GameMode::EonChallenge;
+                game.mode = game::GameMode::MillenniumChallenge;
                 game.reset();
             },
             9 => {
-                game.mode = game::GameMode::Campaign;
+                game.mode = game::GameMode::EonChallenge;
                 game.reset();
             },
             10 => {
-                game.mode = game::GameMode::LocalMultiplayer;
+                game.mode = game::GameMode::Campaign;
                 game.reset();
             },
             11 => {
-                game.mode = game::GameMode::OnlineMultiplayer;
+                game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
             12 => {
-                game.mode = game::GameMode::Tournament;
+                game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
             13 => {
-                game.mode = game::GameMode::PlayerVsBot;
+                game.mode = game::GameMode::Tournament;
                 game.reset();
             },
             14 => {
-                game.mode = game::GameMode::BotVsBot;
+                game.mode = game::GameMode::PlayerVsBot;
                 game.reset();
             },
             15 => {
-                game.mode = game::GameMode::BattleRoyale;
+                game.mode = game::GameMode::BotVsBot;
                 game.reset();
             },
             16 => {
-                game.mode = game::GameMode::TimeAttack;
+                game.mode = game::GameMode::BattleRoyale;
                 game.reset();
             },
             17 => {
-                game.mode = game::GameMode::Survival;
+                game.mode = game::GameMode::TimeAttack;
                 game.reset();
             },
             18 => {
-                game.mode = game::GameMode::Zen;
+                game.mode = game::GameMode::Survival;
                 game.reset();
             },
             19 => {
-                game.mode = game::GameMode::Maze;
+                game.mode = game::GameMode::Zen;
                 game.reset();
             },
             20 => {
-                game.mode = game::GameMode::Cave;
+                game.mode = game::GameMode::Maze;
                 game.reset();
             },
             21 => {
-                game.mode = game::GameMode::Dungeon;
+                game.mode = game::GameMode::Cave;
                 game.reset();
             },
             22 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
             23 => {
-                game.mode = game::GameMode::FogOfWar;
+                game.mode = game::GameMode::Speedrun;
                 game.reset();
             },
             24 => {
-                game.mode = game::GameMode::Evolution;
+                game.mode = game::GameMode::FogOfWar;
                 game.reset();
             },
             25 => {
-                game.mode = game::GameMode::BossRush;
+                game.mode = game::GameMode::Evolution;
                 game.reset();
             },
             26 => {
-                game.mode = game::GameMode::MassiveMultiplayer;
+                game.mode = game::GameMode::BossRush;
                 game.reset();
             },
             27 => {
-                game.mode = game::GameMode::Mirror;
+                game.mode = game::GameMode::MassiveMultiplayer;
                 game.reset();
             },
             28 => {
-                game.mode = game::GameMode::Flood;
+                game.mode = game::GameMode::Mirror;
                 game.reset();
             },
             29 => {
-                game.mode = game::GameMode::Vampire;
+                game.mode = game::GameMode::Flood;
                 game.reset();
             },
             30 => {
-                game.mode = game::GameMode::Gravity;
+                game.mode = game::GameMode::Vampire;
                 game.reset();
             },
             31 => {
-                game.mode = game::GameMode::Tron;
+                game.mode = game::GameMode::Gravity;
                 game.reset();
             },
             32 => {
-                game.mode = game::GameMode::Zombie;
+                game.mode = game::GameMode::Tron;
                 game.reset();
             },
             33 => {
-                game.mode = game::GameMode::Farmstead;
+                game.mode = game::GameMode::Zombie;
                 game.reset();
             },
             34 => {
-                game.mode = game::GameMode::PacMan;
+                game.mode = game::GameMode::Farmstead;
                 game.reset();
             },
             35 => {
-                game.mode = game::GameMode::CaptureTheFlag;
+                game.mode = game::GameMode::PacMan;
                 game.reset();
             },
             36 => {
-                game.mode = game::GameMode::BulletHell;
+                game.mode = game::GameMode::CaptureTheFlag;
                 game.reset();
             },
             37 => {
-                game.mode = game::GameMode::SnakeSurvivor;
+                game.mode = game::GameMode::BulletHell;
                 game.reset();
             },
             38 => {
-                game.mode = game::GameMode::KingOfTheHill;
+                game.mode = game::GameMode::SnakeSurvivor;
                 game.reset();
             },
             39 => {
-                game.mode = game::GameMode::Dodgeball;
+                game.mode = game::GameMode::KingOfTheHill;
                 game.reset();
             },
             40 => {
+                game.mode = game::GameMode::Dodgeball;
+                game.reset();
+            },
+            41 => {
                 game.mode = game::GameMode::DungeonCrawler;
                 game.reset();
             },
 
-            41 => {
+            42 => {
                 game.mode = game::GameMode::Chaos;
                 game.reset();
             },
-            42 => {
+            43 => {
                 game.mode = game::GameMode::Miner;
                 game.reset();
             },
-            43 => {
+            44 => {
                 game.mode = game::GameMode::TurfWar;
                 game.reset();
             },
 
-            44 => {
+            45 => {
                 let _ = game.load_game();
             },
-            45 => game.state = GameState::Settings,
-            46 => game.state = GameState::NftShop,
-            47 => game.state = GameState::SkillTree,
-            48 => game.state = GameState::Stats,
-            49 => game.state = GameState::Achievements,
-            50 => game.state = GameState::Help,
-            51 => {
+            46 => game.state = GameState::Settings,
+            47 => game.state = GameState::NftShop,
+            48 => game.state = GameState::SkillTree,
+            49 => game.state = GameState::Stats,
+            50 => game.state = GameState::Achievements,
+            51 => game.state = GameState::Help,
+            52 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            52 => {
+            53 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -558,99 +562,99 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            53 => {
+            54 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            54 => {
+            55 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            55 => {
+            56 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            56 => {
+            57 => {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            57 => {
+            58 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
-            58 => {
+            59 => {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            59 => {
+            60 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
-            60 => {
+            61 => {
                 game.state = GameState::RealEstate;
                 game.settings_selection = 0;
             },
-            61 => {
+            62 => {
                 game.state = GameState::VehicleGarage;
                 game.settings_selection = 0;
             },
-            62 => {
+            63 => {
                 game.state = GameState::Fishing;
                 game.settings_selection = 0;
                 game.is_fishing = false;
                 game.fishing_progress = 0;
             },
-            63 => {
+            64 => {
                 game.state = GameState::BattlePass;
                 game.settings_selection = 0;
             },
-            64 => {
+            65 => {
                 game.state = GameState::ArtifactShrine;
             },
-            65 => {
+            66 => {
                 game.state = GameState::Hatchery;
                 game.settings_selection = 0;
             },
-            66 => {
+            67 => {
                 game.state = GameState::SpacePort;
                 game.settings_selection = 0;
             },
-            67 => {
+            68 => {
                 game.state = GameState::FactionBase;
                 game.settings_selection = 0;
             },
-            68 => {
+            69 => {
                 game.state = GameState::MagicAcademy;
                 game.settings_selection = 0;
             },
-            69 => {
+            70 => {
                 game.state = GameState::QuestLog;
             },
-            70 => {
+            71 => {
                 game.state = GameState::Bestiary;
                 game.settings_selection = 0;
             },
-            71 => {
+            72 => {
                 game.state = GameState::Tavern;
                 game.settings_selection = 0;
             },
-            72 => {
+            73 => {
                 game.state = GameState::BlackMarket;
                 game.settings_selection = 0;
             },
-            73 => {
+            74 => {
                 game.state = GameState::Bank;
                 game.settings_selection = 0;
             },
-            74 => {
+            75 => {
                 game.state = GameState::AuctionHouse;
                 game.settings_selection = 0;
             },
-            75 => {
+            76 => {
                 game.state = GameState::Gacha;
                 game.settings_selection = 0;
             },
-            76 => {
+            77 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -889,7 +893,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            1 => {
+            2 => {
                 // Iron Wall: 3 Iron
                 let iron =
                     game.stats.inventory.get(&crate::game::Resource::Iron).copied().unwrap_or(0);
@@ -904,7 +908,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            3 => {
                 // Golden Apple: 5 Gold
                 let gold =
                     game.stats.inventory.get(&crate::game::Resource::Gold).copied().unwrap_or(0);
@@ -919,7 +923,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 // Diamond Sword: 1 Diamond
                 let diamond =
                     game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
@@ -1035,6 +1039,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
                 || game.mode == game::GameMode::MonthlyChallenge
@@ -1065,6 +1070,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
                 || game.mode == game::GameMode::MonthlyChallenge
@@ -1095,6 +1101,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
                 || game.mode == game::GameMode::MonthlyChallenge
@@ -1125,6 +1132,7 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
                 || game.mode == game::GameMode::MonthlyChallenge
@@ -1447,7 +1455,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            1 => {
+            2 => {
                 let cost = 1000 * (1 + u32::from(game.stats.upgrade_extra_lives));
                 if game.stats.upgrade_extra_lives < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1456,7 +1464,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            3 => {
                 let cost = 1500 * (1 + u32::from(game.stats.upgrade_laser_capacity));
                 if game.stats.upgrade_laser_capacity < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1465,7 +1473,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
                 if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1550,7 +1558,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 game.difficulty = game.difficulty.prev();
                 game.update_high_scores();
             },
-            1 => {
+            2 => {
                 let themes = &game.stats.unlocked_themes;
                 let current_idx = themes.iter().position(|&t| t == game.theme).unwrap_or(0);
                 let prev_idx = if current_idx > 0 {
@@ -1560,8 +1568,8 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 };
                 game.theme = themes[prev_idx];
             },
-            2 => game.wrap_mode = !game.wrap_mode,
-            3 => {
+            3 => game.wrap_mode = !game.wrap_mode,
+            4 => {
                 let skins = &game.stats.unlocked_skins;
                 let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
                 let prev_idx = if current_idx > 0 {
@@ -1629,7 +1637,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            1 => {
+            2 => {
                 // Diamond Sword [Cost: 1000]
                 if game.stats.coins >= 1000 {
                     game.stats.coins -= 1000;
@@ -1642,7 +1650,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            3 => {
                 // Speed Potion [Cost: 300]
                 if game.stats.coins >= 300 {
                     game.stats.coins -= 300;
@@ -1655,7 +1663,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 // Iron Wall [Cost: 100]
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
@@ -1758,7 +1766,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Warrior);
                 }
             },
-            1 => {
+            2 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Mage) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Mage);
                 } else if game.stats.coins >= 500 {
@@ -1767,7 +1775,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Mage);
                 }
             },
-            2 => {
+            3 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Rogue) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 } else if game.stats.coins >= 500 {
@@ -1776,7 +1784,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 }
             },
-            3 => {
+            4 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Paladin) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 } else if game.stats.coins >= 500 {
@@ -1785,7 +1793,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 }
             },
-            4 => {
+            5 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Necromancer) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
                 } else if game.stats.coins >= 500 {
@@ -1794,7 +1802,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
                 }
             },
-            5 => {
+            6 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Ranger) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ranger);
                 } else if game.stats.coins >= 500 {
@@ -1803,7 +1811,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ranger);
                 }
             },
-            6 => {
+            7 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Ninja) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ninja);
                 } else if game.stats.coins >= 500 {
@@ -1812,7 +1820,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ninja);
                 }
             },
-            7 => {
+            8 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Druid) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
                 } else if game.stats.coins >= 500 {
@@ -1821,7 +1829,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
                 }
             },
-            8 => {
+            9 => {
                 game.stats.equipped_class = None;
             },
             _ => {},
@@ -1938,7 +1946,7 @@ fn handle_casino_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            1 => {
+            2 => {
                 // Roulette
                 if game.stats.coins >= 50 {
                     game.stats.coins -= 50;
@@ -2486,7 +2494,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            1 => {
+            2 => {
                 // Withdraw
                 if game.stats.bank_balance >= 100 {
                     game.stats.bank_balance -= 100;
@@ -2495,7 +2503,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            3 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2537,7 +2545,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            1 => {
+            2 => {
                 // Bid on Rare Theme
                 if game.stats.coins >= 2000
                     && !game.stats.unlocked_themes.contains(&crate::game::Theme::Matrix)
@@ -2548,7 +2556,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            3 => {
                 // Bid on Epic Boss Pet
                 if game.stats.coins >= 10000
                     && !game
@@ -2562,7 +2570,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            3 => {
+            4 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2604,7 +2612,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            1 => {
+            2 => {
                 // 10 Pulls for 1000
                 if game.stats.coins >= 1000 {
                     game.stats.coins -= 1000;
@@ -2615,7 +2623,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            2 => {
+            3 => {
                 // Leave
                 game.state = GameState::Menu;
                 game.death_message = String::new();
