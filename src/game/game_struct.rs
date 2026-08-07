@@ -9494,8 +9494,8 @@ impl Game {
                         .saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
-                if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 10);
+                if d < 10 { // massive entity avoidance range
+                    penalty = penalty.saturating_add((10 - d) * 100); // massive penalty for boss avoidance
                 }
             }
             if let Some((pf, _)) = self.poison_food {
@@ -9513,8 +9513,8 @@ impl Game {
             }
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 5);
+                if d < 5 { // increased distance check
+                    penalty = penalty.saturating_add((5 - d) * 30); // increased penalty for laser avoidance
                 }
             }
             for m in &self.mines {
