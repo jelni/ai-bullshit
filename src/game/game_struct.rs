@@ -4023,6 +4023,7 @@ impl Game {
                     Weather::Snow,
                     Weather::Sandstorm,
                     Weather::Eclipse,
+                    Weather::Fog,
                 ];
                 self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
             }
@@ -5530,13 +5531,14 @@ impl Game {
             }
         }
         if self.rng.gen_bool(0.002) {
-            self.weather = match self.rng.gen_range(0..7) {
+            self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
                 1 => Weather::Rain,
                 2 => Weather::Snow,
                 3 => Weather::Storm,
                 4 => Weather::Tornado,
                 5 => Weather::Sandstorm,
+                6 => Weather::Fog,
                 _ => Weather::Earthquake,
             };
         }
