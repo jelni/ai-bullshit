@@ -10,4 +10,5 @@ pub enum Weather {
     Sandstorm,
     Earthquake,
     Eclipse,
+    Fog,
 }
