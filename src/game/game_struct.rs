@@ -7519,6 +7519,10 @@ impl Game {
                 if let Some(final_ghost_head) = self.get_final_p(next_ghost_head) {
                     next_ghost_head = final_ghost_head;
                 }
+                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                {
+                    next_ghost_head = self.calculate_wrapped_head(next_ghost_head);
+                }
                 ghost.move_to(next_ghost_head, false);
             }
             self.ghost_snake = Some(ghost);
