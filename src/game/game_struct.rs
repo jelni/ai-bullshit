@@ -3808,7 +3808,9 @@ impl Game {
             }
             if let Some(bh) = self.black_hole {
                 let d = calc_dist(p, bh);
-                if d < 5 {
+                if d == 0 {
+                    penalty = penalty.saturating_add(5000);
+                } else if d < 5 {
                     penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
@@ -3959,7 +3961,7 @@ impl Game {
                         can_move = false;
                     } else if self.meteors.iter().any(|m| m.position == final_p) {
                         can_move = false;
-                    } else if self.black_hole == Some(final_p) {
+                    } else if self.black_hole == Some(final_p) && boss_kind != BossType::Phantom {
                         can_move = false;
                     } else if self.poison_food.is_some_and(|(pf, _)| pf == final_p) {
                         can_move = false;
