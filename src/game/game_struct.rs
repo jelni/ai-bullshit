@@ -3829,6 +3829,13 @@ impl Game {
             }
             if self.mines.contains(&p) {
                 penalty = penalty.saturating_add(500);
+            } else {
+                for m in &self.mines {
+                    let d = calc_dist(p, *m);
+                    if d < 4 {
+                        penalty = penalty.saturating_add((4 - d) * 100);
+                    }
+                }
             }
             for l in &self.lasers {
                 if l.position == p {
