@@ -1513,6 +1513,7 @@ fn draw_entities<W: Write>(
     let is_visible = |px: u16, py: u16| -> bool {
         if game.mode == crate::game::GameMode::FogOfWar
             || game.time_of_day == crate::game::TimeOfDay::Night
+            || game.weather == crate::game::Weather::Fog
         {
             let head = game.snake.head();
             let dx = f32::from(px) - f32::from(head.x);
@@ -1675,6 +1676,22 @@ fn draw_entities<W: Write>(
                 }) {
                     stdout.queue(cursor::MoveTo(x, y))?;
                     write!(stdout, "O")?;
+                }
+            }
+        },
+        Weather::Fog => {
+            stdout.queue(SetForegroundColor(Color::Grey))?;
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if !game.obstacles.contains(&Point {
+                    x,
+                    y,
+                }) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "~")?;
                 }
             }
         },

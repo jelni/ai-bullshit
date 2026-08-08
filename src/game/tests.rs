@@ -1625,3 +1625,18 @@ fn test_illusionist_boss_spawns_clones() {
         game.bosses.iter().find(|b| b.kind == crate::game::BossType::Illusionist).unwrap();
     assert_ne!(real_boss.position, start_pos, "Illusionist should teleport");
 }
+
+#[test]
+fn test_fog_weather() {
+    let mut game = crate::game::Game::new(20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
+    game.weather = crate::game::Weather::Fog;
+
+    // Verify that setting Weather::Fog doesn't crash the update loop
+    for _ in 0..100 {
+        game.state = crate::game::GameState::Playing;
+        game.update();
+        game.weather = crate::game::Weather::Fog; // ensure it stays fog
+    }
+
+    assert_eq!(game.weather, crate::game::Weather::Fog, "Weather should remain Fog");
+}

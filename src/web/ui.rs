@@ -15,6 +15,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
     let is_visible = |px: f64, py: f64| -> bool {
         if game.mode == crate::game::GameMode::FogOfWar
             || game.time_of_day == crate::game::TimeOfDay::Night
+            || game.weather == crate::game::Weather::Fog
         {
             let head = game.snake.head();
             let dx = px - f64::from(head.x);
@@ -432,6 +433,26 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                         f64::from(y) * cell_size,
                         cell_size,
                         cell_size,
+                    );
+                }
+            }
+        },
+        crate::game::Weather::Fog => {
+            ctx.set_fill_style_str("#888888");
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if !game.obstacles.contains(&crate::snake::Point {
+                    x,
+                    y,
+                }) {
+                    ctx.fill_rect(
+                        f64::from(x) * cell_size,
+                        f64::from(y) * cell_size,
+                        cell_size,
+                        cell_size * 0.2,
                     );
                 }
             }
