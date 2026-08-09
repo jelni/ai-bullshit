@@ -1973,7 +1973,7 @@ impl Game {
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::PacMan
             || self.mode == GameMode::HourlyChallenge
-                || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::FogOfWar
             || self.mode == GameMode::Evolution
             || self.mode == GameMode::BossRush
@@ -5706,7 +5706,7 @@ impl Game {
         }
         let chat_interval = if self.mode == GameMode::SinglePlayer
             || self.mode == GameMode::HourlyChallenge
-                || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
             || self.mode == GameMode::MonthlyChallenge
             || self.mode == GameMode::YearlyChallenge
@@ -7031,7 +7031,8 @@ impl Game {
             }
         }
         let mut bots_to_remove = std::collections::HashSet::new();
-        let mut bots_grow = vec![self.mode == GameMode::Tron; std::cmp::max(self.bots.len(), bots_len_start_tick)];
+        let mut bots_grow =
+            vec![self.mode == GameMode::Tron; std::cmp::max(self.bots.len(), bots_len_start_tick)];
         let bots_len_start = bots_len_start_tick;
         for (i, final_head, hit_wall) in &final_bot_heads {
             if *hit_wall {
@@ -7234,6 +7235,7 @@ impl Game {
                 self.p1_score += 1;
                 self.p1_has_flag = false;
                 self.p2_flag = Some(p2_base);
+                self.p1_flag = Some(p1_base);
                 beep();
             }
 
@@ -7252,6 +7254,7 @@ impl Game {
                     self.p2_score += 1;
                     self.p2_has_flag = false;
                     self.p1_flag = Some(p1_base);
+                    self.p2_flag = Some(p2_base);
                     beep();
                 }
             }
@@ -7507,9 +7510,7 @@ impl Game {
                         winners.push("Player 2".to_string());
                     }
                     let mut sorted_bots: Vec<_> = bot_scores.into_iter().collect();
-                    sorted_bots.sort_by(|a, b| {
-                        a.0.cmp(&b.0)
-                    });
+                    sorted_bots.sort_by(|a, b| a.0.cmp(&b.0));
                     for (bot_id, score) in sorted_bots {
                         if score == max_score && score > 0 {
                             winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
@@ -7542,7 +7543,8 @@ impl Game {
                 if let Some(final_ghost_head) = self.get_final_p(next_ghost_head) {
                     next_ghost_head = final_ghost_head;
                 }
-                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                if (self.wrap_mode || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
                 {
                     next_ghost_head = self.calculate_wrapped_head(next_ghost_head);
                 }
@@ -8210,7 +8212,7 @@ impl Game {
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::HourlyChallenge
-                || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
         {
             return;
@@ -9530,7 +9532,8 @@ impl Game {
                         .saturating_add(1);
                     d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
                 }
-                if d < 10 { // massive entity avoidance range
+                if d < 10 {
+                    // massive entity avoidance range
                     penalty = penalty.saturating_add((10 - d) * 100); // massive penalty for boss avoidance
                 }
             }
@@ -9549,7 +9552,8 @@ impl Game {
             }
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
-                if d < 5 { // increased distance check
+                if d < 5 {
+                    // increased distance check
                     penalty = penalty.saturating_add((5 - d) * 30); // increased penalty for laser avoidance
                 }
             }
