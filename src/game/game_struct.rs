@@ -5981,6 +5981,9 @@ impl Game {
                     }
                     beep();
                 }
+                if destroyed {
+                    break;
+                }
                 if let Some(i) = hit_boss_idx {
                     let boss_pos = self.bosses[i].position;
                     let boss_health = self.bosses[i].health;
