@@ -104,6 +104,7 @@ pub struct Game {
     pub is_fishing: bool,
     pub eggs_on_board: std::collections::HashMap<Point, crate::game::EggType>,
     pub paladin_life_timer: u32,
+    pub engineer_turret_timer: u32,
     pub current_planet: Planet,
     pub floating_texts: Vec<FloatingText>,
     pub mana: u32,
@@ -515,6 +516,7 @@ impl Game {
             is_fishing: false,
             eggs_on_board: std::collections::HashMap::new(),
             paladin_life_timer: 0,
+            engineer_turret_timer: 0,
             current_planet: Planet::Earth,
             floating_texts: Vec::new(),
             mana: 100,
@@ -755,6 +757,7 @@ impl Game {
             is_fishing: self.is_fishing,
             eggs_on_board: self.eggs_on_board.clone(),
             paladin_life_timer: self.paladin_life_timer,
+            engineer_turret_timer: self.engineer_turret_timer,
             mana: self.mana,
             max_mana: self.max_mana,
             time_of_day: self.time_of_day,
@@ -883,6 +886,7 @@ impl Game {
                 self.is_fishing = state.is_fishing;
                 self.eggs_on_board = state.eggs_on_board;
                 self.paladin_life_timer = state.paladin_life_timer;
+                self.engineer_turret_timer = state.engineer_turret_timer;
                 self.mana = state.mana;
                 self.max_mana = state.max_mana;
                 self.time_of_day = state.time_of_day;
@@ -2223,6 +2227,7 @@ impl Game {
         self.decoy = None;
         self.score = 0;
         self.paladin_life_timer = 0;
+        self.engineer_turret_timer = 0;
         self.lives = if self.stats.equipped_class == Some(crate::game::HeroClass::Warrior) {
             3 + u32::from(self.stats.upgrade_extra_lives)
         } else if self.skin == '💎' {
@@ -2996,6 +3001,7 @@ impl Game {
             fishing_progress: self.fishing_progress,
             is_fishing: self.is_fishing,
             eggs_on_board: self.eggs_on_board.clone(),
+            engineer_turret_timer: self.engineer_turret_timer,
             mana: self.mana,
             max_mana: self.max_mana,
             time_of_day: self.time_of_day,
@@ -4059,6 +4065,19 @@ impl Game {
                 self.chat_log.push_back((
                     "SYSTEM: Paladin generated an extra life!".to_string(),
                     crate::color::Color::Yellow,
+                ));
+                crate::game::beep();
+            }
+        }
+
+        if self.stats.equipped_class == Some(crate::game::HeroClass::Engineer) {
+            self.engineer_turret_timer += 1;
+            if self.engineer_turret_timer >= 150 {
+                self.engineer_turret_timer = 0;
+                self.spawn_turret();
+                self.chat_log.push_back((
+                    "SYSTEM: Engineer deployed a Turret!".to_string(),
+                    crate::color::Color::Cyan,
                 ));
                 crate::game::beep();
             }
