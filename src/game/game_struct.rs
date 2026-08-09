@@ -5981,9 +5981,6 @@ impl Game {
                     }
                     beep();
                 }
-                if destroyed {
-                    break;
-                }
                 if let Some(i) = hit_boss_idx {
                     let boss_pos = self.bosses[i].position;
                     let boss_health = self.bosses[i].health;
@@ -5991,6 +5988,29 @@ impl Game {
                         *self.stats.bestiary.entry(self.bosses[i].kind).or_insert(0) += 1;
                         self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
                         let dead_boss = self.bosses.remove(i);
+
+                        if dead_boss.kind == BossType::Shooter {
+                            self.lasers.push(Laser {
+                                position: dead_boss.position,
+                                direction: Direction::Up,
+                                player: 3,
+                            });
+                            self.lasers.push(Laser {
+                                position: dead_boss.position,
+                                direction: Direction::Down,
+                                player: 3,
+                            });
+                            self.lasers.push(Laser {
+                                position: dead_boss.position,
+                                direction: Direction::Left,
+                                player: 3,
+                            });
+                            self.lasers.push(Laser {
+                                position: dead_boss.position,
+                                direction: Direction::Right,
+                                player: 3,
+                            });
+                        }
 
                         if self.rng.gen_bool(0.2) {
                             self.equipment_boxes.push(dead_boss.position);
