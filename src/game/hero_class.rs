@@ -11,4 +11,5 @@ pub enum HeroClass {
     Ranger,
     Ninja,
     Druid,
+    Engineer,
 }

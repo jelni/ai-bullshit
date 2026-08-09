@@ -95,6 +95,8 @@ pub struct SaveState {
     #[serde(default)]
     pub paladin_life_timer: u32,
     #[serde(default)]
+    pub engineer_turret_timer: u32,
+    #[serde(default)]
     pub mana: u32,
     #[serde(default)]
     pub max_mana: u32,

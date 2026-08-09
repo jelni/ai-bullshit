@@ -2,6 +2,7 @@ use super::{
     Boss, Companion, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake,
     Weather,
 };
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct HistoryState {
     pub snake: Snake,
@@ -43,6 +44,7 @@ pub struct HistoryState {
     pub fishing_progress: u32,
     pub is_fishing: bool,
     pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
+    pub engineer_turret_timer: u32,
     pub mana: u32,
     pub max_mana: u32,
     pub time_of_day: crate::game::TimeOfDay,
