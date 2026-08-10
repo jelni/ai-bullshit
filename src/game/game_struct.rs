@@ -5995,6 +5995,9 @@ impl Game {
                             '$',
                         );
                     }
+                    if destroyed {
+                        break;
+                    }
                     if self.mode == GameMode::SnakeSurvivor {
                         self.xp_gems.insert(gob_pos);
                     }
