@@ -7602,10 +7602,11 @@ impl Game {
                     sorted_bots.sort_by(|a, b| a.0.cmp(&b.0));
                     for (bot_id, score) in sorted_bots {
                         if score == max_score && score > 0 {
+                            // bot_id starts at 3 for index 0, so bot_id - 2 is the 1-based Bot number
                             winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
                         }
                     }
-                    self.just_died = true;
+                    self.lives = 1;
                     if max_score > 0 {
                         let winner_str = match winners.len().cmp(&1) {
                             std::cmp::Ordering::Equal => winners[0].clone(),
@@ -7615,12 +7616,10 @@ impl Game {
                             },
                             std::cmp::Ordering::Less => "Nobody".to_string(),
                         };
-                        self.death_message = format!("Time's Up! {winner_str} Wins!");
+                        self.handle_death(&format!("Time's Up! {winner_str} Wins!"));
                     } else {
-                        self.death_message = "Time's Up! Nobody Wins!".to_string();
+                        self.handle_death("Time's Up! Nobody Wins!");
                     }
-                    self.state = GameState::GameOver;
-                    self.update_high_scores();
                 }
             }
         }

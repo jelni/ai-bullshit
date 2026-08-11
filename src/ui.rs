@@ -1980,7 +1980,7 @@ fn draw_entities<W: Write>(
                     stdout.queue(SetForegroundColor(Color::Red))?;
                     write!(stdout, "D")?;
                 },
-                crate::game::BossType::Mage => {
+                crate::game::BossType::Mage | crate::game::BossType::Mecha => {
                     stdout.queue(SetForegroundColor(Color::Cyan))?;
                     write!(stdout, "M")?;
                 },
@@ -2031,10 +2031,6 @@ fn draw_entities<W: Write>(
                 crate::game::BossType::Glitch => {
                     stdout.queue(SetForegroundColor(Color::DarkGrey))?;
                     write!(stdout, "G")?;
-                },
-                crate::game::BossType::Mecha => {
-                    stdout.queue(SetForegroundColor(Color::Cyan))?;
-                    write!(stdout, "M")?;
                 },
             }
         }
