@@ -183,5 +183,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "???"
             }
         },
+        BossType::Mecha => {
+            if kills > 0 {
+                "A heavily armed robot that chases you while firing lasers."
+            } else {
+                "???"
+            }
+        },
     }
 }
