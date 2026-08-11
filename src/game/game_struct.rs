@@ -4168,7 +4168,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..22) {
+                    match self.rng.gen_range(0..23) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -4191,6 +4191,7 @@ impl Game {
                         19 => BossType::Illusionist,
                         20 => BossType::Wormhole,
                         21 => BossType::Glitch,
+                        22 => BossType::Mecha,
                         _ => BossType::Mimic,
                     }
                 };
@@ -5061,6 +5062,72 @@ impl Game {
                                 margin,
                             ) {
                                 boss.position = new_pos;
+                            }
+                        }
+                    } else if boss.kind == BossType::Mecha {
+                        let mut move_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(1, 2_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                        } else {
+                            2
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            move_threshold = std::cmp::max(1, move_threshold / 2);
+                        }
+                        boss.move_timer += 1;
+                        if boss.move_timer >= move_threshold {
+                            boss.move_timer = 0;
+                            let target_pos = if let Some((decoy_pos, _)) = self.decoy {
+                                decoy_pos
+                            } else {
+                                self.snake.head()
+                            };
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                                let next_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if next_pos.x > margin
+                                    && next_pos.x < self.width - 1 - margin
+                                    && next_pos.y > margin
+                                    && next_pos.y < self.height - 1 - margin
+                                {
+                                    boss.position = next_pos;
+                                }
+                            }
+                        }
+
+                        let mut shoot_threshold = if self.mode == GameMode::BossRush {
+                            std::cmp::max(5, 20_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+                        } else {
+                            15
+                        };
+                        if boss.health <= boss.max_health / 2 {
+                            shoot_threshold = std::cmp::max(3, shoot_threshold / 2);
+                        }
+                        boss.shoot_timer += 1;
+                        if boss.shoot_timer >= shoot_threshold {
+                            boss.shoot_timer = 0;
+                            // Shoot lasers in 4 directions
+                            for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                                let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
+                                let margin = if self.mode == GameMode::BattleRoyale {
+                                    self.safe_zone_margin
+                                } else {
+                                    0
+                                };
+                                if laser_pos.x > margin
+                                    && laser_pos.x < self.width - 1 - margin
+                                    && laser_pos.y > margin
+                                    && laser_pos.y < self.height - 1 - margin
+                                {
+                                    new_lasers.push(Laser {
+                                        position: laser_pos,
+                                        direction: dir,
+                                        player: 0,
+                                    });
+                                }
                             }
                         }
                     } else if boss.kind == BossType::Illusionist {
@@ -8935,9 +9002,10 @@ impl Game {
                             || boss.kind == BossType::Illusionist
                             || boss.kind == BossType::IllusionClone
                             || boss.kind == BossType::Wormhole
+                            || boss.kind == BossType::Mecha
                         {
                             if final_p == boss.position
-                                || (boss.kind == BossType::Shooter && dist <= moves)
+                                || ((boss.kind == BossType::Shooter || boss.kind == BossType::Mecha) && dist <= moves)
                             {
                                 return false;
                             }
@@ -8949,6 +9017,7 @@ impl Game {
                             return false;
                         }
                         if boss.kind == BossType::Shooter
+                            || boss.kind == BossType::Mecha
                             || boss.kind == BossType::Puffer
                             || boss.kind == BossType::Dragon
                             || boss.kind == BossType::Mage
