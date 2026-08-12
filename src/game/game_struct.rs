@@ -3780,27 +3780,53 @@ impl Game {
                 let mut dy_p1 = p1.y.abs_diff(portal1.y);
                 let mut dx_p2 = portal2.x.abs_diff(p2.x);
                 let mut dy_p2 = portal2.y.abs_diff(p2.y);
-                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                if (self.wrap_mode || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
                 {
-                    dx_p1 = std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
-                    dy_p1 = std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
-                    dx_p2 = std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
-                    dy_p2 = std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
+                    dx_p1 =
+                        std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
+                    dy_p1 =
+                        std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
+                    dx_p2 =
+                        std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
+                    dy_p2 =
+                        std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
                 }
-                let dist_via_p1 = dx_p1.saturating_add(dy_p1).saturating_add(dx_p2).saturating_add(dy_p2).saturating_add(1);
+                let dist_via_p1 = dx_p1
+                    .saturating_add(dy_p1)
+                    .saturating_add(dx_p2)
+                    .saturating_add(dy_p2)
+                    .saturating_add(1);
 
                 let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
                 let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
                 let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
                 let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
-                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                if (self.wrap_mode || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
                 {
-                    dx_p2_1 = std::cmp::min(dx_p2_1, self.width.saturating_sub(2).saturating_sub(dx_p2_1));
-                    dy_p2_1 = std::cmp::min(dy_p2_1, self.height.saturating_sub(2).saturating_sub(dy_p2_1));
-                    dx_p1_2 = std::cmp::min(dx_p1_2, self.width.saturating_sub(2).saturating_sub(dx_p1_2));
-                    dy_p1_2 = std::cmp::min(dy_p1_2, self.height.saturating_sub(2).saturating_sub(dy_p1_2));
+                    dx_p2_1 = std::cmp::min(
+                        dx_p2_1,
+                        self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                    );
+                    dy_p2_1 = std::cmp::min(
+                        dy_p2_1,
+                        self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                    );
+                    dx_p1_2 = std::cmp::min(
+                        dx_p1_2,
+                        self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                    );
+                    dy_p1_2 = std::cmp::min(
+                        dy_p1_2,
+                        self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                    );
                 }
-                let dist_via_p2 = dx_p2_1.saturating_add(dy_p2_1).saturating_add(dx_p1_2).saturating_add(dy_p1_2).saturating_add(1);
+                let dist_via_p2 = dx_p2_1
+                    .saturating_add(dy_p2_1)
+                    .saturating_add(dx_p1_2)
+                    .saturating_add(dy_p1_2)
+                    .saturating_add(1);
 
                 return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
             }
@@ -5070,7 +5096,12 @@ impl Game {
                         }
                     } else if boss.kind == BossType::Mecha {
                         let mut move_threshold = if self.mode == GameMode::BossRush {
-                            std::cmp::max(1, 2_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255) / 5))
+                            std::cmp::max(
+                                1,
+                                2_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255) / 5,
+                                ),
+                            )
                         } else {
                             2
                         };
@@ -5085,7 +5116,8 @@ impl Game {
                             } else {
                                 self.snake.head()
                             };
-                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3) {
+                            if let Some(dir) = self.bot_smart_pathfind(boss.position, target_pos, 3)
+                            {
                                 let next_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -5103,7 +5135,12 @@ impl Game {
                         }
 
                         let mut shoot_threshold = if self.mode == GameMode::BossRush {
-                            std::cmp::max(5, 20_u8.saturating_sub(u8::try_from(self.campaign_level).unwrap_or(255)))
+                            std::cmp::max(
+                                5,
+                                20_u8.saturating_sub(
+                                    u8::try_from(self.campaign_level).unwrap_or(255),
+                                ),
+                            )
                         } else {
                             15
                         };
@@ -5114,7 +5151,9 @@ impl Game {
                         if boss.shoot_timer >= shoot_threshold {
                             boss.shoot_timer = 0;
                             // Shoot lasers in 4 directions
-                            for &dir in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                            for &dir in
+                                &[Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+                            {
                                 let laser_pos = Self::calculate_next_head_dir(boss.position, dir);
                                 let margin = if self.mode == GameMode::BattleRoyale {
                                     self.safe_zone_margin
@@ -8818,14 +8857,62 @@ impl Game {
                             + u32::from(final_p.y.abs_diff(boss.position.y));
 
                         if let Some((portal1, portal2)) = self.portals {
-                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                + u32::from(final_p.y.abs_diff(portal1.y))
-                                + u32::from(portal2.x.abs_diff(boss.position.x))
-                                + u32::from(portal2.y.abs_diff(boss.position.y));
-                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                + u32::from(final_p.y.abs_diff(portal2.y))
-                                + u32::from(portal1.x.abs_diff(boss.position.x))
-                                + u32::from(portal1.y.abs_diff(boss.position.y));
+                            let mut dx_p1 = final_p.x.abs_diff(portal1.x);
+                            let mut dy_p1 = final_p.y.abs_diff(portal1.y);
+                            let mut dx_p2 = portal2.x.abs_diff(boss.position.x);
+                            let mut dy_p2 = portal2.y.abs_diff(boss.position.y);
+                            if (self.wrap_mode || self.mode == GameMode::Zen)
+                                && self.mode != GameMode::BattleRoyale
+                            {
+                                dx_p1 = std::cmp::min(
+                                    dx_p1,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p1),
+                                );
+                                dy_p1 = std::cmp::min(
+                                    dy_p1,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p1),
+                                );
+                                dx_p2 = std::cmp::min(
+                                    dx_p2,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p2),
+                                );
+                                dy_p2 = std::cmp::min(
+                                    dy_p2,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p2),
+                                );
+                            }
+                            let dist_via_p1 = u32::from(dx_p1)
+                                + u32::from(dy_p1)
+                                + u32::from(dx_p2)
+                                + u32::from(dy_p2);
+                            let mut dx_p2_1 = final_p.x.abs_diff(portal2.x);
+                            let mut dy_p2_1 = final_p.y.abs_diff(portal2.y);
+                            let mut dx_p1_2 = portal1.x.abs_diff(boss.position.x);
+                            let mut dy_p1_2 = portal1.y.abs_diff(boss.position.y);
+                            if (self.wrap_mode || self.mode == GameMode::Zen)
+                                && self.mode != GameMode::BattleRoyale
+                            {
+                                dx_p2_1 = std::cmp::min(
+                                    dx_p2_1,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                                );
+                                dy_p2_1 = std::cmp::min(
+                                    dy_p2_1,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                                );
+                                dx_p1_2 = std::cmp::min(
+                                    dx_p1_2,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                                );
+                                dy_p1_2 = std::cmp::min(
+                                    dy_p1_2,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                                );
+                            }
+                            let dist_via_p2 = u32::from(dx_p2_1)
+                                + u32::from(dy_p2_1)
+                                + u32::from(dx_p1_2)
+                                + u32::from(dy_p1_2);
                             dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
                         }
                         if dist <= moves {
@@ -8975,14 +9062,62 @@ impl Game {
                             + u32::from(final_p.y.abs_diff(boss.position.y));
 
                         if let Some((portal1, portal2)) = self.portals {
-                            let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                + u32::from(final_p.y.abs_diff(portal1.y))
-                                + u32::from(portal2.x.abs_diff(boss.position.x))
-                                + u32::from(portal2.y.abs_diff(boss.position.y));
-                            let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                + u32::from(final_p.y.abs_diff(portal2.y))
-                                + u32::from(portal1.x.abs_diff(boss.position.x))
-                                + u32::from(portal1.y.abs_diff(boss.position.y));
+                            let mut dx_p1 = final_p.x.abs_diff(portal1.x);
+                            let mut dy_p1 = final_p.y.abs_diff(portal1.y);
+                            let mut dx_p2 = portal2.x.abs_diff(boss.position.x);
+                            let mut dy_p2 = portal2.y.abs_diff(boss.position.y);
+                            if (self.wrap_mode || self.mode == GameMode::Zen)
+                                && self.mode != GameMode::BattleRoyale
+                            {
+                                dx_p1 = std::cmp::min(
+                                    dx_p1,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p1),
+                                );
+                                dy_p1 = std::cmp::min(
+                                    dy_p1,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p1),
+                                );
+                                dx_p2 = std::cmp::min(
+                                    dx_p2,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p2),
+                                );
+                                dy_p2 = std::cmp::min(
+                                    dy_p2,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p2),
+                                );
+                            }
+                            let dist_via_p1 = u32::from(dx_p1)
+                                + u32::from(dy_p1)
+                                + u32::from(dx_p2)
+                                + u32::from(dy_p2);
+                            let mut dx_p2_1 = final_p.x.abs_diff(portal2.x);
+                            let mut dy_p2_1 = final_p.y.abs_diff(portal2.y);
+                            let mut dx_p1_2 = portal1.x.abs_diff(boss.position.x);
+                            let mut dy_p1_2 = portal1.y.abs_diff(boss.position.y);
+                            if (self.wrap_mode || self.mode == GameMode::Zen)
+                                && self.mode != GameMode::BattleRoyale
+                            {
+                                dx_p2_1 = std::cmp::min(
+                                    dx_p2_1,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                                );
+                                dy_p2_1 = std::cmp::min(
+                                    dy_p2_1,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                                );
+                                dx_p1_2 = std::cmp::min(
+                                    dx_p1_2,
+                                    self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                                );
+                                dy_p1_2 = std::cmp::min(
+                                    dy_p1_2,
+                                    self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                                );
+                            }
+                            let dist_via_p2 = u32::from(dx_p2_1)
+                                + u32::from(dy_p2_1)
+                                + u32::from(dx_p1_2)
+                                + u32::from(dy_p1_2);
                             dist = std::cmp::min(dist, std::cmp::min(dist_via_p1, dist_via_p2));
                         }
 
@@ -9008,7 +9143,9 @@ impl Game {
                             || boss.kind == BossType::Mecha
                         {
                             if final_p == boss.position
-                                || ((boss.kind == BossType::Shooter || boss.kind == BossType::Mecha) && dist <= moves)
+                                || ((boss.kind == BossType::Shooter
+                                    || boss.kind == BossType::Mecha)
+                                    && dist <= moves)
                             {
                                 return false;
                             }
@@ -9124,14 +9261,70 @@ impl Game {
                                         + u32::from(final_p.y.abs_diff(boss.position.y));
 
                                     if let Some((portal1, portal2)) = self.portals {
-                                        let dist_via_p1 = u32::from(final_p.x.abs_diff(portal1.x))
-                                            + u32::from(final_p.y.abs_diff(portal1.y))
-                                            + u32::from(portal2.x.abs_diff(boss.position.x))
-                                            + u32::from(portal2.y.abs_diff(boss.position.y));
-                                        let dist_via_p2 = u32::from(final_p.x.abs_diff(portal2.x))
-                                            + u32::from(final_p.y.abs_diff(portal2.y))
-                                            + u32::from(portal1.x.abs_diff(boss.position.x))
-                                            + u32::from(portal1.y.abs_diff(boss.position.y));
+                                        let mut dx_p1 = final_p.x.abs_diff(portal1.x);
+                                        let mut dy_p1 = final_p.y.abs_diff(portal1.y);
+                                        let mut dx_p2 = portal2.x.abs_diff(boss.position.x);
+                                        let mut dy_p2 = portal2.y.abs_diff(boss.position.y);
+                                        if (self.wrap_mode || self.mode == GameMode::Zen)
+                                            && self.mode != GameMode::BattleRoyale
+                                        {
+                                            dx_p1 = std::cmp::min(
+                                                dx_p1,
+                                                self.width.saturating_sub(2).saturating_sub(dx_p1),
+                                            );
+                                            dy_p1 = std::cmp::min(
+                                                dy_p1,
+                                                self.height.saturating_sub(2).saturating_sub(dy_p1),
+                                            );
+                                            dx_p2 = std::cmp::min(
+                                                dx_p2,
+                                                self.width.saturating_sub(2).saturating_sub(dx_p2),
+                                            );
+                                            dy_p2 = std::cmp::min(
+                                                dy_p2,
+                                                self.height.saturating_sub(2).saturating_sub(dy_p2),
+                                            );
+                                        }
+                                        let dist_via_p1 = u32::from(dx_p1)
+                                            + u32::from(dy_p1)
+                                            + u32::from(dx_p2)
+                                            + u32::from(dy_p2);
+                                        let mut dx_p2_1 = final_p.x.abs_diff(portal2.x);
+                                        let mut dy_p2_1 = final_p.y.abs_diff(portal2.y);
+                                        let mut dx_p1_2 = portal1.x.abs_diff(boss.position.x);
+                                        let mut dy_p1_2 = portal1.y.abs_diff(boss.position.y);
+                                        if (self.wrap_mode || self.mode == GameMode::Zen)
+                                            && self.mode != GameMode::BattleRoyale
+                                        {
+                                            dx_p2_1 = std::cmp::min(
+                                                dx_p2_1,
+                                                self.width
+                                                    .saturating_sub(2)
+                                                    .saturating_sub(dx_p2_1),
+                                            );
+                                            dy_p2_1 = std::cmp::min(
+                                                dy_p2_1,
+                                                self.height
+                                                    .saturating_sub(2)
+                                                    .saturating_sub(dy_p2_1),
+                                            );
+                                            dx_p1_2 = std::cmp::min(
+                                                dx_p1_2,
+                                                self.width
+                                                    .saturating_sub(2)
+                                                    .saturating_sub(dx_p1_2),
+                                            );
+                                            dy_p1_2 = std::cmp::min(
+                                                dy_p1_2,
+                                                self.height
+                                                    .saturating_sub(2)
+                                                    .saturating_sub(dy_p1_2),
+                                            );
+                                        }
+                                        let dist_via_p2 = u32::from(dx_p2_1)
+                                            + u32::from(dy_p2_1)
+                                            + u32::from(dx_p1_2)
+                                            + u32::from(dy_p1_2);
                                         dist = std::cmp::min(
                                             dist,
                                             std::cmp::min(dist_via_p1, dist_via_p2),
@@ -9526,12 +9719,28 @@ impl Game {
                     if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                         && self.mode != GameMode::BattleRoyale
                     {
-                        dx_p1 = std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
-                        dy_p1 = std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
-                        dx_p2 = std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
-                        dy_p2 = std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
+                        dx_p1 = std::cmp::min(
+                            dx_p1,
+                            self.width.saturating_sub(2).saturating_sub(dx_p1),
+                        );
+                        dy_p1 = std::cmp::min(
+                            dy_p1,
+                            self.height.saturating_sub(2).saturating_sub(dy_p1),
+                        );
+                        dx_p2 = std::cmp::min(
+                            dx_p2,
+                            self.width.saturating_sub(2).saturating_sub(dx_p2),
+                        );
+                        dy_p2 = std::cmp::min(
+                            dy_p2,
+                            self.height.saturating_sub(2).saturating_sub(dy_p2),
+                        );
                     }
-                    let dist_via_p1 = dx_p1.saturating_add(dy_p1).saturating_add(dx_p2).saturating_add(dy_p2).saturating_add(1);
+                    let dist_via_p1 = dx_p1
+                        .saturating_add(dy_p1)
+                        .saturating_add(dx_p2)
+                        .saturating_add(dy_p2)
+                        .saturating_add(1);
 
                     let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
                     let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
@@ -9540,12 +9749,28 @@ impl Game {
                     if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                         && self.mode != GameMode::BattleRoyale
                     {
-                        dx_p2_1 = std::cmp::min(dx_p2_1, self.width.saturating_sub(2).saturating_sub(dx_p2_1));
-                        dy_p2_1 = std::cmp::min(dy_p2_1, self.height.saturating_sub(2).saturating_sub(dy_p2_1));
-                        dx_p1_2 = std::cmp::min(dx_p1_2, self.width.saturating_sub(2).saturating_sub(dx_p1_2));
-                        dy_p1_2 = std::cmp::min(dy_p1_2, self.height.saturating_sub(2).saturating_sub(dy_p1_2));
+                        dx_p2_1 = std::cmp::min(
+                            dx_p2_1,
+                            self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                        );
+                        dy_p2_1 = std::cmp::min(
+                            dy_p2_1,
+                            self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                        );
+                        dx_p1_2 = std::cmp::min(
+                            dx_p1_2,
+                            self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                        );
+                        dy_p1_2 = std::cmp::min(
+                            dy_p1_2,
+                            self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                        );
                     }
-                    let dist_via_p2 = dx_p2_1.saturating_add(dy_p2_1).saturating_add(dx_p1_2).saturating_add(dy_p1_2).saturating_add(1);
+                    let dist_via_p2 = dx_p2_1
+                        .saturating_add(dy_p2_1)
+                        .saturating_add(dx_p1_2)
+                        .saturating_add(dy_p1_2)
+                        .saturating_add(1);
 
                     return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
                 }
@@ -9701,12 +9926,7 @@ impl Game {
                     }
                 }
             }
-            targets
-                .iter()
-                .map(|t| calc_dist(p, *t))
-                .min()
-                .unwrap_or(0)
-                .saturating_add(penalty)
+            targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
