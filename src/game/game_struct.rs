@@ -3773,35 +3773,50 @@ impl Game {
                 dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                 dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
             }
-            dx.saturating_add(dy)
+            let direct_dist = dx.saturating_add(dy);
+
+            if let Some((portal1, portal2)) = self.portals {
+                let mut dx_p1 = p1.x.abs_diff(portal1.x);
+                let mut dy_p1 = p1.y.abs_diff(portal1.y);
+                let mut dx_p2 = portal2.x.abs_diff(p2.x);
+                let mut dy_p2 = portal2.y.abs_diff(p2.y);
+                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                {
+                    dx_p1 = std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
+                    dy_p1 = std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
+                    dx_p2 = std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
+                    dy_p2 = std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
+                }
+                let dist_via_p1 = dx_p1.saturating_add(dy_p1).saturating_add(dx_p2).saturating_add(dy_p2).saturating_add(1);
+
+                let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
+                let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
+                let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
+                let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
+                if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
+                {
+                    dx_p2_1 = std::cmp::min(dx_p2_1, self.width.saturating_sub(2).saturating_sub(dx_p2_1));
+                    dy_p2_1 = std::cmp::min(dy_p2_1, self.height.saturating_sub(2).saturating_sub(dy_p2_1));
+                    dx_p1_2 = std::cmp::min(dx_p1_2, self.width.saturating_sub(2).saturating_sub(dx_p1_2));
+                    dy_p1_2 = std::cmp::min(dy_p1_2, self.height.saturating_sub(2).saturating_sub(dy_p1_2));
+                }
+                let dist_via_p2 = dx_p2_1.saturating_add(dy_p2_1).saturating_add(dx_p1_2).saturating_add(dy_p1_2).saturating_add(1);
+
+                return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
+            }
+            direct_dist
         };
 
         let heuristic = |p: Point| -> u16 {
             let mut penalty = 0u16;
             for l in &self.lasers {
-                let mut d = calc_dist(p, l.position);
-                if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1)
-                        .saturating_add(calc_dist(p2, l.position))
-                        .saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2)
-                        .saturating_add(calc_dist(p1, l.position))
-                        .saturating_add(1);
-                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
-                }
+                let d = calc_dist(p, l.position);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 100);
                 }
             }
             for m in &self.mines {
-                let mut d = calc_dist(p, *m);
-                if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 =
-                        calc_dist(p, p1).saturating_add(calc_dist(p2, *m)).saturating_add(1);
-                    let d_via_p2 =
-                        calc_dist(p, p2).saturating_add(calc_dist(p1, *m)).saturating_add(1);
-                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
-                }
+                let d = calc_dist(p, *m);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 100);
                 }
@@ -3879,18 +3894,7 @@ impl Game {
                 }
             }
 
-            let dist_direct = calc_dist(p, target);
-            let base_dist = if let Some((portal1, portal2)) = self.portals {
-                let dist_via_portal1 = calc_dist(p, portal2)
-                    .saturating_add(calc_dist(portal1, target))
-                    .saturating_add(1);
-                let dist_via_portal2 = calc_dist(p, portal1)
-                    .saturating_add(calc_dist(portal2, target))
-                    .saturating_add(1);
-                std::cmp::min(dist_direct, std::cmp::min(dist_via_portal1, dist_via_portal2))
-            } else {
-                dist_direct
-            };
+            let base_dist = calc_dist(p, target);
             base_dist.saturating_add(penalty)
         };
 
@@ -9512,7 +9516,40 @@ impl Game {
                     dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
                     dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
                 }
-                dx.saturating_add(dy)
+                let direct_dist = dx.saturating_add(dy);
+
+                if let Some((portal1, portal2)) = self.portals {
+                    let mut dx_p1 = p1.x.abs_diff(portal1.x);
+                    let mut dy_p1 = p1.y.abs_diff(portal1.y);
+                    let mut dx_p2 = portal2.x.abs_diff(p2.x);
+                    let mut dy_p2 = portal2.y.abs_diff(p2.y);
+                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                        && self.mode != GameMode::BattleRoyale
+                    {
+                        dx_p1 = std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
+                        dy_p1 = std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
+                        dx_p2 = std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
+                        dy_p2 = std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
+                    }
+                    let dist_via_p1 = dx_p1.saturating_add(dy_p1).saturating_add(dx_p2).saturating_add(dy_p2).saturating_add(1);
+
+                    let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
+                    let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
+                    let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
+                    let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
+                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                        && self.mode != GameMode::BattleRoyale
+                    {
+                        dx_p2_1 = std::cmp::min(dx_p2_1, self.width.saturating_sub(2).saturating_sub(dx_p2_1));
+                        dy_p2_1 = std::cmp::min(dy_p2_1, self.height.saturating_sub(2).saturating_sub(dy_p2_1));
+                        dx_p1_2 = std::cmp::min(dx_p1_2, self.width.saturating_sub(2).saturating_sub(dx_p1_2));
+                        dy_p1_2 = std::cmp::min(dy_p1_2, self.height.saturating_sub(2).saturating_sub(dy_p1_2));
+                    }
+                    let dist_via_p2 = dx_p2_1.saturating_add(dy_p2_1).saturating_add(dx_p1_2).saturating_add(dy_p1_2).saturating_add(1);
+
+                    return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                }
+                direct_dist
             };
             let mut penalty = 0_u16;
             if checking_player == 1 {
@@ -9612,30 +9649,14 @@ impl Game {
                 if targets.contains(&boss.position) {
                     continue;
                 }
-                let mut d = calc_dist(p, boss.position);
-                if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 = calc_dist(p, p1)
-                        .saturating_add(calc_dist(p2, boss.position))
-                        .saturating_add(1);
-                    let d_via_p2 = calc_dist(p, p2)
-                        .saturating_add(calc_dist(p1, boss.position))
-                        .saturating_add(1);
-                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
-                }
+                let d = calc_dist(p, boss.position);
                 if d < 10 {
                     // massive entity avoidance range
                     penalty = penalty.saturating_add((10 - d) * 100); // massive penalty for boss avoidance
                 }
             }
             if let Some((pf, _)) = self.poison_food {
-                let mut d = calc_dist(p, pf);
-                if let Some((p1, p2)) = self.portals {
-                    let d_via_p1 =
-                        calc_dist(p, p1).saturating_add(calc_dist(p2, pf)).saturating_add(1);
-                    let d_via_p2 =
-                        calc_dist(p, p2).saturating_add(calc_dist(p1, pf)).saturating_add(1);
-                    d = std::cmp::min(d, std::cmp::min(d_via_p1, d_via_p2));
-                }
+                let d = calc_dist(p, pf);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 40);
                 }
@@ -9682,23 +9703,7 @@ impl Game {
             }
             targets
                 .iter()
-                .map(|t| {
-                    let dist_direct = calc_dist(p, *t);
-                    if let Some((portal1, portal2)) = self.portals {
-                        let dist_via_portal1 = calc_dist(p, portal2)
-                            .saturating_add(calc_dist(portal1, *t))
-                            .saturating_add(1);
-                        let dist_via_portal2 = calc_dist(p, portal1)
-                            .saturating_add(calc_dist(portal2, *t))
-                            .saturating_add(1);
-                        std::cmp::min(
-                            dist_direct,
-                            std::cmp::min(dist_via_portal1, dist_via_portal2),
-                        )
-                    } else {
-                        dist_direct
-                    }
-                })
+                .map(|t| calc_dist(p, *t))
                 .min()
                 .unwrap_or(0)
                 .saturating_add(penalty)
