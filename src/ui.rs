@@ -3088,7 +3088,11 @@ fn draw_class_select<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         ("Necromancer", crate::game::HeroClass::Necromancer, "Resurrect dead bosses as companions"),
         ("Ranger", crate::game::HeroClass::Ranger, "Start with Sniper Companion"),
         ("Ninja", crate::game::HeroClass::Ninja, "Pass through walls"),
-        ("Druid", crate::game::HeroClass::Druid, "Converts poison food into bonus points and ignores weather penalties"),
+        (
+            "Druid",
+            crate::game::HeroClass::Druid,
+            "Converts poison food into bonus points and ignores weather penalties",
+        ),
         ("Engineer", crate::game::HeroClass::Engineer, "Periodically deploys a friendly Turret"),
     ];
 

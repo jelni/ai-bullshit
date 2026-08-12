@@ -1104,12 +1104,11 @@ mod tests {
             game.update();
             if game.goblin.is_none() {
                 break;
-            } else {
-                game.goblin.as_mut().unwrap().position = Point {
-                    x: 10,
-                    y: 10,
-                };
             }
+            game.goblin.as_mut().unwrap().position = Point {
+                x: 10,
+                y: 10,
+            };
         }
         assert!(game.goblin.is_none(), "Goblin should be hit by laser and despawned");
         game.update();
@@ -1628,7 +1627,14 @@ fn test_illusionist_boss_spawns_clones() {
 
 #[test]
 fn test_fog_weather() {
-    let mut game = crate::game::Game::new(20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
+    let mut game = crate::game::Game::new(
+        20,
+        20,
+        false,
+        'x',
+        crate::game::Theme::Classic,
+        crate::game::Difficulty::Normal,
+    );
     game.weather = crate::game::Weather::Fog;
 
     // Verify that setting Weather::Fog doesn't crash the update loop

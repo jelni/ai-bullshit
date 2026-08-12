@@ -7,15 +7,21 @@ fn test_boss_mecha_moves_and_shoots() {
     game.obstacles.clear();
     game.state = GameState::Playing;
 
-    let bot_pos = Point { x: 10, y: 15 };
+    let bot_pos = Point {
+        x: 10,
+        y: 15,
+    };
     game.snake = snake_game::snake::Snake::new(bot_pos);
 
-    let mecha_pos = Point { x: 10, y: 5 };
+    let mecha_pos = Point {
+        x: 10,
+        y: 5,
+    };
     game.bosses.push(Boss {
         position: mecha_pos,
         health: 10,
         max_health: 10,
-        move_timer: 10, // Force move
+        move_timer: 10,   // Force move
         shoot_timer: 100, // Force shoot
         kind: BossType::Mecha,
         state_timer: 0,
@@ -41,11 +47,17 @@ fn test_bot_predicts_mecha_laser() {
     game.obstacles.clear();
     game.state = GameState::Playing;
 
-    let bot_pos = Point { x: 5, y: 5 };
+    let bot_pos = Point {
+        x: 5,
+        y: 5,
+    };
     game.snake = snake_game::snake::Snake::new(bot_pos);
 
     // Place Mecha so that it's about to shoot and we are on its X or Y axis
-    let mecha_pos = Point { x: 10, y: 5 };
+    let mecha_pos = Point {
+        x: 10,
+        y: 5,
+    };
     game.bosses.push(Boss {
         position: mecha_pos,
         health: 10,
@@ -57,10 +69,24 @@ fn test_bot_predicts_mecha_laser() {
     });
 
     // Check if moving right (towards the laser path) is safe
-    let right_safe = game.is_safe_final_p(Point { x: 6, y: 5 }, 1, 1);
+    let right_safe = game.is_safe_final_p(
+        Point {
+            x: 6,
+            y: 5,
+        },
+        1,
+        1,
+    );
 
     // Check if moving up (away from the laser path) is safe
-    let up_safe = game.is_safe_final_p(Point { x: 5, y: 4 }, 1, 1);
+    let up_safe = game.is_safe_final_p(
+        Point {
+            x: 5,
+            y: 4,
+        },
+        1,
+        1,
+    );
 
     assert!(!right_safe, "Moving into the Mecha's laser path should be unsafe.");
     assert!(up_safe, "Moving away from the Mecha's laser path should be safe.");

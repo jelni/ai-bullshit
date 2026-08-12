@@ -115,7 +115,10 @@ fn test_astar_avoids_portals_when_unsafe() {
 
     let dir = game.astar_pathfind(game.snake.head(), target, 1);
 
-    assert!(dir != Some(Direction::Right), "Bot should avoid portal if exit is unsafe. Got {:?}", dir);
+    assert!(
+        dir != Some(Direction::Right),
+        "Bot should avoid portal if exit is unsafe. Got {dir:?}"
+    );
 }
 
 #[test]
@@ -158,7 +161,10 @@ fn test_astar_avoids_portals_when_laser_is_on_exit() {
 
     let dir = game.astar_pathfind(game.snake.head(), target, 1);
 
-    assert!(dir != Some(Direction::Right), "Bot should avoid portal if laser is hitting exit. Got {:?}", dir);
+    assert!(
+        dir != Some(Direction::Right),
+        "Bot should avoid portal if laser is hitting exit. Got {dir:?}"
+    );
 }
 
 #[test]
@@ -207,5 +213,8 @@ fn test_astar_avoids_portals_when_laser_passes_through() {
     // wait, is_safe_final_p has portal checks for lasers.
 
     // We expect it to NOT go Right into the portal because it's dangerous
-    assert!(dir != Some(Direction::Right), "Bot should avoid portal if laser will hit it. Got {:?}", dir);
+    assert!(
+        dir != Some(Direction::Right),
+        "Bot should avoid portal if laser will hit it. Got {dir:?}"
+    );
 }

@@ -12,7 +12,10 @@ fn test_ninja_class_passes_through_walls() {
     );
     game.stats.equipped_class = Some(game::HeroClass::Ninja);
 
-    game.snake = snake::Snake::new(snake::Point { x: 1, y: 10 });
+    game.snake = snake::Snake::new(snake::Point {
+        x: 1,
+        y: 10,
+    });
     game.snake.direction = snake::Direction::Left;
     game.snake.direction_queue.push_back(snake::Direction::Left);
     game.state = game::GameState::Playing;

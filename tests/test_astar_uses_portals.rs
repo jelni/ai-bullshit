@@ -72,8 +72,14 @@ fn test_astar_uses_portals() {
     ));
 
     // Ensure the portals are not generated on top of an obstacle.
-    game.obstacles.remove(&snake::Point { x: 2, y: 1 });
-    game.obstacles.remove(&snake::Point { x: 17, y: 18 });
+    game.obstacles.remove(&snake::Point {
+        x: 2,
+        y: 1,
+    });
+    game.obstacles.remove(&snake::Point {
+        x: 17,
+        y: 18,
+    });
 
     // The bot should choose to go Right into the portal at (2,1) to get to (18,18) faster
     let dir = game.astar_pathfind(game.snake.head(), target, 1);
