@@ -5388,6 +5388,7 @@ impl Game {
                                 }
                             }
                         }
+                        next_bosses.push(boss);
                     } else if boss.kind == BossType::TimeWeaver {
                         let mut move_threshold = if self.mode == GameMode::BossRush {
                             std::cmp::max(
