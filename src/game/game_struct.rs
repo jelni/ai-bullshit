@@ -4465,16 +4465,18 @@ impl Game {
                                 timer: 15, // Delay before meteor hits
                             });
 
-                            self.power_up = Some(PowerUp {
-                                p_type: PowerUpType::TimeFreeze,
-                                location: target_pos,
-                                activation_time: Some(
-                                    web_time::SystemTime::now()
-                                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs(),
-                                ),
-                            });
+                            if self.power_up.is_none() {
+                                self.power_up = Some(PowerUp {
+                                    p_type: PowerUpType::TimeFreeze,
+                                    location: target_pos,
+                                    activation_time: Some(
+                                        web_time::SystemTime::now()
+                                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs(),
+                                    ),
+                                });
+                            }
                             beep();
                         }
                     } else if boss.kind == BossType::Shooter {
