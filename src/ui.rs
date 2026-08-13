@@ -2473,6 +2473,7 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
                 crate::game::PowerUpType::Emp => "Emp",
                 crate::game::PowerUpType::Nuke => "Nuke",
                 crate::game::PowerUpType::Invisibility => "Invisibility",
+                crate::game::PowerUpType::Mitosis => "Mitosis",
             };
             let power_up_msg = format!(" | {power_up_name}: {remaining}s");
             write!(stdout, "{power_up_msg}")?;

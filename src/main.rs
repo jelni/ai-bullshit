@@ -219,7 +219,8 @@ fn run_game(stdout: &mut Stdout, args: &Args) -> io::Result<()> {
                     | game::PowerUpType::Decoy
                     | game::PowerUpType::Emp
                     | game::PowerUpType::Nuke
-                    | game::PowerUpType::Invisibility => {}, // Tick rate unaffected
+                    | game::PowerUpType::Invisibility
+                    | game::PowerUpType::Mitosis => {}, // Tick rate unaffected
                 }
             } else {
                 game.power_up = None; // Power-up expired

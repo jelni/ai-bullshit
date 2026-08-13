@@ -17,4 +17,5 @@ pub enum PowerUpType {
     Emp,
     Nuke,
     Invisibility,
+    Mitosis,
 }
