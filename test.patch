@@ -1,0 +1,34 @@
+<<<<<<< SEARCH
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 100);
+                }
+            }
+=======
+            for l in &self.lasers {
+                let d = calc_dist(p, l.position);
+                if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 30);
+                }
+            }
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+            for boss in &self.bosses {
+                if boss.position != start {
+                    let d = calc_dist(p, boss.position);
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d) * 15);
+                    }
+                }
+            }
+=======
+            for boss in &self.bosses {
+                if boss.position != start {
+                    let d = calc_dist(p, boss.position);
+                    if d < 10 {
+                        penalty = penalty.saturating_add((10 - d) * 100);
+                    }
+                }
+            }
+>>>>>>> REPLACE
