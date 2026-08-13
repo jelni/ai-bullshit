@@ -3602,7 +3602,7 @@ impl Game {
         }
     }
 
-    fn update_stock_market(&mut self) {
+    pub fn update_stock_market(&mut self) {
         if self.rng.gen_bool(0.01) {
             let stocks = [
                 crate::game::Stock::SnakeCorp,
