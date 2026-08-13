@@ -3835,6 +3835,14 @@ impl Game {
 
         let heuristic = |p: Point| -> u16 {
             let mut penalty = 0u16;
+            for boss in &self.bosses {
+                if boss.position != start {
+                    let d = calc_dist(p, boss.position);
+                    if d < 10 {
+                        penalty = penalty.saturating_add((10 - d) * 100);
+                    }
+                }
+            }
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
                 if d < 5 {
