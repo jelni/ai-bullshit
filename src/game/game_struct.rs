@@ -7829,6 +7829,25 @@ impl Game {
                 self.obstacles.clear();
                 self.poison_food = None;
                 self.bonus_food = None;
+            } else if p.p_type == PowerUpType::Mitosis {
+                let avoid = |pt: &Point| {
+                    self.obstacles.contains(pt)
+                        || *pt == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *pt == bp)
+                        || self.bosses.iter().any(|b| b.position == *pt)
+                        || *pt == self.snake.head()
+                };
+                if let Some(new_pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.bots.push(Snake::new(new_pos));
+                    self.bots_autopilot_paths.push(Vec::new());
+                }
             } else if p.p_type == PowerUpType::Teleport {
                 let avoid = |pt: &Point| {
                     self.obstacles.contains(pt)
@@ -7881,7 +7900,8 @@ impl Game {
                 || p.p_type == PowerUpType::Teleport
                 || p.p_type == PowerUpType::Decoy
                 || p.p_type == PowerUpType::Emp
-                || p.p_type == PowerUpType::Nuke)
+                || p.p_type == PowerUpType::Nuke
+                || p.p_type == PowerUpType::Mitosis)
             && p.activation_time.is_none()
             && final_head == p.location
         {
@@ -8558,7 +8578,7 @@ impl Game {
                 &mut self.rng,
                 self.safe_zone_margin,
             ) {
-                let p_type = match self.rng.gen_range(0..16) {
+                let p_type = match self.rng.gen_range(0..17) {
                     0 => PowerUpType::SlowDown,
                     1 => PowerUpType::SpeedBoost,
                     2 => PowerUpType::Invincibility,
@@ -8574,6 +8594,7 @@ impl Game {
                     12 => PowerUpType::Emp,
                     13 => PowerUpType::Nuke,
                     14 => PowerUpType::Invisibility,
+                    15 => PowerUpType::Mitosis,
                     _ => PowerUpType::ExtraLife,
                 };
                 self.power_up = Some(PowerUp {
