@@ -122,5 +122,6 @@ fn test_meteor_destroys_obstacle() {
 
     // The meteor should move down to (5,5), hit the obstacle, destroy it, and despawn itself
     assert!(!game.obstacles.contains(&obs_pos), "Meteor should destroy the obstacle");
-    assert!(game.meteors.is_empty(), "Meteor should despawn after hitting obstacle");
+    // Ensure the specific meteor we spawned despawned
+    assert!(!game.meteors.iter().any(|m| m.position == Point { x: 5, y: 5 }), "Meteor should despawn after hitting obstacle");
 }

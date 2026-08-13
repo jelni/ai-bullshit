@@ -4198,7 +4198,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..25) {
+                    match self.rng.gen_range(0..26) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
