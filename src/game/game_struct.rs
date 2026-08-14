@@ -542,7 +542,9 @@ impl Game {
     }
     #[must_use]
     pub fn get_high_score_filename(difficulty: Difficulty, mode: GameMode) -> String {
-        if mode == GameMode::HourlyChallenge {
+        if mode == GameMode::MinutelyChallenge {
+            "highscore_minutely.txt".to_string()
+        } else if mode == GameMode::HourlyChallenge {
             "highscore_hourly.txt".to_string()
         } else if mode == GameMode::DailyChallenge {
             "highscore_daily.txt".to_string()
@@ -1866,6 +1868,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::PacMan
+            | GameMode::MinutelyChallenge
             | GameMode::HourlyChallenge
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
@@ -1944,6 +1947,7 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::PacMan
+                || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::FogOfWar
@@ -1976,6 +1980,7 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::PacMan
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::FogOfWar
@@ -1991,7 +1996,14 @@ impl Game {
         } else {
             &empty_snake
         };
-        if self.mode == GameMode::HourlyChallenge {
+        if self.mode == GameMode::MinutelyChallenge {
+            let minutes_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / 60;
+            self.rng = rand::rngs::StdRng::seed_from_u64(minutes_since_epoch);
+        } else if self.mode == GameMode::HourlyChallenge {
             let hours_since_epoch = web_time::SystemTime::now()
                 .duration_since(web_time::SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -2408,6 +2420,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::PacMan
+            | GameMode::MinutelyChallenge
             | GameMode::HourlyChallenge
             | GameMode::DailyChallenge
             | GameMode::WeeklyChallenge
@@ -3864,16 +3877,13 @@ impl Game {
             if let Some(bh) = self.black_hole {
                 let dx = p.x.abs_diff(bh.x);
                 let dy = p.y.abs_diff(bh.y);
+                let d = calc_dist(p, bh);
                 if dx == 0 || dy == 0 {
-                    let d = calc_dist(p, bh);
                     if d < 5 {
                         penalty = penalty.saturating_add((5 - d) * 10000);
                     }
-                } else {
-                    let d = calc_dist(p, bh);
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d) * 1000);
-                    }
+                } else if d < 5 {
+                    penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
             if let Some(col) = self.lightning_column {
@@ -4177,6 +4187,7 @@ impl Game {
             self.bosses.len() < usize::try_from(max_bosses).unwrap_or(1) && self.rng.gen_bool(0.02)
         } else {
             (self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
@@ -5856,6 +5867,7 @@ impl Game {
             }
         }
         let chat_interval = if self.mode == GameMode::SinglePlayer
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
@@ -7332,6 +7344,7 @@ impl Game {
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
                 || self.mode == GameMode::Survival
+                || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
@@ -7404,7 +7417,11 @@ impl Game {
             // Player 2 logic
             if let Some(fh2) = final_head2_opt {
                 let p2_touches_p1_flag = if let Some(flag_pos) = self.p1_flag {
-                    fh2 == flag_pos || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&flag_pos))
+                    fh2 == flag_pos
+                        || self
+                            .player2
+                            .as_ref()
+                            .is_some_and(|p2| p2.body_map.contains_key(&flag_pos))
                 } else {
                     false
                 };
@@ -8399,6 +8416,7 @@ impl Game {
             || self.mode == GameMode::Maze
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
