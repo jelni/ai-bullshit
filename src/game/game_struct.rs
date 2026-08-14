@@ -9529,6 +9529,13 @@ impl Game {
         if let Some(merchant) = self.merchant {
             targets.push(merchant);
         }
+        if self.mode == GameMode::Farmstead {
+            for crop in &self.crops {
+                if crop.growth_stage == 2 {
+                    targets.push(crop.position);
+                }
+            }
+        }
         if self.mode == GameMode::KingOfTheHill
             && let Some(koth_pos) = self.koth_zone
         {
@@ -9625,6 +9632,13 @@ impl Game {
             }
             if let Some(goblin) = &self.goblin {
                 targets.push(goblin.position);
+            }
+            if self.mode == GameMode::Farmstead {
+                for crop in &self.crops {
+                    if crop.growth_stage == 2 {
+                        targets.push(crop.position);
+                    }
+                }
             }
             if self.mode == GameMode::KingOfTheHill
                 && let Some(koth_pos) = self.koth_zone
