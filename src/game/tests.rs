@@ -447,6 +447,32 @@ mod tests {
         }
         assert!(reached, "Following BFS should reach target");
     }
+
+    #[test]
+    fn test_secondly_challenge_determinism() {
+        let mut game1 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game1.mode = GameMode::SecondlyChallenge;
+        game1.reset();
+        let mut game2 = Game::new(
+            20,
+            20,
+            false,
+            'x',
+            crate::game::Theme::Classic,
+            crate::game::Difficulty::Normal,
+        );
+        game2.mode = GameMode::SecondlyChallenge;
+        game2.reset();
+        assert_eq!(game1.food, game2.food);
+        assert_eq!(game1.obstacles, game2.obstacles);
+    }
     #[test]
     fn test_minutely_challenge_determinism() {
         let mut game1 = Game::new(

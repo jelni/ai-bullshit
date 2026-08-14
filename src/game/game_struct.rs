@@ -542,7 +542,9 @@ impl Game {
     }
     #[must_use]
     pub fn get_high_score_filename(difficulty: Difficulty, mode: GameMode) -> String {
-        if mode == GameMode::MinutelyChallenge {
+        if mode == GameMode::SecondlyChallenge {
+            "highscore_secondly.txt".to_string()
+        } else if mode == GameMode::MinutelyChallenge {
             "highscore_minutely.txt".to_string()
         } else if mode == GameMode::HourlyChallenge {
             "highscore_hourly.txt".to_string()
@@ -1868,6 +1870,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::PacMan
+            | GameMode::SecondlyChallenge
             | GameMode::MinutelyChallenge
             | GameMode::HourlyChallenge
             | GameMode::DailyChallenge
@@ -1947,6 +1950,7 @@ impl Game {
                 || self.mode == GameMode::Dungeon
                 || self.mode == GameMode::CustomLevel
                 || self.mode == GameMode::PacMan
+                || self.mode == GameMode::SecondlyChallenge
                 || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
@@ -1980,7 +1984,8 @@ impl Game {
             || self.mode == GameMode::Dungeon
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::PacMan
-            || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::SecondlyChallenge
+                || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::FogOfWar
@@ -1996,7 +2001,13 @@ impl Game {
         } else {
             &empty_snake
         };
-        if self.mode == GameMode::MinutelyChallenge {
+        if self.mode == GameMode::SecondlyChallenge {
+            let seconds_since_epoch = web_time::SystemTime::now()
+                .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            self.rng = rand::rngs::StdRng::seed_from_u64(seconds_since_epoch);
+        } else if self.mode == GameMode::MinutelyChallenge {
             let minutes_since_epoch = web_time::SystemTime::now()
                 .duration_since(web_time::SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -2420,6 +2431,7 @@ impl Game {
             | GameMode::Dungeon
             | GameMode::CustomLevel
             | GameMode::PacMan
+            | GameMode::SecondlyChallenge
             | GameMode::MinutelyChallenge
             | GameMode::HourlyChallenge
             | GameMode::DailyChallenge
@@ -4187,6 +4199,7 @@ impl Game {
             self.bosses.len() < usize::try_from(max_bosses).unwrap_or(1) && self.rng.gen_bool(0.02)
         } else {
             (self.mode == GameMode::SinglePlayer
+                || self.mode == GameMode::SecondlyChallenge
                 || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
@@ -5867,7 +5880,8 @@ impl Game {
             }
         }
         let chat_interval = if self.mode == GameMode::SinglePlayer
-            || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::SecondlyChallenge
+                || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
@@ -7344,6 +7358,7 @@ impl Game {
                 || self.mode == GameMode::TimeAttack
                 || self.mode == GameMode::Speedrun
                 || self.mode == GameMode::Survival
+                || self.mode == GameMode::SecondlyChallenge
                 || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
@@ -8416,7 +8431,8 @@ impl Game {
             || self.mode == GameMode::Maze
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
-            || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::SecondlyChallenge
+                || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
