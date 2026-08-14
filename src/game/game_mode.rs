@@ -50,4 +50,5 @@ pub enum GameMode {
     Chaos,
     Miner,
     TurfWar,
+    Asteroids,
 }

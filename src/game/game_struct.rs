@@ -1178,7 +1178,7 @@ impl Game {
         }
     }
     fn manage_meteors(&mut self) {
-        if self.rng.gen_bool(0.01) {
+        if self.rng.gen_bool(if self.mode == GameMode::Asteroids { 0.15 } else { 0.01 }) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1898,6 +1898,7 @@ impl Game {
             | GameMode::DungeonCrawler
             | GameMode::Chaos
             | GameMode::Miner
+            | GameMode::Asteroids
             | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -2458,6 +2459,7 @@ impl Game {
             | GameMode::Dodgeball
             | GameMode::Chaos
             | GameMode::Miner
+            | GameMode::Asteroids
             | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
