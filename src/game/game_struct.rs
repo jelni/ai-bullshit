@@ -7239,7 +7239,10 @@ impl Game {
                 ) {
                     self.food = new_food;
                     if self.mode == GameMode::Zombie {
-                        let margin = self.safe_zone_margin;
+                        let mut zombie_margin = self.safe_zone_margin;
+                        if zombie_margin > 0 && (self.width < 10 || self.height < 10) {
+                            zombie_margin = 0;
+                        }
                         if let Some(pos) = Self::get_random_empty_point(
                             self.width,
                             self.height,
@@ -7254,7 +7257,7 @@ impl Game {
                                     || self.bots.iter().any(|b| b.body_map.contains_key(p))
                             },
                             &mut self.rng,
-                            margin,
+                            zombie_margin,
                         ) {
                             self.bots.push(Snake::new(pos));
                             self.bots_autopilot_paths.push(Vec::new());
@@ -8320,8 +8323,7 @@ impl Game {
             self.gain_xp(1);
 
             if spawn_zombie {
-                let margin = self.safe_zone_margin;
-                let mut zombie_margin = margin;
+                let mut zombie_margin = self.safe_zone_margin;
                 if zombie_margin > 0 && (self.width < 10 || self.height < 10) {
                     zombie_margin = 0; // prevent None in small grids
                 }
@@ -8348,7 +8350,10 @@ impl Game {
             self.gain_xp(1);
 
             if spawn_zombie {
-                let margin = self.safe_zone_margin;
+                let mut zombie_margin = self.safe_zone_margin;
+                if zombie_margin > 0 && (self.width < 10 || self.height < 10) {
+                    zombie_margin = 0; // prevent None in small grids
+                }
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
                     self.height,
@@ -8360,7 +8365,7 @@ impl Game {
                             || self.bots.iter().any(|b| b.body_map.contains_key(p))
                     },
                     &mut self.rng,
-                    margin,
+                    zombie_margin,
                 ) {
                     self.bots.push(Snake::new(pos));
                     self.bots_autopilot_paths.push(Vec::new());
