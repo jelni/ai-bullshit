@@ -7369,7 +7369,12 @@ impl Game {
             };
 
             // Player 1 logic
-            if !self.p1_has_flag && !p1_dead && Some(final_head1) == self.p2_flag {
+            let p1_touches_p2_flag = if let Some(flag_pos) = self.p2_flag {
+                final_head1 == flag_pos || self.snake.body_map.contains_key(&flag_pos)
+            } else {
+                false
+            };
+            if !self.p1_has_flag && !p1_dead && p1_touches_p2_flag {
                 self.p1_has_flag = true;
                 self.p2_flag = None;
                 beep();
@@ -7389,7 +7394,12 @@ impl Game {
 
             // Player 2 logic
             if let Some(fh2) = final_head2_opt {
-                if !self.p2_has_flag && !p2_dead && Some(fh2) == self.p1_flag {
+                let p2_touches_p1_flag = if let Some(flag_pos) = self.p1_flag {
+                    fh2 == flag_pos || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&flag_pos))
+                } else {
+                    false
+                };
+                if !self.p2_has_flag && !p2_dead && p2_touches_p1_flag {
                     self.p2_has_flag = true;
                     self.p1_flag = None;
                     beep();
