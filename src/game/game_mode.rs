@@ -18,6 +18,7 @@ pub enum GameMode {
     Dungeon,
     CustomLevel,
     Speedrun,
+    MinutelyChallenge,
     HourlyChallenge,
     DailyChallenge,
     WeeklyChallenge,
