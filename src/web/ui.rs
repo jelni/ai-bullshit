@@ -267,6 +267,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             crate::game::BossType::Glitch => ctx.set_fill_style_str("#FF69B4"),     // HotPink
             crate::game::BossType::Mecha => ctx.set_fill_style_str("#00FFFF"),      // Cyan
             crate::game::BossType::Leviathan => ctx.set_fill_style_str("#008080"),  // Teal
+            crate::game::BossType::Behemoth => ctx.set_fill_style_str("#8B0000"),   // DarkRed
         }
         if boss.position.x < game.width
             && boss.position.y < game.height
