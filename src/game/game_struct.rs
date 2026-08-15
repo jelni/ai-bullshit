@@ -1178,7 +1178,7 @@ impl Game {
         }
     }
     fn manage_meteors(&mut self) {
-        if self.rng.gen_bool(if self.mode == GameMode::Asteroids { 0.15 } else { 0.01 }) {
+        if self.rng.gen_bool(if self.mode == GameMode::Apocalypse { 0.5 } else if self.mode == GameMode::Asteroids { 0.15 } else { 0.01 }) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1899,6 +1899,7 @@ impl Game {
             | GameMode::Chaos
             | GameMode::Miner
             | GameMode::Asteroids
+            | GameMode::Apocalypse
             | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -2460,6 +2461,7 @@ impl Game {
             | GameMode::Chaos
             | GameMode::Miner
             | GameMode::Asteroids
+            | GameMode::Apocalypse
             | GameMode::TurfWar => {
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -4099,7 +4101,7 @@ impl Game {
             };
         }
 
-        if self.mode == GameMode::Chaos {
+        if self.mode == GameMode::Chaos || self.mode == GameMode::Apocalypse {
             if self.tick_counter.is_multiple_of(100) {
                 let weather_types = [
                     Weather::Clear,
@@ -4111,7 +4113,7 @@ impl Game {
                 ];
                 self.weather = weather_types[self.rng.gen_range(0..weather_types.len())];
             }
-            if self.tick_counter.is_multiple_of(500) {
+            if self.tick_counter.is_multiple_of(if self.mode == GameMode::Apocalypse { 100 } else { 500 }) {
                 let mut p = self.snake.head();
                 p.x = p.x.saturating_add(5);
                 self.bosses.push(Boss {
