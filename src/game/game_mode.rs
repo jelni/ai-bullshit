@@ -51,5 +51,4 @@ pub enum GameMode {
     Miner,
     TurfWar,
     Asteroids,
-    Apocalypse,
 }
