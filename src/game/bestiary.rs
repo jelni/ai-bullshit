@@ -190,5 +190,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "???"
             }
         },
+        BossType::Leviathan => {
+            if kills >= 5 {
+                "A colossal serpent of the deep that constantly grows and leaves treacherous obstacles in its wake."
+            } else {
+                "A massive growing beast."
+            }
+        },
     }
 }

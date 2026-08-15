@@ -29,4 +29,5 @@ pub enum BossType {
     Wormhole,
     Glitch,
     Mecha,
+    Leviathan,
 }
