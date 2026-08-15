@@ -197,5 +197,12 @@ pub const fn get_boss_lore(boss_type: &BossType, kills: u32) -> &'static str {
                 "A massive growing beast."
             }
         },
+        BossType::Behemoth => {
+            if kills >= 5 {
+                "A gargantuan monstrosity capable of shattering solid obstacles just by walking through them."
+            } else {
+                "A hulking brute."
+            }
+        },
     }
 }

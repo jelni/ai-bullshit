@@ -30,4 +30,5 @@ pub enum BossType {
     Glitch,
     Mecha,
     Leviathan,
+    Behemoth,
 }

@@ -4021,6 +4021,7 @@ impl Game {
                         && boss_kind != BossType::Charger
                         && boss_kind != BossType::Juggernaut
                         && boss_kind != BossType::Phantom
+                        && boss_kind != BossType::Behemoth
                     {
                         can_move = false;
                     } else if self.mines.contains(&final_p) {
@@ -4241,7 +4242,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..27) {
+                    match self.rng.gen_range(0..28) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -4268,6 +4269,7 @@ impl Game {
                         23 => BossType::ShadowClone,
                         24 => BossType::IllusionClone,
                         25 => BossType::Leviathan,
+                        26 => BossType::Behemoth,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4328,6 +4330,7 @@ impl Game {
                             && boss.kind != BossType::Phantom
                             && boss.kind != BossType::Juggernaut
                             && boss.kind != BossType::Charger
+                            && boss.kind != BossType::Behemoth
                         {
                             self.bot_smart_pathfind(boss.position, target_pos, 3)
                         } else {
@@ -4354,7 +4357,18 @@ impl Game {
                                 && next_pos.y < self.height - 1 - margin
                             {
                                 if self.obstacles.contains(&next_pos) {
-                                    if boss.kind == BossType::Charger {
+                                    if boss.kind == BossType::Behemoth {
+                                        self.obstacles.remove(&next_pos);
+                                        boss.position = next_pos;
+                                        self.spawn_particles(
+                                            f32::from(next_pos.x),
+                                            f32::from(next_pos.y),
+                                            20,
+                                            crate::color::Color::DarkRed,
+                                            '*',
+                                        );
+                                        beep();
+                                    } else if boss.kind == BossType::Charger {
                                         self.obstacles.remove(&next_pos);
                                         boss.position = next_pos;
                                         boss.state_timer = 15;
@@ -9220,6 +9234,7 @@ impl Game {
                             || boss.kind == BossType::Spawner
                             || boss.kind == BossType::Trapper
                             || boss.kind == BossType::Leviathan
+                            || boss.kind == BossType::Behemoth
                             || boss.kind == BossType::Necromancer
                             || boss.kind == BossType::ShadowClone
                             || boss.kind == BossType::Mimic
