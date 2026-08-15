@@ -1698,3 +1698,14 @@ fn test_fog_weather() {
 
     assert_eq!(game.weather, crate::game::Weather::Fog, "Weather should remain Fog");
 }
+
+#[test]
+fn test_apocalypse_mode() {
+    let mut game = Game::new(20, 20, false, 'x', crate::game::Theme::Classic, crate::game::Difficulty::Normal);
+    game.mode = GameMode::Apocalypse;
+    game.reset();
+    for _ in 0..200 {
+        game.update();
+    }
+    assert!(game.meteors.len() > 0, "Apocalypse mode should spawn meteors");
+}

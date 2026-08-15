@@ -545,21 +545,25 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Asteroids;
                 game.reset();
             },
-
             46 => {
+                game.mode = game::GameMode::Apocalypse;
+                game.reset();
+            },
+
+            47 => {
                 let _ = game.load_game();
             },
-            47 => game.state = GameState::Settings,
-            48 => game.state = GameState::NftShop,
-            49 => game.state = GameState::SkillTree,
-            50 => game.state = GameState::Stats,
-            51 => game.state = GameState::Achievements,
-            52 => game.state = GameState::Help,
-            53 => {
+            48 => game.state = GameState::Settings,
+            49 => game.state = GameState::NftShop,
+            50 => game.state = GameState::SkillTree,
+            51 => game.state = GameState::Stats,
+            52 => game.state = GameState::Achievements,
+            53 => game.state = GameState::Help,
+            54 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            54 => {
+            55 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -567,99 +571,99 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            55 => {
+            56 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            56 => {
+            57 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            57 => {
+            58 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            58 => {
+            59 => {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            59 => {
+            60 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
-            60 => {
+            61 => {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            61 => {
+            62 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
-            62 => {
+            63 => {
                 game.state = GameState::RealEstate;
                 game.settings_selection = 0;
             },
-            63 => {
+            64 => {
                 game.state = GameState::VehicleGarage;
                 game.settings_selection = 0;
             },
-            64 => {
+            65 => {
                 game.state = GameState::Fishing;
                 game.settings_selection = 0;
                 game.is_fishing = false;
                 game.fishing_progress = 0;
             },
-            65 => {
+            66 => {
                 game.state = GameState::BattlePass;
                 game.settings_selection = 0;
             },
-            66 => {
+            67 => {
                 game.state = GameState::ArtifactShrine;
             },
-            67 => {
+            68 => {
                 game.state = GameState::Hatchery;
                 game.settings_selection = 0;
             },
-            68 => {
+            69 => {
                 game.state = GameState::SpacePort;
                 game.settings_selection = 0;
             },
-            69 => {
+            70 => {
                 game.state = GameState::FactionBase;
                 game.settings_selection = 0;
             },
-            70 => {
+            71 => {
                 game.state = GameState::MagicAcademy;
                 game.settings_selection = 0;
             },
-            71 => {
+            72 => {
                 game.state = GameState::QuestLog;
             },
-            72 => {
+            73 => {
                 game.state = GameState::Bestiary;
                 game.settings_selection = 0;
             },
-            73 => {
+            74 => {
                 game.state = GameState::Tavern;
                 game.settings_selection = 0;
             },
-            74 => {
+            75 => {
                 game.state = GameState::BlackMarket;
                 game.settings_selection = 0;
             },
-            75 => {
+            76 => {
                 game.state = GameState::Bank;
                 game.settings_selection = 0;
             },
-            76 => {
+            77 => {
                 game.state = GameState::AuctionHouse;
                 game.settings_selection = 0;
             },
-            77 => {
+            78 => {
                 game.state = GameState::Gacha;
                 game.settings_selection = 0;
             },
-            78 => {
+            79 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -669,11 +673,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 77;
+                game.menu_selection = 79;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 77 {
+            if game.menu_selection < 79 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
