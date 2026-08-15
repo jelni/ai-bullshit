@@ -4241,7 +4241,7 @@ impl Game {
                         _ => BossType::Shooter,
                     }
                 } else {
-                    match self.rng.gen_range(0..26) {
+                    match self.rng.gen_range(0..27) {
                         0 => BossType::Shooter,
                         1 => BossType::Charger,
                         2 => BossType::Spawner,
@@ -4267,6 +4267,7 @@ impl Game {
                         22 => BossType::Mecha,
                         23 => BossType::ShadowClone,
                         24 => BossType::IllusionClone,
+                        25 => BossType::Leviathan,
                         _ => BossType::Mimic,
                     }
                 };
@@ -4382,7 +4383,7 @@ impl Game {
                                 } else {
                                     let old_pos = boss.position;
                                     boss.position = next_pos;
-                                    if boss.kind == BossType::Trapper {
+                                    if boss.kind == BossType::Trapper || boss.kind == BossType::Leviathan {
                                         self.obstacles.insert(old_pos);
                                     }
                                 }
@@ -9218,6 +9219,7 @@ impl Game {
                         if boss.kind == BossType::Teleporter
                             || boss.kind == BossType::Spawner
                             || boss.kind == BossType::Trapper
+                            || boss.kind == BossType::Leviathan
                             || boss.kind == BossType::Necromancer
                             || boss.kind == BossType::ShadowClone
                             || boss.kind == BossType::Mimic
