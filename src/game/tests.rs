@@ -459,7 +459,6 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game1.mode = GameMode::SecondlyChallenge;
-        game1.reset();
         let mut game2 = Game::new(
             20,
             20,
@@ -469,6 +468,9 @@ mod tests {
             crate::game::Difficulty::Normal,
         );
         game2.mode = GameMode::SecondlyChallenge;
+
+        // Ensure they are reset at the same second
+        game1.reset();
         game2.reset();
         assert_eq!(game1.food, game2.food);
         assert_eq!(game1.obstacles, game2.obstacles);
@@ -1125,6 +1127,7 @@ mod tests {
             crate::game::Theme::Classic,
             crate::game::Difficulty::Normal,
         );
+        game.obstacles.clear();
         let initial_score = game.score;
         let goblin_pos = Point {
             x: 10,
