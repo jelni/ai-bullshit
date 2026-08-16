@@ -9803,7 +9803,7 @@ impl Game {
             if self.mode == GameMode::CaptureTheFlag {
                 if self.p2_has_flag {
                     targets = vec![Point {
-                        x: self.width.saturating_sub(3),
+                        x: self.width.saturating_sub(2),
                         y: self.height / 2,
                     }];
                 } else if let Some(p1_flag) = self.p1_flag {
@@ -9813,7 +9813,7 @@ impl Game {
                 } else {
                     // Go to base or defend
                     targets = vec![Point {
-                        x: self.width.saturating_sub(3),
+                        x: self.width.saturating_sub(2),
                         y: self.height / 2,
                     }];
                 }
