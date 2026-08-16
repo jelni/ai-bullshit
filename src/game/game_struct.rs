@@ -4052,8 +4052,6 @@ impl Game {
                         && boss_kind != BossType::Behemoth
                     {
                         can_move = false;
-                    } else if self.mines.contains(&final_p) {
-                        can_move = false;
                     } else if self.lasers.iter().any(|l| l.position == final_p) {
                         can_move = false;
                     } else if self.lasers.iter().any(|l| {
@@ -4067,6 +4065,8 @@ impl Game {
                         }
                         next_l_pos == final_p
                     }) {
+                        can_move = false;
+                    } else if boss_kind != BossType::Trapper && boss_kind != BossType::Glitch && self.mines.contains(&final_p) {
                         can_move = false;
                     } else if self.lightning_column == Some(final_p.x) {
                         can_move = false;
