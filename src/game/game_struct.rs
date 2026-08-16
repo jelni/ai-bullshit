@@ -1903,7 +1903,8 @@ impl Game {
             | GameMode::Chaos
             | GameMode::Miner
             | GameMode::Asteroids
-            | GameMode::TurfWar => {
+            | GameMode::TurfWar
+            | GameMode::Sandbox => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2464,7 +2465,8 @@ impl Game {
             | GameMode::Chaos
             | GameMode::Miner
             | GameMode::Asteroids
-            | GameMode::TurfWar => {
+            | GameMode::TurfWar
+            | GameMode::Sandbox => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10256,12 +10258,12 @@ impl Game {
             && self.rng.gen_bool(0.10)
         {
             // Ghost Cloak saves you
-        } else {
+        } else if self.mode != GameMode::Sandbox {
             self.lives = self.lives.saturating_sub(1);
         }
         self.just_died = true;
         beep();
-        if self.lives == 0 {
+        if self.lives == 0 && self.mode != GameMode::Sandbox {
             self.stats.games_played += 1;
             self.stats.total_time_s += self.start_time.elapsed().as_secs();
             self.save_stats();
