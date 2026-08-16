@@ -28,10 +28,22 @@ fn test_boss_behemoth() {
     });
 
     // Place obstacles all around the boss so it has to step on one
-    game.obstacles.insert(Point { x: 9, y: 10 });
-    game.obstacles.insert(Point { x: 10, y: 9 });
-    game.obstacles.insert(Point { x: 11, y: 10 });
-    game.obstacles.insert(Point { x: 10, y: 11 });
+    game.obstacles.insert(Point {
+        x: 9,
+        y: 10,
+    });
+    game.obstacles.insert(Point {
+        x: 10,
+        y: 9,
+    });
+    game.obstacles.insert(Point {
+        x: 11,
+        y: 10,
+    });
+    game.obstacles.insert(Point {
+        x: 10,
+        y: 11,
+    });
 
     game.state = GameState::Playing;
 

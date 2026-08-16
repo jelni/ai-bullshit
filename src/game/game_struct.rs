@@ -1178,7 +1178,11 @@ impl Game {
         }
     }
     fn manage_meteors(&mut self) {
-        if self.rng.gen_bool(if self.mode == GameMode::Asteroids { 0.15 } else { 0.01 }) {
+        if self.rng.gen_bool(if self.mode == GameMode::Asteroids {
+            0.15
+        } else {
+            0.01
+        }) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1986,7 +1990,7 @@ impl Game {
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::PacMan
             || self.mode == GameMode::SecondlyChallenge
-                || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::FogOfWar
@@ -2535,7 +2539,12 @@ impl Game {
                 return;
             }
         } else {
-            return;
+            let bot_idx = usize::from(player.saturating_sub(3));
+            if bot_idx < self.bots.len() {
+                (self.bots[bot_idx].head(), self.bots[bot_idx].direction)
+            } else {
+                return;
+            }
         };
         let laser_pos = Self::calculate_next_head_dir(head, dir);
         let margin = if self.mode == GameMode::BattleRoyale {
@@ -2650,7 +2659,19 @@ impl Game {
                 return false;
             }
         } else {
-            return false;
+            let bot_idx = usize::from(player.saturating_sub(3));
+            if bot_idx < self.bots.len() {
+                (
+                    self.bots[bot_idx].head(),
+                    self.bots[bot_idx]
+                        .direction_queue
+                        .back()
+                        .copied()
+                        .unwrap_or(self.bots[bot_idx].direction),
+                )
+            } else {
+                return false;
+            }
         };
         let margin = if self.mode == GameMode::BattleRoyale {
             self.safe_zone_margin
@@ -2805,6 +2826,11 @@ impl Game {
                         } else if let Some(dir) = self.flood_fill_fallback(start, current_dir, 4) {
                             self.bots_autopilot_paths[i].clear();
                             self.bots[i].direction_queue.push_back(dir);
+                        }
+
+                        let player_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                        if self.should_bot_shoot(player_id) {
+                            self.shoot_laser(player_id);
                         }
                     }
                 }
@@ -4397,7 +4423,9 @@ impl Game {
                                 } else {
                                     let old_pos = boss.position;
                                     boss.position = next_pos;
-                                    if boss.kind == BossType::Trapper || boss.kind == BossType::Leviathan {
+                                    if boss.kind == BossType::Trapper
+                                        || boss.kind == BossType::Leviathan
+                                    {
                                         self.obstacles.insert(old_pos);
                                     }
                                 }
@@ -5898,7 +5926,7 @@ impl Game {
         }
         let chat_interval = if self.mode == GameMode::SinglePlayer
             || self.mode == GameMode::SecondlyChallenge
-                || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
@@ -8449,7 +8477,7 @@ impl Game {
             || self.mode == GameMode::Cave
             || self.mode == GameMode::CustomLevel
             || self.mode == GameMode::SecondlyChallenge
-                || self.mode == GameMode::MinutelyChallenge
+            || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
