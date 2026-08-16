@@ -7,13 +7,19 @@ fn test_mitosis_powerup_spawns_bot() {
     game.obstacles.clear();
 
     // Set up a snake
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
 
     // Spawn a Mitosis powerup right in front of the snake
     game.power_up = Some(PowerUp {
         p_type: PowerUpType::Mitosis,
-        location: Point { x: 6, y: 5 },
+        location: Point {
+            x: 6,
+            y: 5,
+        },
         activation_time: None,
     });
 
