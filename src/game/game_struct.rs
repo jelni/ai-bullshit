@@ -4089,7 +4089,36 @@ impl Game {
                             }
                             return first_step.get(&current).copied();
                         }
-                        let tentative_g = current_g.saturating_add(1);
+                        let mut edge_cost = 1u16;
+                        for l in &self.lasers {
+                            if l.position == final_p {
+                                edge_cost = edge_cost.saturating_add(500);
+                            } else {
+                                let d_dist = calc_dist(final_p, l.position);
+                                if d_dist < 5 {
+                                    edge_cost = edge_cost.saturating_add((5 - d_dist) * 30);
+                                }
+                            }
+                        }
+                        for m in &self.mines {
+                            let d_dist = calc_dist(final_p, *m);
+                            if d_dist < 4 {
+                                edge_cost = edge_cost.saturating_add((4 - d_dist) * 100);
+                            }
+                        }
+                        if let Some(bh) = self.black_hole {
+                            let dx = final_p.x.abs_diff(bh.x);
+                            let dy = final_p.y.abs_diff(bh.y);
+                            let d_dist = calc_dist(final_p, bh);
+                            if dx == 0 || dy == 0 {
+                                if d_dist < 5 {
+                                    edge_cost = edge_cost.saturating_add((5 - d_dist) * 10000);
+                                }
+                            } else if d_dist < 5 {
+                                edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                            }
+                        }
+                        let tentative_g = current_g.saturating_add(edge_cost);
                         if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
                             came_from.insert(final_p, current);
                             g_score.insert(final_p, tentative_g);
