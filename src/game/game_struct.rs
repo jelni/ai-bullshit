@@ -7726,7 +7726,7 @@ impl Game {
                     if let Some(wrapped) = self.get_final_p(final_head) {
                         final_head = wrapped;
                     }
-                    b.move_to(final_head, bots_grow[i]);
+                    b.move_to(final_head, *bots_grow.get(i).unwrap_or(&false));
                 }
                 alive_bots.push(b);
                 alive_paths.push(std::mem::take(&mut old_paths[i]));
