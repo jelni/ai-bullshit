@@ -7789,7 +7789,7 @@ impl Game {
                     for (bot_id, score) in sorted_bots {
                         if score == max_score && score > 0 {
                             // bot_id starts at 3 for index 0, so bot_id - 2 is the 1-based Bot number
-                            winners.push(format!("Bot {}", bot_id.saturating_sub(2)));
+                            winners.push(format!("Bot {}", bot_id - 2));
                         }
                     }
                     self.lives = 1;
