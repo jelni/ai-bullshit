@@ -2513,7 +2513,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            1 => {
                 // Withdraw
                 if game.stats.bank_balance >= 100 {
                     game.stats.bank_balance -= 100;
@@ -2522,7 +2522,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            3 => {
+            2 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2564,7 +2564,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            1 => {
                 // Bid on Rare Theme
                 if game.stats.coins >= 2000
                     && !game.stats.unlocked_themes.contains(&crate::game::Theme::Matrix)
@@ -2575,7 +2575,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            3 => {
+            2 => {
                 // Bid on Epic Boss Pet
                 if game.stats.coins >= 10000
                     && !game
@@ -2589,7 +2589,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            4 => {
+            3 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2631,7 +2631,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            2 => {
+            1 => {
                 // 10 Pulls for 1000
                 if game.stats.coins >= 1000 {
                     game.stats.coins -= 1000;
@@ -2642,7 +2642,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            3 => {
+            2 => {
                 // Leave
                 game.state = GameState::Menu;
                 game.death_message = String::new();
