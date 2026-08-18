@@ -1567,7 +1567,7 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 game.difficulty = game.difficulty.prev();
                 game.update_high_scores();
             },
-            2 => {
+            1 => {
                 let themes = &game.stats.unlocked_themes;
                 let current_idx = themes.iter().position(|&t| t == game.theme).unwrap_or(0);
                 let prev_idx = if current_idx > 0 {
@@ -1577,8 +1577,8 @@ fn handle_settings_input(code: KeyCode, game: &mut Game) -> bool {
                 };
                 game.theme = themes[prev_idx];
             },
-            3 => game.wrap_mode = !game.wrap_mode,
-            4 => {
+            2 => game.wrap_mode = !game.wrap_mode,
+            3 => {
                 let skins = &game.stats.unlocked_skins;
                 let current_idx = skins.iter().position(|&c| c == game.skin).unwrap_or(0);
                 let prev_idx = if current_idx > 0 {
