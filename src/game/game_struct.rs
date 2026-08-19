@@ -3944,7 +3944,7 @@ impl Game {
                 }
             }
             if self.mines.contains(&p) {
-                penalty = penalty.saturating_add(500);
+                penalty = penalty.saturating_add(5000);
             } else {
                 for m in &self.mines {
                     let d = calc_dist(p, *m);
@@ -3955,7 +3955,7 @@ impl Game {
             }
             for l in &self.lasers {
                 if l.position == p {
-                    penalty = penalty.saturating_add(500);
+                    penalty = penalty.saturating_add(5000);
                 } else {
                     let d = calc_dist(p, l.position);
                     if d < 5 {
