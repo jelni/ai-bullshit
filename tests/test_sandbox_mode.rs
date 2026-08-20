@@ -2,7 +2,8 @@ use snake_game::*;
 
 #[test]
 fn test_sandbox_mode_infinite_lives() {
-    let mut game = game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
     game.mode = game::GameMode::Sandbox;
     game.reset();
 
@@ -10,7 +11,10 @@ fn test_sandbox_mode_infinite_lives() {
 
     // Trigger death manually by changing state internally
     let head = game.snake.head();
-    let wall_pos = snake::Point { x: 0, y: head.y };
+    let wall_pos = snake::Point {
+        x: 0,
+        y: head.y,
+    };
     game.snake.move_to(wall_pos, false);
 
     game.update();

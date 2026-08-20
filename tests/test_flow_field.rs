@@ -119,9 +119,15 @@ fn test_flow_field_updates_in_game() {
     let initial_targets = game.flow_field_targets.clone();
 
     // Change food
-    let mut new_food_pos = Point { x: 1, y: 1 };
+    let mut new_food_pos = Point {
+        x: 1,
+        y: 1,
+    };
     if initial_targets.contains(&new_food_pos) {
-        new_food_pos = Point { x: 2, y: 2 };
+        new_food_pos = Point {
+            x: 2,
+            y: 2,
+        };
     }
     game.food = new_food_pos;
     game.update();
