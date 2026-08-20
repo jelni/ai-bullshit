@@ -365,205 +365,213 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             1 => {
-                game.mode = game::GameMode::HourlyChallenge;
+                game.mode = game::GameMode::SecondlyChallenge;
                 game.reset();
             },
             2 => {
-                game.mode = game::GameMode::DailyChallenge;
+                game.mode = game::GameMode::MinutelyChallenge;
                 game.reset();
             },
             3 => {
-                game.mode = game::GameMode::WeeklyChallenge;
+                game.mode = game::GameMode::HourlyChallenge;
                 game.reset();
             },
             4 => {
-                game.mode = game::GameMode::MonthlyChallenge;
+                game.mode = game::GameMode::DailyChallenge;
                 game.reset();
             },
             5 => {
-                game.mode = game::GameMode::YearlyChallenge;
+                game.mode = game::GameMode::WeeklyChallenge;
                 game.reset();
             },
             6 => {
-                game.mode = game::GameMode::DecadeChallenge;
+                game.mode = game::GameMode::MonthlyChallenge;
                 game.reset();
             },
             7 => {
-                game.mode = game::GameMode::CenturyChallenge;
+                game.mode = game::GameMode::YearlyChallenge;
                 game.reset();
             },
             8 => {
-                game.mode = game::GameMode::MillenniumChallenge;
+                game.mode = game::GameMode::DecadeChallenge;
                 game.reset();
             },
             9 => {
-                game.mode = game::GameMode::EonChallenge;
+                game.mode = game::GameMode::CenturyChallenge;
                 game.reset();
             },
             10 => {
-                game.mode = game::GameMode::Campaign;
+                game.mode = game::GameMode::MillenniumChallenge;
                 game.reset();
             },
             11 => {
-                game.mode = game::GameMode::LocalMultiplayer;
+                game.mode = game::GameMode::EonChallenge;
                 game.reset();
             },
             12 => {
-                game.mode = game::GameMode::OnlineMultiplayer;
+                game.mode = game::GameMode::Campaign;
                 game.reset();
             },
             13 => {
-                game.mode = game::GameMode::Tournament;
+                game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
             14 => {
-                game.mode = game::GameMode::PlayerVsBot;
+                game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
             15 => {
-                game.mode = game::GameMode::BotVsBot;
+                game.mode = game::GameMode::Tournament;
                 game.reset();
             },
             16 => {
-                game.mode = game::GameMode::BattleRoyale;
+                game.mode = game::GameMode::PlayerVsBot;
                 game.reset();
             },
             17 => {
-                game.mode = game::GameMode::TimeAttack;
+                game.mode = game::GameMode::BotVsBot;
                 game.reset();
             },
             18 => {
-                game.mode = game::GameMode::Survival;
+                game.mode = game::GameMode::BattleRoyale;
                 game.reset();
             },
             19 => {
-                game.mode = game::GameMode::Zen;
+                game.mode = game::GameMode::TimeAttack;
                 game.reset();
             },
             20 => {
-                game.mode = game::GameMode::Maze;
+                game.mode = game::GameMode::Survival;
                 game.reset();
             },
             21 => {
-                game.mode = game::GameMode::Cave;
+                game.mode = game::GameMode::Zen;
                 game.reset();
             },
             22 => {
-                game.mode = game::GameMode::Dungeon;
+                game.mode = game::GameMode::Maze;
                 game.reset();
             },
             23 => {
-                game.mode = game::GameMode::Speedrun;
+                game.mode = game::GameMode::Cave;
                 game.reset();
             },
             24 => {
-                game.mode = game::GameMode::FogOfWar;
+                game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
             25 => {
-                game.mode = game::GameMode::Evolution;
+                game.mode = game::GameMode::Speedrun;
                 game.reset();
             },
             26 => {
-                game.mode = game::GameMode::BossRush;
+                game.mode = game::GameMode::FogOfWar;
                 game.reset();
             },
             27 => {
-                game.mode = game::GameMode::MassiveMultiplayer;
+                game.mode = game::GameMode::Evolution;
                 game.reset();
             },
             28 => {
-                game.mode = game::GameMode::Mirror;
+                game.mode = game::GameMode::BossRush;
                 game.reset();
             },
             29 => {
-                game.mode = game::GameMode::Flood;
+                game.mode = game::GameMode::MassiveMultiplayer;
                 game.reset();
             },
             30 => {
-                game.mode = game::GameMode::Vampire;
+                game.mode = game::GameMode::Mirror;
                 game.reset();
             },
             31 => {
-                game.mode = game::GameMode::Gravity;
+                game.mode = game::GameMode::Flood;
                 game.reset();
             },
             32 => {
-                game.mode = game::GameMode::Tron;
+                game.mode = game::GameMode::Vampire;
                 game.reset();
             },
             33 => {
-                game.mode = game::GameMode::Zombie;
+                game.mode = game::GameMode::Gravity;
                 game.reset();
             },
             34 => {
-                game.mode = game::GameMode::Farmstead;
+                game.mode = game::GameMode::Tron;
                 game.reset();
             },
             35 => {
-                game.mode = game::GameMode::PacMan;
+                game.mode = game::GameMode::Zombie;
                 game.reset();
             },
             36 => {
-                game.mode = game::GameMode::CaptureTheFlag;
+                game.mode = game::GameMode::Farmstead;
                 game.reset();
             },
             37 => {
-                game.mode = game::GameMode::BulletHell;
+                game.mode = game::GameMode::PacMan;
                 game.reset();
             },
             38 => {
-                game.mode = game::GameMode::SnakeSurvivor;
+                game.mode = game::GameMode::CaptureTheFlag;
                 game.reset();
             },
             39 => {
-                game.mode = game::GameMode::KingOfTheHill;
+                game.mode = game::GameMode::BulletHell;
                 game.reset();
             },
             40 => {
-                game.mode = game::GameMode::Dodgeball;
+                game.mode = game::GameMode::SnakeSurvivor;
                 game.reset();
             },
             41 => {
+                game.mode = game::GameMode::KingOfTheHill;
+                game.reset();
+            },
+            42 => {
+                game.mode = game::GameMode::Dodgeball;
+                game.reset();
+            },
+            43 => {
                 game.mode = game::GameMode::DungeonCrawler;
                 game.reset();
             },
 
-            42 => {
+            44 => {
                 game.mode = game::GameMode::Chaos;
                 game.reset();
             },
-            43 => {
+            45 => {
                 game.mode = game::GameMode::Miner;
                 game.reset();
             },
-            44 => {
+            46 => {
                 game.mode = game::GameMode::TurfWar;
                 game.reset();
             },
-            45 => {
+            47 => {
                 game.mode = game::GameMode::Asteroids;
                 game.reset();
             },
-            46 => {
+            48 => {
                 game.mode = game::GameMode::Sandbox;
                 game.reset();
             },
 
-            47 => {
+            49 => {
                 let _ = game.load_game();
             },
-            48 => game.state = GameState::Settings,
-            49 => game.state = GameState::NftShop,
-            50 => game.state = GameState::SkillTree,
-            51 => game.state = GameState::Stats,
-            52 => game.state = GameState::Achievements,
-            53 => game.state = GameState::Help,
-            54 => {
+            50 => game.state = GameState::Settings,
+            51 => game.state = GameState::NftShop,
+            52 => game.state = GameState::SkillTree,
+            53 => game.state = GameState::Stats,
+            54 => game.state = GameState::Achievements,
+            55 => game.state = GameState::Help,
+            56 => {
                 game.mode = game::GameMode::CustomLevel;
                 game.reset();
             },
-            55 => {
+            57 => {
                 game.state = GameState::LevelEditor;
                 game.editor_cursor = Some(snake::Point {
                     x: game.width / 2,
@@ -571,99 +579,99 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 });
                 game.obstacles.clear();
             },
-            56 => {
+            58 => {
                 game.state = GameState::Crafting;
                 game.settings_selection = 0; // Reusing selection variable
             },
-            57 => {
+            59 => {
                 game.state = GameState::BountyBoard;
                 game.settings_selection = 0;
             },
-            58 => {
+            60 => {
                 game.state = GameState::CompanionCamp;
                 game.settings_selection = 0;
             },
-            59 => {
+            61 => {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            60 => {
+            62 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
-            61 => {
+            63 => {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            62 => {
+            64 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
-            63 => {
+            65 => {
                 game.state = GameState::RealEstate;
                 game.settings_selection = 0;
             },
-            64 => {
+            66 => {
                 game.state = GameState::VehicleGarage;
                 game.settings_selection = 0;
             },
-            65 => {
+            67 => {
                 game.state = GameState::Fishing;
                 game.settings_selection = 0;
                 game.is_fishing = false;
                 game.fishing_progress = 0;
             },
-            66 => {
+            68 => {
                 game.state = GameState::BattlePass;
                 game.settings_selection = 0;
             },
-            67 => {
+            69 => {
                 game.state = GameState::ArtifactShrine;
             },
-            68 => {
+            70 => {
                 game.state = GameState::Hatchery;
                 game.settings_selection = 0;
             },
-            69 => {
+            71 => {
                 game.state = GameState::SpacePort;
                 game.settings_selection = 0;
             },
-            70 => {
+            72 => {
                 game.state = GameState::FactionBase;
                 game.settings_selection = 0;
             },
-            71 => {
+            73 => {
                 game.state = GameState::MagicAcademy;
                 game.settings_selection = 0;
             },
-            72 => {
+            74 => {
                 game.state = GameState::QuestLog;
             },
-            73 => {
+            75 => {
                 game.state = GameState::Bestiary;
                 game.settings_selection = 0;
             },
-            74 => {
+            76 => {
                 game.state = GameState::Tavern;
                 game.settings_selection = 0;
             },
-            75 => {
+            77 => {
                 game.state = GameState::BlackMarket;
                 game.settings_selection = 0;
             },
-            76 => {
+            78 => {
                 game.state = GameState::Bank;
                 game.settings_selection = 0;
             },
-            77 => {
+            79 => {
                 game.state = GameState::AuctionHouse;
                 game.settings_selection = 0;
             },
-            78 => {
+            80 => {
                 game.state = GameState::Gacha;
                 game.settings_selection = 0;
             },
-            79 => {
+            81 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -673,11 +681,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 78;
+                game.menu_selection = 81;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 78 {
+            if game.menu_selection < 81 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 0;
