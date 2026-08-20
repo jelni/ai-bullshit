@@ -1967,6 +1967,13 @@ impl Game {
                 || self.mode == GameMode::MinutelyChallenge
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
+                || self.mode == GameMode::WeeklyChallenge
+                || self.mode == GameMode::MonthlyChallenge
+                || self.mode == GameMode::YearlyChallenge
+                || self.mode == GameMode::DecadeChallenge
+                || self.mode == GameMode::CenturyChallenge
+                || self.mode == GameMode::MillenniumChallenge
+                || self.mode == GameMode::EonChallenge
                 || self.mode == GameMode::FogOfWar
                 || self.mode == GameMode::Evolution
                 || self.mode == GameMode::BossRush
@@ -2001,6 +2008,13 @@ impl Game {
             || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
+            || self.mode == GameMode::WeeklyChallenge
+            || self.mode == GameMode::MonthlyChallenge
+            || self.mode == GameMode::YearlyChallenge
+            || self.mode == GameMode::DecadeChallenge
+            || self.mode == GameMode::CenturyChallenge
+            || self.mode == GameMode::MillenniumChallenge
+            || self.mode == GameMode::EonChallenge
             || self.mode == GameMode::FogOfWar
             || self.mode == GameMode::Evolution
             || self.mode == GameMode::BossRush
@@ -7446,6 +7460,12 @@ impl Game {
                 || self.mode == GameMode::HourlyChallenge
                 || self.mode == GameMode::DailyChallenge
                 || self.mode == GameMode::WeeklyChallenge
+                || self.mode == GameMode::MonthlyChallenge
+                || self.mode == GameMode::YearlyChallenge
+                || self.mode == GameMode::DecadeChallenge
+                || self.mode == GameMode::CenturyChallenge
+                || self.mode == GameMode::MillenniumChallenge
+                || self.mode == GameMode::EonChallenge
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
@@ -8519,6 +8539,12 @@ impl Game {
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
             || self.mode == GameMode::WeeklyChallenge
+            || self.mode == GameMode::MonthlyChallenge
+            || self.mode == GameMode::YearlyChallenge
+            || self.mode == GameMode::DecadeChallenge
+            || self.mode == GameMode::CenturyChallenge
+            || self.mode == GameMode::MillenniumChallenge
+            || self.mode == GameMode::EonChallenge
         {
             return;
         }

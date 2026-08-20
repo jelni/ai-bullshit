@@ -1062,6 +1062,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::YearlyChallenge
                 || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -1093,6 +1096,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::YearlyChallenge
                 || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -1124,6 +1130,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::YearlyChallenge
                 || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -1155,6 +1164,9 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::MonthlyChallenge
                 || game.mode == game::GameMode::YearlyChallenge
                 || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
