@@ -148,19 +148,26 @@ impl Game {
                 let mut next_pos = current_head;
                 for _ in 0..3 {
                     let tentative = Self::calculate_next_head_dir(next_pos, dir);
-                    let margin = if self.mode == GameMode::BattleRoyale {
-                        self.safe_zone_margin
-                    } else {
-                        0
-                    };
-                    if tentative.x > margin
-                        && tentative.x < self.width - 1 - margin
-                        && tentative.y > margin
-                        && tentative.y < self.height - 1 - margin
-                        && !self.obstacles.contains(&tentative)
-                    {
-                        next_pos = tentative;
-                    } else {
+                    let mut is_valid = false;
+
+                    if let Some(final_p) = self.get_final_p(tentative) {
+                        let margin = if self.mode == GameMode::BattleRoyale {
+                            self.safe_zone_margin
+                        } else {
+                            0
+                        };
+                        if final_p.x > margin
+                            && final_p.x < self.width - 1 - margin
+                            && final_p.y > margin
+                            && final_p.y < self.height - 1 - margin
+                            && !self.obstacles.contains(&final_p)
+                        {
+                            next_pos = final_p;
+                            is_valid = true;
+                        }
+                    }
+
+                    if !is_valid {
                         break;
                     }
                 }
