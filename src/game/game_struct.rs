@@ -10163,13 +10163,13 @@ impl Game {
                 && self.is_safe_final_p(final_p, 1, checking_player)
                 && !self.obstacles.contains(&final_p)
             {
-                let cost = 1;
+                let cost: u16 = 1;
                 g_score.insert(final_p, cost);
                 first_step.insert(final_p, d);
                 came_from.insert(final_p, start);
                 tie_breaker_counter += 1;
                 open_set.push(AStarState {
-                    f_score: cost + heuristic(final_p),
+                    f_score: cost.saturating_add(heuristic(final_p)),
                     tie_breaker: tie_breaker_counter,
                     position: final_p,
                 });
