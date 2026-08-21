@@ -10177,8 +10177,14 @@ impl Game {
                 }
             }
             if let Some(bh) = self.black_hole {
+                let dx = p.x.abs_diff(bh.x);
+                let dy = p.y.abs_diff(bh.y);
                 let d = calc_dist(p, bh);
-                if d < 5 {
+                if dx == 0 || dy == 0 {
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d) * 10000);
+                    }
+                } else if d < 5 {
                     penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
