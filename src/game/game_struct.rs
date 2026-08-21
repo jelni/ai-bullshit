@@ -10149,10 +10149,13 @@ impl Game {
                 }
             }
             for l in &self.lasers {
-                let d = calc_dist(p, l.position);
-                if d < 5 {
-                    // increased distance check
-                    penalty = penalty.saturating_add((5 - d) * 30); // increased penalty for laser avoidance
+                if l.position == p {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let d = calc_dist(p, l.position);
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    }
                 }
             }
             for m in &self.mines {
