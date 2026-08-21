@@ -4018,6 +4018,12 @@ impl Game {
             if self.player2.as_ref().is_some_and(|snake2| snake2.body_map.contains_key(&p)) {
                 penalty = penalty.saturating_add(100);
             }
+            for t in &self.turrets {
+                let d = calc_dist(p, t.position);
+                if d < 4 {
+                    penalty = penalty.saturating_add((4 - d) * 10);
+                }
+            }
             for bot in &self.bots {
                 if bot.body_map.contains_key(&p) {
                     penalty = penalty.saturating_add(100);

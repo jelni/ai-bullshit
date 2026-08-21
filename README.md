@@ -41,3 +41,4 @@ dummy update
 ## Major Developments
 * We fixed an edge case where Boss AI would pathfind directly towards lasers, ensuring a much better experience for boss fights. We did this by heavily increasing the heuristic penalty for locations close to lasers in the A* algorithm `get_boss_path`.
 * We significantly improved bot pathfinding in `astar_search` by updating the heuristic penalty for lasers to match `get_boss_path`. This ensures bots now strongly avoid lasers as effectively as bosses do.
+* We ensured bosses now dynamically avoid turrets by adding a proximity penalty to the A* heuristic in `get_boss_path`. This prevents them from pathfinding directly into a turret's line of fire.
