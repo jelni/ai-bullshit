@@ -9142,8 +9142,8 @@ impl Game {
             for meteor in &self.meteors {
                 if meteor.position == final_p
                     || (meteor.position.x == final_p.x
-                        && final_p.y >= meteor.position.y
-                        && final_p.y <= meteor.position.y.saturating_add((u16::from(meteor.timer) + steps) / 2))
+                        && meteor.position.y <= final_p.y
+                        && meteor.position.y + steps >= final_p.y)
                 {
                     return false;
                 }
