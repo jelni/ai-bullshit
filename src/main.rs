@@ -861,8 +861,8 @@ fn handle_bounty_board_input(code: KeyCode, game: &mut Game) -> bool {
                 game.stats.active_bounty = None;
             } else {
                 let bounty = match game.settings_selection {
-                    1 => crate::game::Bounty::new(crate::game::BountyType::KillBosses(3), 1000),
-                    2 => crate::game::Bounty::new(crate::game::BountyType::SurviveTime(120), 750),
+                    0 => crate::game::Bounty::new(crate::game::BountyType::KillBosses(3), 1000),
+                    1 => crate::game::Bounty::new(crate::game::BountyType::SurviveTime(120), 750),
                     _ => crate::game::Bounty::new(crate::game::BountyType::EatFood(50), 500),
                 };
                 game.stats.active_bounty = Some(bounty);
@@ -925,7 +925,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            2 => {
                 // Golden Apple: 5 Gold
                 let gold =
                     game.stats.inventory.get(&crate::game::Resource::Gold).copied().unwrap_or(0);
@@ -940,7 +940,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            3 => {
                 // Diamond Sword: 1 Diamond
                 let diamond =
                     game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
@@ -1554,7 +1554,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            5 => {
                 let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
                 if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1731,7 +1731,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            2 => {
                 // Speed Potion [Cost: 300]
                 if game.stats.coins >= 300 {
                     game.stats.coins -= 300;
@@ -1744,7 +1744,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            3 => {
                 // Iron Wall [Cost: 100]
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
@@ -1857,7 +1857,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Mage);
                 }
             },
-            3 => {
+            2 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Rogue) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 } else if game.stats.coins >= 500 {
@@ -1866,7 +1866,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 }
             },
-            4 => {
+            3 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Paladin) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 } else if game.stats.coins >= 500 {
@@ -1875,7 +1875,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 }
             },
-            5 => {
+            4 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Necromancer) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
                 } else if game.stats.coins >= 500 {
@@ -1884,7 +1884,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Necromancer);
                 }
             },
-            6 => {
+            5 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Ranger) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ranger);
                 } else if game.stats.coins >= 500 {
@@ -1893,7 +1893,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ranger);
                 }
             },
-            7 => {
+            6 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Ninja) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ninja);
                 } else if game.stats.coins >= 500 {
@@ -1902,7 +1902,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Ninja);
                 }
             },
-            8 => {
+            7 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Druid) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
                 } else if game.stats.coins >= 500 {
@@ -1911,7 +1911,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Druid);
                 }
             },
-            9 => {
+            8 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Engineer) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Engineer);
                 } else if game.stats.coins >= 500 {
@@ -1920,7 +1920,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Engineer);
                 }
             },
-            10 => {
+            9 => {
                 game.stats.equipped_class = None;
             },
             _ => {},
