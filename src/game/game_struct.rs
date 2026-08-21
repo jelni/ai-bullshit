@@ -1974,13 +1974,6 @@ impl Game {
                 || self.mode == GameMode::CenturyChallenge
                 || self.mode == GameMode::MillenniumChallenge
                 || self.mode == GameMode::EonChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
                 || self.mode == GameMode::FogOfWar
                 || self.mode == GameMode::Evolution
                 || self.mode == GameMode::BossRush
@@ -2015,13 +2008,6 @@ impl Game {
             || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
             || self.mode == GameMode::WeeklyChallenge
             || self.mode == GameMode::MonthlyChallenge
             || self.mode == GameMode::YearlyChallenge
@@ -4307,13 +4293,6 @@ impl Game {
                 || self.mode == GameMode::DecadeChallenge
                 || self.mode == GameMode::CenturyChallenge
                 || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
                 || self.mode == GameMode::EonChallenge)
                 && self.bosses.is_empty()
                 && self.rng.gen_bool(0.005)
@@ -6005,13 +5984,6 @@ impl Game {
             || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
             || self.mode == GameMode::WeeklyChallenge
             || self.mode == GameMode::MonthlyChallenge
             || self.mode == GameMode::YearlyChallenge
@@ -7497,13 +7469,6 @@ impl Game {
                 || self.mode == GameMode::CenturyChallenge
                 || self.mode == GameMode::MillenniumChallenge
                 || self.mode == GameMode::EonChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
                 || self.mode == GameMode::BossRush
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
@@ -8576,13 +8541,6 @@ impl Game {
             || self.mode == GameMode::MinutelyChallenge
             || self.mode == GameMode::HourlyChallenge
             || self.mode == GameMode::DailyChallenge
-                || self.mode == GameMode::WeeklyChallenge
-                || self.mode == GameMode::MonthlyChallenge
-                || self.mode == GameMode::YearlyChallenge
-                || self.mode == GameMode::DecadeChallenge
-                || self.mode == GameMode::CenturyChallenge
-                || self.mode == GameMode::MillenniumChallenge
-                || self.mode == GameMode::EonChallenge
             || self.mode == GameMode::WeeklyChallenge
             || self.mode == GameMode::MonthlyChallenge
             || self.mode == GameMode::YearlyChallenge
@@ -9184,8 +9142,8 @@ impl Game {
             for meteor in &self.meteors {
                 if meteor.position == final_p
                     || (meteor.position.x == final_p.x
-                        && final_p.y >= meteor.position.y
-                        && final_p.y <= meteor.position.y.saturating_add((u16::from(meteor.timer) + steps) / 2))
+                        && meteor.position.y <= final_p.y
+                        && meteor.position.y + steps >= final_p.y)
                 {
                     return false;
                 }

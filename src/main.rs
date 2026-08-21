@@ -368,7 +368,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::SecondlyChallenge;
                 game.reset();
             },
-            2 => {
+            1 => {
                 game.mode = game::GameMode::MinutelyChallenge;
                 game.reset();
             },
@@ -376,7 +376,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::HourlyChallenge;
                 game.reset();
             },
-            4 => {
+            3 => {
                 game.mode = game::GameMode::DailyChallenge;
                 game.reset();
             },
@@ -408,7 +408,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::EonChallenge;
                 game.reset();
             },
-            12 => {
+            11 => {
                 game.mode = game::GameMode::Campaign;
                 game.reset();
             },
@@ -416,7 +416,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
-            14 => {
+            13 => {
                 game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
@@ -448,7 +448,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Zen;
                 game.reset();
             },
-            22 => {
+            21 => {
                 game.mode = game::GameMode::Maze;
                 game.reset();
             },
@@ -456,7 +456,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Cave;
                 game.reset();
             },
-            24 => {
+            23 => {
                 game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
@@ -488,7 +488,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Flood;
                 game.reset();
             },
-            32 => {
+            31 => {
                 game.mode = game::GameMode::Vampire;
                 game.reset();
             },
@@ -496,7 +496,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Gravity;
                 game.reset();
             },
-            34 => {
+            33 => {
                 game.mode = game::GameMode::Tron;
                 game.reset();
             },
@@ -528,7 +528,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::KingOfTheHill;
                 game.reset();
             },
-            42 => {
+            41 => {
                 game.mode = game::GameMode::Dodgeball;
                 game.reset();
             },
@@ -537,7 +537,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
 
-            44 => {
+            43 => {
                 game.mode = game::GameMode::Chaos;
                 game.reset();
             },
@@ -595,7 +595,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            62 => {
+            61 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
@@ -603,7 +603,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            64 => {
+            63 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
@@ -636,7 +636,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::SpacePort;
                 game.settings_selection = 0;
             },
-            72 => {
+            71 => {
                 game.state = GameState::FactionBase;
                 game.settings_selection = 0;
             },
@@ -644,7 +644,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::MagicAcademy;
                 game.settings_selection = 0;
             },
-            74 => {
+            73 => {
                 game.state = GameState::QuestLog;
             },
             75 => {
@@ -910,7 +910,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            1 => {
                 // Iron Wall: 3 Iron
                 let iron =
                     game.stats.inventory.get(&crate::game::Resource::Iron).copied().unwrap_or(0);
@@ -940,7 +940,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            3 => {
                 // Diamond Sword: 1 Diamond
                 let diamond =
                     game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
@@ -1492,7 +1492,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            1 => {
                 let cost = 1000 * (1 + u32::from(game.stats.upgrade_extra_lives));
                 if game.stats.upgrade_extra_lives < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1510,7 +1510,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            3 => {
                 let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
                 if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1674,7 +1674,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            2 => {
+            1 => {
                 // Diamond Sword [Cost: 1000]
                 if game.stats.coins >= 1000 {
                     game.stats.coins -= 1000;
@@ -1700,7 +1700,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            4 => {
+            3 => {
                 // Iron Wall [Cost: 100]
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
@@ -1804,7 +1804,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Warrior);
                 }
             },
-            2 => {
+            1 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Mage) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Mage);
                 } else if game.stats.coins >= 500 {
@@ -1822,7 +1822,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 }
             },
-            4 => {
+            3 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Paladin) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 } else if game.stats.coins >= 500 {
@@ -1993,7 +1993,7 @@ fn handle_casino_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            1 => {
                 // Roulette
                 if game.stats.coins >= 50 {
                     game.stats.coins -= 50;
@@ -2399,7 +2399,7 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
                         crate::game::beep();
                     }
                 },
-                2 => {
+                1 => {
                     // Rest
                     if game.stats.coins >= 50 {
                         game.stats.coins -= 50;
@@ -2466,7 +2466,7 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                         game.save_stats();
                     }
                 },
-                2 => {
+                1 => {
                     // Buy Corrupted Egg
                     if game.stats.coins >= 3000 {
                         game.stats.coins -= 3000;
@@ -2490,7 +2490,7 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                         game.save_stats();
                     }
                 },
-                4 => {
+                3 => {
                     // Sell Max Mana
                     if game.max_mana > 10 {
                         game.max_mana = game.max_mana.saturating_sub(10);
@@ -2550,7 +2550,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            1 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2603,7 +2603,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            2 => {
+            1 => {
                 // Bid on Epic Boss Pet
                 if game.stats.coins >= 10000
                     && !game
@@ -2670,7 +2670,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            2 => {
+            1 => {
                 // Leave
                 game.state = GameState::Menu;
                 game.death_message = String::new();
