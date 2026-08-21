@@ -4150,6 +4150,12 @@ impl Game {
                                 edge_cost = edge_cost.saturating_add((4 - d_dist) * 100);
                             }
                         }
+                        for t in &self.turrets {
+                            let d_dist = calc_dist(final_p, t.position);
+                            if d_dist < 4 {
+                                edge_cost = edge_cost.saturating_add((4 - d_dist) * 10);
+                            }
+                        }
                         if let Some(bh) = self.black_hole {
                             let dx = final_p.x.abs_diff(bh.x);
                             let dy = final_p.y.abs_diff(bh.y);
