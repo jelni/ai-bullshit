@@ -368,7 +368,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::SecondlyChallenge;
                 game.reset();
             },
-            1 => {
+            2 => {
                 game.mode = game::GameMode::MinutelyChallenge;
                 game.reset();
             },
@@ -376,7 +376,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::HourlyChallenge;
                 game.reset();
             },
-            3 => {
+            4 => {
                 game.mode = game::GameMode::DailyChallenge;
                 game.reset();
             },
@@ -408,7 +408,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::EonChallenge;
                 game.reset();
             },
-            11 => {
+            12 => {
                 game.mode = game::GameMode::Campaign;
                 game.reset();
             },
@@ -416,7 +416,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::LocalMultiplayer;
                 game.reset();
             },
-            13 => {
+            14 => {
                 game.mode = game::GameMode::OnlineMultiplayer;
                 game.reset();
             },
@@ -448,7 +448,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Zen;
                 game.reset();
             },
-            21 => {
+            22 => {
                 game.mode = game::GameMode::Maze;
                 game.reset();
             },
@@ -456,7 +456,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Cave;
                 game.reset();
             },
-            23 => {
+            24 => {
                 game.mode = game::GameMode::Dungeon;
                 game.reset();
             },
@@ -488,7 +488,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Flood;
                 game.reset();
             },
-            31 => {
+            32 => {
                 game.mode = game::GameMode::Vampire;
                 game.reset();
             },
@@ -496,7 +496,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Gravity;
                 game.reset();
             },
-            33 => {
+            34 => {
                 game.mode = game::GameMode::Tron;
                 game.reset();
             },
@@ -528,7 +528,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::KingOfTheHill;
                 game.reset();
             },
-            41 => {
+            42 => {
                 game.mode = game::GameMode::Dodgeball;
                 game.reset();
             },
@@ -537,7 +537,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
 
-            43 => {
+            44 => {
                 game.mode = game::GameMode::Chaos;
                 game.reset();
             },
@@ -595,7 +595,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::ClassSelect;
                 game.settings_selection = 0;
             },
-            61 => {
+            62 => {
                 game.state = GameState::Equipment;
                 game.settings_selection = 0;
             },
@@ -603,7 +603,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::Casino;
                 game.settings_selection = 0;
             },
-            63 => {
+            64 => {
                 game.state = GameState::StockMarket;
                 game.settings_selection = 0;
             },
@@ -636,7 +636,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::SpacePort;
                 game.settings_selection = 0;
             },
-            71 => {
+            72 => {
                 game.state = GameState::FactionBase;
                 game.settings_selection = 0;
             },
@@ -644,7 +644,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.state = GameState::MagicAcademy;
                 game.settings_selection = 0;
             },
-            73 => {
+            74 => {
                 game.state = GameState::QuestLog;
             },
             75 => {
@@ -940,7 +940,7 @@ fn handle_crafting_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 // Diamond Sword: 1 Diamond
                 let diamond =
                     game.stats.inventory.get(&crate::game::Resource::Diamond).copied().unwrap_or(0);
@@ -1067,6 +1067,17 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::CenturyChallenge
                 || game.mode == game::GameMode::MillenniumChallenge
                 || game.mode == game::GameMode::EonChallenge
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
+                || game.mode == game::GameMode::HourlyChallenge
+                || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
+                || game.mode == game::GameMode::YearlyChallenge
+                || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -1092,6 +1103,17 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
+                || game.mode == game::GameMode::HourlyChallenge
+                || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
+                || game.mode == game::GameMode::YearlyChallenge
+                || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::SecondlyChallenge
                 || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
@@ -1139,6 +1161,17 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::CenturyChallenge
                 || game.mode == game::GameMode::MillenniumChallenge
                 || game.mode == game::GameMode::EonChallenge
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
+                || game.mode == game::GameMode::HourlyChallenge
+                || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
+                || game.mode == game::GameMode::YearlyChallenge
+                || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::FogOfWar
                 || game.mode == game::GameMode::Evolution
                 || game.mode == game::GameMode::BossRush
@@ -1164,6 +1197,17 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
+                || game.mode == game::GameMode::HourlyChallenge
+                || game.mode == game::GameMode::DailyChallenge
+                || game.mode == game::GameMode::WeeklyChallenge
+                || game.mode == game::GameMode::MonthlyChallenge
+                || game.mode == game::GameMode::YearlyChallenge
+                || game.mode == game::GameMode::DecadeChallenge
+                || game.mode == game::GameMode::CenturyChallenge
+                || game.mode == game::GameMode::MillenniumChallenge
+                || game.mode == game::GameMode::EonChallenge
                 || game.mode == game::GameMode::SecondlyChallenge
                 || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
@@ -1510,7 +1554,7 @@ fn handle_skill_tree_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 let cost = 2000 * (1 + u32::from(game.stats.upgrade_coin_multiplier));
                 if game.stats.upgrade_coin_multiplier < 10 && game.stats.coins >= cost {
                     game.stats.coins -= cost;
@@ -1700,7 +1744,7 @@ fn handle_merchant_shop_input(code: KeyCode, game: &mut Game) -> bool {
                     crate::game::beep();
                 }
             },
-            3 => {
+            4 => {
                 // Iron Wall [Cost: 100]
                 if game.stats.coins >= 100 {
                     game.stats.coins -= 100;
@@ -1822,7 +1866,7 @@ fn handle_class_select_input(code: KeyCode, game: &mut Game) -> bool {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Rogue);
                 }
             },
-            3 => {
+            4 => {
                 if game.stats.unlocked_classes.contains(&crate::game::HeroClass::Paladin) {
                     game.stats.equipped_class = Some(crate::game::HeroClass::Paladin);
                 } else if game.stats.coins >= 500 {
@@ -2399,7 +2443,7 @@ fn handle_tavern_input(code: KeyCode, game: &mut Game) -> bool {
                         crate::game::beep();
                     }
                 },
-                1 => {
+                2 => {
                     // Rest
                     if game.stats.coins >= 50 {
                         game.stats.coins -= 50;
@@ -2466,7 +2510,7 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                         game.save_stats();
                     }
                 },
-                1 => {
+                2 => {
                     // Buy Corrupted Egg
                     if game.stats.coins >= 3000 {
                         game.stats.coins -= 3000;
@@ -2490,7 +2534,7 @@ fn handle_black_market_input(code: KeyCode, game: &mut Game) -> bool {
                         game.save_stats();
                     }
                 },
-                3 => {
+                4 => {
                     // Sell Max Mana
                     if game.max_mana > 10 {
                         game.max_mana = game.max_mana.saturating_sub(10);
@@ -2550,7 +2594,7 @@ fn handle_bank_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            1 => {
+            2 => {
                 // Leave
                 game.state = GameState::Menu;
             },
@@ -2603,7 +2647,7 @@ fn handle_auction_house_input(code: KeyCode, game: &mut Game) -> bool {
                     game.save_stats();
                 }
             },
-            1 => {
+            2 => {
                 // Bid on Epic Boss Pet
                 if game.stats.coins >= 10000
                     && !game
@@ -2670,7 +2714,7 @@ fn handle_gacha_input(code: KeyCode, game: &mut Game) -> bool {
                     game.death_message = "Not enough coins!".to_string();
                 }
             },
-            1 => {
+            2 => {
                 // Leave
                 game.state = GameState::Menu;
                 game.death_message = String::new();
