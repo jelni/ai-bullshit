@@ -1056,6 +1056,8 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
@@ -1090,6 +1092,8 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
@@ -1124,6 +1128,8 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
@@ -1158,6 +1164,8 @@ fn handle_playing_input(code: KeyCode, game: &mut Game) -> bool {
                 || game.mode == game::GameMode::Mirror
                 || game.mode == game::GameMode::TimeAttack
                 || game.mode == game::GameMode::Speedrun
+                || game.mode == game::GameMode::SecondlyChallenge
+                || game.mode == game::GameMode::MinutelyChallenge
                 || game.mode == game::GameMode::HourlyChallenge
                 || game.mode == game::GameMode::DailyChallenge
                 || game.mode == game::GameMode::WeeklyChallenge
