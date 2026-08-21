@@ -3922,7 +3922,7 @@ impl Game {
             for l in &self.lasers {
                 let d = calc_dist(p, l.position);
                 if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 30);
+                    penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                 }
             }
             for m in &self.mines {
@@ -3976,11 +3976,11 @@ impl Game {
             }
             for l in &self.lasers {
                 if l.position == p {
-                    penalty = penalty.saturating_add(5000);
+                    penalty = penalty.saturating_add(50000);
                 } else {
                     let d = calc_dist(p, l.position);
                     if d < 5 {
-                        penalty = penalty.saturating_add((5 - d) * 30);
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                     }
                 }
             }
