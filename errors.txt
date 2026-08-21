@@ -1,0 +1,221 @@
+    Checking snake_game v0.1.0 (/app)
+warning: unreachable pattern
+   --> src/main.rs:371:13
+    |
+367 |             1 => {
+    |             - matches all the relevant values
+...
+371 |             1 => {
+    |             ^ no value can reach this
+    |
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable pattern
+   --> src/main.rs:379:13
+    |
+375 |             3 => {
+    |             - matches all the relevant values
+...
+379 |             3 => {
+    |             ^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:411:13
+    |
+407 |             11 => {
+    |             -- matches all the relevant values
+...
+411 |             11 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:419:13
+    |
+415 |             13 => {
+    |             -- matches all the relevant values
+...
+419 |             13 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:451:13
+    |
+447 |             21 => {
+    |             -- matches all the relevant values
+...
+451 |             21 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:459:13
+    |
+455 |             23 => {
+    |             -- matches all the relevant values
+...
+459 |             23 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:491:13
+    |
+487 |             31 => {
+    |             -- matches all the relevant values
+...
+491 |             31 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:499:13
+    |
+495 |             33 => {
+    |             -- matches all the relevant values
+...
+499 |             33 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:531:13
+    |
+527 |             41 => {
+    |             -- matches all the relevant values
+...
+531 |             41 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:540:13
+    |
+535 |             43 => {
+    |             -- matches all the relevant values
+...
+540 |             43 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:598:13
+    |
+594 |             61 => {
+    |             -- matches all the relevant values
+...
+598 |             61 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:606:13
+    |
+602 |             63 => {
+    |             -- matches all the relevant values
+...
+606 |             63 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:639:13
+    |
+635 |             71 => {
+    |             -- matches all the relevant values
+...
+639 |             71 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:647:13
+    |
+643 |             73 => {
+    |             -- matches all the relevant values
+...
+647 |             73 => {
+    |             ^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/main.rs:943:13
+    |
+928 |             3 => {
+    |             - matches all the relevant values
+...
+943 |             3 => {
+    |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:1557:13
+     |
+1548 |             3 => {
+     |             - matches all the relevant values
+...
+1557 |             3 => {
+     |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:1747:13
+     |
+1734 |             3 => {
+     |             - matches all the relevant values
+...
+1747 |             3 => {
+     |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:1869:13
+     |
+1860 |             3 => {
+     |             - matches all the relevant values
+...
+1869 |             3 => {
+     |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2446:17
+     |
+2422 |                 1 => {
+     |                 - matches all the relevant values
+...
+2446 |                 1 => {
+     |                 ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2513:17
+     |
+2502 |                 1 => {
+     |                 - matches all the relevant values
+...
+2513 |                 1 => {
+     |                 ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2537:17
+     |
+2526 |                 3 => {
+     |                 - matches all the relevant values
+...
+2537 |                 3 => {
+     |                 ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2597:13
+     |
+2588 |             1 => {
+     |             - matches all the relevant values
+...
+2597 |             1 => {
+     |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2650:13
+     |
+2639 |             1 => {
+     |             - matches all the relevant values
+...
+2650 |             1 => {
+     |             ^ no value can reach this
+
+warning: unreachable pattern
+    --> src/main.rs:2717:13
+     |
+2706 |             1 => {
+     |             - matches all the relevant values
+...
+2717 |             1 => {
+     |             ^ no value can reach this
+
+warning: `snake_game` (bin "snake_game") generated 24 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.29s
