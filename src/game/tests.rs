@@ -1701,3 +1701,55 @@ fn test_fog_weather() {
 
     assert_eq!(game.weather, crate::game::Weather::Fog, "Weather should remain Fog");
 }
+use crate::game::{Game, GameMode, Point, Boss, Turret, Direction, Theme, Difficulty};
+
+#[test]
+fn test_get_boss_path_avoids_turret() {
+    let mut game = Game::new(40, 40, false, 's', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::Zen; // Zen works
+    let boss_pos = Point { x: 5, y: 5 };
+    let target_pos = Point { x: 5, y: 1 }; // Boss wants to go UP
+    game.bosses.push(Boss {
+        position: boss_pos,
+        health: 100,
+        max_health: 100,
+        kind: crate::game::BossType::Shooter,
+        move_timer: 0,
+        shoot_timer: 0,
+        state_timer: 0,
+    });
+
+    // Put a turret directly in the path (at 5, 4)
+    game.turrets.push(Turret {
+        position: Point { x: 5, y: 4 },
+        shoot_timer: 0,
+        is_enemy: true,
+    });
+
+    // The boss should avoid going directly UP (which would be into the turret)
+    let next_dir = game.get_boss_path(boss_pos, target_pos, crate::game::BossType::Shooter);
+    assert_ne!(next_dir, Some(Direction::Up), "Boss should avoid the turret in its path");
+}
+
+#[test]
+fn test_bot_autopilot_avoids_turret() {
+    let mut game = Game::new(40, 40, false, 's', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::Zen;
+
+    // Setup snake
+    game.snake.body = std::collections::VecDeque::from([Point { x: 5, y: 5 }, Point { x: 5, y: 6 }]);
+    game.snake.direction = Direction::Up;
+
+    // Food is up
+    game.food = Point { x: 5, y: 1 };
+
+    // Turret is in the way
+    game.turrets.push(Turret {
+        position: Point { x: 5, y: 4 },
+        shoot_timer: 0,
+        is_enemy: true,
+    });
+
+    let next_move = game.calculate_autopilot_move();
+    assert_ne!(next_move, Some(Direction::Up), "Bot should avoid the turret in its path");
+}
