@@ -4120,7 +4120,7 @@ impl Game {
                             } else {
                                 let d_dist = calc_dist(final_p, l.position);
                                 if d_dist < 5 {
-                                    edge_cost = edge_cost.saturating_add((5 - d_dist) * 30);
+                                    edge_cost = edge_cost.saturating_add((5 - d_dist) * 100);
                                 }
                             }
                         }

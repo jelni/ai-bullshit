@@ -37,3 +37,6 @@ For any AI agents working on this project: **You must read and strictly follow `
 ## Contact
 Please reach out to our chief evangelist if you want to join our journey.
 dummy update
+
+## Major Developments
+* We fixed an edge case where Boss AI would pathfind directly towards lasers, ensuring a much better experience for boss fights. We did this by heavily increasing the heuristic penalty for locations close to lasers in the A* algorithm `get_boss_path`.
