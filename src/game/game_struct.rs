@@ -3946,29 +3946,41 @@ impl Game {
                 }
             }
             if let Some(bh) = self.black_hole {
-                let dx = p.x.abs_diff(bh.x);
-                let dy = p.y.abs_diff(bh.y);
-                let d = calc_dist(p, bh);
-                if dx == 0 || dy == 0 {
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d) * 10000);
+                if p == bh {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(bh.x);
+                    let dy = p.y.abs_diff(bh.y);
+                    let d = calc_dist(p, bh);
+                    if dx == 0 || dy == 0 {
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
+                    } else if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                     }
-                } else if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
             if let Some(col) = self.lightning_column {
-                let dx = p.x.abs_diff(col);
-                if dx < 3 {
-                    penalty = penalty.saturating_add((3 - dx) * 50);
+                if p.x == col {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(col);
+                    if dx < 3 {
+                        penalty = penalty.saturating_add((3 - dx).saturating_mul(10000));
+                    }
                 }
             }
             for m in &self.meteors {
-                let dx = p.x.abs_diff(m.position.x);
-                if dx < 2 && p.y >= m.position.y {
-                    let dy = p.y.abs_diff(m.position.y);
-                    if dy < 10 {
-                        penalty = penalty.saturating_add((10 - dy) * 5);
+                if m.position == p {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(m.position.x);
+                    if dx < 2 && p.y >= m.position.y {
+                        let dy = p.y.abs_diff(m.position.y);
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
                     }
                 }
             }
@@ -10181,29 +10193,41 @@ impl Game {
                 }
             }
             if let Some(bh) = self.black_hole {
-                let dx = p.x.abs_diff(bh.x);
-                let dy = p.y.abs_diff(bh.y);
-                let d = calc_dist(p, bh);
-                if dx == 0 || dy == 0 {
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d) * 10000);
+                if p == bh {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(bh.x);
+                    let dy = p.y.abs_diff(bh.y);
+                    let d = calc_dist(p, bh);
+                    if dx == 0 || dy == 0 {
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
+                    } else if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                     }
-                } else if d < 5 {
-                    penalty = penalty.saturating_add((5 - d) * 1000);
                 }
             }
             if let Some(col) = self.lightning_column {
-                let dx = p.x.abs_diff(col);
-                if dx < 3 {
-                    penalty = penalty.saturating_add((3 - dx) * 50);
+                if p.x == col {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(col);
+                    if dx < 3 {
+                        penalty = penalty.saturating_add((3 - dx).saturating_mul(10000));
+                    }
                 }
             }
             for m in &self.meteors {
-                let dx = p.x.abs_diff(m.position.x);
-                if dx < 2 && p.y >= m.position.y {
-                    let dy = p.y.abs_diff(m.position.y);
-                    if dy < 10 {
-                        penalty = penalty.saturating_add((10 - dy) * 5);
+                if m.position == p {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(m.position.x);
+                    if dx < 2 && p.y >= m.position.y {
+                        let dy = p.y.abs_diff(m.position.y);
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
                     }
                 }
             }
