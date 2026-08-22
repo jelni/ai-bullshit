@@ -10455,6 +10455,21 @@ impl Game {
                             }
                         }
                     }
+                    if let Some((pf, _)) = self.poison_food {
+                        let d_dist = calc_dist(final_p, pf);
+                        if d_dist < 4 {
+                            edge_cost = edge_cost.saturating_add((4 - d_dist) * 40);
+                        }
+                    }
+                    for boss in &self.bosses {
+                        if targets.contains(&boss.position) {
+                            continue;
+                        }
+                        let d_dist = calc_dist(final_p, boss.position);
+                        if d_dist < 10 {
+                            edge_cost = edge_cost.saturating_add((10 - d_dist) * 100);
+                        }
+                    }
                 }
 
                 let tentative_g = current_g.saturating_add(edge_cost);
