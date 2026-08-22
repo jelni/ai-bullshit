@@ -4187,6 +4187,15 @@ impl Game {
                                 }
                             }
                         }
+                        for m in &self.meteors {
+                            let dx = final_p.x.abs_diff(m.position.x);
+                            if dx < 2 && final_p.y >= m.position.y {
+                                let dy = final_p.y.abs_diff(m.position.y);
+                                if dy < 10 {
+                                    edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                                }
+                            }
+                        }
                         if let Some((pf, _)) = self.poison_food {
                             let d_dist = calc_dist(final_p, pf);
                             if d_dist < 4 {
@@ -10444,21 +10453,6 @@ impl Game {
                             if dy < 10 {
                                 edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
                             }
-                        }
-                    }
-                    if let Some((pf, _)) = self.poison_food {
-                        let d_dist = calc_dist(final_p, pf);
-                        if d_dist < 4 {
-                            edge_cost = edge_cost.saturating_add((4 - d_dist) * 40);
-                        }
-                    }
-                    for boss in &self.bosses {
-                        if targets.contains(&boss.position) {
-                            continue;
-                        }
-                        let d_dist = calc_dist(final_p, boss.position);
-                        if d_dist < 10 {
-                            edge_cost = edge_cost.saturating_add((10 - d_dist) * 100);
                         }
                     }
                 }
