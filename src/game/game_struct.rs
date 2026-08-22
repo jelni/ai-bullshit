@@ -3935,14 +3935,8 @@ impl Game {
                 if p == bh {
                     penalty = penalty.saturating_add(50000);
                 } else {
-                    let dx = p.x.abs_diff(bh.x);
-                    let dy = p.y.abs_diff(bh.y);
                     let d = calc_dist(p, bh);
-                    if dx == 0 || dy == 0 {
-                        if d < 5 {
-                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
-                        }
-                    } else if d < 5 {
+                    if d < 5 {
                         penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                     }
                 }
@@ -4161,15 +4155,9 @@ impl Game {
                             }
                         }
                         if let Some(bh) = self.black_hole {
-                            let dx = final_p.x.abs_diff(bh.x);
-                            let dy = final_p.y.abs_diff(bh.y);
                             let d_dist = calc_dist(final_p, bh);
-                            if dx == 0 || dy == 0 {
-                                if d_dist < 5 {
-                                    edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
-                                }
-                            } else if d_dist < 5 {
-                                edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                            if d_dist < 5 {
+                                edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
                             }
                         }
                         if let Some(col) = self.lightning_column {
@@ -10096,6 +10084,22 @@ impl Game {
 
         let heuristic = |p: Point| -> u16 {
             let mut penalty = 0_u16;
+            if let Some(bh) = self.black_hole {
+                if p == bh {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let dx = p.x.abs_diff(bh.x);
+                    let dy = p.y.abs_diff(bh.y);
+                    let d = calc_dist(p, bh);
+                    if dx == 0 || dy == 0 {
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
+                    } else if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    }
+                }
+            }
             if checking_player == 1 {
                 if let Some(p2) = &self.player2 {
                     for part in &p2.body {
@@ -10323,15 +10327,9 @@ impl Game {
                     }
                 }
                 if let Some(bh) = self.black_hole {
-                    let dx = final_p.x.abs_diff(bh.x);
-                    let dy = final_p.y.abs_diff(bh.y);
                     let d_dist = calc_dist(final_p, bh);
-                    if dx == 0 || dy == 0 {
-                        if d_dist < 5 {
-                            edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
-                        }
-                    } else if d_dist < 5 {
-                        edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                    if d_dist < 5 {
+                        edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
                     }
                 }
                 if let Some(col) = self.lightning_column {
@@ -10429,15 +10427,9 @@ impl Game {
                         }
                     }
                     if let Some(bh) = self.black_hole {
-                        let dx = final_p.x.abs_diff(bh.x);
-                        let dy = final_p.y.abs_diff(bh.y);
                         let d_dist = calc_dist(final_p, bh);
-                        if dx == 0 || dy == 0 {
-                            if d_dist < 5 {
-                                edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
-                            }
-                        } else if d_dist < 5 {
-                            edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                        if d_dist < 5 {
+                            edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
                         }
                     }
                     if let Some(col) = self.lightning_column {
