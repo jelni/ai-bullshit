@@ -81,3 +81,45 @@ fn test_boss_avoids_mine() {
         "Boss should move up or down to avoid the mine"
     );
 }
+
+#[test]
+fn test_boss_avoids_poison_food() {
+    let mut game =
+        game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+
+    // Boss at (5, 5)
+    let start = snake::Point {
+        x: 5,
+        y: 5,
+    };
+    // Target is right of the boss at (10, 5)
+    let target = snake::Point {
+        x: 10,
+        y: 5,
+    };
+
+    // Place poison food right in the middle (7, 5)
+    game.poison_food = Some((
+        snake::Point {
+            x: 7,
+            y: 5,
+        },
+        web_time::Instant::now(),
+    ));
+
+    let boss_kind = game::BossType::Shooter;
+
+    let path_end = game.get_boss_path(start, target, boss_kind);
+
+    // Because of the poison food at (7, 5), the boss should pathfind UP or DOWN instead of going straight RIGHT
+    // Direct path would be Right
+    assert_ne!(
+        path_end,
+        Some(snake::Direction::Right),
+        "Boss should avoid going straight into the poison food"
+    );
+    assert!(
+        path_end == Some(snake::Direction::Up) || path_end == Some(snake::Direction::Down),
+        "Boss should move up or down to avoid the poison food"
+    );
+}
