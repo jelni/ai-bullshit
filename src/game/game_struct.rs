@@ -3984,9 +3984,21 @@ impl Game {
                 if l.position == p {
                     penalty = penalty.saturating_add(50000);
                 } else {
-                    let d = calc_dist(p, l.position);
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    let dx = p.x.abs_diff(l.position.x);
+                    let dy = p.y.abs_diff(l.position.y);
+                    if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
+                    } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
+                        if dx < 10 {
+                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                        }
+                    } else {
+                        let d = calc_dist(p, l.position);
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
                     }
                 }
             }
@@ -10188,9 +10200,21 @@ impl Game {
                 if l.position == p {
                     penalty = penalty.saturating_add(50000);
                 } else {
-                    let d = calc_dist(p, l.position);
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    let dx = p.x.abs_diff(l.position.x);
+                    let dy = p.y.abs_diff(l.position.y);
+                    if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
+                    } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
+                        if dx < 10 {
+                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                        }
+                    } else {
+                        let d = calc_dist(p, l.position);
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
                     }
                 }
             }
