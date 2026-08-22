@@ -3925,20 +3925,6 @@ impl Game {
 
         let heuristic = |p: Point| -> u16 {
             let mut penalty = 0u16;
-            for boss in &self.bosses {
-                if boss.position != start {
-                    let d = calc_dist(p, boss.position);
-                    if d < 10 {
-                        penalty = penalty.saturating_add((10 - d) * 100);
-                    }
-                }
-            }
-            for l in &self.lasers {
-                let d = calc_dist(p, l.position);
-                if d < 5 {
-                    penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
-                }
-            }
             for t in &self.turrets {
                 let d = calc_dist(p, t.position);
                 if d < 4 {
@@ -4186,6 +4172,20 @@ impl Game {
                                 let dy = final_p.y.abs_diff(m.position.y);
                                 if dy < 10 {
                                     edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                                }
+                            }
+                        }
+                        if let Some((pf, _)) = self.poison_food {
+                            let d_dist = calc_dist(final_p, pf);
+                            if d_dist < 4 {
+                                edge_cost = edge_cost.saturating_add((4 - d_dist) * 40);
+                            }
+                        }
+                        for boss in &self.bosses {
+                            if boss.position != start {
+                                let d_dist = calc_dist(final_p, boss.position);
+                                if d_dist < 10 {
+                                    edge_cost = edge_cost.saturating_add((10 - d_dist) * 100);
                                 }
                             }
                         }
@@ -10314,6 +10314,21 @@ impl Game {
                         if dy < 10 {
                             edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
                         }
+                    }
+                }
+                if let Some((pf, _)) = self.poison_food {
+                    let d_dist = calc_dist(final_p, pf);
+                    if d_dist < 4 {
+                        edge_cost = edge_cost.saturating_add((4 - d_dist) * 40);
+                    }
+                }
+                for boss in &self.bosses {
+                    if targets.contains(&boss.position) {
+                        continue;
+                    }
+                    let d_dist = calc_dist(final_p, boss.position);
+                    if d_dist < 10 {
+                        edge_cost = edge_cost.saturating_add((10 - d_dist) * 100);
                     }
                 }
 
