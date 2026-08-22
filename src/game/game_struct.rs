@@ -4003,7 +4003,7 @@ impl Game {
                 }
             }
             if let Some((pf_p, _)) = self.poison_food {
-                let d = p.x.abs_diff(pf_p.x) + p.y.abs_diff(pf_p.y);
+                let d = calc_dist(p, pf_p);
                 if d < 4 {
                     penalty = penalty.saturating_add((4 - d) * 40);
                 }
