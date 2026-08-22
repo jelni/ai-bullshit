@@ -3984,9 +3984,21 @@ impl Game {
                 if l.position == p {
                     penalty = penalty.saturating_add(50000);
                 } else {
-                    let d = calc_dist(p, l.position);
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    let dx = p.x.abs_diff(l.position.x);
+                    let dy = p.y.abs_diff(l.position.y);
+                    if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
+                    } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
+                        if dx < 10 {
+                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                        }
+                    } else {
+                        let d = calc_dist(p, l.position);
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
                     }
                 }
             }
@@ -4164,6 +4176,15 @@ impl Game {
                             let dx = final_p.x.abs_diff(col);
                             if dx < 3 {
                                 edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
+                            }
+                        }
+                        for m in &self.meteors {
+                            let dx = final_p.x.abs_diff(m.position.x);
+                            if dx < 2 && final_p.y >= m.position.y {
+                                let dy = final_p.y.abs_diff(m.position.y);
+                                if dy < 10 {
+                                    edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                                }
                             }
                         }
                         for m in &self.meteors {
@@ -10188,9 +10209,21 @@ impl Game {
                 if l.position == p {
                     penalty = penalty.saturating_add(50000);
                 } else {
-                    let d = calc_dist(p, l.position);
-                    if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    let dx = p.x.abs_diff(l.position.x);
+                    let dy = p.y.abs_diff(l.position.y);
+                    if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
+                        if dy < 10 {
+                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                        }
+                    } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
+                        if dx < 10 {
+                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                        }
+                    } else {
+                        let d = calc_dist(p, l.position);
+                        if d < 5 {
+                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        }
                     }
                 }
             }
@@ -10420,21 +10453,6 @@ impl Game {
                             if dy < 10 {
                                 edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
                             }
-                        }
-                    }
-                    if let Some((pf, _)) = self.poison_food {
-                        let d_dist = calc_dist(final_p, pf);
-                        if d_dist < 4 {
-                            edge_cost = edge_cost.saturating_add((4 - d_dist) * 40);
-                        }
-                    }
-                    for boss in &self.bosses {
-                        if targets.contains(&boss.position) {
-                            continue;
-                        }
-                        let d_dist = calc_dist(final_p, boss.position);
-                        if d_dist < 10 {
-                            edge_cost = edge_cost.saturating_add((10 - d_dist) * 100);
                         }
                     }
                 }
