@@ -4168,7 +4168,7 @@ impl Game {
                             let d_dist = calc_dist(final_p, bh);
                             if dx == 0 || dy == 0 {
                                 if d_dist < 5 {
-                                    edge_cost = edge_cost.saturating_add((5 - d_dist) * 10000);
+                                    edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
                                 }
                             } else if d_dist < 5 {
                                 edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
@@ -9967,95 +9967,98 @@ impl Game {
         let mut came_from = std::collections::HashMap::new();
         let mut tie_breaker_counter = 0u64;
         g_score.insert(start, 0);
-        let heuristic = |p: Point| -> u16 {
-            let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
-                pu.p_type == PowerUpType::PassThroughWalls
-                    && pu.activation_time.is_some_and(|time| {
-                        web_time::SystemTime::now()
-                            .duration_since(web_time::SystemTime::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                            .saturating_sub(time)
-                            < self.powerup_duration()
-                    })
-            }) || self.stats.equipped_vehicle
-                == Some(crate::game::Vehicle::Spaceship);
-            let calc_dist = |p1: Point, p2: Point| -> u16 {
-                let mut dx = p1.x.abs_diff(p2.x);
-                let mut dy = p1.y.abs_diff(p2.y);
+
+        let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
+            pu.p_type == PowerUpType::PassThroughWalls
+                && pu.activation_time.is_some_and(|time| {
+                    web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .saturating_sub(time)
+                        < self.powerup_duration()
+                })
+        }) || self.stats.equipped_vehicle
+            == Some(crate::game::Vehicle::Spaceship);
+
+        let calc_dist = |p1: Point, p2: Point| -> u16 {
+            let mut dx = p1.x.abs_diff(p2.x);
+            let mut dy = p1.y.abs_diff(p2.y);
+            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
+            {
+                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+            }
+            let direct_dist = dx.saturating_add(dy);
+
+            if let Some((portal1, portal2)) = self.portals {
+                let mut dx_p1 = p1.x.abs_diff(portal1.x);
+                let mut dy_p1 = p1.y.abs_diff(portal1.y);
+                let mut dx_p2 = portal2.x.abs_diff(p2.x);
+                let mut dy_p2 = portal2.y.abs_diff(p2.y);
                 if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
                     && self.mode != GameMode::BattleRoyale
                 {
-                    dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                    dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+                    dx_p1 = std::cmp::min(
+                        dx_p1,
+                        self.width.saturating_sub(2).saturating_sub(dx_p1),
+                    );
+                    dy_p1 = std::cmp::min(
+                        dy_p1,
+                        self.height.saturating_sub(2).saturating_sub(dy_p1),
+                    );
+                    dx_p2 = std::cmp::min(
+                        dx_p2,
+                        self.width.saturating_sub(2).saturating_sub(dx_p2),
+                    );
+                    dy_p2 = std::cmp::min(
+                        dy_p2,
+                        self.height.saturating_sub(2).saturating_sub(dy_p2),
+                    );
                 }
-                let direct_dist = dx.saturating_add(dy);
+                let dist_via_p1 = dx_p1
+                    .saturating_add(dy_p1)
+                    .saturating_add(dx_p2)
+                    .saturating_add(dy_p2)
+                    .saturating_add(1);
 
-                if let Some((portal1, portal2)) = self.portals {
-                    let mut dx_p1 = p1.x.abs_diff(portal1.x);
-                    let mut dy_p1 = p1.y.abs_diff(portal1.y);
-                    let mut dx_p2 = portal2.x.abs_diff(p2.x);
-                    let mut dy_p2 = portal2.y.abs_diff(p2.y);
-                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                        && self.mode != GameMode::BattleRoyale
-                    {
-                        dx_p1 = std::cmp::min(
-                            dx_p1,
-                            self.width.saturating_sub(2).saturating_sub(dx_p1),
-                        );
-                        dy_p1 = std::cmp::min(
-                            dy_p1,
-                            self.height.saturating_sub(2).saturating_sub(dy_p1),
-                        );
-                        dx_p2 = std::cmp::min(
-                            dx_p2,
-                            self.width.saturating_sub(2).saturating_sub(dx_p2),
-                        );
-                        dy_p2 = std::cmp::min(
-                            dy_p2,
-                            self.height.saturating_sub(2).saturating_sub(dy_p2),
-                        );
-                    }
-                    let dist_via_p1 = dx_p1
-                        .saturating_add(dy_p1)
-                        .saturating_add(dx_p2)
-                        .saturating_add(dy_p2)
-                        .saturating_add(1);
-
-                    let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
-                    let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
-                    let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
-                    let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
-                    if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                        && self.mode != GameMode::BattleRoyale
-                    {
-                        dx_p2_1 = std::cmp::min(
-                            dx_p2_1,
-                            self.width.saturating_sub(2).saturating_sub(dx_p2_1),
-                        );
-                        dy_p2_1 = std::cmp::min(
-                            dy_p2_1,
-                            self.height.saturating_sub(2).saturating_sub(dy_p2_1),
-                        );
-                        dx_p1_2 = std::cmp::min(
-                            dx_p1_2,
-                            self.width.saturating_sub(2).saturating_sub(dx_p1_2),
-                        );
-                        dy_p1_2 = std::cmp::min(
-                            dy_p1_2,
-                            self.height.saturating_sub(2).saturating_sub(dy_p1_2),
-                        );
-                    }
-                    let dist_via_p2 = dx_p2_1
-                        .saturating_add(dy_p2_1)
-                        .saturating_add(dx_p1_2)
-                        .saturating_add(dy_p1_2)
-                        .saturating_add(1);
-
-                    return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
+                let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
+                let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
+                let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
+                let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
+                if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale
+                {
+                    dx_p2_1 = std::cmp::min(
+                        dx_p2_1,
+                        self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                    );
+                    dy_p2_1 = std::cmp::min(
+                        dy_p2_1,
+                        self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                    );
+                    dx_p1_2 = std::cmp::min(
+                        dx_p1_2,
+                        self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                    );
+                    dy_p1_2 = std::cmp::min(
+                        dy_p1_2,
+                        self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                    );
                 }
-                direct_dist
-            };
+                let dist_via_p2 = dx_p2_1
+                    .saturating_add(dy_p2_1)
+                    .saturating_add(dx_p1_2)
+                    .saturating_add(dy_p1_2)
+                    .saturating_add(1);
+
+                return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
+            }
+            direct_dist
+        };
+
+        let heuristic = |p: Point| -> u16 {
             let mut penalty = 0_u16;
             if checking_player == 1 {
                 if let Some(p2) = &self.player2 {
@@ -10248,7 +10251,58 @@ impl Game {
                 && self.is_safe_final_p(final_p, 1, checking_player)
                 && !self.obstacles.contains(&final_p)
             {
-                let cost: u16 = 1;
+                let mut edge_cost = 1u16;
+                for l in &self.lasers {
+                    if l.position == final_p {
+                        edge_cost = edge_cost.saturating_add(500);
+                    } else {
+                        let d_dist = calc_dist(final_p, l.position);
+                        if d_dist < 5 {
+                            edge_cost = edge_cost.saturating_add((5 - d_dist) * 100);
+                        }
+                    }
+                }
+                for m in &self.mines {
+                    let d_dist = calc_dist(final_p, *m);
+                    if d_dist < 4 {
+                        edge_cost = edge_cost.saturating_add((4 - d_dist) * 100);
+                    }
+                }
+                for t in &self.turrets {
+                    let d_dist = calc_dist(final_p, t.position);
+                    if d_dist < 4 {
+                        edge_cost = edge_cost.saturating_add((4 - d_dist) * 10);
+                    }
+                }
+                if let Some(bh) = self.black_hole {
+                    let dx = final_p.x.abs_diff(bh.x);
+                    let dy = final_p.y.abs_diff(bh.y);
+                    let d_dist = calc_dist(final_p, bh);
+                    if dx == 0 || dy == 0 {
+                        if d_dist < 5 {
+                            edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
+                        }
+                    } else if d_dist < 5 {
+                        edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                    }
+                }
+                if let Some(col) = self.lightning_column {
+                    let dx = final_p.x.abs_diff(col);
+                    if dx < 3 {
+                        edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
+                    }
+                }
+                for m in &self.meteors {
+                    let dx = final_p.x.abs_diff(m.position.x);
+                    if dx < 2 && final_p.y >= m.position.y {
+                        let dy = final_p.y.abs_diff(m.position.y);
+                        if dy < 10 {
+                            edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                        }
+                    }
+                }
+
+                let cost: u16 = edge_cost;
                 g_score.insert(final_p, cost);
                 first_step.insert(final_p, d);
                 came_from.insert(final_p, start);
@@ -10287,7 +10341,60 @@ impl Game {
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
-                let tentative_g = current_g.saturating_add(1);
+                let mut edge_cost = 1u16;
+                if let Some(final_p) = self.get_final_p(next_p) {
+                    for l in &self.lasers {
+                        if l.position == final_p {
+                            edge_cost = edge_cost.saturating_add(500);
+                        } else {
+                            let d_dist = calc_dist(final_p, l.position);
+                            if d_dist < 5 {
+                                edge_cost = edge_cost.saturating_add((5 - d_dist) * 100);
+                            }
+                        }
+                    }
+                    for m in &self.mines {
+                        let d_dist = calc_dist(final_p, *m);
+                        if d_dist < 4 {
+                            edge_cost = edge_cost.saturating_add((4 - d_dist) * 100);
+                        }
+                    }
+                    for t in &self.turrets {
+                        let d_dist = calc_dist(final_p, t.position);
+                        if d_dist < 4 {
+                            edge_cost = edge_cost.saturating_add((4 - d_dist) * 10);
+                        }
+                    }
+                    if let Some(bh) = self.black_hole {
+                        let dx = final_p.x.abs_diff(bh.x);
+                        let dy = final_p.y.abs_diff(bh.y);
+                        let d_dist = calc_dist(final_p, bh);
+                        if dx == 0 || dy == 0 {
+                            if d_dist < 5 {
+                                edge_cost = edge_cost.saturating_add((5 - d_dist).saturating_mul(10000));
+                            }
+                        } else if d_dist < 5 {
+                            edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
+                        }
+                    }
+                    if let Some(col) = self.lightning_column {
+                        let dx = final_p.x.abs_diff(col);
+                        if dx < 3 {
+                            edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
+                        }
+                    }
+                    for m in &self.meteors {
+                        let dx = final_p.x.abs_diff(m.position.x);
+                        if dx < 2 && final_p.y >= m.position.y {
+                            let dy = final_p.y.abs_diff(m.position.y);
+                            if dy < 10 {
+                                edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                            }
+                        }
+                    }
+                }
+
+                let tentative_g = current_g.saturating_add(edge_cost);
                 if let Some(final_p) = self.get_final_p(next_p)
                     && (next_p == final_p
                         || (self.is_safe_final_p(next_p, tentative_g, checking_player)
