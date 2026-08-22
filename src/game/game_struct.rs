@@ -3939,12 +3939,6 @@ impl Game {
                     penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                 }
             }
-            for m in &self.mines {
-                let d = calc_dist(p, *m);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 100);
-                }
-            }
             for t in &self.turrets {
                 let d = calc_dist(p, t.position);
                 if d < 4 {
@@ -3978,13 +3972,13 @@ impl Game {
                     }
                 }
             }
-            if self.mines.contains(&p) {
-                penalty = penalty.saturating_add(5000);
-            } else {
-                for m in &self.mines {
+            for m in &self.mines {
+                if *m == p {
+                    penalty = penalty.saturating_add(50000);
+                } else {
                     let d = calc_dist(p, *m);
-                    if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 100);
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
                     }
                 }
             }
@@ -10171,9 +10165,13 @@ impl Game {
                 }
             }
             for m in &self.mines {
-                let d = calc_dist(p, *m);
-                if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 100);
+                if *m == p {
+                    penalty = penalty.saturating_add(50000);
+                } else {
+                    let d = calc_dist(p, *m);
+                    if d < 5 {
+                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                    }
                 }
             }
             for t in &self.turrets {
