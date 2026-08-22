@@ -1,6 +1,6 @@
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct AStarState {
-    pub f_score: u16,
+    pub f_score: u32,
     pub tie_breaker: u64,
     pub position: crate::snake::Point,
 }

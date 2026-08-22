@@ -3923,43 +3923,43 @@ impl Game {
             direct_dist
         };
 
-        let heuristic = |p: Point| -> u16 {
-            let mut penalty = 0u16;
+        let heuristic = |p: Point| -> u32 {
+            let mut penalty = 0u32;
             for t in &self.turrets {
                 let d = calc_dist(p, t.position);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                 }
             }
             if let Some(bh) = self.black_hole {
                 if p == bh {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let d = calc_dist(p, bh);
                     if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(100_000));
                     }
                 }
             }
             if let Some(col) = self.lightning_column {
                 if p.x == col {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let dx = p.x.abs_diff(col);
                     if dx < 3 {
-                        penalty = penalty.saturating_add((3 - dx).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(3 - dx).saturating_mul(100_000));
                     }
                 }
             }
             for m in &self.meteors {
                 if m.position == p {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let dx = p.x.abs_diff(m.position.x);
                     if dx < 2 && p.y >= m.position.y {
                         let dy = p.y.abs_diff(m.position.y);
                         if dy < 10 {
-                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dy).saturating_mul(100_000));
                         }
                     }
                 }
@@ -3970,7 +3970,7 @@ impl Game {
                 } else {
                     let d = calc_dist(p, *m);
                     if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(10000));
                     }
                 }
             }
@@ -3982,16 +3982,16 @@ impl Game {
                     let dy = p.y.abs_diff(l.position.y);
                     if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
                         if dy < 10 {
-                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dy).saturating_mul(10000));
                         }
                     } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
                         if dx < 10 {
-                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dx).saturating_mul(10000));
                         }
                     } else {
                         let d = calc_dist(p, l.position);
                         if d < 5 {
-                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(10000));
                         }
                     }
                 }
@@ -3999,14 +3999,14 @@ impl Game {
             if let Some((pf_p, _)) = self.poison_food {
                 let d = calc_dist(p, pf_p);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 40);
+                    penalty = penalty.saturating_add(u32::from(4 - d) * 40);
                 }
             }
             for boss in &self.bosses {
                 if boss.position != start {
                     let d = calc_dist(p, boss.position);
                     if d < 10 {
-                        penalty = penalty.saturating_add((10 - d) * 100);
+                        penalty = penalty.saturating_add(u32::from(10 - d) * 100);
                     }
                 }
             }
@@ -4019,7 +4019,7 @@ impl Game {
             for t in &self.turrets {
                 let d = calc_dist(p, t.position);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                 }
             }
             for bot in &self.bots {
@@ -4028,7 +4028,7 @@ impl Game {
                 }
             }
 
-            let base_dist = calc_dist(p, target);
+            let base_dist = u32::from(calc_dist(p, target));
             base_dist.saturating_add(penalty)
         };
 
@@ -4211,7 +4211,7 @@ impl Game {
 
                             tie_breaker_counter += 1;
                             open_set.push(AStarState {
-                                f_score: tentative_g.saturating_add(heuristic(final_p)),
+                                f_score: u32::from(tentative_g).saturating_add(heuristic(final_p)),
                                 tie_breaker: tie_breaker_counter,
                                 position: final_p,
                             });
@@ -10082,21 +10082,21 @@ impl Game {
             direct_dist
         };
 
-        let heuristic = |p: Point| -> u16 {
-            let mut penalty = 0_u16;
+        let heuristic = |p: Point| -> u32 {
+            let mut penalty = 0_u32;
             if let Some(bh) = self.black_hole {
                 if p == bh {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let dx = p.x.abs_diff(bh.x);
                     let dy = p.y.abs_diff(bh.y);
                     let d = calc_dist(p, bh);
                     if dx == 0 || dy == 0 {
                         if d < 5 {
-                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(100_000));
                         }
                     } else if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(100_000));
                     }
                 }
             }
@@ -10105,7 +10105,7 @@ impl Game {
                     for part in &p2.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10116,7 +10116,7 @@ impl Game {
                     for part in &bot.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10124,7 +10124,7 @@ impl Game {
                 for part in &self.snake.body {
                     let d = calc_dist(p, *part);
                     if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 10);
+                        penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                     }
                 }
                 for bot in &self.bots {
@@ -10134,7 +10134,7 @@ impl Game {
                     for part in &bot.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10142,14 +10142,14 @@ impl Game {
                 for part in &self.snake.body {
                     let d = calc_dist(p, *part);
                     if d < 4 {
-                        penalty = penalty.saturating_add((4 - d) * 10);
+                        penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                     }
                 }
                 if let Some(p2) = &self.player2 {
                     for part in &p2.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10160,7 +10160,7 @@ impl Game {
                     for part in &bot.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10169,14 +10169,14 @@ impl Game {
                     for part in &self.snake.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                     if let Some(p2) = &self.player2 {
                         for part in &p2.body {
                             let d = calc_dist(p, *part);
                             if d < 4 {
-                                penalty = penalty.saturating_add((4 - d) * 10);
+                                penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                             }
                         }
                     }
@@ -10188,7 +10188,7 @@ impl Game {
                     for part in &bot.body {
                         let d = calc_dist(p, *part);
                         if d < 4 {
-                            penalty = penalty.saturating_add((4 - d) * 10);
+                            penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                         }
                     }
                 }
@@ -10200,13 +10200,13 @@ impl Game {
                 let d = calc_dist(p, boss.position);
                 if d < 10 {
                     // massive entity avoidance range
-                    penalty = penalty.saturating_add((10 - d) * 100); // massive penalty for boss avoidance
+                    penalty = penalty.saturating_add(u32::from(10 - d) * 100); // massive penalty for boss avoidance
                 }
             }
             if let Some((pf, _)) = self.poison_food {
                 let d = calc_dist(p, pf);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 40);
+                    penalty = penalty.saturating_add(u32::from(4 - d) * 40);
                 }
             }
             for l in &self.lasers {
@@ -10217,16 +10217,16 @@ impl Game {
                     let dy = p.y.abs_diff(l.position.y);
                     if (l.direction == Direction::Up || l.direction == Direction::Down) && dx < 2 {
                         if dy < 10 {
-                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dy).saturating_mul(10000));
                         }
                     } else if (l.direction == Direction::Left || l.direction == Direction::Right) && dy < 2 {
                         if dx < 10 {
-                            penalty = penalty.saturating_add((10 - dx).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dx).saturating_mul(10000));
                         }
                     } else {
                         let d = calc_dist(p, l.position);
                         if d < 5 {
-                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(10000));
                         }
                     }
                 }
@@ -10237,14 +10237,14 @@ impl Game {
                 } else {
                     let d = calc_dist(p, *m);
                     if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(10000));
                     }
                 }
             }
             for t in &self.turrets {
                 let d = calc_dist(p, t.position);
                 if d < 4 {
-                    penalty = penalty.saturating_add((4 - d) * 10);
+                    penalty = penalty.saturating_add(u32::from(4 - d) * 10);
                 }
             }
             if let Some(bh) = self.black_hole {
@@ -10256,37 +10256,37 @@ impl Game {
                     let d = calc_dist(p, bh);
                     if dx == 0 || dy == 0 {
                         if d < 5 {
-                            penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(100_000));
                         }
                     } else if d < 5 {
-                        penalty = penalty.saturating_add((5 - d).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(5 - d).saturating_mul(100_000));
                     }
                 }
             }
             if let Some(col) = self.lightning_column {
                 if p.x == col {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let dx = p.x.abs_diff(col);
                     if dx < 3 {
-                        penalty = penalty.saturating_add((3 - dx).saturating_mul(10000));
+                        penalty = penalty.saturating_add(u32::from(3 - dx).saturating_mul(100_000));
                     }
                 }
             }
             for m in &self.meteors {
                 if m.position == p {
-                    penalty = penalty.saturating_add(50000);
+                    penalty = penalty.saturating_add(500_000);
                 } else {
                     let dx = p.x.abs_diff(m.position.x);
                     if dx < 2 && p.y >= m.position.y {
                         let dy = p.y.abs_diff(m.position.y);
                         if dy < 10 {
-                            penalty = penalty.saturating_add((10 - dy).saturating_mul(10000));
+                            penalty = penalty.saturating_add(u32::from(10 - dy).saturating_mul(100_000));
                         }
                     }
                 }
             }
-            targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0).saturating_add(penalty)
+            u32::from(targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0)).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         for &d in &dirs {
@@ -10369,7 +10369,7 @@ impl Game {
                 came_from.insert(final_p, start);
                 tie_breaker_counter += 1;
                 open_set.push(AStarState {
-                    f_score: cost.saturating_add(heuristic(final_p)),
+                    f_score: u32::from(cost).saturating_add(heuristic(final_p)),
                     tie_breaker: tie_breaker_counter,
                     position: final_p,
                 });
@@ -10484,7 +10484,7 @@ impl Game {
                     );
                     tie_breaker_counter += 1;
                     open_set.push(AStarState {
-                        f_score: tentative_g.saturating_add(heuristic(final_p)),
+                        f_score: u32::from(tentative_g).saturating_add(heuristic(final_p)),
                         tie_breaker: tie_breaker_counter,
                         position: final_p,
                     });
