@@ -43,3 +43,4 @@ dummy update
 * We significantly improved bot pathfinding in `astar_search` by updating the heuristic penalty for lasers to match `get_boss_path`. This ensures bots now strongly avoid lasers as effectively as bosses do.
 * We ensured bosses now dynamically avoid turrets by adding a proximity penalty to the A* heuristic in `get_boss_path`. This prevents them from pathfinding directly into a turret's line of fire.
 * We significantly improved bot pathfinding in `astar_search` by updating the edge cost penalty for turrets. This ensures bots now strongly avoid turrets.
+* We ensured bosses and bots now dynamically avoid mines by heavily increasing the heuristic penalty for exact mine locations and locations close to mines in both `get_boss_path` and `astar_search`. This prevents them from pathfinding directly into mines.
