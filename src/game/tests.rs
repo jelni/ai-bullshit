@@ -1704,6 +1704,60 @@ fn test_fog_weather() {
 use crate::game::{Game, GameMode, Point, Boss, Turret, Direction, Theme, Difficulty};
 
 #[test]
+fn test_get_boss_path_avoids_lightning_column() {
+    let mut game = Game::new(40, 40, false, 's', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::Zen;
+    let boss_pos = Point { x: 5, y: 5 };
+    let target_pos = Point { x: 9, y: 5 };
+    game.bosses.push(Boss {
+        position: boss_pos,
+        health: 100,
+        max_health: 100,
+        kind: crate::game::BossType::Shooter,
+        move_timer: 0,
+        shoot_timer: 0,
+        state_timer: 0,
+    });
+    game.lightning_column = Some(6);
+
+    let next_dir = game.get_boss_path(boss_pos, target_pos, crate::game::BossType::Shooter);
+
+    // The direct path is blocked by a lightning column at x=6, so the boss should try to path around it (e.g., up or down), rather than directly right.
+    assert!(next_dir.is_some());
+    let dir = next_dir.unwrap();
+    assert_ne!(dir, Direction::Right);
+}
+
+#[test]
+fn test_get_boss_path_avoids_meteor() {
+    let mut game = Game::new(40, 40, false, 's', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::Zen;
+    let boss_pos = Point { x: 4, y: 5 };
+    let target_pos = Point { x: 8, y: 5 };
+    game.bosses.push(Boss {
+        position: boss_pos,
+        health: 100,
+        max_health: 100,
+        kind: crate::game::BossType::Shooter,
+        move_timer: 0,
+        shoot_timer: 0,
+        state_timer: 0,
+    });
+    game.meteors.push(crate::game::meteor::Meteor {
+        position: Point { x: 6, y: 5 },
+        timer: 10,
+    });
+
+    let next_dir = game.get_boss_path(boss_pos, target_pos, crate::game::BossType::Shooter);
+
+    // The direct path right goes through x=5, which is threatened by the meteor at x=6, y=5.
+    // The boss should try to path around it (e.g., up), rather than directly right.
+    assert!(next_dir.is_some());
+    let dir = next_dir.unwrap();
+    assert_ne!(dir, Direction::Right);
+}
+
+#[test]
 fn test_get_boss_path_avoids_turret() {
     let mut game = Game::new(40, 40, false, 's', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::Zen; // Zen works

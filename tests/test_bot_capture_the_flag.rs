@@ -37,6 +37,7 @@ fn test_bot_returns_flag_to_base() {
     let mut game = Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::CaptureTheFlag;
     game.reset();
+    game.obstacles.clear();
 
     game.auto_pilot = true;
     game.p1_has_flag = true;
@@ -63,6 +64,7 @@ fn test_p2_bot_targets_enemy_flag() {
     let mut game = Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::CaptureTheFlag;
     game.reset();
+    game.obstacles.clear();
 
     game.food = Point {
         x: 0,
@@ -94,6 +96,7 @@ fn test_p2_bot_returns_flag_to_base() {
     let mut game = Game::new(20, 20, false, '█', Theme::Classic, Difficulty::Normal);
     game.mode = GameMode::CaptureTheFlag;
     game.reset();
+    game.obstacles.clear();
 
     game.food = Point {
         x: 0,

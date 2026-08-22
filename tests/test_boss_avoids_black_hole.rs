@@ -4,6 +4,7 @@ use snake_game::*;
 fn test_boss_avoids_black_hole() {
     let mut game =
         game::Game::new(20, 20, false, 'x', game::Theme::Classic, game::Difficulty::Normal);
+    game.obstacles.clear();
 
     let start = snake::Point {
         x: 5,

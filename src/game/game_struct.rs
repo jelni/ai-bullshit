@@ -4174,6 +4174,21 @@ impl Game {
                                 edge_cost = edge_cost.saturating_add((5 - d_dist) * 1000);
                             }
                         }
+                        if let Some(col) = self.lightning_column {
+                            let dx = final_p.x.abs_diff(col);
+                            if dx < 3 {
+                                edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
+                            }
+                        }
+                        for m in &self.meteors {
+                            let dx = final_p.x.abs_diff(m.position.x);
+                            if dx < 2 && final_p.y >= m.position.y {
+                                let dy = final_p.y.abs_diff(m.position.y);
+                                if dy < 10 {
+                                    edge_cost = edge_cost.saturating_add((10 - dy).saturating_mul(10000));
+                                }
+                            }
+                        }
                         let tentative_g = current_g.saturating_add(edge_cost);
                         if tentative_g < *g_score.get(&final_p).unwrap_or(&u16::MAX) {
                             came_from.insert(final_p, current);
@@ -9203,7 +9218,7 @@ impl Game {
                 if meteor.position == final_p
                     || (meteor.position.x == final_p.x
                         && meteor.position.y <= final_p.y
-                        && meteor.position.y + steps >= final_p.y)
+                        && meteor.position.y.saturating_add(steps) >= final_p.y)
                 {
                     return false;
                 }
