@@ -1,4 +1,0 @@
-refactor(game): overhaul bot A* entity avoidance to survive bullet hell
-
-- Re-weighted entity avoidance heuristics to use massive penalties (`(10 - dist) * 100` for bosses, `(5 - dist) * 30` for lasers) to ensure bots aggressively route away from dynamic threats instead of trying to path tightly around them.
-- Fixed `test_astar_entity_avoidance` failing paths to improve competitive e-sports bot viability against Juggernaut and Laser swarms.
