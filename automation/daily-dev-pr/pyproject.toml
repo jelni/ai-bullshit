@@ -1,0 +1,21 @@
+[project]
+name = "daily-dev-pr"
+version = "0.1.0"
+description = "Mistral Workflows worker that analyzes a repo and opens one automated development PR per run."
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "mistralai>=3.6.0",
+    "mistralai-workflows[mistralai]>=3.20.0",
+    "pydantic>=2.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25.3",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
