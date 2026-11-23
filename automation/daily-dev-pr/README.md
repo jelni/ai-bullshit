@@ -3,7 +3,7 @@
 A [Mistral Workflows](https://docs.mistral.ai/studio/workflows/overview) worker that, on every run:
 
 1. clones the target repository (`jelni/ai-bullshit` by default),
-2. has a durable LLM agent analyze the codebase and pick **exactly one** best next major development,
+2. has a durable LLM agent (`mistral-large-4` by default) analyze the codebase and pick **exactly one** best next major development,
 3. implements it end-to-end and fixes `cargo test` / `./clippy.sh` failures autonomously,
 4. pushes a branch `auto/daily-dev-<UTC date>` and opens (or updates) a pull request.
 

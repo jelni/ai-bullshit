@@ -30,7 +30,7 @@ from daily_dev.prompts import (
 class DailyDevPrInput(BaseModel):
     repo: str = Field(default="jelni/ai-bullshit", description='GitHub repository in "owner/name" form')
     base_branch: str = Field(default="main", description="Branch the pull request targets")
-    model: str = Field(default="devstral-latest", description="Mistral model driving the development agent")
+    model: str = Field(default="mistral-large-4", description="Mistral model driving the development agent")
     max_turns: int = Field(default=40, ge=5, le=100, description="Maximum agent turns per run")
 
 
