@@ -82,6 +82,15 @@ fn test_turf_war_scoring() {
         },
         3,
     ); // Bot 1
+    // Bot 1 gets a large, lopsided territory far away from the bots' spawn
+    // area, so autopilot movement during the two updates cannot change the
+    // winner.
+    for y in 5..=12 {
+        game.painted_tiles.insert(
+            snake::Point { x: 3, y },
+            3,
+        ); // Bot 1
+    }
 
     game.painted_tiles.insert(
         snake::Point {

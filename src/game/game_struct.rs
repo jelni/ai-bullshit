@@ -2929,6 +2929,7 @@ impl Game {
                 || self.mode == GameMode::Tron
                 || self.mode == GameMode::Zombie
                 || self.mode == GameMode::KingOfTheHill
+                || self.mode == GameMode::TurfWar
             {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
@@ -3004,6 +3005,13 @@ impl Game {
                                 targets.insert(0, koth_pos);
                             }
                         }
+                        if self.mode == GameMode::TurfWar {
+                            let bot_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                            let mut turf_targets =
+                                self.turf_war_frontier_targets(start, bot_id, 3);
+                            turf_targets.append(&mut targets);
+                            targets = turf_targets;
+                        }
                         if let Some((dir, path)) =
                             self.astar_search_verified(start, Some(current_dir), &targets, 4)
                         {
@@ -3029,6 +3037,37 @@ impl Game {
                 }
             }
         }
+    }
+    #[must_use]
+    pub fn turf_war_frontier_targets(
+        &self,
+        start: Point,
+        bot_id: u8,
+        max: usize,
+    ) -> Vec<Point> {
+        let mut frontier: Vec<(u32, Point)> = Vec::new();
+        for y in 1..self.height.saturating_sub(1) {
+            for x in 1..self.width.saturating_sub(1) {
+                let p = Point { x, y };
+                if p == start
+                    || self.painted_tiles.get(&p) == Some(&bot_id)
+                    || self.obstacles.contains(&p)
+                    || self.snake.body_map.contains_key(&p)
+                    || self
+                        .player2
+                        .as_ref()
+                        .is_some_and(|p2| p2.body_map.contains_key(&p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+                {
+                    continue;
+                }
+                let dist = u32::from(start.x.abs_diff(x)) + u32::from(start.y.abs_diff(y));
+                frontier.push((dist, p));
+            }
+        }
+        frontier.sort_by_key(|(dist, _)| *dist);
+        frontier.truncate(max);
+        frontier.into_iter().map(|(_, p)| p).collect()
     }
     pub(crate) fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
         let head1 = self.snake.head();

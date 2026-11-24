@@ -20,6 +20,9 @@ We have recently added a dynamic "Portals" mechanic! Occasionally, a pair of con
 ## ❄️ Blizzard Mode
 We have added a **Blizzard Mode**! A permanent snowstorm (`Weather::Snow`) sweeps the board: every few ticks a snow drift falls on a random empty cell and blocks movement like an obstacle (never on the snake, on items, or on the cell a snake is about to enter). Every 250-tick cycle the snow thaws away, and eating food melts the snow around it. The autopilot handles the storm natively since snow is a hard obstacle in the A* pathfinding and safety verification. Select "Blizzard Mode" from the main menu.
 
+## 🎨 Turf War Mode
+We have added a **Turf War Mode**! Every snake paints the cells its body covers, and when the clock runs out the participant with the most painted territory wins. The mode's arena bots are driven by the full verified-safe autopilot and actively expand into unpainted (or enemy-held) frontier tiles via `turf_war_frontier_targets`, so they contest turf instead of beelining into walls.
+
 ## 🏆 Daily Challenge
 We have introduced a **Daily Challenge** mode! Every day, a globally synchronized seed is generated based on the days since the UNIX epoch. This guarantees that all players worldwide face the exact same procedural maze, obstacles, and food spawns for that day, fostering true competitive e-sports. The RNG architecture is fully refactored to use `StdRng` for testability and determinism.
 
@@ -42,6 +45,7 @@ Please reach out to our chief evangelist if you want to join our journey.
 dummy update
 
 ## Major Developments
+* We brought the **Turf War arena bots under the full verified-safe autopilot**: `GameMode::TurfWar` now drives its 3 arena bots through the same pipeline as the other arena modes — every candidate route is verified step-by-step (`path_is_safe` with rival-head prediction and predicted enemy occupancy), trap-checked (`path_keeps_tail_reachable`), scored for survivable space, with tail-chase and flood-fill fallbacks — so bots no longer drive straight into walls and die. On top of that, Turf War bots get territory-aware targets: `turf_war_frontier_targets` prepends the nearest cells they have not painted yet (including enemy-owned tiles, which can be reclaimed) ahead of food/power-ups, so each bot actively expands and contests turf instead of only chasing food. Covered by `tests/test_turf_war_autopilot.rs` and documented in `docs/mechanics/README.md`.
 * We added **Blizzard Mode** (`GameMode::Blizzard`, menu entry 49): a permanent snowstorm in which snow drifts accumulate on the board as hard obstacles (capped at 10% of the board), thaw away every 250-tick cycle, and melt around eaten food. Snow is mirrored into `obstacles`/`snow_tiles` so the A* autopilot, path verification, trap avoidance, save/load and time-rewind all treat it consistently; snow never spawns on snakes, entities, or the cell a snake is about to enter, and the bot is exempt from the usual Snow movement delay in this mode. Covered by `tests/test_blizzard_mode.rs` and documented in `docs/mechanics/README.md`.
 * We fixed an edge case where Boss AI would pathfind directly towards lasers, ensuring a much better experience for boss fights. We did this by heavily increasing the heuristic penalty for locations close to lasers in the A* algorithm `get_boss_path`.
 * We significantly improved bot pathfinding in `astar_search` by updating the heuristic penalty for lasers to match `get_boss_path`. This ensures bots now strongly avoid lasers as effectively as bosses do.
