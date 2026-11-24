@@ -2795,6 +2795,7 @@ impl Game {
                     if self.bots[i].direction_queue.is_empty() {
                         let start = self.bots[i].head();
                         let current_dir = self.bots[i].direction;
+                        let tail = self.bots[i].body.back().copied();
 
                         // Use flow field for MassiveMultiplayer and Zombie to save performance
                         let expected_targets = if self.mode == GameMode::Zombie {
@@ -2857,6 +2858,13 @@ impl Game {
                         }
                         if let Some((dir, path)) =
                             self.astar_search(start, Some(current_dir), &targets, 4)
+                        {
+                            self.bots_autopilot_paths[i] = path;
+                            self.bots[i].direction_queue.push_back(dir);
+                        } else if let Some(tail) = tail
+                            && tail != start
+                            && let Some((dir, path)) =
+                                self.astar_search(start, Some(current_dir), &[tail], 4)
                         {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
@@ -9866,12 +9874,20 @@ impl Game {
             return Some(dir);
         }
         self.autopilot_path.clear();
+        if let Some(tail) = self.snake.body.back().copied()
+            && tail != start
+            && let Some((dir, path)) = self.astar_search(start, Some(current_dir), &[tail], 1)
+        {
+            self.autopilot_path = path;
+            return Some(dir);
+        }
         self.flood_fill_fallback(start, current_dir, 1)
     }
     pub fn calculate_p2_autopilot_move(&mut self) -> Option<Direction> {
         if let Some(p2) = &self.player2 {
             let start = p2.head();
             let current_dir = p2.direction;
+            let tail = p2.body.back().copied();
             let mut targets = vec![self.food];
             if let Some((bf_p, _)) = self.bonus_food {
                 targets.push(bf_p);
@@ -9972,6 +9988,13 @@ impl Game {
                 return Some(dir);
             }
             self.p2_autopilot_path.clear();
+            if let Some(tail) = tail
+                && tail != start
+                && let Some((dir, path)) = self.astar_search(start, Some(current_dir), &[tail], 2)
+            {
+                self.p2_autopilot_path = path;
+                return Some(dir);
+            }
             self.flood_fill_fallback(start, current_dir, 2)
         } else {
             None
