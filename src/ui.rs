@@ -629,6 +629,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Turf War Mode",
         "Asteroids Mode",
         "Sandbox Mode",
+        "Blizzard Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1829,19 +1830,30 @@ fn draw_entities<W: Write>(
             stdout.queue(cursor::MoveTo(obs.x, obs.y))?;
             write!(stdout, "X")?;
         }
+    }
 
-        for crop in &game.crops {
-            stdout.queue(cursor::MoveTo(crop.position.x, crop.position.y))?;
-            if crop.growth_stage == 0 {
-                stdout.queue(SetForegroundColor(Color::DarkGrey))?;
-                write!(stdout, ".")?;
-            } else if crop.growth_stage == 1 {
-                stdout.queue(SetForegroundColor(Color::Green))?;
-                write!(stdout, "v")?;
-            } else {
-                stdout.queue(SetForegroundColor(Color::Yellow))?;
-                write!(stdout, "¥")?;
+    // Draw snow drifts (Blizzard mode)
+    if game.mode == crate::game::GameMode::Blizzard {
+        stdout.queue(SetForegroundColor(Color::White))?;
+        for snow in &game.snow_tiles {
+            if is_visible(snow.x, snow.y) {
+                stdout.queue(cursor::MoveTo(snow.x, snow.y))?;
+                write!(stdout, "*")?;
             }
+        }
+    }
+
+    for crop in &game.crops {
+        stdout.queue(cursor::MoveTo(crop.position.x, crop.position.y))?;
+        if crop.growth_stage == 0 {
+            stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+            write!(stdout, ".")?;
+        } else if crop.growth_stage == 1 {
+            stdout.queue(SetForegroundColor(Color::Green))?;
+            write!(stdout, "v")?;
+        } else {
+            stdout.queue(SetForegroundColor(Color::Yellow))?;
+            write!(stdout, "¥")?;
         }
     }
 
@@ -2523,10 +2535,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         } else {
             String::new()
         };
+    let snow_str = if game.mode == crate::game::GameMode::Blizzard {
+        format!(" | Snow: {}", game.snow_tiles.len())
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
-    write!(stdout, "{weather_str}{tod_str}")?;
+    write!(stdout, "{weather_str}{tod_str}{snow_str}")?;
 
     if !game.bosses.is_empty() {
         let total_health: u32 = game.bosses.iter().map(|b| b.health).sum();

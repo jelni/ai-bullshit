@@ -52,4 +52,5 @@ pub enum GameMode {
     TurfWar,
     Asteroids,
     Sandbox,
+    Blizzard,
 }

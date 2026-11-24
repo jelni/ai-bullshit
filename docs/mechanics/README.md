@@ -7,3 +7,27 @@ The game features several complex mechanics beyond simple snake movement:
 - **Power-ups:** Players can collect various power-ups that modify gameplay (e.g., speed boosts, invincibility, or score multipliers).
 - **Daily Challenges:** Deterministic challenges generated using a specific global seed.
 - **Missions/Bounties:** Dynamic quests spawned during the game.
+
+## Weather System
+
+The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse` and `Fog` (randomly over time, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
+
+- **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
+- **Sandstorm:** occasionally shuffles the food to a neighboring cell.
+- **Earthquake:** occasionally adds or removes an obstacle.
+- **Tornado:** occasionally relocates the food.
+- **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it).
+- **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
+
+The Druid hero class ignores all weather penalties.
+
+## Blizzard Mode
+
+`GameMode::Blizzard` (menu entry "Blizzard Mode") is a survival mode wrapped in a permanent snowstorm (`weather` is forced to `Weather::Snow` every tick):
+
+- **Snowfall:** every 6th tick a snow drift (`*`) falls on a random empty cell, up to a cap of 10% of the board. Snow tiles are stored in `snow_tiles` and mirrored into `obstacles`, so they block movement for the player, the autopilot, and all arena bots like any other obstacle.
+- **Fairness:** snow never falls on the snake's body, on any entity (food, power-ups, portals, mines, bosses, turrets, companion, goblin, ...), or on the cell any snake is about to move into this tick.
+- **Thawing:** at tick 200 of every 250-tick cycle, all accumulated snow melts away ("Thawing!"), keeping the board playable.
+- **Melting by food:** eating food melts all snow tiles adjacent to the eaten cell.
+- **Persistence:** snow survives respawns and is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). If another effect clears obstacles (e.g. the Bomb power-up), stale snow records are pruned on the next tick.
+- **Rendering:** snow drifts are drawn as white `*` (terminal) / white cells (web) on top of the red `X` obstacles, and the status bar shows a `Snow: <count>` counter.

@@ -99,6 +99,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw snow drifts (Blizzard mode)
+    if game.mode == crate::game::GameMode::Blizzard {
+        ctx.set_fill_style_str("#FFFFFF");
+        for snow in &game.snow_tiles {
+            if snow.x < game.width
+                && snow.y < game.height
+                && is_visible(f64::from(snow.x), f64::from(snow.y))
+            {
+                ctx.fill_rect(
+                    f64::from(snow.x) * cell_size,
+                    f64::from(snow.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Turrets
     ctx.set_fill_style_str("#008B8B"); // DarkCyan
     for turret in &game.turrets {

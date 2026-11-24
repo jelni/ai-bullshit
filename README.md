@@ -17,6 +17,9 @@ Our sensible business model:
 ## 🌀 Portals Feature
 We have recently added a dynamic "Portals" mechanic! Occasionally, a pair of connected portals will spawn on the map. Entering one portal instantly teleports the snake to the other.
 
+## ❄️ Blizzard Mode
+We have added a **Blizzard Mode**! A permanent snowstorm (`Weather::Snow`) sweeps the board: every few ticks a snow drift falls on a random empty cell and blocks movement like an obstacle (never on the snake, on items, or on the cell a snake is about to enter). Every 250-tick cycle the snow thaws away, and eating food melts the snow around it. The autopilot handles the storm natively since snow is a hard obstacle in the A* pathfinding and safety verification. Select "Blizzard Mode" from the main menu.
+
 ## 🏆 Daily Challenge
 We have introduced a **Daily Challenge** mode! Every day, a globally synchronized seed is generated based on the days since the UNIX epoch. This guarantees that all players worldwide face the exact same procedural maze, obstacles, and food spawns for that day, fostering true competitive e-sports. The RNG architecture is fully refactored to use `StdRng` for testability and determinism.
 
@@ -39,6 +42,7 @@ Please reach out to our chief evangelist if you want to join our journey.
 dummy update
 
 ## Major Developments
+* We added **Blizzard Mode** (`GameMode::Blizzard`, menu entry 49): a permanent snowstorm in which snow drifts accumulate on the board as hard obstacles (capped at 10% of the board), thaw away every 250-tick cycle, and melt around eaten food. Snow is mirrored into `obstacles`/`snow_tiles` so the A* autopilot, path verification, trap avoidance, save/load and time-rewind all treat it consistently; snow never spawns on snakes, entities, or the cell a snake is about to enter, and the bot is exempt from the usual Snow movement delay in this mode. Covered by `tests/test_blizzard_mode.rs` and documented in `docs/mechanics/README.md`.
 * We fixed an edge case where Boss AI would pathfind directly towards lasers, ensuring a much better experience for boss fights. We did this by heavily increasing the heuristic penalty for locations close to lasers in the A* algorithm `get_boss_path`.
 * We significantly improved bot pathfinding in `astar_search` by updating the heuristic penalty for lasers to match `get_boss_path`. This ensures bots now strongly avoid lasers as effectively as bosses do.
 * We ensured bosses now dynamically avoid turrets by adding a proximity penalty to the A* heuristic in `get_boss_path`. This prevents them from pathfinding directly into a turret's line of fire.

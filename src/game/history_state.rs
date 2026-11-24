@@ -60,4 +60,5 @@ pub struct HistoryState {
     pub xp_gems: HashSet<Point>,
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     pub match_time: u32,
+    pub snow_tiles: HashSet<Point>,
 }

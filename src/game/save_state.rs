@@ -127,6 +127,8 @@ pub struct SaveState {
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     #[serde(default)]
     pub match_time: u32,
+    #[serde(default)]
+    pub snow_tiles: HashSet<Point>,
 }
 
 #[must_use]

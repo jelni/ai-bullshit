@@ -126,6 +126,7 @@ pub struct Game {
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     pub match_time: u32,
     pub controls_scrambled_timer: u8,
+    pub snow_tiles: HashSet<Point>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -545,6 +546,7 @@ impl Game {
             painted_tiles: std::collections::HashMap::new(),
             match_time: 0,
             controls_scrambled_timer: 0,
+            snow_tiles: HashSet::new(),
         }
     }
     #[must_use]
@@ -785,6 +787,7 @@ impl Game {
             current_room_coords: self.current_room_coords,
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
+            snow_tiles: self.snow_tiles.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -914,6 +917,7 @@ impl Game {
                 self.current_room_coords = state.current_room_coords;
                 self.painted_tiles = state.painted_tiles;
                 self.match_time = state.match_time;
+                self.snow_tiles = state.snow_tiles;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1269,6 +1273,89 @@ impl Game {
             meteors_to_keep.push(meteor);
         }
         self.meteors = meteors_to_keep;
+    }
+    fn manage_blizzard(&mut self) {
+        if self.mode != GameMode::Blizzard {
+            return;
+        }
+        // The storm never breaks in Blizzard mode
+        self.weather = Weather::Snow;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale snow records
+        self.snow_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic thaw: all accumulated snow melts away
+        if self.tick_counter == 200 {
+            if !self.snow_tiles.is_empty() {
+                for p in self.snow_tiles.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Thawing!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            return;
+        }
+        // Snowfall accumulates on random empty cells
+        if self.tick_counter.is_multiple_of(6) {
+            let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+            if u32::try_from(self.snow_tiles.len()).unwrap_or(u32::MAX) < cap {
+                let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+                let p2_next = self
+                    .player2
+                    .as_ref()
+                    .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+                let bot_next: Vec<Point> = self
+                    .bots
+                    .iter()
+                    .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                    .collect();
+                let avoid = |p: &Point| {
+                    *p == p1_next
+                        || p2_next == Some(*p)
+                        || bot_next.contains(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.mines.contains(p)
+                        || self.black_hole == Some(*p)
+                        || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                        || self.bosses.iter().any(|b| b.position == *p)
+                        || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                        || self.turrets.iter().any(|t| t.position == *p)
+                        || self.xp_gems.contains(p)
+                        || self.painted_tiles.contains_key(p)
+                        || self.equipment_boxes.contains(p)
+                        || self.crops.iter().any(|c| c.position == *p)
+                        || self.eggs_on_board.contains_key(p)
+                        || self.koth_zone == Some(*p)
+                        || self.p1_flag == Some(*p)
+                        || self.p2_flag == Some(*p)
+                        || self.resources.contains_key(p)
+                        || self.lasers.iter().any(|l| l.position == *p)
+                        || self.meteors.iter().any(|m| m.position == *p)
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.snow_tiles.insert(pos);
+                    self.obstacles.insert(pos);
+                }
+            }
+        }
     }
     fn manage_black_hole(&mut self) {
         let spawn_chance = 0.002;
@@ -1911,7 +1998,8 @@ impl Game {
             | GameMode::Miner
             | GameMode::Asteroids
             | GameMode::TurfWar
-            | GameMode::Sandbox => {
+            | GameMode::Sandbox
+            | GameMode::Blizzard => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -1990,6 +2078,7 @@ impl Game {
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
+                || self.mode == GameMode::Blizzard
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2037,6 +2126,7 @@ impl Game {
             || self.mode == GameMode::Flood
             || self.mode == GameMode::Vampire
             || self.mode == GameMode::Gravity
+            || self.mode == GameMode::Blizzard
         {
             &self.snake
         } else {
@@ -2142,6 +2232,7 @@ impl Game {
             self.current_room_coords = (0, 0);
         }
 
+        self.snow_tiles.clear();
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2217,6 +2308,47 @@ impl Game {
             if let Some(p2) = &self.player2 {
                 let p2_body_map = p2.body_map.clone();
                 self.obstacles.retain(|p| !p2_body_map.contains_key(p));
+            }
+        } else if self.mode == GameMode::Blizzard {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let initial_snow = (u32::from(self.width) * u32::from(self.height)) / 80;
+            for _ in 0..initial_snow {
+                let snow_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    snow_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.snow_tiles.insert(p);
+                    self.obstacles.insert(p);
+                }
             }
         } else {
             let mut obstacles = HashSet::new();
@@ -2337,6 +2469,9 @@ impl Game {
         self.weather = Weather::Clear;
         if self.current_planet == Planet::Mars {
             self.weather = Weather::Sandstorm;
+        }
+        if self.mode == GameMode::Blizzard {
+            self.weather = Weather::Snow;
         }
         self.lightning_column = None;
         self.mines = HashSet::new();
@@ -2501,7 +2636,8 @@ impl Game {
             | GameMode::Miner
             | GameMode::Asteroids
             | GameMode::TurfWar
-            | GameMode::Sandbox => {
+            | GameMode::Sandbox
+            | GameMode::Blizzard => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2550,6 +2686,7 @@ impl Game {
         }
         self.bots.clear();
         self.bots_autopilot_paths.clear();
+        self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -2760,7 +2897,9 @@ impl Game {
         false
     }
     pub fn handle_autopilot_moves(&mut self) {
-        let delay_bot = self.weather == Weather::Snow && self.rng.gen_bool(0.2);
+        let delay_bot = self.weather == Weather::Snow
+            && self.mode != GameMode::Blizzard
+            && self.rng.gen_bool(0.2);
         if !delay_bot {
             if (self.auto_pilot || self.mode == GameMode::BotVsBot)
                 && self.snake.direction_queue.is_empty()
@@ -3027,6 +3166,7 @@ impl Game {
             self.xp_gems = state.xp_gems;
             self.painted_tiles = state.painted_tiles;
             self.match_time = state.match_time;
+            self.snow_tiles = state.snow_tiles;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3123,6 +3263,7 @@ impl Game {
             xp_gems: self.xp_gems.clone(),
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
+            snow_tiles: self.snow_tiles.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6834,6 +6975,7 @@ impl Game {
         self.manage_mines();
         self.manage_black_hole();
         self.manage_meteors();
+        self.manage_blizzard();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -8546,6 +8688,29 @@ impl Game {
         self.stats.coins += coins_earned;
         self.update_bounty_progress(crate::game::BountyType::EatFood(0), 1);
         self.update_quest_progress(crate::game::QuestType::CollectCoins, coins_earned);
+        if self.mode == GameMode::Blizzard {
+            let mut melted = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.snow_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    melted += 1;
+                }
+            }
+            if melted > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Melted {melted} snow!"),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {
             self.campaign_level += 1;
