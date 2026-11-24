@@ -70,6 +70,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw telegraphed meteor impact zones
+    ctx.set_fill_style_str("#8B0000"); // DarkRed
+    for cell in game.meteor_impact_cells() {
+        if cell.x < game.width
+            && cell.y < game.height
+            && is_visible(f64::from(cell.x), f64::from(cell.y))
+        {
+            ctx.fill_rect(
+                f64::from(cell.x) * cell_size,
+                f64::from(cell.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw food
     ctx.set_fill_style_str("#00FF00");
     if game.food.x < game.width

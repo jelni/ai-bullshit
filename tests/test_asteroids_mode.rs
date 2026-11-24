@@ -1,5 +1,5 @@
 use rand::SeedableRng;
-use snake_game::game::{Difficulty, Game, GameMode, GameState, Meteor, Theme};
+use snake_game::game::{Difficulty, Game, GameMode, GameState, Meteor, Theme, Weather};
 use snake_game::snake::{Direction, Point, Snake};
 
 fn asteroids_game(width: u16, height: u16) -> Game {
@@ -488,4 +488,248 @@ fn test_non_asteroids_meteors_do_not_drift() {
             5 + n / 2
         );
     }
+}
+
+#[test]
+fn test_asteroids_reset_clears_impact_counter() {
+    let mut game = asteroids_game(20, 20);
+    game.asteroid_impacts = 7;
+
+    game.reset();
+
+    assert_eq!(game.asteroid_impacts, 0);
+}
+
+#[test]
+fn test_asteroids_never_spawns_on_body_columns() {
+    let mut game = asteroids_game(50, 30);
+    game.obstacles.clear();
+    game.snake = Snake::new(Point { x: 10, y: 10 });
+    game.snake.direction = Direction::Right;
+    game.food = Point { x: 40, y: 20 };
+    game.lives = 100;
+
+    for tick in [11_u32, 23, 35, 47, 59] {
+        game.state = GameState::Playing;
+        let body_columns: std::collections::HashSet<u16> =
+            game.snake.body.iter().map(|p| p.x).collect();
+        let before: std::collections::HashSet<Point> =
+            game.meteors.iter().map(|m| m.position).collect();
+        game.tick_counter = tick;
+        game.update();
+        // Meteors spawned this tick are at the top row and were not in flight before
+        for m in &game.meteors {
+            if m.position.y == 1 && !before.contains(&m.position) {
+                assert!(
+                    !body_columns.contains(&m.position.x),
+                    "a meteor must never spawn on a column the snake's body occupies (x: {})",
+                    m.position.x
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_meteor_impact_cells_telegraph_landing_spot() {
+    let mut game = asteroids_game(20, 20);
+    game.obstacles.clear();
+    game.mines.clear();
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point { x: 5, y: 2 },
+        timer: 0,
+        vx: 0,
+    });
+
+    // Empty column: the meteor crashes on the bottom row of the play field
+    let cells = game.meteor_impact_cells();
+    assert_eq!(cells.len(), 1);
+    assert_eq!((cells[0].x, cells[0].y), (5, 19));
+
+    // An obstacle blocks the fall
+    game.obstacles.insert(Point { x: 5, y: 10 });
+    let cells = game.meteor_impact_cells();
+    assert_eq!((cells[0].x, cells[0].y), (5, 10));
+
+    // A mine higher up blocks it first
+    game.mines.insert(Point { x: 5, y: 7 });
+    let cells = game.meteor_impact_cells();
+    assert_eq!((cells[0].x, cells[0].y), (5, 7));
+}
+
+#[test]
+fn test_asteroids_impact_cell_rejected_once_meteor_can_reach_it() {
+    let mut game = asteroids_game(20, 20);
+    game.obstacles.clear();
+    game.food = Point { x: 1, y: 1 };
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point { x: 5, y: 2 },
+        timer: 0,
+        vx: 0,
+    });
+
+    assert!(
+        !game.is_safe_final_p(Point { x: 5, y: 19 }, 40, 1),
+        "the telegraphed impact cell must be rejected once the meteor can reach it"
+    );
+    assert!(
+        !game.is_safe_final_p(Point { x: 5, y: 10 }, 20, 1),
+        "any cell in the meteor's fall column must be rejected within the arrival horizon"
+    );
+    assert!(
+        game.is_safe_final_p(Point { x: 5, y: 1 }, 1, 1),
+        "cells above the meteor stay safe (it only falls down)"
+    );
+    assert!(
+        game.is_safe_final_p(Point { x: 6, y: 19 }, 40, 1),
+        "a different column must remain safe"
+    );
+}
+
+#[test]
+fn test_asteroids_impact_carves_crater_and_counts() {
+    let mut game = asteroids_game(20, 20);
+    game.obstacles.clear();
+    game.food = Point { x: 1, y: 1 };
+    // Obstacle ring around the impact cell plus one far-away obstacle
+    for p in [
+        Point { x: 5, y: 10 },
+        Point { x: 4, y: 10 },
+        Point { x: 6, y: 10 },
+        Point { x: 5, y: 9 },
+        Point { x: 5, y: 11 },
+        Point { x: 8, y: 10 },
+    ] {
+        game.obstacles.insert(p);
+    }
+    // Meteor one step above the obstacle, about to move onto it this tick
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point { x: 5, y: 9 },
+        timer: 1,
+        vx: 0,
+    });
+
+    game.state = GameState::Playing;
+    game.update();
+
+    assert_eq!(
+        game.asteroid_impacts, 1,
+        "the meteor crash must be counted in Asteroids mode"
+    );
+    for p in [
+        Point { x: 5, y: 10 },
+        Point { x: 4, y: 10 },
+        Point { x: 6, y: 10 },
+        Point { x: 5, y: 9 },
+        Point { x: 5, y: 11 },
+    ] {
+        assert!(
+            !game.obstacles.contains(&p),
+            "crater must destroy the obstacle at ({}, {})",
+            p.x,
+            p.y
+        );
+    }
+    assert!(
+        game.obstacles.contains(&Point { x: 8, y: 10 }),
+        "obstacles outside the crater must survive"
+    );
+}
+
+#[test]
+fn test_asteroids_impacts_accumulate_over_time() {
+    let mut game = asteroids_game(50, 30);
+    game.obstacles.clear();
+    game.auto_pilot = true;
+    game.lives = 100;
+
+    for _ in 0..120 {
+        game.update();
+        if game.state != GameState::Playing {
+            if game.lives == 0 {
+                break;
+            }
+            game.state = GameState::Playing;
+        }
+        // Keep the weather clear so ambient weather hazards (earthquake rubble,
+        // storm lightning) stay out of this meteor-focused test
+        game.weather = Weather::Clear;
+    }
+
+    assert!(
+        game.asteroid_impacts >= 5,
+        "expected several meteor impacts over 120 ticks, got {}",
+        game.asteroid_impacts
+    );
+}
+
+#[test]
+fn test_asteroids_bot_survives_showers_and_craters() {
+    let mut game = asteroids_game(50, 40);
+    game.auto_pilot = true;
+    game.lives = 100;
+
+    for _ in 0..150 {
+        game.update();
+        if game.state != GameState::Playing {
+            if game.lives == 0 {
+                break;
+            }
+            // Non-death interruption (e.g. merchant visit): resume playing
+            game.state = GameState::Playing;
+        }
+        // Keep the weather clear so ambient weather hazards (earthquake rubble,
+        // storm lightning) stay out of this meteor-focused test
+        game.weather = Weather::Clear;
+    }
+
+    assert!(
+        game.state == GameState::Playing && game.lives > 0,
+        "Autopilot should survive the meteor showers (lives: {}, impacts: {}, score: {})",
+        game.lives,
+        game.asteroid_impacts,
+        game.score
+    );
+    assert!(
+        game.asteroid_impacts >= 5,
+        "expected several impacts over 150 ticks, got {}",
+        game.asteroid_impacts
+    );
+}
+
+#[test]
+fn test_asteroid_impacts_persist_through_history_rewind() {
+    let mut game = asteroids_game(20, 20);
+    game.asteroid_impacts = 42;
+    game.save_history_state();
+    game.asteroid_impacts = 0;
+
+    game.rewind_time();
+
+    assert_eq!(
+        game.asteroid_impacts, 42,
+        "time-rewind must restore the asteroid impact counter"
+    );
+}
+
+#[test]
+fn test_asteroid_impacts_persist_through_save_file() {
+    let mut game = asteroids_game(20, 20);
+    game.asteroid_impacts = 13;
+    let path = std::env::temp_dir().join(format!(
+        "snake_asteroid_impacts_save_{}.json",
+        std::process::id()
+    ));
+    game.save_game_to_file(path.to_str().unwrap());
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    let json: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(
+        json["asteroid_impacts"].as_u64(),
+        Some(13),
+        "asteroid_impacts must be persisted in SaveState"
+    );
 }

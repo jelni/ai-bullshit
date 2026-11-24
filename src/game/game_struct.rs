@@ -134,6 +134,7 @@ pub struct Game {
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
     pub meteor_showers: u32,
+    pub asteroid_impacts: u32,
     pub tournament: Option<Tournament>,
     pub tornado: Option<Point>,
     pub tornado_gusts: u32,
@@ -572,6 +573,7 @@ impl Game {
             volcano_vents: Vec::new(),
             volcano_eruptions: 0,
             meteor_showers: 0,
+            asteroid_impacts: 0,
             tournament: None,
             tornado: None,
             tornado_gusts: 0,
@@ -830,6 +832,7 @@ impl Game {
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
             meteor_showers: self.meteor_showers,
+            asteroid_impacts: self.asteroid_impacts,
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
@@ -977,6 +980,7 @@ impl Game {
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
                 self.meteor_showers = state.meteor_showers;
+                self.asteroid_impacts = state.asteroid_impacts;
                 self.tournament = state.tournament;
                 if self.mode == GameMode::Tournament && self.tournament.is_none() {
                     let player_name = if self.player_name.is_empty() {
@@ -1280,8 +1284,10 @@ impl Game {
         }
         snakes.extend(self.bots.iter());
         for s in &snakes {
+            for seg in &s.body {
+                forbidden.push(seg.x);
+            }
             let head = s.head();
-            forbidden.push(head.x);
             forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
         }
         for m in &self.meteors {
@@ -1318,6 +1324,89 @@ impl Game {
             });
         }
         pool
+    }
+    fn register_meteor_impact(&mut self, impact: Point) {
+        if self.mode != GameMode::Asteroids {
+            return;
+        }
+        self.asteroid_impacts += 1;
+        crate::game::beep();
+        // The blast carves a small crater: obstacles adjacent to the impact cell are destroyed
+        let mut crater = Vec::with_capacity(4);
+        if impact.x > 0 {
+            crater.push(Point {
+                x: impact.x - 1,
+                y: impact.y,
+            });
+        }
+        if impact.x + 1 < self.width {
+            crater.push(Point {
+                x: impact.x + 1,
+                y: impact.y,
+            });
+        }
+        if impact.y > 0 {
+            crater.push(Point {
+                x: impact.x,
+                y: impact.y - 1,
+            });
+        }
+        if impact.y + 1 < self.height {
+            crater.push(Point {
+                x: impact.x,
+                y: impact.y + 1,
+            });
+        }
+        for p in crater {
+            if self.obstacles.remove(&p) {
+                self.spawn_particles(
+                    f32::from(p.x),
+                    f32::from(p.y),
+                    5,
+                    crate::color::Color::DarkYellow,
+                    'x',
+                );
+            }
+        }
+    }
+    #[must_use]
+    pub fn meteor_impact_cells(&self) -> Vec<Point> {
+        // Telegraph where each falling meteor will crash: the first blocked cell
+        // (obstacle or mine) along its predicted trajectory, or the bottom row
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let ground = self.height.saturating_sub(1).saturating_sub(margin);
+        let max_steps = self.height.saturating_mul(2);
+        let (lo, hi) = self.meteor_drift_bounds();
+        let mut cells = Vec::with_capacity(self.meteors.len());
+        for meteor in &self.meteors {
+            let mut impact = Point {
+                x: meteor.position.x,
+                y: ground,
+            };
+            for s in 1..=max_steps {
+                if let Some(p) = self.meteor_position_after(*meteor, s) {
+                    if self.obstacles.contains(&p) || self.mines.contains(&p) {
+                        impact = p;
+                        break;
+                    }
+                } else {
+                    // The meteor reaches the ground at this step; its final
+                    // column follows the (possibly bounced) drift trajectory
+                    let drift = (ground / 2).saturating_sub(meteor.position.y / 2);
+                    impact = Point {
+                        x: Self::bounced_x(meteor.position.x, meteor.vx, drift, lo, hi),
+                        y: ground,
+                    };
+                    break;
+                }
+            }
+            cells.push(impact);
+        }
+        cells
     }
     fn manage_meteors(&mut self) {
         let asteroids = self.mode == GameMode::Asteroids;
@@ -1428,6 +1517,7 @@ impl Game {
                     crate::color::Color::Red,
                     '*',
                 );
+                self.register_meteor_impact(meteor.position);
                 continue;
             }
             if self.obstacles.contains(&meteor.position) {
@@ -1440,6 +1530,7 @@ impl Game {
                     'X',
                 );
                 crate::game::beep();
+                self.register_meteor_impact(meteor.position);
                 continue;
             }
             if self.obstacles.contains(&meteor.position) {
@@ -1452,6 +1543,7 @@ impl Game {
                     'X',
                 );
                 crate::game::beep();
+                self.register_meteor_impact(meteor.position);
                 continue;
             }
             if self.mines.contains(&meteor.position) {
@@ -1464,6 +1556,7 @@ impl Game {
                     'X',
                 );
                 beep();
+                self.register_meteor_impact(meteor.position);
                 continue;
             }
             meteors_to_keep.push(meteor);
@@ -3603,6 +3696,7 @@ impl Game {
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
         self.meteor_showers = 0;
+        self.asteroid_impacts = 0;
         if self.mode == GameMode::Tornado {
             self.tornado = None;
             self.tornado_gusts = 0;
@@ -4772,6 +4866,7 @@ impl Game {
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
             self.meteor_showers = state.meteor_showers;
+            self.asteroid_impacts = state.asteroid_impacts;
             self.tournament = state.tournament;
             self.tornado = state.tornado;
             self.tornado_gusts = state.tornado_gusts;
@@ -4886,6 +4981,7 @@ impl Game {
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
             meteor_showers: self.meteor_showers,
+            asteroid_impacts: self.asteroid_impacts,
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,

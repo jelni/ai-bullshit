@@ -1818,6 +1818,15 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw telegraphed meteor impact zones
+    for cell in game.meteor_impact_cells() {
+        if is_visible(cell.x, cell.y) && !game.meteors.iter().any(|m| m.position == cell) {
+            stdout.queue(cursor::MoveTo(cell.x, cell.y))?;
+            stdout.queue(SetForegroundColor(Color::DarkRed))?;
+            write!(stdout, "!")?;
+        }
+    }
+
     // Draw food
     if is_visible(game.food.x, game.food.y) {
         stdout.queue(cursor::MoveTo(game.food.x, game.food.y))?;
@@ -2637,6 +2646,11 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let impacts_str = if game.mode == crate::game::GameMode::Asteroids {
+        format!(" | Impacts: {}", game.asteroid_impacts)
+    } else {
+        String::new()
+    };
     let tournament_str = if game.mode == crate::game::GameMode::Tournament
         && let Some(tournament) = &game.tournament
     {
@@ -2671,7 +2685,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}"
     )?;
 
     if !game.bosses.is_empty() {
