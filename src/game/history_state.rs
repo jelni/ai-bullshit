@@ -73,4 +73,6 @@ pub struct HistoryState {
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
     pub meteor_strikes: u32,
+    pub seismic_rubble: HashSet<Point>,
+    pub seismic_quakes: u32,
 }

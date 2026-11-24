@@ -150,6 +150,9 @@ pub struct SaveState {
     #[serde(default)]
     pub tremor_count: u32,
     pub meteor_strikes: u32,
+    pub seismic_rubble: HashSet<Point>,
+    #[serde(default)]
+    pub seismic_quakes: u32,
 }
 
 #[must_use]

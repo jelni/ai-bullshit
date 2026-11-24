@@ -636,6 +636,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Tornado Mode",
         "Earthquake Mode",
         "Meteor Shower Mode",
+        "Seismic Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1886,6 +1887,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw seismic rubble piles (Seismic mode)
+    if game.mode == crate::game::GameMode::Seismic {
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for rubble in &game.seismic_rubble {
+            if is_visible(rubble.x, rubble.y) {
+                stdout.queue(cursor::MoveTo(rubble.x, rubble.y))?;
+                write!(stdout, "#")?;
+            }
+        }
+    }
+
     for crop in &game.crops {
         stdout.queue(cursor::MoveTo(crop.position.x, crop.position.y))?;
         if crop.growth_stage == 0 {
@@ -2637,6 +2649,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     };
     let tremors_str = if game.mode == crate::game::GameMode::Earthquake {
         format!(" | Tremors: {}", game.tremor_count)
+    } else if game.mode == crate::game::GameMode::Seismic {
+        format!(" | Quakes: {}", game.seismic_quakes)
     } else {
         String::new()
     };

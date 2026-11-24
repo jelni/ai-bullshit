@@ -18,6 +18,8 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell.
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick. In Earthquake Mode the earthquake is also permanent, with a fair scheduled tremor every 5th tick.
 - **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent: a roaming vortex drifts every 6th tick and drags items towards itself, and every 8th tick a board-wide gust shoves every snake one cell in a shared random direction (see below).
+- **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick; in Seismic Mode a full row tremor is guaranteed every 6th tick.
+- **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent and a roaming vortex also drags items towards itself (see below).
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
 
@@ -140,3 +142,18 @@ The Druid hero class ignores all weather penalties.
 - **Autopilot:** falling meteors are already hard hazards in the A* heuristic/edge costs and in `is_safe_final_p`, which rejects any cell in a meteor's column that the meteor will reach within the cell's arrival step count, so the bot routes around meteor columns natively.
 - **Persistence:** the `meteor_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent; meteors themselves were already persisted), and the status bar shows a `Meteors: <count>` counter.
 - **Tests:** see [tests/test_meteor_shower_mode.rs](../../tests/test_meteor_shower_mode.rs).
+        }
+
+## Seismic Mode
+
+`GameMode::Seismic` (menu entry "Seismic Mode" (entry 56 in the main menu; Quake Mode is 51, Volcano Mode is 52, Tornado Mode is 53, Earthquake Mode is 54, Meteor Shower Mode is 55)) is a survival mode wrapped in a permanent earthquake (`weather` is forced to `Weather::Earthquake` every tick):
+
+- **Scheduled tremors:** on every 6th tick a tremor is guaranteed to shake a random row (on top of the usual ambient earthquake chance). The shaken row crumbles: all obstacles in it are destroyed, bosses standing in it lose 5 health (a kill grants score, bestiary/quest/bounty progress, and a chance to drop an equipment box), and up to 5 fresh rubble piles spawn on random empty cells of that row, up to a cap of 10% of the board. Rubble tiles are stored in `seismic_rubble` and mirrored into `obstacles`, so they block movement for the player, the autopilot, and all arena bots like any other obstacle.
+- **Fairness:** a scheduled tremor never shakes the row a snake currently occupies or the row its head is about to enter this tick (`pick_seismic_row`), and rubble never spawns on a snake's body, on any entity (food, power-ups, portals, mines, bosses, turrets, companion, goblin, ...), or on the cell any snake is about to move into this tick.
+- **Settling:** at tick 200 of every 250-tick cycle, the ground settles ("Settling!") and all accumulated rubble crumbles away, keeping the board playable.
+- **Bracing by food:** eating food clears all rubble tiles adjacent to the eaten cell ("Braced N rubble!").
+- **Autopilot:** rubble lives in `obstacles`, which the A* search, `path_is_safe`/`is_safe_final_p` verified-safe checks, and trap avoidance already treat as hard constraints, so the autopilot routes around fresh rubble natively.
+- **Persistence:** rubble survives respawns and is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), along with the `seismic_quakes` counter. If another effect clears obstacles (e.g. the Bomb power-up), stale rubble records are pruned on the next tick.
+- **Rendering:** rubble is drawn as dark-grey `#` (terminal) / grey cells (web) on top of the red `X` obstacles, and the status bar shows a `Quakes: <count>` counter.
+- **Tests:** see [tests/test_seismic_mode.rs](../../tests/test_seismic_mode.rs).
+

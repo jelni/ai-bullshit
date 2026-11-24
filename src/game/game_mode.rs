@@ -59,4 +59,5 @@ pub enum GameMode {
     Tornado,
     Earthquake,
     MeteorShower,
+    Seismic,
 }

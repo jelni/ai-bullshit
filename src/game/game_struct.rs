@@ -140,6 +140,8 @@ pub struct Game {
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
     pub meteor_strikes: u32,
+    pub seismic_rubble: HashSet<Point>,
+    pub seismic_quakes: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -573,6 +575,8 @@ impl Game {
             rubble_tiles: HashSet::new(),
             tremor_count: 0,
             meteor_strikes: 0,
+            seismic_rubble: HashSet::new(),
+            seismic_quakes: 0,
         }
     }
     #[must_use]
@@ -826,6 +830,8 @@ impl Game {
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
             meteor_strikes: self.meteor_strikes,
+            seismic_rubble: self.seismic_rubble.clone(),
+            seismic_quakes: self.seismic_quakes,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -977,6 +983,8 @@ impl Game {
                 self.rubble_tiles = state.rubble_tiles;
                 self.tremor_count = state.tremor_count;
                 self.meteor_strikes = state.meteor_strikes;
+                self.seismic_rubble = state.seismic_rubble;
+                self.seismic_quakes = state.seismic_quakes;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -2106,6 +2114,179 @@ impl Game {
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
     }
+
+    fn manage_seismic(&mut self) {
+        if self.mode != GameMode::Seismic {
+            return;
+        }
+        // The earthquake never stops in Seismic mode
+        self.weather = Weather::Earthquake;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale rubble records
+        self.seismic_rubble.retain(|p| self.obstacles.contains(p));
+        // Periodic settling: the ground stabilizes and all accumulated rubble crumbles away
+        if self.tick_counter == 200 {
+            if !self.seismic_rubble.is_empty() {
+                for p in self.seismic_rubble.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Settling!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // A guaranteed tremor shakes a whole row every 6th tick
+        if self.tick_counter.is_multiple_of(6) {
+            let min_y = 1;
+            let max_y = self.height.saturating_sub(1).max(min_y);
+            if let Some(quake_y) = self.pick_seismic_row(min_y, max_y) {
+                self.seismic_quakes += 1;
+                // The shaken row crumbles: existing obstacles in it are destroyed
+                let crumbled: Vec<Point> = self
+                    .obstacles
+                    .iter()
+                    .copied()
+                    .filter(|p| p.y == quake_y)
+                    .collect();
+                for p in &crumbled {
+                    self.obstacles.remove(p);
+                    self.seismic_rubble.remove(p);
+                }
+                // Bosses standing in the shaken row are damaged by the collapsing ground
+                let mut next_bosses = Vec::new();
+                for mut boss in std::mem::take(&mut self.bosses) {
+                    if boss.position.y == quake_y {
+                        boss.health = boss.health.saturating_sub(5);
+                        if boss.health == 0 {
+                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                            self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
+                            self.update_bounty_progress(crate::game::BountyType::KillBosses(0), 1);
+                            self.score += 100;
+                            if self.stats.faction.is_some() {
+                                self.stats.faction_rep += 100;
+                            }
+                            if self.rng.gen_bool(0.2) {
+                                self.equipment_boxes.push(boss.position);
+                            }
+                            self.spawn_particles(
+                                f32::from(boss.position.x),
+                                f32::from(boss.position.y),
+                                30,
+                                crate::color::Color::Magenta,
+                                'B',
+                            );
+                            continue;
+                        }
+                    }
+                    next_bosses.push(boss);
+                }
+                self.bosses = next_bosses;
+                // Fresh rubble piles up on random empty cells of the shaken row
+                let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+                let rubble_per_quake = 5u32;
+                if u32::try_from(self.seismic_rubble.len()).unwrap_or(u32::MAX) < cap {
+                    let p1_next =
+                        Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+                    let p2_next = self
+                        .player2
+                        .as_ref()
+                        .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+                    let bot_next: Vec<Point> = self
+                        .bots
+                        .iter()
+                        .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                        .collect();
+                    let avoid = |p: &Point| {
+                        *p == p1_next
+                            || p2_next == Some(*p)
+                            || bot_next.contains(p)
+                            || self.obstacles.contains(p)
+                            || self.seismic_rubble.contains(p)
+                            || self.snake.body_map.contains_key(p)
+                            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                            || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                            || *p == self.food
+                            || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                            || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                            || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                            || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                            || self.mines.contains(p)
+                            || self.black_hole == Some(*p)
+                            || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                            || self.bosses.iter().any(|b| b.position == *p)
+                            || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                            || self.turrets.iter().any(|t| t.position == *p)
+                            || self.xp_gems.contains(p)
+                            || self.painted_tiles.contains_key(p)
+                            || self.equipment_boxes.contains(p)
+                            || self.crops.iter().any(|c| c.position == *p)
+                            || self.eggs_on_board.contains_key(p)
+                            || self.koth_zone == Some(*p)
+                            || self.p1_flag == Some(*p)
+                            || self.p2_flag == Some(*p)
+                            || self.resources.contains_key(p)
+                            || self.lasers.iter().any(|l| l.position == *p)
+                            || self.meteors.iter().any(|m| m.position == *p)
+                    };
+                    let mut candidates: Vec<Point> = (1..self.width.saturating_sub(1))
+                        .map(|x| Point { x, y: quake_y })
+                        .filter(|p| !avoid(p))
+                        .collect();
+                    let mut spawned = 0u32;
+                    while spawned < rubble_per_quake
+                        && u32::try_from(self.seismic_rubble.len()).unwrap_or(u32::MAX) < cap
+                        && !candidates.is_empty()
+                    {
+                        let idx = self.rng.gen_range(0..candidates.len());
+                        let pos = candidates.swap_remove(idx);
+                        self.seismic_rubble.insert(pos);
+                        self.obstacles.insert(pos);
+                        spawned += 1;
+                    }
+                }
+                for x in (1..self.width.saturating_sub(1)).step_by(3) {
+                    self.spawn_particles(
+                        f32::from(x),
+                        f32::from(quake_y),
+                        2,
+                        crate::color::Color::DarkGrey,
+                        '#',
+                    );
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Tremor!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+            }
+        }
+    }
+    fn pick_seismic_row(&mut self, min_y: u16, max_y: u16) -> Option<u16> {
+        // Fairness: never shake the row a snake currently occupies or is about to enter
+        let mut forbidden: Vec<u16> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            forbidden.push(head.y);
+            forbidden.push(Self::calculate_next_head_dir(head, s.direction).y);
+        }
+        let allowed: Vec<u16> = (min_y..max_y).filter(|y| !forbidden.contains(y)).collect();
+        if allowed.is_empty() {
+            None
+        } else {
+            Some(allowed[self.rng.gen_range(0..allowed.len())])
+        }
+    }
     fn manage_black_hole(&mut self) {
         let spawn_chance = 0.002;
         if self.black_hole.is_none() && self.rng.gen_bool(spawn_chance) {
@@ -2757,7 +2938,8 @@ impl Game {
             | GameMode::Volcano
             | GameMode::Tornado
             | GameMode::Earthquake
-            | GameMode::MeteorShower => {
+            | GameMode::MeteorShower
+            | GameMode::Seismic => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2843,6 +3025,7 @@ impl Game {
                 || self.mode == GameMode::Tornado
                 || self.mode == GameMode::Earthquake
                 || self.mode == GameMode::MeteorShower
+                || self.mode == GameMode::Seismic
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2897,6 +3080,7 @@ impl Game {
             || self.mode == GameMode::Tornado
             || self.mode == GameMode::Earthquake
             || self.mode == GameMode::MeteorShower
+            || self.mode == GameMode::Seismic
         {
             &self.snake
         } else {
@@ -3016,6 +3200,8 @@ impl Game {
         self.rubble_tiles.clear();
         self.tremor_count = 0;
         self.meteor_strikes = 0;
+        self.seismic_rubble.clear();
+        self.seismic_quakes = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -3174,6 +3360,47 @@ impl Game {
                     self.obstacles.insert(p);
                 }
             }
+        } else if self.mode == GameMode::Seismic {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let initial_rubble = (u32::from(self.width) * u32::from(self.height)) / 80;
+            for _ in 0..initial_rubble {
+                let rubble_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    rubble_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.seismic_rubble.insert(p);
+                    self.obstacles.insert(p);
+                }
+            }
         } else {
             let mut obstacles = HashSet::new();
             for _ in 0..obs_count {
@@ -3328,6 +3555,9 @@ impl Game {
         }
         if self.mode == GameMode::MeteorShower {
             self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Seismic {
+            self.weather = Weather::Earthquake;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -3525,7 +3755,8 @@ impl Game {
             | GameMode::Volcano
             | GameMode::Tornado
             | GameMode::Earthquake
-            | GameMode::MeteorShower => {
+            | GameMode::MeteorShower
+            | GameMode::Seismic => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3577,6 +3808,7 @@ impl Game {
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
+        self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -4128,6 +4360,8 @@ impl Game {
             self.rubble_tiles = state.rubble_tiles;
             self.tremor_count = state.tremor_count;
             self.meteor_strikes = state.meteor_strikes;
+            self.seismic_rubble = state.seismic_rubble;
+            self.seismic_quakes = state.seismic_quakes;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -4237,6 +4471,8 @@ impl Game {
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
             meteor_strikes: self.meteor_strikes,
+            seismic_rubble: self.seismic_rubble.clone(),
+            seismic_quakes: self.seismic_quakes,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6964,9 +7200,11 @@ impl Game {
         if self.rng.gen_bool(0.002)
             && self.mode != GameMode::Storm
             && self.mode != GameMode::Quake
+            && self.mode != GameMode::Volcano
             && self.mode != GameMode::Tornado
             && self.mode != GameMode::Earthquake
             && self.mode != GameMode::MeteorShower
+            && self.mode != GameMode::Seismic
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -7926,6 +8164,7 @@ impl Game {
         self.manage_tornado();
         self.manage_earthquake();
         self.manage_meteor_shower();
+        self.manage_seismic();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -9786,6 +10025,29 @@ impl Game {
                 "Deflected!".to_string(),
                 crate::color::Color::Yellow,
             );
+        }
+        if self.mode == GameMode::Seismic {
+            let mut braced = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.seismic_rubble.remove(&np) {
+                    self.obstacles.remove(&np);
+                    braced += 1;
+                }
+            }
+            if braced > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Braced {braced} rubble!"),
+                    crate::color::Color::DarkGrey,
+                );
+            }
         }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {

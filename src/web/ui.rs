@@ -167,6 +167,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw seismic rubble piles (Seismic mode)
+    if game.mode == crate::game::GameMode::Seismic {
+        ctx.set_fill_style_str("#696969");
+        for rubble in &game.seismic_rubble {
+            if rubble.x < game.width
+                && rubble.y < game.height
+                && is_visible(f64::from(rubble.x), f64::from(rubble.y))
+            {
+                ctx.fill_rect(
+                    f64::from(rubble.x) * cell_size,
+                    f64::from(rubble.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Turrets
     ctx.set_fill_style_str("#008B8B"); // DarkCyan
     for turret in &game.turrets {
