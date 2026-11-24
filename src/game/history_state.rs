@@ -61,6 +61,8 @@ pub struct HistoryState {
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     pub match_time: u32,
     pub snow_tiles: HashSet<Point>,
+    pub sand_tiles: HashSet<Point>,
+    pub sand_drifts: u32,
     pub storm_strikes: u32,
     pub quake_count: u32,
     pub lava_tiles: HashSet<Point>,

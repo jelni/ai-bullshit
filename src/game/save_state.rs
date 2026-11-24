@@ -130,6 +130,10 @@ pub struct SaveState {
     #[serde(default)]
     pub snow_tiles: HashSet<Point>,
     #[serde(default)]
+    pub sand_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub sand_drifts: u32,
+    #[serde(default)]
     pub storm_strikes: u32,
     #[serde(default)]
     pub quake_count: u32,

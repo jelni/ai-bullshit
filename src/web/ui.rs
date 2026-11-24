@@ -14,6 +14,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
 
     let is_visible = |px: f64, py: f64| -> bool {
         if game.mode == crate::game::GameMode::FogOfWar
+            || game.mode == crate::game::GameMode::Sandstorm
             || game.time_of_day == crate::game::TimeOfDay::Night
             || game.weather == crate::game::Weather::Fog
             || (game.mode == crate::game::GameMode::Eclipse && game.eclipse_flare == 0)
@@ -113,6 +114,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 cell_size,
                 cell_size,
             );
+        }
+    }
+
+    // Draw sand drifts (Sandstorm mode)
+    if game.mode == crate::game::GameMode::Sandstorm {
+        ctx.set_fill_style_str("#D2B48C"); // Tan
+        for sand in &game.sand_tiles {
+            if sand.x < game.width
+                && sand.y < game.height
+                && is_visible(f64::from(sand.x), f64::from(sand.y))
+            {
+                ctx.fill_rect(
+                    f64::from(sand.x) * cell_size,
+                    f64::from(sand.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
         }
     }
 

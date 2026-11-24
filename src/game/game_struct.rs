@@ -128,6 +128,8 @@ pub struct Game {
     pub match_time: u32,
     pub controls_scrambled_timer: u8,
     pub snow_tiles: HashSet<Point>,
+    pub sand_tiles: HashSet<Point>,
+    pub sand_drifts: u32,
     pub storm_strikes: u32,
     pub quake_count: u32,
     pub lava_tiles: HashSet<Point>,
@@ -568,6 +570,8 @@ impl Game {
             match_time: 0,
             controls_scrambled_timer: 0,
             snow_tiles: HashSet::new(),
+            sand_tiles: HashSet::new(),
+            sand_drifts: 0,
             storm_strikes: 0,
             quake_count: 0,
             lava_tiles: HashSet::new(),
@@ -828,6 +832,8 @@ impl Game {
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
+            sand_tiles: self.sand_tiles.clone(),
+            sand_drifts: self.sand_drifts,
             storm_strikes: self.storm_strikes,
             quake_count: self.quake_count,
             lava_tiles: self.lava_tiles.clone(),
@@ -977,6 +983,8 @@ impl Game {
                 self.painted_tiles = state.painted_tiles;
                 self.match_time = state.match_time;
                 self.snow_tiles = state.snow_tiles;
+                self.sand_tiles = state.sand_tiles;
+                self.sand_drifts = state.sand_drifts;
                 self.storm_strikes = state.storm_strikes;
                 self.quake_count = state.quake_count;
                 self.lava_tiles = state.lava_tiles;
@@ -1770,6 +1778,171 @@ impl Game {
             }
         }
     }
+    fn manage_sandstorm(&mut self) {
+        if self.mode != GameMode::Sandstorm {
+            return;
+        }
+        // The sandstorm never breaks in Sandstorm mode
+        self.weather = Weather::Sandstorm;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale sand records
+        self.sand_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic gale: all accumulated sand blows away
+        if self.tick_counter == 200 {
+            if !self.sand_tiles.is_empty() {
+                for p in self.sand_tiles.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The sand blows away!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+            }
+            return;
+        }
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        // Scheduled sandblast: every 6th tick the wind is guaranteed to shift the food
+        self.sand_blasts += 1;
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min_x = margin;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+        let min_y = margin;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.tornado == Some(*p)
+        };
+        let mut candidates = Vec::new();
+        for dir in [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            let np = Self::calculate_next_head_dir(self.food, dir);
+            if np.x > min_x && np.x < max_x && np.y > min_y && np.y < max_y && !avoid(&np) {
+                candidates.push(np);
+            }
+        }
+        if !candidates.is_empty() {
+            let np = candidates[self.rng.gen_range(0..candidates.len())];
+            self.food = np;
+            self.spawn_floating_text(
+                f32::from(np.x),
+                f32::from(np.y),
+                "Sandblast!".to_string(),
+                crate::color::Color::Yellow,
+            );
+
+        // Sandfall accumulates on random fair empty cells
+        self.sand_drifts += 1;
+            let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+            if u32::try_from(self.sand_tiles.len()).unwrap_or(u32::MAX) < cap {
+                let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+                let p2_next = self
+                    .player2
+                    .as_ref()
+                    .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+                let bot_next: Vec<Point> = self
+                    .bots
+                    .iter()
+                    .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                    .collect();
+                let avoid = |p: &Point| {
+                    *p == p1_next
+                        || p2_next == Some(*p)
+                        || bot_next.contains(p)
+                        || self.obstacles.contains(p)
+                        || self.sand_tiles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.mines.contains(p)
+                        || self.black_hole == Some(*p)
+                        || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                        || self.bosses.iter().any(|b| b.position == *p)
+                        || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                        || self.turrets.iter().any(|t| t.position == *p)
+                        || self.xp_gems.contains(p)
+                        || self.painted_tiles.contains_key(p)
+                        || self.equipment_boxes.contains(p)
+                        || self.crops.iter().any(|c| c.position == *p)
+                        || self.eggs_on_board.contains_key(p)
+                        || self.koth_zone == Some(*p)
+                        || self.p1_flag == Some(*p)
+                        || self.p2_flag == Some(*p)
+                        || self.resources.contains_key(p)
+                        || self.lasers.iter().any(|l| l.position == *p)
+                        || self.meteors.iter().any(|m| m.position == *p)
+                        || self.tornado.is_some_and(|t| t == *p)
+                        || self.lava_tiles.contains(p)
+                        || self.seismic_rubble.contains(p)
+                        || self.rubble_tiles.contains(p)
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.sand_tiles.insert(pos);
+                    self.obstacles.insert(pos);
+                }
+            }
+        }
+    }
     fn manage_storm(&mut self) {
         if self.mode != GameMode::Storm {
             return;
@@ -2498,90 +2671,6 @@ impl Game {
                 self.lava_tiles.insert(pos);
                 self.obstacles.insert(pos);
             }
-        }
-    }
-    fn manage_sandstorm(&mut self) {
-        if self.mode != GameMode::Sandstorm {
-            return;
-        }
-        // The sandstorm never dies down in Sandstorm mode
-        self.weather = Weather::Sandstorm;
-        // Scheduled sandblast: every 6th tick the wind is guaranteed to shift the food
-        if !self.tick_counter.is_multiple_of(6) {
-            return;
-        }
-        self.sand_blasts += 1;
-        let margin = if self.mode == GameMode::BattleRoyale {
-            self.safe_zone_margin
-        } else {
-            0
-        };
-        let min_x = margin;
-        let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
-        let min_y = margin;
-        let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
-        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
-        let p2_next = self
-            .player2
-            .as_ref()
-            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
-        let bot_next: Vec<Point> = self
-            .bots
-            .iter()
-            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
-            .collect();
-        let avoid = |p: &Point| {
-            *p == p1_next
-                || p2_next == Some(*p)
-                || bot_next.contains(p)
-                || self.obstacles.contains(p)
-                || self.snake.body_map.contains_key(p)
-                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
-                || self.bots.iter().any(|b| b.body_map.contains_key(p))
-                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
-                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
-                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
-                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
-                || self.mines.contains(p)
-                || self.black_hole == Some(*p)
-                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
-                || self.bosses.iter().any(|b| b.position == *p)
-                || self.companion.as_ref().is_some_and(|c| c.position == *p)
-                || self.turrets.iter().any(|t| t.position == *p)
-                || self.xp_gems.contains(p)
-                || self.painted_tiles.contains_key(p)
-                || self.equipment_boxes.contains(p)
-                || self.crops.iter().any(|c| c.position == *p)
-                || self.eggs_on_board.contains_key(p)
-                || self.koth_zone == Some(*p)
-                || self.p1_flag == Some(*p)
-                || self.p2_flag == Some(*p)
-                || self.resources.contains_key(p)
-                || self.lasers.iter().any(|l| l.position == *p)
-                || self.meteors.iter().any(|m| m.position == *p)
-                || self.tornado == Some(*p)
-        };
-        let mut candidates = Vec::new();
-        for dir in [
-            Direction::Up,
-            Direction::Down,
-            Direction::Left,
-            Direction::Right,
-        ] {
-            let np = Self::calculate_next_head_dir(self.food, dir);
-            if np.x > min_x && np.x < max_x && np.y > min_y && np.y < max_y && !avoid(&np) {
-                candidates.push(np);
-            }
-        }
-        if !candidates.is_empty() {
-            let np = candidates[self.rng.gen_range(0..candidates.len())];
-            self.food = np;
-            self.spawn_floating_text(
-                f32::from(np.x),
-                f32::from(np.y),
-                "Sandblast!".to_string(),
-                crate::color::Color::Yellow,
-            );
         }
     }
     fn manage_volcano(&mut self) {
@@ -3782,6 +3871,8 @@ impl Game {
         }
 
         self.snow_tiles.clear();
+        self.sand_tiles.clear();
+        self.sand_drifts = 0;
         self.storm_strikes = 0;
         self.quake_count = 0;
         self.lava_tiles.clear();
@@ -3916,6 +4007,47 @@ impl Game {
                     0,
                 ) {
                     self.snow_tiles.insert(p);
+                    self.obstacles.insert(p);
+                }
+            }
+        } else if self.mode == GameMode::Sandstorm {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let initial_sand = (u32::from(self.width) * u32::from(self.height)) / 80;
+            for _ in 0..initial_sand {
+                let sand_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    sand_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.sand_tiles.insert(p);
                     self.obstacles.insert(p);
                 }
             }
@@ -4415,6 +4547,7 @@ impl Game {
         self.bots.clear();
         self.bots_autopilot_paths.clear();
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
+        self.sand_tiles.retain(|p| self.obstacles.contains(p));
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
@@ -4957,6 +5090,8 @@ impl Game {
             self.painted_tiles = state.painted_tiles;
             self.match_time = state.match_time;
             self.snow_tiles = state.snow_tiles;
+            self.sand_tiles = state.sand_tiles;
+            self.sand_drifts = state.sand_drifts;
             self.storm_strikes = state.storm_strikes;
             self.quake_count = state.quake_count;
             self.lava_tiles = state.lava_tiles;
@@ -5071,6 +5206,8 @@ impl Game {
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
+            sand_tiles: self.sand_tiles.clone(),
+            sand_drifts: self.sand_drifts,
             storm_strikes: self.storm_strikes,
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
@@ -8787,6 +8924,7 @@ impl Game {
         self.manage_black_hole();
         self.manage_meteors();
         self.manage_blizzard();
+        self.manage_sandstorm();
         self.manage_storm();
         self.manage_quake();
         self.manage_volcano();
@@ -8794,7 +8932,6 @@ impl Game {
         self.manage_earthquake();
         self.manage_meteor_shower();
         self.manage_eclipse();
-        self.manage_sandstorm();
         self.manage_seismic();
         self.manage_goblin();
         self.manage_turrets();
@@ -10565,6 +10702,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Melted {melted} snow!"),
                     crate::color::Color::Cyan,
+                );
+            }
+        }
+        if self.mode == GameMode::Sandstorm {
+            let mut cleared = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.sand_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    cleared += 1;
+                }
+            }
+            if cleared > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Cleared {cleared} sand!"),
+                    crate::color::Color::Yellow,
                 );
             }
         }
@@ -13816,6 +13976,7 @@ impl Game {
         self.turrets.clear();
         self.bosses.clear();
         self.snow_tiles.clear();
+        self.sand_tiles.clear();
         self.lightning_column = None;
         self.flow_field = None;
         self.flow_field_targets.clear();

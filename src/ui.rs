@@ -1530,6 +1530,7 @@ fn draw_entities<W: Write>(
 ) -> io::Result<()> {
     let is_visible = |px: u16, py: u16| -> bool {
         if game.mode == crate::game::GameMode::FogOfWar
+            || game.mode == crate::game::GameMode::Sandstorm
             || game.time_of_day == crate::game::TimeOfDay::Night
             || game.weather == crate::game::Weather::Fog
             || (game.mode == crate::game::GameMode::Eclipse && game.eclipse_flare == 0)
@@ -1866,6 +1867,17 @@ fn draw_entities<W: Write>(
             if is_visible(snow.x, snow.y) {
                 stdout.queue(cursor::MoveTo(snow.x, snow.y))?;
                 write!(stdout, "*")?;
+            }
+        }
+    }
+
+    // Draw sand drifts (Sandstorm mode)
+    if game.mode == crate::game::GameMode::Sandstorm {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        for sand in &game.sand_tiles {
+            if is_visible(sand.x, sand.y) {
+                stdout.queue(cursor::MoveTo(sand.x, sand.y))?;
+                write!(stdout, "%")?;
             }
         }
     }
@@ -2686,12 +2698,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let sand_str = if game.mode == crate::game::GameMode::Sandstorm {
+        format!(
+            " | Sand: {} | Drifts: {}",
+            game.sand_tiles.len(),
+            game.sand_drifts
+        )
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}"
     )?;
 
     if !game.bosses.is_empty() {
