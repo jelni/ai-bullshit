@@ -10772,6 +10772,60 @@ impl Game {
         }
     }
 
+    /// Wall-clock interval between Battle Royale safe-zone shrinks.
+    pub const ZONE_SHRINK_INTERVAL: Duration = Duration::from_secs(10);
+    /// Upper bound on a single tick's wall-clock duration (the slowest
+    /// difficulty plus slowdown effects stay well below this). Projecting the
+    /// zone shrink with it makes the projection conservative: the real zone
+    /// can never shrink more during a path than this predicts.
+    pub const MAX_TICK_DURATION: Duration = Duration::from_millis(500);
+    /// The safe-zone margin the engine enforces right now: `safe_zone_margin`
+    /// in Battle Royale, 0 in every other mode.
+    #[must_use]
+    pub const fn zone_margin_now(&self) -> u16 {
+        match self.mode {
+            GameMode::BattleRoyale => self.safe_zone_margin,
+            _ => 0,
+        }
+    }
+    /// The safe-zone margin projected `steps` ticks into the future. In Battle
+    /// Royale the zone shrinks once per `ZONE_SHRINK_INTERVAL` of wall-clock
+    /// time, so the number of shrinks that happen while a path of `steps`
+    /// cells is being followed is derived from the elapsed time plus `steps`
+    /// maximum-length ticks. Capped at the maximum margin, like the engine.
+    #[must_use]
+    pub fn zone_margin_at(&self, steps: u16) -> u16 {
+        if self.mode != GameMode::BattleRoyale {
+            return 0;
+        }
+        let max_margin = (self.width.min(self.height) / 2).saturating_sub(2);
+        let interval_ms = Self::ZONE_SHRINK_INTERVAL.as_millis();
+        let elapsed_ms = self.last_shrink_time.elapsed().as_millis();
+        let future_ms = elapsed_ms.saturating_add(
+            u128::from(u64::from(steps)).saturating_mul(Self::MAX_TICK_DURATION.as_millis()),
+        );
+        let extra = u16::try_from(
+            (future_ms / interval_ms).saturating_sub(elapsed_ms / interval_ms),
+        )
+        .unwrap_or(u16::MAX);
+        self.safe_zone_margin.saturating_add(extra).min(max_margin)
+    }
+    /// Whether `p` is still inside the safe zone when reached `steps` ticks
+    /// from now. Only Battle Royale has a shrinking zone, and there the engine
+    /// disables wrapping and treats the zone border as a lethal wall, so this
+    /// mirrors the exact lethal condition of the movement code. Every other
+    /// mode is unaffected (the map edge is handled by `get_final_p`).
+    #[must_use]
+    pub fn within_safe_zone(&self, p: Point, steps: u16) -> bool {
+        if self.mode != GameMode::BattleRoyale {
+            return true;
+        }
+        let margin = self.zone_margin_at(steps);
+        p.x > margin
+            && p.x < self.width.saturating_sub(1).saturating_sub(margin)
+            && p.y > margin
+            && p.y < self.height.saturating_sub(1).saturating_sub(margin)
+    }
     /// Wrap- and portal-aware Manhattan distance between two cells. Used as the
     /// A* heuristic base and as the arrival-time estimate for rival snakes.
     #[must_use]
@@ -10900,6 +10954,12 @@ impl Game {
     #[expect(clippy::too_many_lines)]
     pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
         let is_invincible = self.is_invincible_active();
+        // In Battle Royale the safe-zone border is a hard wall in the engine,
+        // even while invincible, so it is checked before every other hazard
+        // and with the margin projected to this cell's arrival step.
+        if !self.within_safe_zone(final_p, steps) {
+            return false;
+        }
         let is_time_frozen = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::TimeFreeze
                 && p.activation_time.is_some_and(|t| {
@@ -12798,6 +12858,10 @@ impl Game {
                 if let Some(final_p) = self.get_final_p(next_p)
                     && !lane_hit(next_p, tentative_g)
                     && !lane_hit(final_p, tentative_g)
+                    // The shrinking safe zone is a hard constraint: even a
+                    // target cell may never be entered outside the projected
+                    // zone at its arrival step.
+                    && self.within_safe_zone(final_p, tentative_g)
                     && (next_p == final_p
                         || (self.is_safe_final_p(next_p, tentative_g, checking_player)
                             && !self.obstacles.contains(&next_p)))
@@ -13000,7 +13064,12 @@ impl Game {
         }
         blocked
     }
-    fn flood_fill_reachable(&self, from: Point, blocked: &HashSet<Point>) -> HashSet<Point> {
+    fn flood_fill_reachable(
+        &self,
+        from: Point,
+        blocked: &HashSet<Point>,
+        horizon: u16,
+    ) -> HashSet<Point> {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut visited: HashSet<Point> = HashSet::new();
         let mut queue: std::collections::VecDeque<Point> = std::collections::VecDeque::new();
@@ -13014,6 +13083,7 @@ impl Game {
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(curr, d);
                 if let Some(final_p) = self.get_final_p(next_p)
+                    && self.within_safe_zone(final_p, horizon)
                     && !blocked.contains(&final_p)
                     && !visited.contains(&final_p)
                 {
@@ -13043,7 +13113,8 @@ impl Game {
             return true;
         }
         let blocked = self.post_path_blocked_cells(start, &sim, checking_player);
-        self.flood_fill_reachable(head, &blocked).contains(&tail)
+        let horizon = u16::try_from(path.len()).unwrap_or(u16::MAX);
+        self.flood_fill_reachable(head, &blocked, horizon).contains(&tail)
     }
     #[must_use]
     pub fn reachable_space_after_path(
@@ -13060,7 +13131,8 @@ impl Game {
             return 0;
         };
         let blocked = self.post_path_blocked_cells(start, &sim, checking_player);
-        u32::try_from(self.flood_fill_reachable(head, &blocked).len()).unwrap_or(u32::MAX)
+        let horizon = u16::try_from(path.len()).unwrap_or(u16::MAX);
+        u32::try_from(self.flood_fill_reachable(head, &blocked, horizon).len()).unwrap_or(u32::MAX)
     }
     fn flood_fill_fallback(
         &self,

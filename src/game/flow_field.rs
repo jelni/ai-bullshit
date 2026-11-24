@@ -93,11 +93,7 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
 
             for (final_prev, target_dir) in candidates {
                 // Check if final_prev is actually a valid point on the board
-                let margin = if game.mode == crate::game::GameMode::BattleRoyale {
-                    game.safe_zone_margin
-                } else {
-                    0
-                };
+                let margin = game.zone_margin_now();
                 if final_prev.x <= margin
                     || final_prev.x >= game.width - 1 - margin
                     || final_prev.y <= margin
