@@ -78,4 +78,5 @@ pub struct HistoryState {
     pub seismic_quakes: u32,
     pub eclipse_flares: u32,
     pub eclipse_flare: u32,    pub tornado_spins: u32,
+    pub sand_blasts: u32,
 }

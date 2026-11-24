@@ -160,6 +160,7 @@ pub struct SaveState {
     #[serde(default)]
     pub eclipse_flare: u32,    #[serde(default)]
     pub tornado_spins: u32,
+    pub sand_blasts: u32,
 }
 
 #[must_use]

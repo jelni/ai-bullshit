@@ -16,7 +16,7 @@ The game features several complex mechanics beyond simple snake movement:
 The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse` and `Fog` (randomly over time, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
 
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
-- **Sandstorm:** occasionally shuffles the food to a neighboring cell.
+- **Sandstorm:** occasionally shuffles the food to a neighboring cell. In Sandstorm Mode the sandstorm is permanent and a sandblast is guaranteed every 6th tick.
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick. In Earthquake Mode the earthquake is also permanent, with a fair scheduled tremor every 5th tick.
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick; in Seismic Mode a full row tremor is guaranteed every 6th tick.
 - **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent: a roaming vortex drifts every 6th tick and drags items towards itself, every 8th tick a board-wide gust shoves every snake one cell in a shared random direction, and every 6th tick a full twister spin reshuffles items and obstacles (see below).
@@ -179,3 +179,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Sunlit:** eating food sets `eclipse_flare` to at least 6 ("Sunlit!"), a manual way to lift the darkness without incrementing the flare counter.
 - **Persistence:** the `eclipse_flares` counter and the `eclipse_flare` timer are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows a `Flares: <count>` counter.
 - **Tests:** see [tests/test_eclipse_mode.rs](../../tests/test_eclipse_mode.rs).
+
+
+## Sandstorm Mode
+
+`GameMode::Sandstorm` (menu entry "Sandstorm Mode") is a survival mode wrapped in a permanent sandstorm (`weather` is forced to `Weather::Sandstorm` every tick, and the ambient weather randomization is skipped in this mode):
+
+- **Scheduled sandblasts:** on every 6th tick a sandblast is guaranteed (on top of the usual ambient sandstorm chance) and drifts the food to a random adjacent cell. A sandblast shows a "Sandblast!" floating text at the food's new cell. If every adjacent cell is blocked, the food stays put but the blast still counts.
+- **Fairness:** the food never lands off the board, on a snake's body, on any entity (bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors, the tornado vortex), on an obstacle, or on the cell any snake is about to move into this tick (`manage_sandstorm`).
+- **Autopilot:** the autopilot recomputes its target list every tick, so it simply chases the food wherever the wind shifts it — no special handling needed.
+- **Persistence:** the `sand_blasts` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows a `Blasts: <count>` counter.
+- **Tests:** see [tests/test_sandstorm_mode.rs](../../tests/test_sandstorm_mode.rs).

@@ -146,6 +146,7 @@ pub struct Game {
     pub seismic_quakes: u32,
     pub eclipse_flares: u32,
     pub eclipse_flare: u32,
+    pub sand_blasts: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -585,6 +586,7 @@ impl Game {
             seismic_quakes: 0,
             eclipse_flares: 0,
             eclipse_flare: 0,
+            sand_blasts: 0,
         }
     }
     #[must_use]
@@ -844,6 +846,7 @@ impl Game {
             seismic_quakes: self.seismic_quakes,
             eclipse_flares: self.eclipse_flares,
             eclipse_flare: self.eclipse_flare,
+            sand_blasts: self.sand_blasts,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1001,8 +1004,10 @@ impl Game {
                 self.seismic_quakes = state.seismic_quakes;
             self.eclipse_flares = state.eclipse_flares;
             self.eclipse_flare = state.eclipse_flare;
+            self.sand_blasts = state.sand_blasts;
                 self.eclipse_flares = state.eclipse_flares;
                 self.eclipse_flare = state.eclipse_flare;
+                self.sand_blasts = state.sand_blasts;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -2495,6 +2500,90 @@ impl Game {
             }
         }
     }
+    fn manage_sandstorm(&mut self) {
+        if self.mode != GameMode::Sandstorm {
+            return;
+        }
+        // The sandstorm never dies down in Sandstorm mode
+        self.weather = Weather::Sandstorm;
+        // Scheduled sandblast: every 6th tick the wind is guaranteed to shift the food
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.sand_blasts += 1;
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min_x = margin;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+        let min_y = margin;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.tornado == Some(*p)
+        };
+        let mut candidates = Vec::new();
+        for dir in [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            let np = Self::calculate_next_head_dir(self.food, dir);
+            if np.x > min_x && np.x < max_x && np.y > min_y && np.y < max_y && !avoid(&np) {
+                candidates.push(np);
+            }
+        }
+        if !candidates.is_empty() {
+            let np = candidates[self.rng.gen_range(0..candidates.len())];
+            self.food = np;
+            self.spawn_floating_text(
+                f32::from(np.x),
+                f32::from(np.y),
+                "Sandblast!".to_string(),
+                crate::color::Color::Yellow,
+            );
+        }
+    }
     fn manage_volcano(&mut self) {
         if self.mode != GameMode::Volcano {
             return;
@@ -3440,7 +3529,8 @@ impl Game {
             | GameMode::Earthquake
             | GameMode::MeteorShower
             | GameMode::Seismic
-            | GameMode::Eclipse => {
+            | GameMode::Eclipse
+            | GameMode::Sandstorm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3528,6 +3618,7 @@ impl Game {
                 || self.mode == GameMode::MeteorShower
                 || self.mode == GameMode::Seismic
                 || self.mode == GameMode::Eclipse
+                || self.mode == GameMode::Sandstorm
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -3584,6 +3675,7 @@ impl Game {
             || self.mode == GameMode::MeteorShower
             || self.mode == GameMode::Seismic
             || self.mode == GameMode::Eclipse
+            || self.mode == GameMode::Sandstorm
         {
             &self.snake
         } else {
@@ -3709,6 +3801,7 @@ impl Game {
         self.seismic_quakes = 0;
         self.eclipse_flares = 0;
         self.eclipse_flare = 0;
+        self.sand_blasts = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -4069,6 +4162,9 @@ impl Game {
         if self.mode == GameMode::Eclipse {
             self.weather = Weather::Eclipse;
         }
+        if self.mode == GameMode::Sandstorm {
+            self.weather = Weather::Sandstorm;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -4268,7 +4364,8 @@ impl Game {
             | GameMode::Earthquake
             | GameMode::MeteorShower
             | GameMode::Seismic
-            | GameMode::Eclipse => {
+            | GameMode::Eclipse
+            | GameMode::Sandstorm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4876,6 +4973,7 @@ impl Game {
             self.meteor_strikes = state.meteor_strikes;
             self.seismic_rubble = state.seismic_rubble;
             self.seismic_quakes = state.seismic_quakes;
+            self.sand_blasts = state.sand_blasts;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -4991,6 +5089,7 @@ impl Game {
             seismic_quakes: self.seismic_quakes,
             eclipse_flares: self.eclipse_flares,
             eclipse_flare: self.eclipse_flare,
+            sand_blasts: self.sand_blasts,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -7734,6 +7833,7 @@ impl Game {
             && self.mode != GameMode::MeteorShower
             && self.mode != GameMode::Seismic
             && self.mode != GameMode::Eclipse
+            && self.mode != GameMode::Sandstorm
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -8694,6 +8794,7 @@ impl Game {
         self.manage_earthquake();
         self.manage_meteor_shower();
         self.manage_eclipse();
+        self.manage_sandstorm();
         self.manage_seismic();
         self.manage_goblin();
         self.manage_turrets();
