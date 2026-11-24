@@ -2857,14 +2857,14 @@ impl Game {
                             }
                         }
                         if let Some((dir, path)) =
-                            self.astar_search(start, Some(current_dir), &targets, 4)
+                            self.astar_search_verified(start, Some(current_dir), &targets, 4)
                         {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
                         } else if let Some(tail) = tail
                             && tail != start
                             && let Some((dir, path)) =
-                                self.astar_search(start, Some(current_dir), &[tail], 4)
+                                self.astar_search_verified(start, Some(current_dir), &[tail], 4)
                         {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
@@ -9869,14 +9869,16 @@ impl Game {
                 }];
             }
         }
-        if let Some((dir, path)) = self.astar_search(start, Some(current_dir), &targets, 1) {
+        if let Some((dir, path)) = self.astar_search_verified(start, Some(current_dir), &targets, 1)
+        {
             self.autopilot_path = path;
             return Some(dir);
         }
         self.autopilot_path.clear();
         if let Some(tail) = self.snake.body.back().copied()
             && tail != start
-            && let Some((dir, path)) = self.astar_search(start, Some(current_dir), &[tail], 1)
+            && let Some((dir, path)) =
+                self.astar_search_verified(start, Some(current_dir), &[tail], 1)
         {
             self.autopilot_path = path;
             return Some(dir);
@@ -9983,14 +9985,17 @@ impl Game {
                     }];
                 }
             }
-            if let Some((dir, path)) = self.astar_search(start, Some(current_dir), &targets, 2) {
+            if let Some((dir, path)) =
+                self.astar_search_verified(start, Some(current_dir), &targets, 2)
+            {
                 self.p2_autopilot_path = path;
                 return Some(dir);
             }
             self.p2_autopilot_path.clear();
             if let Some(tail) = tail
                 && tail != start
-                && let Some((dir, path)) = self.astar_search(start, Some(current_dir), &[tail], 2)
+                && let Some((dir, path)) =
+                    self.astar_search_verified(start, Some(current_dir), &[tail], 2)
             {
                 self.p2_autopilot_path = path;
                 return Some(dir);
@@ -9999,6 +10004,45 @@ impl Game {
         } else {
             None
         }
+    }
+    #[must_use]
+    pub fn path_is_safe(&self, path: &[Point], targets: &[Point], checking_player: u8) -> bool {
+        for (idx, &p) in path.iter().enumerate() {
+            let steps = u16::try_from(idx + 1).unwrap_or(u16::MAX);
+            let is_final = idx + 1 == path.len();
+            if is_final && targets.contains(&p) && self.bosses.iter().any(|b| b.position == p) {
+                continue;
+            }
+            if self.obstacles.contains(&p) || !self.is_safe_final_p(p, steps, checking_player) {
+                return false;
+            }
+        }
+        true
+    }
+    #[must_use]
+    pub fn astar_search_verified(
+        &self,
+        start: Point,
+        current_dir: Option<Direction>,
+        targets: &[Point],
+        checking_player: u8,
+    ) -> Option<(Direction, Vec<Point>)> {
+        let mut remaining: Vec<Point> = targets.to_vec();
+        let max_attempts = remaining.len().min(10);
+        let mut attempts = 0;
+        while !remaining.is_empty() && attempts < max_attempts {
+            attempts += 1;
+            let (dir, path) = self.astar_search(start, current_dir, &remaining, checking_player)?;
+            if self.path_is_safe(&path, &remaining, checking_player) {
+                return Some((dir, path));
+            }
+            if let Some(&reached) = path.last() {
+                remaining.retain(|t| *t != reached);
+            } else {
+                break;
+            }
+        }
+        None
     }
     #[expect(clippy::too_many_lines, reason = "Search algorithm is inherently complex and long")]
     fn astar_search(
