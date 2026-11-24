@@ -22,7 +22,7 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick; in Seismic Mode a full row tremor is guaranteed every 6th tick.
 - **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent and a roaming vortex also drags items towards itself (see below).
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
-- **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
+- **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s). In Eclipse Mode the eclipse is permanent and only solar flares (see below) lift the darkness.
 
 The Druid hero class ignores all weather penalties.
 
@@ -169,3 +169,12 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Hard constraint:** `is_safe_final_p` returns `false` for any cell outside `within_safe_zone(p, steps)` — before every other hazard check and regardless of invincibility, exactly mirroring the engine's lethal wall/zone condition (`x <= margin || x >= width-1-margin || y <= margin || y >= height-1-margin`). Outside Battle Royale `within_safe_zone` never rejects (the map edge is handled by `get_final_p`), so other modes are unchanged.
 - **Shrink projection:** `zone_margin_at(steps)` projects the margin `steps` ticks ahead using `last_shrink_time.elapsed()` plus `steps * Game::MAX_TICK_DURATION` (500 ms, an upper bound on any tick), capped at the maximum margin — so a path is verified against the zone it will face when each cell is actually reached, not the zone of today.
 - **Search and fallbacks:** `astar_search` never expands into out-of-zone cells (even target cells), `path_is_safe` rejects paths that cross the projected border, and the trap-avoidance/space flood fills (`path_keeps_tail_reachable`, `reachable_space_after_path`) only count in-zone cells via the zone-aware `flood_fill_reachable`. The flow field uses `zone_margin_now()` plus the same `is_safe_final_p` check, so flow-field bots are covered too.
+## Eclipse Mode
+
+`GameMode::Eclipse` (menu entry "Eclipse Mode") is a survival mode wrapped in a permanent eclipse (`weather` is forced to `Weather::Eclipse` every tick, and ambient weather randomization is skipped in this mode):
+
+- **Darkness:** rendering visibility is restricted to a radius of 6 around each snake's head (terminal and web UI both), so only the neighborhood of your snake is drawn. Collision and game logic still use the full board state, and the autopilot navigates on the full board state (as in Fog Of War mode), so the bot is unaffected by the dark.
+- **Solar flares:** on every 6th tick a scheduled solar flare sets `eclipse_flare = 3`, revealing the whole board for 3 ticks ("Solar flare!"), and the flare timer counts down each tick until the board is dark again.
+- **Sunlit:** eating food sets `eclipse_flare` to at least 6 ("Sunlit!"), a manual way to lift the darkness without incrementing the flare counter.
+- **Persistence:** the `eclipse_flares` counter and the `eclipse_flare` timer are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows a `Flares: <count>` counter.
+- **Tests:** see [tests/test_eclipse_mode.rs](../../tests/test_eclipse_mode.rs).

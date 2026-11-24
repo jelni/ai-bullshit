@@ -637,6 +637,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Earthquake Mode",
         "Meteor Shower Mode",
         "Seismic Mode",
+        "Eclipse Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1530,6 +1531,7 @@ fn draw_entities<W: Write>(
         if game.mode == crate::game::GameMode::FogOfWar
             || game.time_of_day == crate::game::TimeOfDay::Night
             || game.weather == crate::game::Weather::Fog
+            || (game.mode == crate::game::GameMode::Eclipse && game.eclipse_flare == 0)
         {
             let head = game.snake.head();
             let dx = f32::from(px) - f32::from(head.x);
@@ -2654,12 +2656,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let flares_str = if game.mode == crate::game::GameMode::Eclipse {
+        format!(" | Flares: {}", game.eclipse_flares)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{tournament_str}{gusts_str}{tremors_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{tournament_str}{gusts_str}{tremors_str}{flares_str}"
     )?;
 
     if !game.bosses.is_empty() {

@@ -60,4 +60,5 @@ pub enum GameMode {
     Earthquake,
     MeteorShower,
     Seismic,
+    Eclipse,
 }

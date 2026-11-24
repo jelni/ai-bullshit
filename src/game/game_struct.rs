@@ -142,6 +142,8 @@ pub struct Game {
     pub meteor_strikes: u32,
     pub seismic_rubble: HashSet<Point>,
     pub seismic_quakes: u32,
+    pub eclipse_flares: u32,
+    pub eclipse_flare: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -577,6 +579,8 @@ impl Game {
             meteor_strikes: 0,
             seismic_rubble: HashSet::new(),
             seismic_quakes: 0,
+            eclipse_flares: 0,
+            eclipse_flare: 0,
         }
     }
     #[must_use]
@@ -832,6 +836,8 @@ impl Game {
             meteor_strikes: self.meteor_strikes,
             seismic_rubble: self.seismic_rubble.clone(),
             seismic_quakes: self.seismic_quakes,
+            eclipse_flares: self.eclipse_flares,
+            eclipse_flare: self.eclipse_flare,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -985,6 +991,10 @@ impl Game {
                 self.meteor_strikes = state.meteor_strikes;
                 self.seismic_rubble = state.seismic_rubble;
                 self.seismic_quakes = state.seismic_quakes;
+            self.eclipse_flares = state.eclipse_flares;
+            self.eclipse_flare = state.eclipse_flare;
+                self.eclipse_flares = state.eclipse_flares;
+                self.eclipse_flare = state.eclipse_flare;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1848,6 +1858,28 @@ impl Game {
                 f32::from(pos.y),
                 "Quake!".to_string(),
                 crate::color::Color::Red,
+            );
+        }
+    }
+    fn manage_eclipse(&mut self) {
+        if self.mode != GameMode::Eclipse {
+            return;
+        }
+        // The eclipse never breaks in Eclipse mode
+        self.weather = Weather::Eclipse;
+        if self.eclipse_flare > 0 {
+            self.eclipse_flare -= 1;
+        }
+        // Every 6th tick a solar flare briefly reveals the whole board
+        if self.tick_counter.is_multiple_of(6) && self.eclipse_flare == 0 {
+            self.eclipse_flare = 3;
+            self.eclipse_flares += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "Solar flare!".to_string(),
+                crate::color::Color::Yellow,
             );
         }
     }
@@ -3112,7 +3144,8 @@ impl Game {
             | GameMode::Tornado
             | GameMode::Earthquake
             | GameMode::MeteorShower
-            | GameMode::Seismic => {
+            | GameMode::Seismic
+            | GameMode::Eclipse => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3199,6 +3232,7 @@ impl Game {
                 || self.mode == GameMode::Earthquake
                 || self.mode == GameMode::MeteorShower
                 || self.mode == GameMode::Seismic
+                || self.mode == GameMode::Eclipse
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -3254,6 +3288,7 @@ impl Game {
             || self.mode == GameMode::Earthquake
             || self.mode == GameMode::MeteorShower
             || self.mode == GameMode::Seismic
+            || self.mode == GameMode::Eclipse
         {
             &self.snake
         } else {
@@ -3375,6 +3410,8 @@ impl Game {
         self.meteor_strikes = 0;
         self.seismic_rubble.clear();
         self.seismic_quakes = 0;
+        self.eclipse_flares = 0;
+        self.eclipse_flare = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -3732,6 +3769,9 @@ impl Game {
         if self.mode == GameMode::Seismic {
             self.weather = Weather::Earthquake;
         }
+        if self.mode == GameMode::Eclipse {
+            self.weather = Weather::Eclipse;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -3929,7 +3969,8 @@ impl Game {
             | GameMode::Tornado
             | GameMode::Earthquake
             | GameMode::MeteorShower
-            | GameMode::Seismic => {
+            | GameMode::Seismic
+            | GameMode::Eclipse => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4646,6 +4687,8 @@ impl Game {
             meteor_strikes: self.meteor_strikes,
             seismic_rubble: self.seismic_rubble.clone(),
             seismic_quakes: self.seismic_quakes,
+            eclipse_flares: self.eclipse_flares,
+            eclipse_flare: self.eclipse_flare,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -7388,6 +7431,7 @@ impl Game {
             && self.mode != GameMode::Earthquake
             && self.mode != GameMode::MeteorShower
             && self.mode != GameMode::Seismic
+            && self.mode != GameMode::Eclipse
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -8347,6 +8391,7 @@ impl Game {
         self.manage_tornado();
         self.manage_earthquake();
         self.manage_meteor_shower();
+        self.manage_eclipse();
         self.manage_seismic();
         self.manage_goblin();
         self.manage_turrets();
@@ -10231,6 +10276,16 @@ impl Game {
                     crate::color::Color::DarkGrey,
                 );
             }
+        }
+        if self.mode == GameMode::Eclipse {
+            // Eating food catches the sunlight: the board stays revealed for 6 ticks
+            self.eclipse_flare = self.eclipse_flare.max(6);
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Sunlit!".to_string(),
+                crate::color::Color::Yellow,
+            );
         }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {

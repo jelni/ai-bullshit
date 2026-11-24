@@ -153,6 +153,10 @@ pub struct SaveState {
     pub seismic_rubble: HashSet<Point>,
     #[serde(default)]
     pub seismic_quakes: u32,
+    #[serde(default)]
+    pub eclipse_flares: u32,
+    #[serde(default)]
+    pub eclipse_flare: u32,
 }
 
 #[must_use]

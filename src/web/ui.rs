@@ -16,6 +16,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         if game.mode == crate::game::GameMode::FogOfWar
             || game.time_of_day == crate::game::TimeOfDay::Night
             || game.weather == crate::game::Weather::Fog
+            || (game.mode == crate::game::GameMode::Eclipse && game.eclipse_flare == 0)
         {
             let head = game.snake.head();
             let dx = px - f64::from(head.x);

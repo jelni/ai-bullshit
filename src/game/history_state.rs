@@ -75,4 +75,6 @@ pub struct HistoryState {
     pub meteor_strikes: u32,
     pub seismic_rubble: HashSet<Point>,
     pub seismic_quakes: u32,
+    pub eclipse_flares: u32,
+    pub eclipse_flare: u32,
 }
