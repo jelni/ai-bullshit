@@ -78,3 +78,15 @@ The Druid hero class ignores all weather penalties.
 - **Persistence:** `lava_tiles`, `volcano_vents` and `volcano_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). If another effect clears obstacles (e.g. the Bomb power-up), stale lava records are pruned on the next tick and the vents are re-seated into `obstacles`.
 - **Rendering:** lava is drawn as a red `~` (terminal) / orange cell (web) on top of the red `X` obstacles, vents as a dark-red `V` / dark-red cell, and the status bar shows `Lava: <count> | Eruptions: <count>`.
 - **Tests:** see [tests/test_volcano_mode.rs](../../tests/test_volcano_mode.rs).
+
+## Asteroids Mode
+
+`GameMode::Asteroids` (menu entry "Asteroids Mode") is a survival mode under a constant meteor bombardment:
+
+- **Ambient bombardment:** meteors spawn at the top of the board 15x more often than in other modes (15% per tick instead of 1%) and fall one cell every 2 ticks, destroying obstacles and mines they hit and killing any snake whose head (or body) they land on.
+- **Scheduled showers:** on every 6th tick a guaranteed meteor shower drops 2 meteors at once on random columns, on top of the ambient spawn chance. Each shower increments the `asteroid_strikes` counter.
+- **Fairness:** in Asteroids mode every meteor spawn (ambient or scheduled) picks its column via `pick_asteroid_columns`, which never targets the column a snake currently occupies, the column its head is about to enter this tick, or a column that already has a meteor in flight — so the bombardment is dangerous but never cheap.
+- **Deflection:** eating food deflects the most imminent meteor (the lowest one in flight) with a "Deflected!" flash, giving the player a way to neutralize the closest incoming impact.
+- **Autopilot:** meteors are already hard hazards in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks (which predict the cells a falling meteor will sweep through at each arrival step), so the autopilot rides out the bombardment natively.
+- **Persistence:** the `asteroid_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), and active `meteors` were already persisted. The status bar shows a `Meteors: <count>` counter, and meteors are rendered as dark-yellow `*` (terminal) / orange cells (web).
+- **Tests:** see [tests/test_asteroids_mode.rs](../../tests/test_asteroids_mode.rs).

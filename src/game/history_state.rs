@@ -66,4 +66,5 @@ pub struct HistoryState {
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
+    pub asteroid_strikes: u32,
 }

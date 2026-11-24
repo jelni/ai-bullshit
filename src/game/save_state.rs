@@ -139,6 +139,8 @@ pub struct SaveState {
     pub volcano_vents: Vec<Point>,
     #[serde(default)]
     pub volcano_eruptions: u32,
+    #[serde(default)]
+    pub asteroid_strikes: u32,
 }
 
 #[must_use]

@@ -132,6 +132,7 @@ pub struct Game {
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
+    pub asteroid_strikes: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -557,6 +558,7 @@ impl Game {
             lava_tiles: HashSet::new(),
             volcano_vents: Vec::new(),
             volcano_eruptions: 0,
+            asteroid_strikes: 0,
         }
     }
     #[must_use]
@@ -803,6 +805,7 @@ impl Game {
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
+            asteroid_strikes: self.asteroid_strikes,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -938,6 +941,7 @@ impl Game {
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
+                self.asteroid_strikes = state.asteroid_strikes;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1222,14 +1226,20 @@ impl Game {
             let min_x = margin + 1;
             let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
             if max_x > min_x {
-                let spawn_x = self.rng.gen_range(min_x..max_x);
-                self.meteors.push(Meteor {
-                    position: Point {
-                        x: spawn_x,
-                        y: margin + 1,
-                    },
-                    timer: 0,
-                });
+                let spawn_x = if self.mode == GameMode::Asteroids {
+                    self.pick_asteroid_columns(min_x, max_x, 1).into_iter().next()
+                } else {
+                    Some(self.rng.gen_range(min_x..max_x))
+                };
+                if let Some(spawn_x) = spawn_x {
+                    self.meteors.push(Meteor {
+                        position: Point {
+                            x: spawn_x,
+                            y: margin + 1,
+                        },
+                        timer: 0,
+                    });
+                }
             }
         }
         let mut meteors_to_keep = Vec::new();
@@ -1469,6 +1479,70 @@ impl Game {
                 crate::color::Color::Red,
             );
         }
+    }
+    fn manage_asteroids(&mut self) {
+        if self.mode != GameMode::Asteroids {
+            return;
+        }
+        // Scheduled meteor shower: every 6th tick a guaranteed shower of 2 meteors
+        // falls on fair columns (never a snake's current or next head column, and
+        // never a column that already has a meteor in flight).
+        if self.tick_counter.is_multiple_of(6) {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let min_x = margin + 1;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+            if max_x > min_x {
+                let columns = self.pick_asteroid_columns(min_x, max_x, 2);
+                if !columns.is_empty() {
+                    self.asteroid_strikes += 1;
+                    for x in columns {
+                        self.meteors.push(Meteor {
+                            position: Point {
+                                x,
+                                y: margin + 1,
+                            },
+                            timer: 0,
+                        });
+                        self.spawn_particles(
+                            f32::from(x),
+                            f32::from(margin + 1),
+                            5,
+                            crate::color::Color::Red,
+                            '*',
+                        );
+                    }
+                }
+            }
+        }
+    }
+    fn pick_asteroid_columns(&mut self, min_x: u16, max_x: u16, count: usize) -> Vec<u16> {
+        // Fairness: never spawn on the column a snake currently occupies or is about
+        // to enter, and never on a column that already has a meteor in flight.
+        let mut forbidden: Vec<u16> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            forbidden.push(head.x);
+            forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
+        }
+        for m in &self.meteors {
+            forbidden.push(m.position.x);
+        }
+        let mut pool: Vec<u16> = (min_x..max_x).filter(|x| !forbidden.contains(x)).collect();
+        let mut picked = Vec::new();
+        while picked.len() < count && !pool.is_empty() {
+            let i = self.rng.gen_range(0..pool.len());
+            picked.push(pool.remove(i));
+        }
+        picked
     }
     fn pick_storm_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
         // Fairness: never strike the column a snake currently occupies or is about to enter
@@ -2523,6 +2597,7 @@ impl Game {
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
+        self.asteroid_strikes = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -3529,6 +3604,7 @@ impl Game {
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
+            self.asteroid_strikes = state.asteroid_strikes;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3631,6 +3707,7 @@ impl Game {
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
+            asteroid_strikes: self.asteroid_strikes,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -7291,6 +7368,7 @@ impl Game {
         self.manage_mines();
         self.manage_black_hole();
         self.manage_meteors();
+        self.manage_asteroids();
         self.manage_blizzard();
         self.manage_storm();
         self.manage_quake();
@@ -9072,6 +9150,29 @@ impl Game {
                     crate::color::Color::Cyan,
                 );
             }
+        }
+        if self.mode == GameMode::Asteroids && !self.meteors.is_empty() {
+            // Eating food deflects the most imminent meteor (the lowest one in flight)
+            let mut lowest = 0;
+            for (i, m) in self.meteors.iter().enumerate() {
+                if m.position.y > self.meteors[lowest].position.y {
+                    lowest = i;
+                }
+            }
+            let m = self.meteors.remove(lowest);
+            self.spawn_particles(
+                f32::from(m.position.x),
+                f32::from(m.position.y),
+                15,
+                crate::color::Color::Yellow,
+                '*',
+            );
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Deflected!".to_string(),
+                crate::color::Color::Yellow,
+            );
         }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {

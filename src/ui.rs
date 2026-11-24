@@ -2580,12 +2580,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let meteors_str = if game.mode == crate::game::GameMode::Asteroids {
+        format!(" | Meteors: {}", game.asteroid_strikes)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}"
     )?;
 
     if !game.bosses.is_empty() {
