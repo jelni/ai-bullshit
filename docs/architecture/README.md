@@ -18,3 +18,7 @@ The autopilot (`Game::calculate_autopilot_move`, `calculate_p2_autopilot_move`, 
 4. **Survival fallbacks:** tail-chasing (`astar_search_verified` toward the snake's own tail), then `flood_fill_fallback`, which picks the first step maximizing reachable open space.
 
 In **Meteor Shower mode** (`GameMode::MeteorShower`) the scheduled strikes always pick a fair column (`pick_safe_strike_column`: no snake head/body column and no column a snake is about to enter), and the meteor-column hazard checks above are what let the bot survive the bombardment natively.
+
+## Persistence / Save Format
+
+`SaveState` (`src/game/save_state.rs`) is serialized to JSON by `save_game`/`save_game_to_file` and read back by `load_game_from_file`; `HistoryState` mirrors the same fields for time-rewind. Maps whose keys are not strings (e.g. `painted_tiles: HashMap<Point, u8>`, `eggs_on_board: HashMap<Point, EggType>`, `dungeon_grid: HashMap<(i32, i32), DungeonRoom>`) cannot be JSON objects, so they are serialized through the `map_as_pairs` helper (`src/game/map_as_pairs.rs`) as JSON arrays of `[key, value]` pairs. Deserialization accepts both that pair form and the legacy empty-object form written by older versions, so existing save files keep loading. Covered by [tests/test_save_integrity.rs](../../tests/test_save_integrity.rs).

@@ -90,7 +90,7 @@ pub struct SaveState {
     pub fishing_progress: u32,
     #[serde(default)]
     pub is_fishing: bool,
-    #[serde(default)]
+    #[serde(default, with = "super::map_as_pairs")]
     pub eggs_on_board: std::collections::HashMap<crate::snake::Point, crate::game::EggType>,
     #[serde(default)]
     pub paladin_life_timer: u32,
@@ -119,11 +119,11 @@ pub struct SaveState {
     pub koth_zone: Option<Point>,
     #[serde(default)]
     pub xp_gems: HashSet<Point>,
-    #[serde(default)]
+    #[serde(default, with = "super::map_as_pairs")]
     pub dungeon_grid: std::collections::HashMap<(i32, i32), crate::game::dungeon::DungeonRoom>,
     #[serde(default)]
     pub current_room_coords: (i32, i32),
-    #[serde(default)]
+    #[serde(default, with = "super::map_as_pairs")]
     pub painted_tiles: std::collections::HashMap<Point, u8>,
     #[serde(default)]
     pub match_time: u32,

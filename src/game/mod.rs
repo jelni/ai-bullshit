@@ -30,6 +30,7 @@ pub mod goblin;
 pub mod history_state;
 pub mod in_game_upgrade;
 pub mod laser;
+pub mod map_as_pairs;
 pub mod meteor;
 pub mod misc;
 pub mod particle;
