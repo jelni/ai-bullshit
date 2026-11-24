@@ -2817,6 +2817,12 @@ impl Game {
                             && let Some(flow_field) = self.flow_field.as_ref()
                             && let Some(&dir) = flow_field.get(&start)
                         {
+                            let path = crate::game::follow_flow_field(
+                                self,
+                                flow_field,
+                                start,
+                                &expected_targets,
+                            );
                             let is_opp = match (current_dir, dir) {
                                 (Direction::Up, Direction::Down)
                                 | (Direction::Down, Direction::Up)
@@ -2827,10 +2833,13 @@ impl Game {
 
                             let next_head = Self::calculate_next_head_dir(start, dir);
                             if !is_opp
+                                && !path.is_empty()
                                 && let Some(final_p) = self.get_final_p(next_head)
                                 && self.is_safe_final_p(final_p, 1, 4)
+                                && self.path_is_safe(start, &path, &expected_targets, 4)
+                                && self.path_keeps_tail_reachable(start, &path, 4)
                             {
-                                self.bots_autopilot_paths[i].clear();
+                                self.bots_autopilot_paths[i] = path;
                                 self.bots[i].direction_queue.push_back(dir);
                                 continue;
                             }

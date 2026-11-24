@@ -1,6 +1,7 @@
 use crate::game::Game;
 use crate::snake::{Direction, Point};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::BuildHasher;
 
 #[must_use]
 #[allow(clippy::allow_attributes)]
@@ -120,4 +121,39 @@ pub fn generate_flow_field(game: &Game, targets: &[Point]) -> HashMap<Point, Dir
     }
 
     flow_field
+}
+
+/// Follows a generated flow field from `start`.
+///
+/// Returns the sequence of cells a mover would visit (excluding `start`
+/// itself) until it reaches one of `targets`, runs out of field entries,
+/// revisits a cell, or exceeds a board-sized step cap. Portal and wrap-around
+/// moves are resolved through `get_final_p`.
+#[must_use]
+pub fn follow_flow_field<S: BuildHasher>(
+    game: &Game,
+    flow_field: &HashMap<Point, Direction, S>,
+    start: Point,
+    targets: &[Point],
+) -> Vec<Point> {
+    let mut path = Vec::new();
+    let mut visited: HashSet<Point> = HashSet::new();
+    visited.insert(start);
+    let mut current = start;
+    let max_steps = usize::from(game.width) * usize::from(game.height);
+    while path.len() < max_steps && !targets.contains(&current) {
+        let Some(&d) = flow_field.get(&current) else {
+            break;
+        };
+        let next = Game::calculate_next_head_dir(current, d);
+        let Some(final_p) = game.get_final_p(next) else {
+            break;
+        };
+        if !visited.insert(final_p) {
+            break;
+        }
+        path.push(final_p);
+        current = final_p;
+    }
+    path
 }
