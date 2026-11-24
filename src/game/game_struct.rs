@@ -1868,6 +1868,112 @@ impl Game {
             self.power_up = Some(pu);
         }
     }
+
+    fn manage_tornado_gust(&mut self) {
+        if self.mode != GameMode::Tornado {
+            return;
+        }
+        // A gust sweeps the whole board on every 8th tick
+        if !self.tick_counter.is_multiple_of(8) || self.state != GameState::Playing {
+            return;
+        }
+        self.tornado_gusts += 1;
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        let gust_dir = dirs[self.rng.gen_range(0..4)];
+        // One shared gust direction shoves every snake one cell. Snakes are
+        // shoved sequentially so earlier shoves are respected by later checks.
+        if let Some(dest) = self.gust_destination(self.snake.head(), gust_dir) {
+            self.snake.move_to(dest, false);
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Gust!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
+        let p2_dest = self
+            .player2
+            .as_ref()
+            .and_then(|p2| self.gust_destination(p2.head(), gust_dir));
+        if let Some(dest) = p2_dest {
+            if let Some(p2) = &mut self.player2 {
+                p2.move_to(dest, false);
+            }
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Gust!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
+        for i in 0..self.bots.len() {
+            let dest = self.gust_destination(self.bots[i].head(), gust_dir);
+            if let Some(dest) = dest {
+                self.bots[i].move_to(dest, false);
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    "Gust!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+        // The gust also drags the food one cell in the gust direction
+        if let Some(dest) = self.gust_destination(self.food, gust_dir) {
+            let blocked = self.bonus_food.is_some_and(|(bp, _)| bp == dest)
+                || self.poison_food.is_some_and(|(pp, _)| pp == dest)
+                || self.power_up.as_ref().is_some_and(|pu| pu.location == dest)
+                || self.portals.is_some_and(|(p1, p2)| p1 == dest || p2 == dest)
+                || self.goblin.as_ref().is_some_and(|g| g.position == dest)
+                || self.companion.as_ref().is_some_and(|c| c.position == dest)
+                || self.xp_gems.contains(&dest)
+                || self.equipment_boxes.contains(&dest)
+                || self.koth_zone == Some(dest)
+                || self.p1_flag == Some(dest)
+                || self.p2_flag == Some(dest)
+                || self.resources.contains_key(&dest);
+            if !blocked {
+                self.food = dest;
+            }
+        }
+    }
+    fn gust_destination(&self, head: Point, dir: Direction) -> Option<Point> {
+        // Fairness: a gust never shoves a snake out of bounds (unless the board
+        // wraps), into an obstacle, or into anything lethal or occupied.
+        let raw = Self::calculate_next_head_dir(head, dir);
+        let wraps = (self.wrap_mode || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale;
+        let dest = if wraps {
+            self.calculate_wrapped_head(raw)
+        } else {
+            raw
+        };
+        let margin = self.safe_zone_margin;
+        if dest.x <= margin
+            || dest.x >= self.width - 1 - margin
+            || dest.y <= margin
+            || dest.y >= self.height - 1 - margin
+        {
+            return None;
+        }
+        if self.obstacles.contains(&dest)
+            || self.snake.body_map.contains_key(&dest)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&dest))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&dest))
+            || self.mines.contains(&dest)
+            || self.black_hole == Some(dest)
+            || self.lightning_column.is_some_and(|col| dest.x == col)
+            || self.bosses.iter().any(|b| b.position == dest)
+            || self.lasers.iter().any(|l| l.position == dest)
+            || self.meteors.iter().any(|m| m.position == dest)
+            || self.turrets.iter().any(|t| t.position == dest)
+            || self.tornado == Some(dest)
+        {
+            return None;
+        }
+        Some(dest)
+    }
+
     fn pick_safe_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
         // Fairness: never strike a column any snake currently occupies (a falling meteor
         // sweeps its whole column, so body segments count too) or is about to enter
@@ -9007,6 +9113,8 @@ impl Game {
             }
             self.ghost_snake = Some(ghost);
         }
+
+        self.manage_tornado_gust();
     }
     fn check_body_collisions(
         &self,

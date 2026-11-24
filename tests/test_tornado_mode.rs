@@ -248,3 +248,159 @@ fn test_tornado_bot_survives_the_twister() {
         game.tornado_gusts
     );
 }
+
+#[test]
+fn test_tornado_gust_fires_every_8_ticks() {
+    let mut game = tornado_game(30, 30);
+    game.obstacles.clear();
+    game.auto_pilot = true;
+
+    // update() increments tick_counter first, so setting it to 8k - 1 makes the
+    // next update run tick 8k, which must fire a board-wide gust.
+    for tick in [7_u32, 15, 23, 31, 39, 47] {
+        game.state = snake_game::game::GameState::Playing;
+        game.tick_counter = tick;
+        let gusts_before = game.tornado_gusts;
+        game.update();
+        assert_eq!(
+            game.tick_counter,
+            tick + 1,
+            "update must run exactly one tick (lives: {})",
+            game.lives
+        );
+        assert!(
+            game.tornado_gusts > gusts_before,
+            "a board-wide gust must fire on tick {} (gusts before: {}, after: {})",
+            tick + 1,
+            gusts_before,
+            game.tornado_gusts
+        );
+    }
+    assert!(game.tornado_gusts >= 6);
+}
+
+#[test]
+fn test_tornado_gust_never_shoves_into_obstacles() {
+    let mut game = tornado_game(12, 12);
+    // Wall off every interior cell except the snake's body and the cell it is
+    // about to move into, so every possible gust destination is blocked.
+    game.obstacles.clear();
+    for x in 1..11 {
+        for y in 1..11 {
+            let p = Point { x, y };
+            let is_snake = p == Point { x: 5, y: 5 }
+                || p == Point { x: 5, y: 6 }
+                || p == Point { x: 5, y: 7 };
+            let is_next = p == Point { x: 6, y: 5 };
+            if !is_snake && !is_next {
+                game.obstacles.insert(p);
+            }
+        }
+    }
+    // Pin the vortex away from the action so only the gust can move the snake
+    game.tornado = Some(Point { x: 9, y: 9 });
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+    game.snake.direction_queue.push_back(Direction::Right);
+    // Food sits on the snake's own tail: the normal move Right does not eat it
+    // (and eating the last free cell would end the tick early via a win).
+    game.food = Point { x: 5, y: 7 };
+
+    // Next update runs tick 8, which must fire a gust
+    game.tick_counter = 7;
+    game.update();
+
+    assert_eq!(game.tick_counter, 8);
+    assert!(
+        game.tornado_gusts >= 1,
+        "a gust must have fired on tick 8"
+    );
+    // The snake moved Right to (6, 5); every gust destination from there is an
+    // obstacle or its own body, so the gust must have fizzled.
+    assert_eq!(
+        game.snake.head(),
+        Point { x: 6, y: 5 },
+        "a gust must never shove the snake into an obstacle"
+    );
+    assert!(
+        !game.just_died && game.lives == 3,
+        "the snake must survive the gust (lives: {})",
+        game.lives
+    );
+}
+
+#[test]
+fn test_tornado_gust_shove_keeps_length_and_stays_safe() {
+    let mut game = tornado_game(20, 20);
+    game.obstacles.clear();
+    game.tornado = Some(Point { x: 18, y: 18 });
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+    game.snake.direction_queue.push_back(Direction::Right);
+    game.food = Point { x: 15, y: 15 }; // far away: no eating this tick
+    let len_before = game.snake.body.len();
+
+    // Next update runs tick 8, which must fire a gust
+    game.tick_counter = 7;
+    game.update();
+
+    assert!(game.tornado_gusts >= 1);
+    assert_eq!(
+        game.snake.body.len(),
+        len_before,
+        "a gust shove must not grow the snake"
+    );
+    let head = game.snake.head();
+    // Normal move went Right to (6, 5); the gust may shove one more cell in any
+    // direction, but never out of bounds or onto the body or the vortex.
+    let possible = [
+        Point { x: 6, y: 5 },
+        Point { x: 6, y: 4 },
+        Point { x: 6, y: 6 },
+        Point { x: 7, y: 5 },
+    ];
+    assert!(
+        possible.contains(&head),
+        "unexpected head after gust: {head:?}"
+    );
+    for seg in &game.snake.body {
+        assert!(
+            seg.x > 0 && seg.x < game.width - 1 && seg.y > 0 && seg.y < game.height - 1,
+            "gust must never shove out of bounds: {seg:?}"
+        );
+    }
+}
+
+#[test]
+fn test_tornado_gust_bot_survives() {
+    let mut game = tornado_game(40, 30);
+    game.auto_pilot = true;
+
+    for _ in 0..160 {
+        game.update();
+        if game.state != snake_game::game::GameState::Playing {
+            if game.lives == 0 {
+                break;
+            }
+            // Non-death interruption (e.g. merchant visit): resume playing
+            game.state = snake_game::game::GameState::Playing;
+        }
+        assert!(
+            !game.obstacles.contains(&game.snake.head()),
+            "the snake head must never end up inside an obstacle"
+        );
+    }
+
+    assert!(
+        game.state == snake_game::game::GameState::Playing && game.lives > 0,
+        "Autopilot should survive the tornado (lives: {}, gusts: {}, score: {})",
+        game.lives,
+        game.tornado_gusts,
+        game.score
+    );
+    assert!(
+        game.tornado_gusts >= 20,
+        "expected at least 20 gusts over 160 ticks, got {}",
+        game.tornado_gusts
+    );
+}
