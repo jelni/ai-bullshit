@@ -10075,6 +10075,73 @@ impl Game {
         mask
     }
 
+    const ENEMY_PREDICTION_HORIZON: u16 = 24;
+    fn enemy_head_path(&self, enemy: &Snake, horizon: u16) -> Vec<Point> {
+        let mut path = Vec::with_capacity(usize::from(horizon) + 1);
+        let mut head = enemy.head();
+        let mut dir = enemy.direction;
+        path.push(head);
+        for step in 1..=horizon {
+            let mut next_dir = enemy
+                .direction_queue
+                .get(usize::from(step - 1))
+                .copied()
+                .unwrap_or(dir);
+            if next_dir.is_opposite(dir) {
+                next_dir = dir;
+            }
+            let next_head = Self::calculate_next_head_dir(head, next_dir);
+            let Some(final_p) = self.get_final_p(next_head) else {
+                break;
+            };
+            head = final_p;
+            dir = next_dir;
+            path.push(head);
+        }
+        path
+    }
+    fn predicted_enemy_occupancy(
+        &self,
+        start: Point,
+        checking_player: u8,
+        horizon: u16,
+    ) -> std::collections::HashMap<Point, (u16, u16)> {
+        let mut occupied: std::collections::HashMap<Point, (u16, u16)> =
+            std::collections::HashMap::new();
+        let mut enemies: Vec<&Snake> = Vec::new();
+        if checking_player != 2
+            && let Some(p2) = &self.player2
+        {
+            enemies.push(p2);
+        }
+        if checking_player != 1 {
+            enemies.push(&self.snake);
+        }
+        for b in &self.bots {
+            if b.head() != start {
+                enemies.push(b);
+            }
+        }
+        for enemy in enemies {
+            let body_len = u16::try_from(enemy.body.len()).unwrap_or(u16::MAX);
+            let head_path = self.enemy_head_path(enemy, horizon);
+            for (idx, &cell) in head_path.iter().enumerate().skip(1) {
+                let from = u16::try_from(idx).unwrap_or(u16::MAX);
+                // A head-path cell stays occupied until it becomes the tail;
+                // arriving exactly on the tail step is allowed (it vacates
+                // simultaneously), matching the static steps_to_clear model.
+                let to = from.saturating_add(body_len.saturating_sub(2)).min(horizon);
+                occupied
+                    .entry(cell)
+                    .and_modify(|window| {
+                        window.0 = window.0.min(from);
+                        window.1 = window.1.max(to);
+                    })
+                    .or_insert((from, to));
+            }
+        }
+        occupied
+    }
     #[must_use]
     pub fn path_is_safe(
         &self,
@@ -10087,6 +10154,14 @@ impl Game {
             std::collections::HashMap::new()
         } else {
             self.rival_head_lane_mask(checking_player, start)
+        };
+        let horizon = u16::try_from(path.len())
+            .unwrap_or(u16::MAX)
+            .min(Self::ENEMY_PREDICTION_HORIZON);
+        let enemy_occupancy = if horizon > 0 && !self.is_invincible_active() {
+            self.predicted_enemy_occupancy(start, checking_player, horizon)
+        } else {
+            std::collections::HashMap::new()
         };
         for (idx, &p) in path.iter().enumerate() {
             let steps = u16::try_from(idx + 1).unwrap_or(u16::MAX);
@@ -10102,6 +10177,12 @@ impl Game {
                 && lane_mask
                     .get(&p)
                     .is_some_and(|m| m & (1_u32 << steps) != 0)
+            {
+                return false;
+            }
+            if let Some(&(from, to)) = enemy_occupancy.get(&p)
+                && from <= steps
+                && steps <= to
             {
                 return false;
             }
