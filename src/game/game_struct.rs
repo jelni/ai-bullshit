@@ -1255,7 +1255,7 @@ impl Game {
             self.goblin = None;
         }
     }
-    fn meteor_safe_spawn_columns(&self, min_x: u16, max_x: u16) -> Vec<u16> {
+    fn meteor_safe_spawn_columns(&self, min_x: u16, max_x: u16, drift: bool) -> Vec<u16> {
         // Fairness: never spawn a meteor in the column a snake currently
         // occupies or is about to enter, and never in a column that already
         // has a meteor in flight
@@ -1265,7 +1265,7 @@ impl Game {
             snakes.push(p2);
         }
         snakes.extend(self.bots.iter());
-        for s in snakes {
+        for s in &snakes {
             let head = s.head();
             forbidden.push(head.x);
             forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
@@ -1273,7 +1273,37 @@ impl Game {
         for m in &self.meteors {
             forbidden.push(m.position.x);
         }
-        (min_x..max_x).filter(|x| !forbidden.contains(x)).collect()
+        let mut pool: Vec<u16> = (min_x..max_x).filter(|x| !forbidden.contains(x)).collect();
+        if drift {
+            // Drift fairness: a drifting meteor sweeps sideways while it falls, so also
+            // skip columns from which a meteor with vx = ±1 would hit a snake cell.
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let y0 = margin + 1; // spawn row
+            let mut snake_cells: Vec<Point> = Vec::new();
+            for s in &snakes {
+                snake_cells.extend(s.body.iter().copied());
+                snake_cells.push(Self::calculate_next_head_dir(s.head(), s.direction));
+            }
+            let max_steps = self.height.saturating_mul(2);
+            pool.retain(|&x| {
+                [1, -1].iter().all(|&vx| {
+                    let m = Meteor {
+                        position: Point { x, y: y0 },
+                        timer: 0,
+                        vx,
+                    };
+                    !(1..=max_steps).any(|s| {
+                        self.meteor_position_after(m, s)
+                            .is_some_and(|p| snake_cells.contains(&p))
+                    })
+                })
+            });
+        }
+        pool
     }
     fn manage_meteors(&mut self) {
         let asteroids = self.mode == GameMode::Asteroids;
@@ -1290,7 +1320,7 @@ impl Game {
             0.01
         }) && max_x > min_x {
             let spawn_x = if asteroids {
-                let allowed = self.meteor_safe_spawn_columns(min_x, max_x);
+                let allowed = self.meteor_safe_spawn_columns(min_x, max_x, false);
                 if allowed.is_empty() {
                     None
                 } else {
@@ -1306,26 +1336,34 @@ impl Game {
                         y: margin + 1,
                     },
                     timer: 0,
+                    vx: 0,
                 });
             }
         }
         // Scheduled meteor showers in Asteroids mode: every 12th tick a burst of
-        // up to 3 meteors falls in distinct fairness-checked columns
+        // up to 3 meteors falls in distinct fairness-checked columns; the first
+        // meteor of the burst sweeps sideways (vx = ±1)
         if asteroids && self.tick_counter.is_multiple_of(12) && max_x > min_x {
             self.meteor_showers += 1;
-            let mut allowed = self.meteor_safe_spawn_columns(min_x, max_x);
-            for _ in 0..3 {
+            let mut allowed = self.meteor_safe_spawn_columns(min_x, max_x, true);
+            for i in 0..3 {
                 if allowed.is_empty() {
                     break;
                 }
                 let idx = self.rng.gen_range(0..allowed.len());
                 let spawn_x = allowed.swap_remove(idx);
+                let vx = if i == 0 {
+                    if self.rng.gen_bool(0.5) { 1 } else { -1 }
+                } else {
+                    0
+                };
                 self.meteors.push(Meteor {
                     position: Point {
                         x: spawn_x,
                         y: margin + 1,
                     },
                     timer: 0,
+                    vx,
                 });
             }
         }
@@ -1343,6 +1381,7 @@ impl Game {
                     y: margin + 1,
                 },
                 timer: 0,
+                vx: 0,
             });
         }
         let mut meteors_to_keep = Vec::new();
@@ -1351,6 +1390,21 @@ impl Game {
             if meteor.timer >= 2 {
                 meteor.timer = 0;
                 meteor.position.y += 1;
+                // Drift one column per two fallen rows (on even rows), bouncing at the walls.
+                if meteor.vx != 0 && meteor.position.y % 2 == 0 {
+                    let (lo, hi) = self.meteor_drift_bounds();
+                    let next_x = i32::from(meteor.position.x) + i32::from(meteor.vx);
+                    if next_x < i32::from(lo) || next_x > i32::from(hi) {
+                        meteor.vx = -meteor.vx;
+                        meteor.position.x = u16::try_from(
+                            (i32::from(meteor.position.x) + i32::from(meteor.vx))
+                                .clamp(i32::from(lo), i32::from(hi)),
+                        )
+                        .unwrap_or(lo);
+                    } else {
+                        meteor.position.x = u16::try_from(next_x).unwrap_or(lo);
+                    }
+                }
             }
             if meteor.position.y >= self.height - 1 - margin {
                 self.spawn_particles(
@@ -1401,6 +1455,125 @@ impl Game {
             meteors_to_keep.push(meteor);
         }
         self.meteors = meteors_to_keep;
+    }
+    fn meteor_drift_bounds(&self) -> (u16, u16) {
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let lo = margin + 1;
+        let hi = self.width.saturating_sub(2).saturating_sub(margin).max(lo);
+        (lo, hi)
+    }
+    fn bounced_x(start: u16, vx: i8, steps: u16, lo: u16, hi: u16) -> u16 {
+        if vx == 0 || hi <= lo {
+            return start.clamp(lo, hi);
+        }
+        let span = i32::from(hi - lo);
+        let raw = (i32::from(start) - i32::from(lo) + i32::from(vx) * i32::from(steps))
+            .rem_euclid(2 * span);
+        let t = if raw > span { 2 * span - raw } else { raw };
+        u16::try_from(i32::from(lo) + t).unwrap_or(lo)
+    }
+    #[must_use]
+    pub fn meteor_position_after(&self, m: Meteor, steps: u16) -> Option<Point> {
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let ground = self.height.saturating_sub(1).saturating_sub(margin);
+        let t0 = u16::from(m.timer.min(1));
+        let fall = u16::midpoint(t0, steps);
+        let y = m.position.y.saturating_add(fall);
+        if y >= ground {
+            return None;
+        }
+        let (lo, hi) = self.meteor_drift_bounds();
+        // Drift one column per two fallen rows: count the even rows in (y, y + fall].
+        let drift = (y / 2).saturating_sub(m.position.y / 2);
+        Some(Point {
+            x: Self::bounced_x(m.position.x, m.vx, drift, lo, hi),
+            y,
+        })
+    }
+    fn meteor_would_hit(&self, m: Meteor, p: Point, steps: u16) -> bool {
+        if m.position == p {
+            return true;
+        }
+        if p.y < m.position.y {
+            return false;
+        }
+        let dy = u32::from(p.y - m.position.y);
+        let t0 = u32::from(m.timer.min(1));
+        let (lo, hi) = self.meteor_drift_bounds();
+        let steps = u32::from(steps);
+        let base = (2 * dy).saturating_sub(t0);
+        for s in [base, base + 1] {
+            if s >= 1 && s <= steps {
+                let fall = u32::midpoint(t0, s);
+                let y = m
+                    .position
+                    .y
+                    .saturating_add(u16::try_from(fall).unwrap_or(0));
+                let drift = u32::from(y / 2).saturating_sub(u32::from(m.position.y / 2));
+                if y == p.y
+                    && Self::bounced_x(
+                        m.position.x,
+                        m.vx,
+                        u16::try_from(drift).unwrap_or(u16::MAX),
+                        lo,
+                        hi,
+                    ) == p.x
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    fn meteor_lane_penalty(&self, p: Point) -> u32 {
+        let mut penalty = 0u32;
+        for m in &self.meteors {
+            if m.vx == 0 {
+                continue;
+            }
+            for step in 1..=10_u16 {
+                if let Some(mp) = self.meteor_position_after(*m, step) {
+                    if mp == p {
+                        penalty = penalty.saturating_add(500_000);
+                    } else {
+                        let d = self.travel_dist(p, mp, false);
+                        if d < 3 {
+                            penalty =
+                                penalty.saturating_add(u32::from(3 - d).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
+        }
+        penalty
+    }
+    fn meteor_edge_cost(&self, p: Point) -> u16 {
+        let mut cost = 0u16;
+        for m in &self.meteors {
+            if m.vx == 0 {
+                continue;
+            }
+            for step in 1..=10_u16 {
+                if let Some(mp) = self.meteor_position_after(*m, step) {
+                    let dx = p.x.abs_diff(mp.x);
+                    if dx < 2 && p.y >= mp.y {
+                        let dy = p.y.abs_diff(mp.y);
+                        if dy < 10 {
+                            cost = cost.saturating_add((10 - dy).saturating_mul(10_000));
+                        }
+                    }
+                }
+            }
+        }
+        cost
     }
     fn manage_blizzard(&mut self) {
         if self.mode != GameMode::Blizzard {
@@ -5267,7 +5440,7 @@ impl Game {
             for m in &self.meteors {
                 if m.position == p {
                     penalty = penalty.saturating_add(500_000);
-                } else {
+                } else if m.vx == 0 {
                     let dx = p.x.abs_diff(m.position.x);
                     if dx < 2 && p.y >= m.position.y {
                         let dy = p.y.abs_diff(m.position.y);
@@ -5277,6 +5450,7 @@ impl Game {
                     }
                 }
             }
+            penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
             for m in &self.mines {
                 if *m == p {
                     penalty = penalty.saturating_add(50000);
@@ -5488,6 +5662,9 @@ impl Game {
                             }
                         }
                         for m in &self.meteors {
+                            if m.vx != 0 {
+                                continue;
+                            }
                             let dx = final_p.x.abs_diff(m.position.x);
                             if dx < 2 && final_p.y >= m.position.y {
                                 let dy = final_p.y.abs_diff(m.position.y);
@@ -5496,7 +5673,11 @@ impl Game {
                                 }
                             }
                         }
+                        edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                         for m in &self.meteors {
+                            if m.vx != 0 {
+                                continue;
+                            }
                             let dx = final_p.x.abs_diff(m.position.x);
                             if dx < 2 && final_p.y >= m.position.y {
                                 let dy = final_p.y.abs_diff(m.position.y);
@@ -5505,6 +5686,7 @@ impl Game {
                                 }
                             }
                         }
+                        edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                         if let Some((pf, _)) = self.poison_food {
                             let d_dist = calc_dist(final_p, pf);
                             if d_dist < 4 {
@@ -5988,6 +6170,7 @@ impl Game {
                             self.meteors.push(Meteor {
                                 position: target_pos,
                                 timer: 15, // Delay before meteor hits
+                                vx: 0,
                             });
 
                             if self.power_up.is_none() {
@@ -10839,11 +11022,15 @@ impl Game {
                 return false;
             }
             for meteor in &self.meteors {
-                if meteor.position == final_p
-                    || (meteor.position.x == final_p.x
-                        && meteor.position.y <= final_p.y
-                        && meteor.position.y.saturating_add(steps) >= final_p.y)
-                {
+                if meteor.vx == 0 {
+                    if meteor.position == final_p
+                        || (meteor.position.x == final_p.x
+                            && meteor.position.y <= final_p.y
+                            && meteor.position.y.saturating_add(steps) >= final_p.y)
+                    {
+                        return false;
+                    }
+                } else if self.meteor_would_hit(*meteor, final_p, steps) {
                     return false;
                 }
             }
@@ -11779,6 +11966,44 @@ impl Game {
         } else {
             std::collections::HashMap::new()
         };
+        // Drifting meteors can sweep into the body, not just the head: reject the path if
+        // a predicted meteor position coincides with any cell the moving snake still
+        // occupies (the head path cells within one body length, plus the current body).
+        if !self.is_invincible_active()
+            && let Some(body) = self.moving_body_for(start, checking_player)
+        {
+            let l = u32::try_from(body.len()).unwrap_or(u32::MAX);
+            let path_idx: std::collections::HashMap<Point, u32> = path
+                .iter()
+                .enumerate()
+                .map(|(i, &p)| (p, u32::try_from(i).unwrap_or(u32::MAX)))
+                .collect();
+            let meteor_horizon = u16::try_from(path.len())
+                .unwrap_or(u16::MAX)
+                .min(64);
+            for m in &self.meteors {
+                if m.vx == 0 {
+                    continue;
+                }
+                for s in 1..=meteor_horizon {
+                    if let Some(mp) = self.meteor_position_after(*m, s) {
+                        let s32 = u32::from(s);
+                        if let Some(&j) = path_idx.get(&mp)
+                            && j < s32
+                            && s32 <= j + 1 + l
+                        {
+                            return false;
+                        }
+                        if let Some(i) = body.iter().position(|&b| b == mp) {
+                            let i = u32::try_from(i).unwrap_or(u32::MAX);
+                            if s32 <= l.saturating_sub(i) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         for (idx, &p) in path.iter().enumerate() {
             let steps = u16::try_from(idx + 1).unwrap_or(u16::MAX);
             let is_final = idx + 1 == path.len();
@@ -12354,7 +12579,7 @@ impl Game {
             for m in &self.meteors {
                 if m.position == p {
                     penalty = penalty.saturating_add(500_000);
-                } else {
+                } else if m.vx == 0 {
                     let dx = p.x.abs_diff(m.position.x);
                     if dx < 2 && p.y >= m.position.y {
                         let dy = p.y.abs_diff(m.position.y);
@@ -12364,6 +12589,7 @@ impl Game {
                     }
                 }
             }
+            penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
             u32::from(targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0)).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
@@ -12423,6 +12649,9 @@ impl Game {
                     }
                 }
                 for m in &self.meteors {
+                    if m.vx != 0 {
+                        continue;
+                    }
                     let dx = final_p.x.abs_diff(m.position.x);
                     if dx < 2 && final_p.y >= m.position.y {
                         let dy = final_p.y.abs_diff(m.position.y);
@@ -12431,6 +12660,7 @@ impl Game {
                         }
                     }
                 }
+                edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                 if let Some((pf, _)) = self.poison_food {
                     let d_dist = calc_dist(final_p, pf);
                     if d_dist < 4 {
@@ -12535,6 +12765,9 @@ impl Game {
                         }
                     }
                     for m in &self.meteors {
+                        if m.vx != 0 {
+                            continue;
+                        }
                         let dx = final_p.x.abs_diff(m.position.x);
                         if dx < 2 && final_p.y >= m.position.y {
                             let dy = final_p.y.abs_diff(m.position.y);
@@ -12543,6 +12776,7 @@ impl Game {
                             }
                         }
                     }
+                    edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                     if let Some((pf, _)) = self.poison_food {
                         let d_dist = calc_dist(final_p, pf);
                         if d_dist < 4 {
@@ -12671,15 +12905,23 @@ impl Game {
         }
         for m in &self.meteors {
             blocked.insert(m.position);
-            for step in 1..10_u16 {
-                let y = m.position.y.saturating_add(step);
-                if y >= self.height.saturating_sub(1) {
-                    break;
+            if m.vx == 0 {
+                for step in 1..10_u16 {
+                    let y = m.position.y.saturating_add(step);
+                    if y >= self.height.saturating_sub(1) {
+                        break;
+                    }
+                    blocked.insert(Point {
+                        x: m.position.x,
+                        y,
+                    });
                 }
-                blocked.insert(Point {
-                    x: m.position.x,
-                    y,
-                });
+            } else {
+                for step in 1..10_u16 {
+                    if let Some(mp) = self.meteor_position_after(*m, step) {
+                        blocked.insert(mp);
+                    }
+                }
             }
         }
         match checking_player {
@@ -12874,6 +13116,56 @@ impl Game {
                     best_dir = Some(d);
                 }
             }
+        }
+        if best_dir.is_none() {
+            // Last resort: no hazard-safe move exists, but still never walk into a wall or
+            // obstacle — pick the roomiest in-bounds, obstacle-free direction instead.
+            let in_bounds = |p: Point| {
+                self.wrap_mode
+                    || self.mode == GameMode::Zen
+                    || (p.x > 0 && p.y > 0 && p.x < self.width - 1 && p.y < self.height - 1)
+            };
+            let mut fallback_best = None;
+            let mut fallback_max = 0;
+            for &d in &dirs {
+                if d.is_opposite(current_dir) {
+                    continue;
+                }
+                let next_p = Self::calculate_next_head_dir(start, d);
+                let Some(final_p) = self.get_final_p(next_p) else {
+                    continue;
+                };
+                if !in_bounds(final_p) || self.obstacles.contains(&final_p) {
+                    continue;
+                }
+                let mut visited = std::collections::HashSet::new();
+                let mut queue: std::collections::VecDeque<Point> = std::collections::VecDeque::new();
+                visited.insert(final_p);
+                queue.push_back(final_p);
+                let mut open = 0;
+                while let Some(curr) = queue.pop_front() {
+                    open += 1;
+                    if open >= 100 {
+                        break;
+                    }
+                    for &nd in &dirs {
+                        let step_p = Self::calculate_next_head_dir(curr, nd);
+                        if let Some(valid_p) = self.get_final_p(step_p)
+                            && in_bounds(valid_p)
+                            && !self.obstacles.contains(&valid_p)
+                            && !visited.contains(&valid_p)
+                        {
+                            visited.insert(valid_p);
+                            queue.push_back(valid_p);
+                        }
+                    }
+                }
+                if open > fallback_max {
+                    fallback_max = open;
+                    fallback_best = Some(d);
+                }
+            }
+            return fallback_best;
         }
         best_dir
     }

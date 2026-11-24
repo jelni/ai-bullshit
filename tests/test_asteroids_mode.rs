@@ -1,3 +1,4 @@
+use rand::SeedableRng;
 use snake_game::game::{Difficulty, Game, GameMode, GameState, Meteor, Theme};
 use snake_game::snake::{Direction, Point, Snake};
 
@@ -127,6 +128,7 @@ fn test_asteroids_meteor_lane_blocks_verified_paths() {
     game.meteors.push(Meteor {
         position: Point { x: 12, y: 9 },
         timer: 0,
+        vx: 0,
     });
 
     // The cell in the meteor's fall lane is unsafe at its true arrival step
@@ -181,6 +183,7 @@ fn test_asteroids_autopilot_never_steps_onto_a_meteor() {
     game.meteors.push(Meteor {
         position: Point { x: 12, y: 9 },
         timer: 0,
+        vx: 0,
     });
     game.auto_pilot = true;
     game.lives = 100;
@@ -264,10 +267,12 @@ fn test_asteroids_eating_food_deflects_lowest_meteor() {
     game.meteors.push(Meteor {
         position: Point { x: 8, y: 3 },
         timer: 0,
+        vx: 0,
     });
     game.meteors.push(Meteor {
         position: Point { x: 9, y: 8 },
         timer: 0,
+        vx: 0,
     });
     // Not a multiple of 12, so no scheduled shower interferes
     game.tick_counter = 1;
@@ -296,6 +301,7 @@ fn test_asteroids_never_spawns_in_a_column_with_a_meteor_in_flight() {
     game.meteors.push(Meteor {
         position: Point { x: 7, y: 10 },
         timer: 0,
+        vx: 0,
     });
     game.state = GameState::Playing;
     game.tick_counter = 11; // next update runs tick 12 -> scheduled shower
@@ -310,5 +316,176 @@ fn test_asteroids_never_spawns_in_a_column_with_a_meteor_in_flight() {
                 "no new meteor may spawn in a column that already has a meteor in flight"
             );
         }
+    }
+}
+
+fn drift_game(width: u16, height: u16) -> Game {
+    let mut game = asteroids_game(width, height);
+    game.rng = rand::rngs::StdRng::seed_from_u64(42);
+    game.obstacles.clear();
+    game.meteors.clear();
+    game.lives = 1000;
+    game.state = GameState::Playing;
+    game
+}
+
+#[test]
+fn test_asteroids_shower_first_meteor_drifts() {
+    let mut game = drift_game(30, 30);
+    game.auto_pilot = true;
+
+    // Showers fire on every 12th tick; the first meteor of a shower gets vx = ±1.
+    let mut saw_drifting = false;
+    for tick in [11_u32, 23, 35, 47] {
+        game.state = GameState::Playing;
+        game.tick_counter = tick;
+        game.update();
+        if game.meteors.iter().any(|m| m.vx != 0) {
+            saw_drifting = true;
+        }
+    }
+    assert!(
+        saw_drifting,
+        "the first meteor of a 12th-tick shower must drift sideways (vx != 0)"
+    );
+}
+
+#[test]
+fn test_drifting_meteor_moves_sideways_and_bounces() {
+    let mut game = drift_game(20, 20);
+    game.meteors.push(Meteor {
+        position: Point { x: 17, y: 5 },
+        timer: 0,
+        vx: 1,
+    });
+
+    game.update();
+    let m = game.meteors.iter().find(|m| m.vx != 0).unwrap();
+    assert_eq!((m.position.x, m.position.y), (17, 5), "no drift until the fall tick");
+    assert_eq!(m.timer, 1);
+
+    game.update();
+    let m = game.meteors.iter().find(|m| m.vx != 0).unwrap();
+    assert_eq!((m.position.x, m.position.y), (18, 6), "even row: falls one row and drifts one column");
+
+    game.update();
+    game.update();
+    let m = game.meteors.iter().find(|m| m.vx != 0).unwrap();
+    assert_eq!((m.position.x, m.position.y), (18, 7), "odd row: falls without drifting");
+
+    game.update();
+    game.update();
+    let m = game.meteors.iter().find(|m| m.vx != 0).unwrap();
+    assert_eq!((m.position.x, m.position.y), (17, 8), "even row: drifts and bounces off the right wall");
+    assert_eq!(m.vx, -1, "vx must flip at the right edge");
+
+    for _ in 0..10 {
+        game.state = GameState::Playing;
+        game.update();
+        for m in &game.meteors {
+            assert!((1..=18).contains(&m.position.x), "meteor x stays in bounds");
+        }
+    }
+}
+
+#[test]
+fn test_is_safe_final_p_tracks_drifting_meteor() {
+    let mut game = drift_game(20, 20);
+    game.snake = Snake::new(Point { x: 2, y: 15 });
+    // Drifting right one column per two fallen rows: s=1 -> (10,2), s=2 -> (10,3),
+    // s=4 -> (11,4), s=6 -> (11,5), s=8 -> (12,6), ...
+    game.meteors.push(Meteor {
+        position: Point { x: 10, y: 2 },
+        timer: 0,
+        vx: 1,
+    });
+
+    assert!(
+        !game.is_safe_final_p(Point { x: 10, y: 2 }, 1, 1),
+        "predicted meteor cell at step 1 must be unsafe"
+    );
+    assert!(
+        !game.is_safe_final_p(Point { x: 10, y: 3 }, 2, 1),
+        "predicted meteor cell at step 2 must be unsafe"
+    );
+    assert!(
+        !game.is_safe_final_p(Point { x: 11, y: 4 }, 4, 1),
+        "predicted meteor cell at step 4 must be unsafe"
+    );
+    assert!(
+        game.is_safe_final_p(Point { x: 11, y: 4 }, 2, 1),
+        "the same cell is safe before the meteor arrives"
+    );
+    assert!(
+        game.is_safe_final_p(Point { x: 11, y: 3 }, 4, 1),
+        "the cell the meteor has already drifted away from stays safe"
+    );
+}
+
+#[test]
+fn test_drifting_meteor_kills_snake() {
+    let mut game = drift_game(20, 20);
+    game.snake = Snake::new(Point { x: 10, y: 10 });
+    game.snake.direction = Direction::Right; // moving to (11,10)
+    // After the meteor's tick it lands exactly on (11,10): timer 1 -> falls to y=10
+    // (even row, drifts) -> x=11.
+    game.meteors.push(Meteor {
+        position: Point { x: 10, y: 9 },
+        timer: 1,
+        vx: 1,
+    });
+
+    let lives_before = game.lives;
+    game.update();
+    assert_eq!(
+        game.lives,
+        lives_before - 1,
+        "a drifting meteor landing on the head must kill the snake"
+    );
+}
+
+#[test]
+fn test_meteor_vx_survives_serialization_and_defaults() {
+    // Old saves have no vx field: it must default to 0.
+    let legacy: Meteor =
+        serde_json::from_str(r#"{"position":{"x":3,"y":4},"timer":1}"#)
+            .expect("legacy meteor JSON without vx must still deserialize");
+    assert_eq!(legacy.vx, 0);
+
+    let m = Meteor {
+        position: Point { x: 7, y: 2 },
+        timer: 0,
+        vx: -1,
+    };
+    let json = serde_json::to_string(&vec![m]).unwrap();
+    let back: Vec<Meteor> = serde_json::from_str(&json).unwrap();
+    assert_eq!(back[0].vx, -1, "vx must round-trip through SaveState JSON");
+}
+
+#[test]
+fn test_non_asteroids_meteors_do_not_drift() {
+    let mut game = Game::new(20, 20, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.rng = rand::rngs::StdRng::seed_from_u64(7);
+    game.obstacles.clear();
+    game.meteors.clear();
+    game.lives = 1000;
+    game.state = GameState::Playing;
+    game.meteors.push(Meteor {
+        position: Point { x: 10, y: 5 },
+        timer: 0,
+        vx: 0,
+    });
+
+    for n in 1..=6_u16 {
+        game.state = GameState::Playing;
+        game.update();
+        assert!(
+            game
+                .meteors
+                .iter()
+                .any(|m| m.position == Point { x: 10, y: 5 + n / 2 }),
+            "vx = 0 meteors fall straight down (expected column x=10 at y={})",
+            5 + n / 2
+        );
     }
 }

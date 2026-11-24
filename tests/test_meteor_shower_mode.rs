@@ -22,6 +22,7 @@ fn test_meteor_shower_reset_clears_state() {
             y: 3,
         },
         timer: 0,
+        vx: 0,
     });
     game.mode = GameMode::MeteorShower;
     game.reset();
@@ -150,6 +151,7 @@ fn test_meteor_shower_meteor_column_is_lethal() {
             y: 3,
         },
         timer: 0,
+        vx: 0,
     });
 
     assert!(

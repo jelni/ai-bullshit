@@ -66,6 +66,7 @@ fn test_nuke_powerup_destroys_everything() {
             y: 8,
         },
         timer: 5,
+        vx: 0,
     });
 
     game.resources.insert(

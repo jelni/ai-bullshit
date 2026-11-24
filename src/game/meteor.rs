@@ -3,4 +3,6 @@ use super::{Deserialize, Point, Serialize};
 pub struct Meteor {
     pub position: Point,
     pub timer: u8,
+    #[serde(default)]
+    pub vx: i8,
 }

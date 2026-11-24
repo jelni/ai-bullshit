@@ -1763,6 +1763,7 @@ fn test_get_boss_path_avoids_meteor() {
     game.meteors.push(crate::game::meteor::Meteor {
         position: Point { x: 6, y: 5 },
         timer: 10,
+        vx: 0,
     });
 
     let next_dir = game.get_boss_path(boss_pos, target_pos, crate::game::BossType::Shooter);

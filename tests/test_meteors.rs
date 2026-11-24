@@ -22,6 +22,7 @@ fn test_meteor_spawning_and_falling() {
             y: 5,
         },
         timer: 0,
+        vx: 0,
     });
 
     game.state = snake_game::game::GameState::Playing;
@@ -35,6 +36,7 @@ fn test_meteor_spawning_and_falling() {
             y: 5,
         },
         timer: 0,
+        vx: 0,
     });
 
     // After 1 tick, timer should be 1, y should be 5
@@ -79,6 +81,7 @@ fn test_meteor_kills_snake() {
             y: 10,
         },
         timer: 0,
+        vx: 0,
     });
 
     game.state = snake_game::game::GameState::Playing;
@@ -114,6 +117,7 @@ fn test_meteor_destroys_obstacle() {
             y: 4,
         },
         timer: 1, // Ready to move down on next update
+        vx: 0,
     });
 
     game.state = snake_game::game::GameState::Playing;
