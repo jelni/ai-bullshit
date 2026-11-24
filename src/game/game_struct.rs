@@ -10464,7 +10464,13 @@ impl Game {
                     curr = prev;
                 }
                 path.reverse();
-                return first_step.get(&current).copied().map(|d| (d, path));
+                if let Some(dir) = first_step.get(&current).copied()
+                    && self.path_keeps_tail_reachable(start, &path, checking_player)
+                {
+                    return Some((dir, path));
+                }
+                // The path would seal the mover off from its own tail: keep
+                // searching for a non-trapping route instead of returning it.
             }
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
             for &d in &dirs {
@@ -10559,6 +10565,194 @@ impl Game {
             }
         }
         None
+    }
+    fn moving_body_for(&self, start: Point, checking_player: u8) -> Option<Vec<Point>> {
+        match checking_player {
+            1 => Some(self.snake.body.iter().copied().collect()),
+            2 => self
+                .player2
+                .as_ref()
+                .map(|p2| p2.body.iter().copied().collect()),
+            4 => self
+                .bots
+                .iter()
+                .find(|b| b.head() == start)
+                .map(|b| b.body.iter().copied().collect()),
+            _ => {
+                if self.snake.head() == start {
+                    Some(self.snake.body.iter().copied().collect())
+                } else {
+                    // Single-cell movers (bosses, the goblin, companions) have no
+                    // tail and therefore cannot trap themselves.
+                    None
+                }
+            }
+        }
+    }
+    fn trap_blocked_cells(&self, start: Point, checking_player: u8) -> HashSet<Point> {
+        let mut blocked: HashSet<Point> = self.obstacles.iter().copied().collect();
+        blocked.extend(self.mines.iter().copied());
+        for t in &self.turrets {
+            blocked.insert(t.position);
+        }
+        if let Some(bh) = self.black_hole {
+            blocked.insert(bh);
+        }
+        if let Some(col) = self.lightning_column {
+            for y in 1..self.height.saturating_sub(1) {
+                blocked.insert(Point { x: col, y });
+            }
+        }
+        if let Some((pf, _)) = self.poison_food {
+            blocked.insert(pf);
+        }
+        for b in &self.bosses {
+            blocked.insert(b.position);
+        }
+        let ray_len = self.width.max(self.height);
+        for l in &self.lasers {
+            blocked.insert(l.position);
+            for step in 1..ray_len {
+                let cell = match l.direction {
+                    Direction::Up => Point {
+                        x: l.position.x,
+                        y: l.position.y.saturating_sub(step),
+                    },
+                    Direction::Down => Point {
+                        x: l.position.x,
+                        y: l.position.y.saturating_add(step),
+                    },
+                    Direction::Left => Point {
+                        x: l.position.x.saturating_sub(step),
+                        y: l.position.y,
+                    },
+                    Direction::Right => Point {
+                        x: l.position.x.saturating_add(step),
+                        y: l.position.y,
+                    },
+                };
+                if cell.x == 0
+                    || cell.y == 0
+                    || cell.x >= self.width.saturating_sub(1)
+                    || cell.y >= self.height.saturating_sub(1)
+                {
+                    break;
+                }
+                blocked.insert(cell);
+            }
+        }
+        for m in &self.meteors {
+            blocked.insert(m.position);
+            for step in 1..10_u16 {
+                let y = m.position.y.saturating_add(step);
+                if y >= self.height.saturating_sub(1) {
+                    break;
+                }
+                blocked.insert(Point {
+                    x: m.position.x,
+                    y,
+                });
+            }
+        }
+        match checking_player {
+            1 => {
+                if let Some(p2) = &self.player2 {
+                    blocked.extend(p2.body.iter().copied());
+                }
+                for b in &self.bots {
+                    blocked.extend(b.body.iter().copied());
+                }
+            }
+            2 => {
+                blocked.extend(self.snake.body.iter().copied());
+                for b in &self.bots {
+                    blocked.extend(b.body.iter().copied());
+                }
+            }
+            4 => {
+                blocked.extend(self.snake.body.iter().copied());
+                if let Some(p2) = &self.player2 {
+                    blocked.extend(p2.body.iter().copied());
+                }
+                for b in &self.bots {
+                    if b.head() != start {
+                        blocked.extend(b.body.iter().copied());
+                    }
+                }
+            }
+            _ => {
+                if self.snake.head() != start {
+                    blocked.extend(self.snake.body.iter().copied());
+                }
+                if let Some(p2) = &self.player2 {
+                    blocked.extend(p2.body.iter().copied());
+                }
+                for b in &self.bots {
+                    blocked.extend(b.body.iter().copied());
+                }
+            }
+        }
+        blocked
+    }
+    fn path_keeps_tail_reachable(
+        &self,
+        start: Point,
+        path: &[Point],
+        checking_player: u8,
+    ) -> bool {
+        let Some(body) = self.moving_body_for(start, checking_player) else {
+            return true;
+        };
+        if body.len() < 2 || path.is_empty() {
+            return true;
+        }
+        // Simulate following the path. Assume the snake grows on arrival at the
+        // target (conservative: the tail does not vacate on the final step).
+        let mut sim: std::collections::VecDeque<Point> = body.into_iter().collect();
+        let last = path.len() - 1;
+        for (i, &cell) in path.iter().enumerate() {
+            sim.push_front(cell);
+            if i != last {
+                sim.pop_back();
+            }
+        }
+        let (Some(&head), Some(&tail)) = (sim.front(), sim.back()) else {
+            return true;
+        };
+        if head == tail {
+            return true;
+        }
+        let mut blocked = self.trap_blocked_cells(start, checking_player);
+        // The mover's own body blocks the way, except for the tail cell, which
+        // always vacates in time.
+        for &p in sim.iter().take(sim.len().saturating_sub(1)) {
+            blocked.insert(p);
+        }
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        let mut visited: HashSet<Point> = HashSet::new();
+        let mut queue: std::collections::VecDeque<Point> = std::collections::VecDeque::new();
+        visited.insert(head);
+        queue.push_back(head);
+        let max_visited = usize::from(self.width) * usize::from(self.height);
+        while let Some(curr) = queue.pop_front() {
+            if curr == tail {
+                return true;
+            }
+            if visited.len() >= max_visited {
+                break;
+            }
+            for &d in &dirs {
+                let next_p = Self::calculate_next_head_dir(curr, d);
+                if let Some(final_p) = self.get_final_p(next_p)
+                    && !blocked.contains(&final_p)
+                    && !visited.contains(&final_p)
+                {
+                    visited.insert(final_p);
+                    queue.push_back(final_p);
+                }
+            }
+        }
+        false
     }
     fn flood_fill_fallback(
         &self,
