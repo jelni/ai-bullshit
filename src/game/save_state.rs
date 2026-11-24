@@ -133,6 +133,12 @@ pub struct SaveState {
     pub storm_strikes: u32,
     #[serde(default)]
     pub quake_count: u32,
+    #[serde(default)]
+    pub lava_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub volcano_vents: Vec<Point>,
+    #[serde(default)]
+    pub volcano_eruptions: u32,
 }
 
 #[must_use]

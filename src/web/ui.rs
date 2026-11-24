@@ -117,6 +117,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw lava flows and volcano vents (Volcano mode)
+    if game.mode == crate::game::GameMode::Volcano {
+        ctx.set_fill_style_str("#FF4500");
+        for lava in &game.lava_tiles {
+            if lava.x < game.width
+                && lava.y < game.height
+                && is_visible(f64::from(lava.x), f64::from(lava.y))
+            {
+                ctx.fill_rect(
+                    f64::from(lava.x) * cell_size,
+                    f64::from(lava.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#8B0000");
+        for vent in &game.volcano_vents {
+            if vent.x < game.width
+                && vent.y < game.height
+                && is_visible(f64::from(vent.x), f64::from(vent.y))
+            {
+                ctx.fill_rect(
+                    f64::from(vent.x) * cell_size,
+                    f64::from(vent.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Turrets
     ctx.set_fill_style_str("#008B8B"); // DarkCyan
     for turret in &game.turrets {

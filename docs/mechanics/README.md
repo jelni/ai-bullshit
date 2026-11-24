@@ -64,3 +64,17 @@ The Druid hero class ignores all weather penalties.
 - **Autopilot:** obstacles are already hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance, so the autopilot routes around fresh rubble natively and rides out the quakes.
 - **Persistence:** the `quake_count` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows a `Quakes: <count>` counter, and rubble is rendered as a regular red `X` obstacle (terminal) / red cell (web).
 - **Tests:** see [tests/test_quake_mode.rs](../../tests/test_quake_mode.rs).
+
+## Volcano Mode
+
+`GameMode::Volcano` (menu entry "Volcano Mode") is a survival mode built around a growing lava field:
+
+- **Vents:** at reset, two volcano vents spawn on random empty cells (`volcano_vents`). Vent cells are lava and are permanent fixtures of the board.
+- **Eruptions:** on every 6th tick a scheduled eruption (`erupt_volcano`) spreads lava from a random lava-frontier cell to a random orthogonal neighbor, up to `2 + vent_count` cells per eruption, capped at 15% of the board. Eruptions are counted in `volcano_eruptions` and shown as `Eruptions: <count>` in the status bar.
+- **Lethality:** lava is stored in `lava_tiles` and mirrored into `obstacles`, so entering a lava tile kills the snake, and the autopilot treats lava as a hard obstacle natively (A* heuristic/edge costs, `is_safe_final_p` verified-safe path checks, and trap-avoidance flood fills all see it through `obstacles`).
+- **Fairness:** lava never spreads onto a snake's body, the cell any snake is about to enter this tick, or any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, lasers, meteors, crops, eggs, flags, resources, ...).
+- **Cooling cycle:** at tick 200 of every 250-tick cycle the whole lava field cools away ("The volcano cools!"), leaving only the vents, keeping the board playable.
+- **Cooling by food:** eating food cools all lava tiles adjacent to the eaten cell ("Cooled N lava!").
+- **Persistence:** `lava_tiles`, `volcano_vents` and `volcano_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). If another effect clears obstacles (e.g. the Bomb power-up), stale lava records are pruned on the next tick and the vents are re-seated into `obstacles`.
+- **Rendering:** lava is drawn as a red `~` (terminal) / orange cell (web) on top of the red `X` obstacles, vents as a dark-red `V` / dark-red cell, and the status bar shows `Lava: <count> | Eruptions: <count>`.
+- **Tests:** see [tests/test_volcano_mode.rs](../../tests/test_volcano_mode.rs).

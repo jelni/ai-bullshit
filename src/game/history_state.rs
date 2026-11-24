@@ -63,4 +63,7 @@ pub struct HistoryState {
     pub snow_tiles: HashSet<Point>,
     pub storm_strikes: u32,
     pub quake_count: u32,
+    pub lava_tiles: HashSet<Point>,
+    pub volcano_vents: Vec<Point>,
+    pub volcano_eruptions: u32,
 }

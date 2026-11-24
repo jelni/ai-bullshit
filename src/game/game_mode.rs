@@ -55,4 +55,5 @@ pub enum GameMode {
     Blizzard,
     Storm,
     Quake,
+    Volcano,
 }

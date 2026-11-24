@@ -129,6 +129,9 @@ pub struct Game {
     pub snow_tiles: HashSet<Point>,
     pub storm_strikes: u32,
     pub quake_count: u32,
+    pub lava_tiles: HashSet<Point>,
+    pub volcano_vents: Vec<Point>,
+    pub volcano_eruptions: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -551,6 +554,9 @@ impl Game {
             snow_tiles: HashSet::new(),
             storm_strikes: 0,
             quake_count: 0,
+            lava_tiles: HashSet::new(),
+            volcano_vents: Vec::new(),
+            volcano_eruptions: 0,
         }
     }
     #[must_use]
@@ -794,6 +800,9 @@ impl Game {
             snow_tiles: self.snow_tiles.clone(),
             storm_strikes: self.storm_strikes,
             quake_count: self.quake_count,
+            lava_tiles: self.lava_tiles.clone(),
+            volcano_vents: self.volcano_vents.clone(),
+            volcano_eruptions: self.volcano_eruptions,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -926,6 +935,9 @@ impl Game {
                 self.snow_tiles = state.snow_tiles;
                 self.storm_strikes = state.storm_strikes;
                 self.quake_count = state.quake_count;
+                self.lava_tiles = state.lava_tiles;
+                self.volcano_vents = state.volcano_vents;
+                self.volcano_eruptions = state.volcano_eruptions;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1477,6 +1489,149 @@ impl Game {
         } else {
             Some(allowed[self.rng.gen_range(0..allowed.len())])
         }
+    }
+    fn spawn_volcano_vents(&mut self) {
+        for _ in 0..2 {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.volcano_vents.contains(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                0,
+            ) {
+                self.volcano_vents.push(pos);
+                self.lava_tiles.insert(pos);
+                self.obstacles.insert(pos);
+            }
+        }
+    }
+    fn manage_volcano(&mut self) {
+        if self.mode != GameMode::Volcano {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale lava records
+        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        // Vents are permanent fixtures: keep them on the board as lava
+        for vent in self.volcano_vents.clone() {
+            self.obstacles.insert(vent);
+            self.lava_tiles.insert(vent);
+        }
+        // Periodic cooling: at tick 200 of every 250-tick cycle the lava field cools away (vents remain)
+        if self.tick_counter == 200 {
+            let vents = self.volcano_vents.clone();
+            let mut cooled = false;
+            for p in self.lava_tiles.clone() {
+                if !vents.contains(&p) {
+                    self.lava_tiles.remove(&p);
+                    self.obstacles.remove(&p);
+                    cooled = true;
+                }
+            }
+            if cooled {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The volcano cools!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            return;
+        }
+        // Scheduled eruption every 6th tick
+        if self.tick_counter.is_multiple_of(6) {
+            self.volcano_eruptions += 1;
+            self.erupt_volcano();
+        }
+    }
+    fn erupt_volcano(&mut self) {
+        let cap = (u32::from(self.width) * u32::from(self.height)) * 15 / 100;
+        if u32::try_from(self.lava_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let frontier: Vec<Point> = self.lava_tiles.iter().copied().collect();
+        if frontier.is_empty() {
+            return;
+        }
+        let spread_attempts = 2 + self.volcano_vents.len();
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        for _ in 0..spread_attempts {
+            if u32::try_from(self.lava_tiles.len()).unwrap_or(u32::MAX) >= cap {
+                break;
+            }
+            let base = frontier[self.rng.gen_range(0..frontier.len())];
+            let np = Self::calculate_next_head_dir(base, dirs[self.rng.gen_range(0..4)]);
+            if np.x >= self.width || np.y >= self.height {
+                continue;
+            }
+            if self.is_volcano_spread_blocked(np, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            self.lava_tiles.insert(np);
+            self.obstacles.insert(np);
+        }
+    }
+    fn is_volcano_spread_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
     }
     fn manage_black_hole(&mut self) {
         let spawn_chance = 0.002;
@@ -2122,7 +2277,8 @@ impl Game {
             | GameMode::Sandbox
             | GameMode::Blizzard
             | GameMode::Storm
-            | GameMode::Quake => {
+            | GameMode::Quake
+            | GameMode::Volcano => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2204,6 +2360,7 @@ impl Game {
                 || self.mode == GameMode::Blizzard
                 || self.mode == GameMode::Storm
                 || self.mode == GameMode::Quake
+                || self.mode == GameMode::Volcano
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2254,6 +2411,7 @@ impl Game {
             || self.mode == GameMode::Storm
             || self.mode == GameMode::Blizzard
             || self.mode == GameMode::Quake
+            || self.mode == GameMode::Volcano
         {
             &self.snake
         } else {
@@ -2362,6 +2520,9 @@ impl Game {
         self.snow_tiles.clear();
         self.storm_strikes = 0;
         self.quake_count = 0;
+        self.lava_tiles.clear();
+        self.volcano_vents.clear();
+        self.volcano_eruptions = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2515,6 +2676,9 @@ impl Game {
             0,
         )
         .expect("Board cannot be full on reset");
+        if self.mode == GameMode::Volcano {
+            self.spawn_volcano_vents();
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -2774,7 +2938,8 @@ impl Game {
             | GameMode::Sandbox
             | GameMode::Blizzard
             | GameMode::Storm
-            | GameMode::Quake => {
+            | GameMode::Quake
+            | GameMode::Volcano => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2824,6 +2989,7 @@ impl Game {
         self.bots.clear();
         self.bots_autopilot_paths.clear();
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
+        self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -3360,6 +3526,9 @@ impl Game {
             self.snow_tiles = state.snow_tiles;
             self.storm_strikes = state.storm_strikes;
             self.quake_count = state.quake_count;
+            self.lava_tiles = state.lava_tiles;
+            self.volcano_vents = state.volcano_vents;
+            self.volcano_eruptions = state.volcano_eruptions;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3459,6 +3628,9 @@ impl Game {
             snow_tiles: self.snow_tiles.clone(),
             storm_strikes: self.storm_strikes,
             quake_count: self.quake_count,
+            lava_tiles: self.lava_tiles.clone(),
+            volcano_vents: self.volcano_vents.clone(),
+            volcano_eruptions: self.volcano_eruptions,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -7122,6 +7294,7 @@ impl Game {
         self.manage_blizzard();
         self.manage_storm();
         self.manage_quake();
+        self.manage_volcano();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -8875,6 +9048,30 @@ impl Game {
                 "Stabilized!".to_string(),
                 crate::color::Color::Green,
             );
+        }
+        if self.mode == GameMode::Volcano {
+            let vents = self.volcano_vents.clone();
+            let mut cooled = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if !vents.contains(&np) && self.lava_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    cooled += 1;
+                }
+            }
+            if cooled > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Cooled {cooled} lava!"),
+                    crate::color::Color::Cyan,
+                );
+            }
         }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {

@@ -632,6 +632,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Blizzard Mode",
         "Storm Mode",
         "Quake Mode",
+        "Volcano Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1845,6 +1846,24 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw lava flows and volcano vents (Volcano mode)
+    if game.mode == crate::game::GameMode::Volcano {
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for lava in &game.lava_tiles {
+            if is_visible(lava.x, lava.y) {
+                stdout.queue(cursor::MoveTo(lava.x, lava.y))?;
+                write!(stdout, "~")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::DarkRed))?;
+        for vent in &game.volcano_vents {
+            if is_visible(vent.x, vent.y) {
+                stdout.queue(cursor::MoveTo(vent.x, vent.y))?;
+                write!(stdout, "V")?;
+            }
+        }
+    }
+
     for crop in &game.crops {
         stdout.queue(cursor::MoveTo(crop.position.x, crop.position.y))?;
         if crop.growth_stage == 0 {
@@ -2552,12 +2571,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let lava_str = if game.mode == crate::game::GameMode::Volcano {
+        format!(
+            " | Lava: {} | Eruptions: {}",
+            game.lava_tiles.len(),
+            game.volcano_eruptions
+        )
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}"
     )?;
 
     if !game.bosses.is_empty() {
