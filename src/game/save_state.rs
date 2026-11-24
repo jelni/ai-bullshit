@@ -145,6 +145,10 @@ pub struct SaveState {
     pub tornado: Option<Point>,
     #[serde(default)]
     pub tornado_gusts: u32,
+    #[serde(default)]
+    pub rubble_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub tremor_count: u32,
 }
 
 #[must_use]

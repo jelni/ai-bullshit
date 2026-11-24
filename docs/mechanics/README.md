@@ -16,8 +16,7 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell.
-- **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick.
-- **Earthquake:** occasionally adds or removes an obstacle.
+- **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick. In Earthquake Mode the earthquake is also permanent, with a fair scheduled tremor every 5th tick.
 - **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent and a roaming vortex also drags items towards itself (see below).
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
@@ -115,3 +114,16 @@ The Druid hero class ignores all weather penalties.
 - **Autopilot:** the vortex cell is a hard hazard in `is_safe_final_p` (so verified-safe path checks reject it at every step), carries a large heuristic penalty and edge cost in both `astar_search` and `get_boss_path`, and is a blocked cell in `trap_blocked_cells`, so bots and bosses route around the twister natively.
 - **Persistence:** `tornado` and `tornado_gusts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_tornado_mode.rs](../../tests/test_tornado_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+## Earthquake Mode
+
+`GameMode::Earthquake` (menu entry "Earthquake Mode") is a survival mode wrapped in a permanent earthquake (`weather` is forced to `Weather::Earthquake` every tick, and both the random weather re-roll and the ambient earthquake effect are disabled in this mode so only the fair scheduled tremors shape the board):
+
+- **Scheduled tremors:** on every 5th tick a tremor fires (`manage_earthquake`). With 50% probability an existing rubble pile collapses, otherwise a new rubble tile is dropped on a random empty cell, up to a cap of 10% of the board. Rubble is stored in `rubble_tiles` and mirrored into `obstacles`, so it blocks movement for the player, the autopilot, and all arena bots like any other obstacle.
+- **Fairness:** a tremor never drops rubble on a snake's body, on any entity (food, power-ups, portals, mines, bosses, turrets, companion, goblin, lava, ...), or on the cell any snake is about to move into this tick.
+- **Settling:** at tick 200 of every 250-tick cycle, all accumulated rubble crumbles away ("Settling!"), keeping the board playable.
+- **Shaking loose by food:** eating food removes all rubble tiles adjacent to the eaten cell ("Shook N rubble loose!").
+- **Persistence:** rubble survives respawns and is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), along with the `tremor_count` counter. If another effect clears obstacles (e.g. the Bomb power-up), stale rubble records are pruned on the next tick.
+- **Autopilot:** rubble is a hard obstacle in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks, so the autopilot routes around the shifting rubble field natively.
+- **Rendering:** rubble piles are drawn as dark-yellow `^` (terminal) / brown cells (web), and the status bar shows a `Tremors: <count>` counter.
+- **Tests:** see [tests/test_earthquake_mode.rs](../../tests/test_earthquake_mode.rs).

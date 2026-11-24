@@ -70,4 +70,6 @@ pub struct HistoryState {
     pub tournament: Option<Tournament>,
     pub tornado: Option<Point>,
     pub tornado_gusts: u32,
+    pub rubble_tiles: HashSet<Point>,
+    pub tremor_count: u32,
 }

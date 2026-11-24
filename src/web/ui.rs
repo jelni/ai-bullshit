@@ -149,6 +149,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw rubble piles (Earthquake mode)
+    if game.mode == crate::game::GameMode::Earthquake {
+        ctx.set_fill_style_str("#8B4513"); // SaddleBrown
+        for rubble in &game.rubble_tiles {
+            if rubble.x < game.width
+                && rubble.y < game.height
+                && is_visible(f64::from(rubble.x), f64::from(rubble.y))
+            {
+                ctx.fill_rect(
+                    f64::from(rubble.x) * cell_size,
+                    f64::from(rubble.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Turrets
     ctx.set_fill_style_str("#008B8B"); // DarkCyan
     for turret in &game.turrets {

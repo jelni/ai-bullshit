@@ -57,4 +57,5 @@ pub enum GameMode {
     Quake,
     Volcano,
     Tornado,
+    Earthquake,
 }

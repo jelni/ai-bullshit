@@ -634,6 +634,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Quake Mode",
         "Volcano Mode",
         "Tornado Mode",
+        "Earthquake Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1873,6 +1874,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw rubble piles (Earthquake mode)
+    if game.mode == crate::game::GameMode::Earthquake {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for rubble in &game.rubble_tiles {
+            if is_visible(rubble.x, rubble.y) {
+                stdout.queue(cursor::MoveTo(rubble.x, rubble.y))?;
+                write!(stdout, "^")?;
+            }
+        }
+    }
+
     for crop in &game.crops {
         stdout.queue(cursor::MoveTo(crop.position.x, crop.position.y))?;
         if crop.growth_stage == 0 {
@@ -2549,6 +2561,7 @@ fn draw_powerup_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> 
     Ok(())
 }
 
+#[expect(clippy::too_many_lines, reason = "Status bar naturally accumulates per-mode counters")]
 fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     stdout.queue(SetForegroundColor(Color::Reset))?;
     stdout.queue(cursor::MoveTo(0, game.height))?;
@@ -2619,12 +2632,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let tremors_str = if game.mode == crate::game::GameMode::Earthquake {
+        format!(" | Tremors: {}", game.tremor_count)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}{gusts_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}{gusts_str}{tremors_str}"
     )?;
 
     if !game.bosses.is_empty() {
