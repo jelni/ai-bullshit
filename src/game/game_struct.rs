@@ -10027,22 +10027,33 @@ impl Game {
         targets: &[Point],
         checking_player: u8,
     ) -> Option<(Direction, Vec<Point>)> {
-        let mut remaining: Vec<Point> = targets.to_vec();
-        let max_attempts = remaining.len().min(10);
-        let mut attempts = 0;
-        while !remaining.is_empty() && attempts < max_attempts {
-            attempts += 1;
-            let (dir, path) = self.astar_search(start, current_dir, &remaining, checking_player)?;
-            if self.path_is_safe(&path, &remaining, checking_player) {
-                return Some((dir, path));
+        // Evaluate every target's own verified path and keep the most survivable
+        // one: the path that leaves the most reachable free space after arrival
+        // (minus its length, so equally roomy targets prefer the shorter route).
+        let max_attempts = targets.len().min(10);
+        let mut best: Option<(u32, usize, Direction, Vec<Point>)> = None;
+        for &target in targets.iter().take(max_attempts) {
+            let Some((dir, path)) =
+                self.astar_search(start, current_dir, &[target], checking_player)
+            else {
+                continue;
+            };
+            if !self.path_is_safe(&path, &[target], checking_player) {
+                continue;
             }
-            if let Some(&reached) = path.last() {
-                remaining.retain(|t| *t != reached);
-            } else {
-                break;
+            let space = self.reachable_space_after_path(start, &path, checking_player);
+            let score = space.saturating_sub(u32::try_from(path.len()).unwrap_or(u32::MAX));
+            let is_better = match &best {
+                None => true,
+                Some((best_score, best_len, _, _)) => {
+                    score > *best_score || (score == *best_score && path.len() < *best_len)
+                },
+            };
+            if is_better {
+                best = Some((score, path.len(), dir, path));
             }
         }
-        None
+        best.map(|(_, _, dir, path)| (dir, path))
     }
     #[expect(clippy::too_many_lines, reason = "Search algorithm is inherently complex and long")]
     fn astar_search(
@@ -10694,21 +10705,19 @@ impl Game {
         }
         blocked
     }
-    fn path_keeps_tail_reachable(
+    fn simulated_body_after_path(
         &self,
         start: Point,
         path: &[Point],
         checking_player: u8,
-    ) -> bool {
-        let Some(body) = self.moving_body_for(start, checking_player) else {
-            return true;
-        };
-        if body.len() < 2 || path.is_empty() {
-            return true;
+    ) -> Option<std::collections::VecDeque<Point>> {
+        let body = self.moving_body_for(start, checking_player)?;
+        let mut sim: std::collections::VecDeque<Point> = body.into_iter().collect();
+        if path.is_empty() {
+            return Some(sim);
         }
         // Simulate following the path. Assume the snake grows on arrival at the
         // target (conservative: the tail does not vacate on the final step).
-        let mut sim: std::collections::VecDeque<Point> = body.into_iter().collect();
         let last = path.len() - 1;
         for (i, &cell) in path.iter().enumerate() {
             sim.push_front(cell);
@@ -10716,28 +10725,30 @@ impl Game {
                 sim.pop_back();
             }
         }
-        let (Some(&head), Some(&tail)) = (sim.front(), sim.back()) else {
-            return true;
-        };
-        if head == tail {
-            return true;
-        }
+        Some(sim)
+    }
+    fn post_path_blocked_cells(
+        &self,
+        start: Point,
+        sim: &std::collections::VecDeque<Point>,
+        checking_player: u8,
+    ) -> HashSet<Point> {
         let mut blocked = self.trap_blocked_cells(start, checking_player);
         // The mover's own body blocks the way, except for the tail cell, which
         // always vacates in time.
         for &p in sim.iter().take(sim.len().saturating_sub(1)) {
             blocked.insert(p);
         }
+        blocked
+    }
+    fn flood_fill_reachable(&self, from: Point, blocked: &HashSet<Point>) -> HashSet<Point> {
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
         let mut visited: HashSet<Point> = HashSet::new();
         let mut queue: std::collections::VecDeque<Point> = std::collections::VecDeque::new();
-        visited.insert(head);
-        queue.push_back(head);
+        visited.insert(from);
+        queue.push_back(from);
         let max_visited = usize::from(self.width) * usize::from(self.height);
         while let Some(curr) = queue.pop_front() {
-            if curr == tail {
-                return true;
-            }
             if visited.len() >= max_visited {
                 break;
             }
@@ -10752,7 +10763,45 @@ impl Game {
                 }
             }
         }
-        false
+        visited
+    }
+    fn path_keeps_tail_reachable(
+        &self,
+        start: Point,
+        path: &[Point],
+        checking_player: u8,
+    ) -> bool {
+        if path.is_empty() {
+            return true;
+        }
+        let Some(sim) = self.simulated_body_after_path(start, path, checking_player) else {
+            return true;
+        };
+        let (Some(&head), Some(&tail)) = (sim.front(), sim.back()) else {
+            return true;
+        };
+        if head == tail {
+            return true;
+        }
+        let blocked = self.post_path_blocked_cells(start, &sim, checking_player);
+        self.flood_fill_reachable(head, &blocked).contains(&tail)
+    }
+    #[must_use]
+    pub fn reachable_space_after_path(
+        &self,
+        start: Point,
+        path: &[Point],
+        checking_player: u8,
+    ) -> u32 {
+        let Some(sim) = self.simulated_body_after_path(start, path, checking_player) else {
+            return u32::try_from(usize::from(self.width) * usize::from(self.height))
+                .unwrap_or(u32::MAX);
+        };
+        let Some(&head) = sim.front() else {
+            return 0;
+        };
+        let blocked = self.post_path_blocked_cells(start, &sim, checking_player);
+        u32::try_from(self.flood_fill_reachable(head, &blocked).len()).unwrap_or(u32::MAX)
     }
     fn flood_fill_fallback(
         &self,
