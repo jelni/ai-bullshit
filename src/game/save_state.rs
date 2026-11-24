@@ -165,6 +165,12 @@ pub struct SaveState {
     pub eclipse_flare: u32,    #[serde(default)]
     pub tornado_spins: u32,
     pub sand_blasts: u32,
+    #[serde(default)]
+    pub bomb_carrier: Option<u8>,
+    #[serde(default)]
+    pub bomb_timer: u32,
+    #[serde(default)]
+    pub bomb_tags: u32,
 }
 
 #[must_use]

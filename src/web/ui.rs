@@ -135,6 +135,37 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw the bomb on the carrier's head (Bomb Tag mode)
+    if game.mode == crate::game::GameMode::BombTag
+        && let Some(carrier) = game.bomb_carrier
+    {
+        let head = if carrier == 1 {
+            game.snake.head()
+        } else if carrier == 2 {
+            game
+                .player2
+                .as_ref()
+                .map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+        } else {
+            game
+                .bots
+                .get(usize::from(carrier.saturating_sub(3)))
+                .map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+        };
+        if head.x < game.width
+            && head.y < game.height
+            && is_visible(f64::from(head.x), f64::from(head.y))
+        {
+            ctx.set_fill_style_str("#FF0000"); // Red
+            ctx.fill_rect(
+                f64::from(head.x) * cell_size,
+                f64::from(head.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         ctx.set_fill_style_str("#FFFFFF");

@@ -62,4 +62,5 @@ pub enum GameMode {
     Seismic,
     Eclipse,
     Sandstorm,
+    BombTag,
 }

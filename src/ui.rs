@@ -639,6 +639,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Seismic Mode",
         "Eclipse Mode",
         "Sandstorm Mode",
+        "Bomb Tag",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1882,6 +1883,26 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw the bomb on the carrier's head (Bomb Tag mode)
+    if game.mode == crate::game::GameMode::BombTag
+        && let Some(carrier) = game.bomb_carrier
+    {
+        let head = if carrier == 1 {
+            game.snake.head()
+        } else if carrier == 2 {
+            game.player2.as_ref().map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+        } else {
+            game.bots
+                .get(usize::from(carrier.saturating_sub(3)))
+                .map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+        };
+        if is_visible(head.x, head.y) {
+            stdout.queue(SetForegroundColor(Color::Red))?;
+            stdout.queue(cursor::MoveTo(head.x, head.y))?;
+            write!(stdout, "!")?;
+        }
+    }
+
     // Draw lava flows and volcano vents (Volcano mode)
     if game.mode == crate::game::GameMode::Volcano {
         stdout.queue(SetForegroundColor(Color::Red))?;
@@ -2707,12 +2728,23 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let bomb_str = if game.mode == crate::game::GameMode::BombTag {
+        let carrier = match game.bomb_carrier {
+            Some(1) => "You".to_string(),
+            Some(2) => "Player 2".to_string(),
+            Some(id) => format!("Bot {}", id.saturating_sub(2)),
+            None => "-".to_string(),
+        };
+        format!(" | Bomb: {carrier} ({}) | Tags: {}", game.bomb_timer, game.bomb_tags)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{bomb_str}"
     )?;
 
     if !game.bosses.is_empty() {

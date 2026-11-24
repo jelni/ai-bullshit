@@ -81,4 +81,7 @@ pub struct HistoryState {
     pub eclipse_flares: u32,
     pub eclipse_flare: u32,    pub tornado_spins: u32,
     pub sand_blasts: u32,
+    pub bomb_carrier: Option<u8>,
+    pub bomb_timer: u32,
+    pub bomb_tags: u32,
 }

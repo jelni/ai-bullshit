@@ -149,6 +149,9 @@ pub struct Game {
     pub eclipse_flares: u32,
     pub eclipse_flare: u32,
     pub sand_blasts: u32,
+    pub bomb_carrier: Option<u8>,
+    pub bomb_timer: u32,
+    pub bomb_tags: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -590,6 +593,9 @@ impl Game {
             seismic_quakes: 0,
             eclipse_flares: 0,
             eclipse_flare: 0,
+            bomb_carrier: None,
+            bomb_timer: 0,
+            bomb_tags: 0,
             sand_blasts: 0,
         }
     }
@@ -853,6 +859,9 @@ impl Game {
             eclipse_flares: self.eclipse_flares,
             eclipse_flare: self.eclipse_flare,
             sand_blasts: self.sand_blasts,
+            bomb_carrier: self.bomb_carrier,
+            bomb_timer: self.bomb_timer,
+            bomb_tags: self.bomb_tags,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1016,6 +1025,9 @@ impl Game {
                 self.eclipse_flares = state.eclipse_flares;
                 self.eclipse_flare = state.eclipse_flare;
                 self.sand_blasts = state.sand_blasts;
+                self.bomb_carrier = state.bomb_carrier;
+                self.bomb_timer = state.bomb_timer;
+                self.bomb_tags = state.bomb_tags;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -3619,7 +3631,8 @@ impl Game {
             | GameMode::MeteorShower
             | GameMode::Seismic
             | GameMode::Eclipse
-            | GameMode::Sandstorm => {
+            | GameMode::Sandstorm
+            | GameMode::BombTag => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3708,6 +3721,7 @@ impl Game {
                 || self.mode == GameMode::Seismic
                 || self.mode == GameMode::Eclipse
                 || self.mode == GameMode::Sandstorm
+                || self.mode == GameMode::BombTag
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -3893,6 +3907,9 @@ impl Game {
         self.eclipse_flares = 0;
         self.eclipse_flare = 0;
         self.sand_blasts = 0;
+        self.bomb_carrier = None;
+        self.bomb_timer = 0;
+        self.bomb_tags = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -4408,6 +4425,7 @@ impl Game {
             || self.mode == GameMode::Zombie
             || self.mode == GameMode::KingOfTheHill
             || self.mode == GameMode::TurfWar
+            || self.mode == GameMode::BombTag
         {
             let margin = self.safe_zone_margin;
             let count = if self.mode == GameMode::MassiveMultiplayer {
@@ -4417,6 +4435,8 @@ impl Game {
             } else if self.mode == GameMode::KingOfTheHill {
                 3
             } else if self.mode == GameMode::TurfWar {
+                3
+            } else if self.mode == GameMode::BombTag {
                 3
             } else {
                 1
@@ -4440,6 +4460,18 @@ impl Game {
                     self.bots_autopilot_paths.push(Vec::new());
                 }
             }
+        }
+        if self.mode == GameMode::BombTag {
+            let mut ids: Vec<u8> = vec![1];
+            if self.player2.is_some() {
+                ids.push(2);
+            }
+            for i in 0..self.bots.len() {
+                ids.push(u8::try_from(i).unwrap_or(255).saturating_add(3));
+            }
+            let idx = self.rng.gen_range(0..ids.len());
+            self.bomb_carrier = Some(ids[idx]);
+            self.bomb_timer = Self::BOMB_TIMER_MAX;
         }
     }
     fn respawn(&mut self) {
@@ -4497,7 +4529,8 @@ impl Game {
             | GameMode::MeteorShower
             | GameMode::Seismic
             | GameMode::Eclipse
-            | GameMode::Sandstorm => {
+            | GameMode::Sandstorm
+            | GameMode::BombTag => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4544,8 +4577,10 @@ impl Game {
                 }
             },
         }
-        self.bots.clear();
-        self.bots_autopilot_paths.clear();
+        if self.mode != GameMode::BombTag {
+            self.bots.clear();
+            self.bots_autopilot_paths.clear();
+        }
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.sand_tiles.retain(|p| self.obstacles.contains(p));
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
@@ -4799,6 +4834,7 @@ impl Game {
                 || self.mode == GameMode::Zombie
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::TurfWar
+                || self.mode == GameMode::BombTag
             {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
@@ -4892,6 +4928,14 @@ impl Game {
                                 self.turf_war_frontier_targets(start, bot_id, 3);
                             turf_targets.append(&mut targets);
                             targets = turf_targets;
+                        }
+                        if self.mode == GameMode::BombTag {
+                            let bot_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                            if self.bomb_carrier == Some(bot_id) {
+                                let mut tag_targets = self.bomb_rival_adjacent_targets(bot_id);
+                                tag_targets.append(&mut targets);
+                                targets = tag_targets;
+                            }
                         }
                         if let Some((dir, path)) = self.astar_search_verified_contested(
                             start,
@@ -5109,6 +5153,9 @@ impl Game {
             self.seismic_rubble = state.seismic_rubble;
             self.seismic_quakes = state.seismic_quakes;
             self.sand_blasts = state.sand_blasts;
+            self.bomb_carrier = state.bomb_carrier;
+            self.bomb_timer = state.bomb_timer;
+            self.bomb_tags = state.bomb_tags;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -5227,6 +5274,9 @@ impl Game {
             eclipse_flares: self.eclipse_flares,
             eclipse_flare: self.eclipse_flare,
             sand_blasts: self.sand_blasts,
+            bomb_carrier: self.bomb_carrier,
+            bomb_timer: self.bomb_timer,
+            bomb_tags: self.bomb_tags,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -9701,6 +9751,7 @@ impl Game {
                 || self.mode == GameMode::Vampire
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
+                || self.mode == GameMode::BombTag
             {
                 self.handle_death("You Died!");
             } else {
@@ -9992,6 +10043,7 @@ impl Game {
         }
         self.bots = alive_bots;
         self.bots_autopilot_paths = alive_paths;
+        self.manage_bomb_tag();
 
         if self.mode == GameMode::TurfWar {
             for segment in &self.snake.body {
@@ -11118,6 +11170,145 @@ impl Game {
         }
         if self.score > self.high_score {
             self.high_score = self.score;
+        }
+    }
+    fn alive_participant_heads(&self) -> Vec<(u8, Point)> {
+        let mut heads = vec![(1_u8, self.snake.head())];
+        if let Some(p2) = &self.player2 {
+            heads.push((2, p2.head()));
+        }
+        for (i, bot) in self.bots.iter().enumerate() {
+            heads.push((u8::try_from(i).unwrap_or(255).saturating_add(3), bot.head()));
+        }
+        heads
+    }
+    fn bomb_carrier_head(&self) -> Option<(u8, Point)> {
+        let id = self.bomb_carrier?;
+        match id {
+            1 => Some((1, self.snake.head())),
+            2 => self.player2.as_ref().map(|p2| (2, p2.head())),
+            _ => self.bots.get(usize::from(id.saturating_sub(3))).map(|b| (id, b.head())),
+        }
+    }
+    fn respawn_bomb(&mut self, exclude: Option<u8>) {
+        let ids: Vec<u8> = self
+            .alive_participant_heads()
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| Some(*id) != exclude)
+            .collect();
+        if ids.is_empty() {
+            self.bomb_carrier = None;
+            self.bomb_timer = 0;
+            return;
+        }
+        let idx = self.rng.gen_range(0..ids.len());
+        self.bomb_carrier = Some(ids[idx]);
+        self.bomb_timer = Self::BOMB_TIMER_MAX;
+    }
+    fn bomb_rival_adjacent_targets(&self, carrier_id: u8) -> Vec<Point> {
+        let Some((_, carrier_head)) = self.bomb_carrier_head() else {
+            return Vec::new();
+        };
+        let mut best: Option<(Point, u16)> = None;
+        for (id, head) in self.alive_participant_heads() {
+            if id == carrier_id {
+                continue;
+            }
+            let dist =
+                head.x.abs_diff(carrier_head.x).saturating_add(head.y.abs_diff(carrier_head.y));
+            if best.is_none_or(|(_, bd)| dist < bd) {
+                best = Some((head, dist));
+            }
+        }
+        let Some((rival_head, _)) = best else {
+            return Vec::new();
+        };
+        let mut targets = Vec::new();
+        for dir in [Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+            let np = Self::calculate_next_head_dir(rival_head, dir);
+            if np.x > 0 && np.x < self.width - 1 && np.y > 0 && np.y < self.height - 1 {
+                targets.push(np);
+            }
+        }
+        targets
+    }
+    fn manage_bomb_tag(&mut self) {
+        if self.mode != GameMode::BombTag {
+            return;
+        }
+        let Some((carrier, carrier_head)) = self.bomb_carrier_head() else {
+            self.respawn_bomb(None);
+            return;
+        };
+        // Passing: if the carrier's head is orthogonally adjacent to another
+        // alive snake's head, the bomb passes to that snake
+        for (id, head) in self.alive_participant_heads() {
+            if id == carrier {
+                continue;
+            }
+            if head.x.abs_diff(carrier_head.x).saturating_add(head.y.abs_diff(carrier_head.y)) == 1
+            {
+                self.bomb_carrier = Some(id);
+                self.bomb_timer = Self::BOMB_TIMER_MAX;
+                self.bomb_tags += 1;
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Tagged!".to_string(),
+                    crate::color::Color::Red,
+                );
+                return;
+            }
+        }
+        // Countdown
+        self.bomb_timer = self.bomb_timer.saturating_sub(1);
+        if self.match_time > 0 {
+            self.match_time -= 1;
+        }
+        if self.bomb_timer == 0 || self.match_time == 0 {
+            // The carrier is eliminated
+            if carrier == 1 {
+                let cause = if self.bomb_timer == 0 {
+                    "Bombed!"
+                } else {
+                    "Time's Up! Bombed!"
+                };
+                self.handle_death(cause);
+            } else if carrier == 2 {
+                self.player2 = None;
+            } else {
+                let idx = usize::from(carrier.saturating_sub(3));
+                if idx < self.bots.len() {
+                    let pos = self.bots[idx].head();
+                    self.spawn_particles(
+                        f32::from(pos.x),
+                        f32::from(pos.y),
+                        30,
+                        crate::color::Color::Red,
+                        'X',
+                    );
+                    self.bots.remove(idx);
+                    if idx < self.bots_autopilot_paths.len() {
+                        self.bots_autopilot_paths.remove(idx);
+                    }
+                    self.spawn_floating_text(
+                        f32::from(pos.x),
+                        f32::from(pos.y),
+                        "Boom!".to_string(),
+                        crate::color::Color::Red,
+                    );
+                }
+            }
+            self.respawn_bomb(Some(carrier));
+        }
+        // Last participant standing wins
+        if self.player2.is_none()
+            && self.bots.is_empty()
+            && self.lives > 0
+            && self.state == GameState::Playing
+        {
+            self.handle_win();
         }
     }
     fn manage_portals(&mut self) {
@@ -12349,6 +12540,11 @@ impl Game {
             turf_targets.append(&mut targets);
             targets = turf_targets;
         }
+        if self.mode == GameMode::BombTag && self.bomb_carrier == Some(1) {
+            let mut tag_targets = self.bomb_rival_adjacent_targets(1);
+            tag_targets.append(&mut targets);
+            targets = tag_targets;
+        }
         if let Some((dir, path)) = self.hunting_move(start, Some(current_dir), 1) {
             self.autopilot_path = path;
             return Some(dir);
@@ -12496,6 +12692,7 @@ impl Game {
     }
     /// Maximum number of steps ahead for which rival snake heads are predicted
     /// along their current direction during verified-safe path checking.
+    pub const BOMB_TIMER_MAX: u32 = 30;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

@@ -195,3 +195,15 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `sand_blasts`, `sand_tiles`, and `sand_drifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Blasts: <count>` and `Sand: <count> | Drifts: <count>` counters, and sand is rendered as a yellow `%` (terminal) / tan cell (web).
 - **Tests:** see [tests/test_sandstorm_mode.rs](../../tests/test_sandstorm_mode.rs).
 - **Tests:** see [tests/test_sandstorm_mode.rs](../../tests/test_sandstorm_mode.rs).
+
+## Bomb Tag
+
+`GameMode::BombTag` (menu entry "Bomb Tag") is an arena elimination mode: the player faces 3 arena bots (ids 3-5), and one participant is randomly chosen on reset to carry a ticking bomb:
+
+- **Bomb state:** `bomb_carrier` (1 = player, 2 = player 2, 3+ = bot index + 3), `bomb_timer` (counts down from `Game::BOMB_TIMER_MAX` = 30 every tick), and `bomb_tags` (pass counter). The status bar shows `Bomb: <carrier> (<ticks>) | Tags: <count>`, and the carrier's head is rendered as a red `!` (terminal) / red cell (web).
+- **Passing:** if the carrier's head is orthogonally adjacent (Manhattan distance 1) to another alive snake's head at the end of a tick, the bomb passes to that snake, the timer resets to `BOMB_TIMER_MAX`, `bomb_tags` is incremented, and "Tagged!" is shown.
+- **Explosion:** when the timer reaches 0 (or `match_time` reaches 0), the carrier is eliminated: a bot is removed from `bots` (with particles and "Boom!"), player 2 is removed, or the player loses a life through `handle_death` (bots are preserved across player respawns in this mode). The bomb then respawns on a random other alive participant with a fresh timer.
+- **Winning:** when only one participant remains (no player 2 and no bots) and the player is alive, `handle_win` declares the player the winner (Game Won / high-score flow). If the player's lives run out, the standard Game Over flow applies.
+- **Autopilot:** arena bots and the player bot run the usual verified-safe pipeline; additionally, a carrier prepends up to 4 targets — the in-bounds cells adjacent to the nearest rival's head (`bomb_rival_adjacent_targets`) — so it actively chases, while non-carriers flee the carrier via the predicted-enemy-occupancy hard constraints in `path_is_safe`. Passing then happens through normal movement.
+- **Persistence:** `bomb_carrier`, `bomb_timer`, and `bomb_tags` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_bomb_tag.rs](../../tests/test_bomb_tag.rs).
