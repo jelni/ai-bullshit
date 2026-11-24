@@ -10086,6 +10086,11 @@ impl Game {
                 }];
             }
         }
+        if self.mode == GameMode::TurfWar {
+            let mut turf_targets = self.turf_war_frontier_targets(start, 1, 5);
+            turf_targets.append(&mut targets);
+            targets = turf_targets;
+        }
         if let Some((dir, path)) = self.astar_search_verified(start, Some(current_dir), &targets, 1)
         {
             self.autopilot_path = path;
