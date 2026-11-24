@@ -127,6 +127,7 @@ pub struct Game {
     pub match_time: u32,
     pub controls_scrambled_timer: u8,
     pub snow_tiles: HashSet<Point>,
+    pub storm_strikes: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -547,6 +548,7 @@ impl Game {
             match_time: 0,
             controls_scrambled_timer: 0,
             snow_tiles: HashSet::new(),
+            storm_strikes: 0,
         }
     }
     #[must_use]
@@ -788,6 +790,7 @@ impl Game {
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
+            storm_strikes: self.storm_strikes,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -918,6 +921,7 @@ impl Game {
                 self.painted_tiles = state.painted_tiles;
                 self.match_time = state.match_time;
                 self.snow_tiles = state.snow_tiles;
+                self.storm_strikes = state.storm_strikes;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1355,6 +1359,33 @@ impl Game {
                     self.obstacles.insert(pos);
                 }
             }
+        }
+    }
+    fn manage_storm(&mut self) {
+        if self.mode != GameMode::Storm {
+            return;
+        }
+        // The thunderstorm never breaks in Storm mode
+        self.weather = Weather::Storm;
+    }
+    fn pick_storm_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
+        // Fairness: never strike the column a snake currently occupies or is about to enter
+        let mut forbidden: Vec<u16> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            forbidden.push(head.x);
+            forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
+        }
+        let allowed: Vec<u16> = (min_x..max_x).filter(|x| !forbidden.contains(x)).collect();
+        if allowed.is_empty() {
+            None
+        } else {
+            Some(allowed[self.rng.gen_range(0..allowed.len())])
         }
     }
     fn manage_black_hole(&mut self) {
@@ -1999,7 +2030,8 @@ impl Game {
             | GameMode::Asteroids
             | GameMode::TurfWar
             | GameMode::Sandbox
-            | GameMode::Blizzard => {
+            | GameMode::Blizzard
+            | GameMode::Storm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2079,6 +2111,7 @@ impl Game {
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::Blizzard
+                || self.mode == GameMode::Storm
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2126,6 +2159,7 @@ impl Game {
             || self.mode == GameMode::Flood
             || self.mode == GameMode::Vampire
             || self.mode == GameMode::Gravity
+            || self.mode == GameMode::Storm
             || self.mode == GameMode::Blizzard
         {
             &self.snake
@@ -2233,6 +2267,7 @@ impl Game {
         }
 
         self.snow_tiles.clear();
+        self.storm_strikes = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2473,6 +2508,9 @@ impl Game {
         if self.mode == GameMode::Blizzard {
             self.weather = Weather::Snow;
         }
+        if self.mode == GameMode::Storm {
+            self.weather = Weather::Storm;
+        }
         self.lightning_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
@@ -2637,7 +2675,8 @@ impl Game {
             | GameMode::Asteroids
             | GameMode::TurfWar
             | GameMode::Sandbox
-            | GameMode::Blizzard => {
+            | GameMode::Blizzard
+            | GameMode::Storm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3206,6 +3245,7 @@ impl Game {
             self.painted_tiles = state.painted_tiles;
             self.match_time = state.match_time;
             self.snow_tiles = state.snow_tiles;
+            self.storm_strikes = state.storm_strikes;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3303,6 +3343,7 @@ impl Game {
             painted_tiles: self.painted_tiles.clone(),
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
+            storm_strikes: self.storm_strikes,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6072,7 +6113,7 @@ impl Game {
                 }
             }
         }
-        if self.rng.gen_bool(0.002) {
+        if self.rng.gen_bool(0.002) && self.mode != GameMode::Storm {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
                 1 => Weather::Rain,
@@ -6086,7 +6127,8 @@ impl Game {
         }
         if self.weather == Weather::Storm
             && self.stats.equipped_class != Some(crate::game::HeroClass::Druid)
-            && self.rng.gen_bool(0.02)
+            && (self.mode == GameMode::Storm && self.tick_counter.is_multiple_of(6)
+                || self.rng.gen_bool(0.02))
         {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
@@ -6096,147 +6138,156 @@ impl Game {
             let min_x = margin + 1;
             let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
             if max_x > min_x {
-                let strike_x = self.rng.gen_range(min_x..max_x);
-                self.lightning_column = Some(strike_x);
-                self.obstacles.retain(|p| p.x != strike_x);
-                let mut next_bosses = Vec::new();
-                let mut new_lasers = Vec::new();
-                for mut boss in std::mem::take(&mut self.bosses) {
-                    if boss.position.x == strike_x {
-                        boss.health = boss.health.saturating_sub(5);
-                        if boss.health == 0 {
-                            *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
-                            self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
-                            if self.rng.gen_bool(0.2) {
-                                self.equipment_boxes.push(boss.position);
-                            }
-                            if self.stats.equipped_class
-                                == Some(crate::game::HeroClass::Necromancer)
-                            {
-                                self.companion = Some(Companion {
-                                    position: boss.position,
-                                    kind: crate::game::CompanionType::Fighter,
-                                    move_timer: 0,
-                                    action_timer: 0,
-                                    path: Vec::new(),
-                                });
-                                crate::game::beep();
-                            }
-
-                            if self.mode == GameMode::SnakeSurvivor {
-                                self.xp_gems.insert(boss.position);
-                            }
-
-                            if boss.kind == BossType::Splitter && boss.max_health > 5 {
-                                let half_max = boss.max_health / 2;
-                                let child1_pos = Point {
-                                    x: boss.position.x.saturating_sub(1).max(1),
-                                    y: boss.position.y,
-                                };
-                                let child2_pos = Point {
-                                    x: (boss.position.x + 1).min(self.width - 2),
-                                    y: boss.position.y,
-                                };
-                                next_bosses.push(Boss {
-                                    position: child1_pos,
-                                    health: half_max,
-                                    max_health: half_max,
-                                    move_timer: 0,
-                                    shoot_timer: 0,
-                                    kind: BossType::Splitter,
-                                    state_timer: 0,
-                                });
-                                next_bosses.push(Boss {
-                                    position: child2_pos,
-                                    health: half_max,
-                                    max_health: half_max,
-                                    move_timer: 0,
-                                    shoot_timer: 0,
-                                    kind: BossType::Splitter,
-                                    state_timer: 0,
-                                });
-                                self.spawn_particles(
-                                    f32::from(strike_x),
-                                    f32::from(boss.position.y),
-                                    30,
-                                    crate::color::Color::Magenta,
-                                    's',
-                                );
-                            } else {
-                                self.update_bounty_progress(
-                                    crate::game::BountyType::KillBosses(0),
-                                    1,
-                                );
-                                if self.mode == GameMode::BossRush {
-                                    self.score += 1000 * self.campaign_level;
-                                    self.campaign_level += 1;
-                                } else {
-                                    self.score += 100;
+                let strike_x = if self.mode == GameMode::Storm {
+                    self.pick_storm_strike_column(min_x, max_x)
+                } else {
+                    Some(self.rng.gen_range(min_x..max_x))
+                };
+                if let Some(strike_x) = strike_x {
+                    if self.mode == GameMode::Storm {
+                        self.storm_strikes += 1;
+                    }
+                    self.lightning_column = Some(strike_x);
+                    self.obstacles.retain(|p| p.x != strike_x);
+                    let mut next_bosses = Vec::new();
+                    let mut new_lasers = Vec::new();
+                    for mut boss in std::mem::take(&mut self.bosses) {
+                        if boss.position.x == strike_x {
+                            boss.health = boss.health.saturating_sub(5);
+                            if boss.health == 0 {
+                                *self.stats.bestiary.entry(boss.kind).or_insert(0) += 1;
+                                self.update_quest_progress(crate::game::QuestType::SlayBosses, 1);
+                                if self.rng.gen_bool(0.2) {
+                                    self.equipment_boxes.push(boss.position);
                                 }
-                                if self.stats.faction.is_some() {
-                                    self.stats.faction_rep += 100;
+                                if self.stats.equipped_class
+                                    == Some(crate::game::HeroClass::Necromancer)
+                                {
+                                    self.companion = Some(Companion {
+                                        position: boss.position,
+                                        kind: crate::game::CompanionType::Fighter,
+                                        move_timer: 0,
+                                        action_timer: 0,
+                                        path: Vec::new(),
+                                    });
+                                    crate::game::beep();
                                 }
-                                self.spawn_particles(
-                                    f32::from(strike_x),
-                                    f32::from(boss.position.y),
-                                    30,
-                                    crate::color::Color::Magenta,
-                                    'B',
-                                );
-                                let boss_pos = boss.position;
-                                let margin = if self.mode == GameMode::BattleRoyale {
-                                    self.safe_zone_margin
+
+                                if self.mode == GameMode::SnakeSurvivor {
+                                    self.xp_gems.insert(boss.position);
+                                }
+
+                                if boss.kind == BossType::Splitter && boss.max_health > 5 {
+                                    let half_max = boss.max_health / 2;
+                                    let child1_pos = Point {
+                                        x: boss.position.x.saturating_sub(1).max(1),
+                                        y: boss.position.y,
+                                    };
+                                    let child2_pos = Point {
+                                        x: (boss.position.x + 1).min(self.width - 2),
+                                        y: boss.position.y,
+                                    };
+                                    next_bosses.push(Boss {
+                                        position: child1_pos,
+                                        health: half_max,
+                                        max_health: half_max,
+                                        move_timer: 0,
+                                        shoot_timer: 0,
+                                        kind: BossType::Splitter,
+                                        state_timer: 0,
+                                    });
+                                    next_bosses.push(Boss {
+                                        position: child2_pos,
+                                        health: half_max,
+                                        max_health: half_max,
+                                        move_timer: 0,
+                                        shoot_timer: 0,
+                                        kind: BossType::Splitter,
+                                        state_timer: 0,
+                                    });
+                                    self.spawn_particles(
+                                        f32::from(strike_x),
+                                        f32::from(boss.position.y),
+                                        30,
+                                        crate::color::Color::Magenta,
+                                        's',
+                                    );
                                 } else {
-                                    0
-                                };
-                                for &dir in &[
-                                    Direction::Up,
-                                    Direction::Down,
-                                    Direction::Left,
-                                    Direction::Right,
-                                ] {
-                                    let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
-                                    if laser_pos.x > margin
-                                        && laser_pos.x < self.width - 1 - margin
-                                        && laser_pos.y > margin
-                                        && laser_pos.y < self.height - 1 - margin
-                                    {
-                                        new_lasers.push(Laser {
-                                            position: laser_pos,
-                                            direction: dir,
-                                            player: 3,
-                                        });
+                                    self.update_bounty_progress(
+                                        crate::game::BountyType::KillBosses(0),
+                                        1,
+                                    );
+                                    if self.mode == GameMode::BossRush {
+                                        self.score += 1000 * self.campaign_level;
+                                        self.campaign_level += 1;
+                                    } else {
+                                        self.score += 100;
+                                    }
+                                    if self.stats.faction.is_some() {
+                                        self.stats.faction_rep += 100;
+                                    }
+                                    self.spawn_particles(
+                                        f32::from(strike_x),
+                                        f32::from(boss.position.y),
+                                        30,
+                                        crate::color::Color::Magenta,
+                                        'B',
+                                    );
+                                    let boss_pos = boss.position;
+                                    let margin = if self.mode == GameMode::BattleRoyale {
+                                        self.safe_zone_margin
+                                    } else {
+                                        0
+                                    };
+                                    for &dir in &[
+                                        Direction::Up,
+                                        Direction::Down,
+                                        Direction::Left,
+                                        Direction::Right,
+                                    ] {
+                                        let laser_pos = Self::calculate_next_head_dir(boss_pos, dir);
+                                        if laser_pos.x > margin
+                                            && laser_pos.x < self.width - 1 - margin
+                                            && laser_pos.y > margin
+                                            && laser_pos.y < self.height - 1 - margin
+                                        {
+                                            new_lasers.push(Laser {
+                                                position: laser_pos,
+                                                direction: dir,
+                                                player: 3,
+                                            });
+                                        }
                                     }
                                 }
+                            } else {
+                                self.spawn_particles(
+                                    f32::from(strike_x),
+                                    f32::from(boss.position.y),
+                                    10,
+                                    crate::color::Color::Yellow,
+                                    '*',
+                                );
+                                next_bosses.push(boss);
                             }
                         } else {
-                            self.spawn_particles(
-                                f32::from(strike_x),
-                                f32::from(boss.position.y),
-                                10,
-                                crate::color::Color::Yellow,
-                                '*',
-                            );
                             next_bosses.push(boss);
                         }
-                    } else {
-                        next_bosses.push(boss);
                     }
-                }
-                self.bosses = next_bosses;
-                self.lasers.extend(new_lasers);
-                for y in (margin + 1)..self.height.saturating_sub(margin).saturating_sub(1) {
-                    if y % 3 == 0 {
-                        self.spawn_particles(
-                            f32::from(strike_x),
-                            f32::from(y),
-                            2,
-                            crate::color::Color::Cyan,
-                            '!',
-                        );
+                    self.bosses = next_bosses;
+                    self.lasers.extend(new_lasers);
+                    for y in (margin + 1)..self.height.saturating_sub(margin).saturating_sub(1) {
+                        if y % 3 == 0 {
+                            self.spawn_particles(
+                                f32::from(strike_x),
+                                f32::from(y),
+                                2,
+                                crate::color::Color::Cyan,
+                                '!',
+                            );
+                        }
                     }
+                    crate::game::beep();
                 }
-                crate::game::beep();
             }
         }
         let chat_interval = if self.mode == GameMode::SinglePlayer
@@ -7015,6 +7066,7 @@ impl Game {
         self.manage_black_hole();
         self.manage_meteors();
         self.manage_blizzard();
+        self.manage_storm();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -8749,6 +8801,14 @@ impl Game {
                     crate::color::Color::Cyan,
                 );
             }
+        }
+        if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Grounded!".to_string(),
+                crate::color::Color::Yellow,
+            );
         }
         beep();
         if self.mode == GameMode::Campaign && self.food_eaten_session >= self.campaign_level * 5 {

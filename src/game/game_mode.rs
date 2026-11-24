@@ -53,4 +53,5 @@ pub enum GameMode {
     Asteroids,
     Sandbox,
     Blizzard,
+    Storm,
 }

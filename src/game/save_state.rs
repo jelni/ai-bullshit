@@ -129,6 +129,8 @@ pub struct SaveState {
     pub match_time: u32,
     #[serde(default)]
     pub snow_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub storm_strikes: u32,
 }
 
 #[must_use]

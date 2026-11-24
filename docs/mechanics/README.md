@@ -16,7 +16,7 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell.
 - **Earthquake:** occasionally adds or removes an obstacle.
 - **Tornado:** occasionally relocates the food.
-- **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it).
+- **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
 
 The Druid hero class ignores all weather penalties.
@@ -41,3 +41,13 @@ The Druid hero class ignores all weather penalties.
 - **Player bot:** with `--bot`, `calculate_autopilot_move` also prepends up to 5 frontier cells (`turf_war_frontier_targets(start, 1, 5)`, i.e. cells the player has not painted itself) to its targets in this mode, so the player bot actively expands territory instead of only chasing food.
 - **Scoring:** at timeout, painted tiles are tallied per owner id (1 = player 1, 2 = player 2, 3+ = bots) and all participants tied at the maximum score are declared winners.
 - **Tests:** see [tests/test_turf_war_autopilot.rs](../../tests/test_turf_war_autopilot.rs) and [tests/test_turf_war.rs](../../tests/test_turf_war.rs).
+
+## Storm Mode
+
+`GameMode::Storm` (menu entry "Storm Mode") is a survival mode wrapped in a permanent thunderstorm (`weather` is forced to `Weather::Storm` every tick):
+
+- **Scheduled strikes:** on every 6th tick a lightning column is guaranteed to strike a random column (on top of the usual ambient storm strike chance). The strike devastates the whole row: snakes whose head enters the column die, bosses in it lose health, and all obstacles in that column are burned away.
+- **Fairness:** a scheduled strike never targets the column a snake currently occupies or the column its head is about to enter this tick, so the storm is dangerous but never unfair.
+- **Grounding:** eating food clears the currently active lightning column ("Grounded!"), giving the player a way to neutralize an incoming strike.
+- **Autopilot:** the active lightning column is already a hard hazard in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks, so the autopilot routes around it natively.
+- **Persistence:** the `storm_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), and the active `lightning_column` was already persisted. The status bar shows a `Strikes: <count>` counter, and the column is rendered as a yellow `|` (terminal) / yellow bar (web).
