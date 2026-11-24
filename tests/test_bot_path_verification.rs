@@ -42,7 +42,7 @@ fn test_path_is_safe_accepts_clear_path() {
 
     let path = vec![p(10, 9), p(9, 9), p(8, 9)];
     assert!(
-        game.path_is_safe(&path, &[], 1),
+        game.path_is_safe(game.snake.head(), &path, &[], 1),
         "a path through free cells should be considered safe"
     );
 }
@@ -58,14 +58,14 @@ fn test_path_is_safe_rejects_own_body_collision_at_arrival() {
     // 4 - 1 = 3 steps; arriving there in 1 step is a collision.
     let short_path = vec![p(9, 10)];
     assert!(
-        !game.path_is_safe(&short_path, &[], 1),
+        !game.path_is_safe(game.snake.head(), &short_path, &[], 1),
         "arriving on a body segment before it vacates must be unsafe"
     );
 
     // The same cell reached after 3 steps is fine.
     let long_path = vec![p(10, 9), p(9, 9), p(9, 10)];
     assert!(
-        game.path_is_safe(&long_path, &[], 1),
+        game.path_is_safe(game.snake.head(), &long_path, &[], 1),
         "reaching the body segment only after it has vacated should be safe"
     );
 }
@@ -83,12 +83,12 @@ fn test_path_is_safe_rejects_laser_cell() {
 
     let into_laser = vec![p(12, 5)];
     assert!(
-        !game.path_is_safe(&into_laser, &[p(12, 5)], 1),
+        !game.path_is_safe(game.snake.head(), &into_laser, &[p(12, 5)], 1),
         "a path ending on a laser-covered non-boss target must be unsafe"
     );
 
     let beside_laser = vec![p(12, 6)];
-    assert!(game.path_is_safe(&beside_laser, &[], 1), "a cell off the laser ray should be safe");
+    assert!(game.path_is_safe(game.snake.head(), &beside_laser, &[], 1), "a cell off the laser ray should be safe");
 }
 
 #[test]

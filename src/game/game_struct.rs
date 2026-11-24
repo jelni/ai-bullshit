@@ -9099,9 +9099,8 @@ impl Game {
         self.astar_search(start, None, &[target], checking_player).map(|(dir, _)| dir)
     }
     #[must_use]
-    #[expect(clippy::too_many_lines)]
-    pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
-        let is_invincible = self.mode == GameMode::Zen
+    pub fn is_invincible_active(&self) -> bool {
+        self.mode == GameMode::Zen
             || self.power_up.as_ref().is_some_and(|pu| {
                 pu.p_type == PowerUpType::Invincibility
                     && pu.activation_time.is_some_and(|t| {
@@ -9112,7 +9111,12 @@ impl Game {
                             .saturating_sub(t)
                             < self.powerup_duration()
                     })
-            });
+            })
+    }
+    #[must_use]
+    #[expect(clippy::too_many_lines)]
+    pub fn is_safe_final_p(&self, final_p: Point, steps: u16, checking_player: u8) -> bool {
+        let is_invincible = self.is_invincible_active();
         let is_time_frozen = self.power_up.as_ref().is_some_and(|p| {
             p.p_type == PowerUpType::TimeFreeze
                 && p.activation_time.is_some_and(|t| {
@@ -10005,8 +10009,76 @@ impl Game {
             None
         }
     }
+    /// Maximum number of steps ahead for which rival snake heads are predicted
+    /// along their current direction during verified-safe path checking.
+    pub const RIVAL_HEAD_HORIZON: u16 = 8;
+
+    /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
+    /// at which a rival snake's predicted head lands on that cell, assuming
+    /// every rival keeps moving straight along its current direction (through
+    /// portals and wrapping when applicable).
     #[must_use]
-    pub fn path_is_safe(&self, path: &[Point], targets: &[Point], checking_player: u8) -> bool {
+    pub fn rival_head_lane_mask(
+        &self,
+        checking_player: u8,
+        mover_head: Point,
+    ) -> std::collections::HashMap<Point, u32> {
+        let mut rivals: Vec<(Point, Direction)> = Vec::new();
+        match checking_player {
+            1 => {
+                if let Some(p2) = &self.player2 {
+                    rivals.push((p2.head(), p2.direction));
+                }
+            }
+            2 => {
+                if self.snake.head() != mover_head {
+                    rivals.push((self.snake.head(), self.snake.direction));
+                }
+            }
+            _ => {
+                if self.snake.head() != mover_head {
+                    rivals.push((self.snake.head(), self.snake.direction));
+                }
+                if let Some(p2) = &self.player2
+                    && p2.head() != mover_head
+                {
+                    rivals.push((p2.head(), p2.direction));
+                }
+                for b in &self.bots {
+                    if b.head() != mover_head {
+                        rivals.push((b.head(), b.direction));
+                    }
+                }
+            }
+        }
+        let mut mask: std::collections::HashMap<Point, u32> = std::collections::HashMap::new();
+        for (head, dir) in rivals {
+            let mut cur = head;
+            for step in 1..=Self::RIVAL_HEAD_HORIZON {
+                let next = Self::calculate_next_head_dir(cur, dir);
+                let Some(final_p) = self.get_final_p(next) else {
+                    break;
+                };
+                cur = final_p;
+                *mask.entry(cur).or_insert(0) |= 1_u32 << step;
+            }
+        }
+        mask
+    }
+
+    #[must_use]
+    pub fn path_is_safe(
+        &self,
+        start: Point,
+        path: &[Point],
+        targets: &[Point],
+        checking_player: u8,
+    ) -> bool {
+        let lane_mask = if self.is_invincible_active() {
+            std::collections::HashMap::new()
+        } else {
+            self.rival_head_lane_mask(checking_player, start)
+        };
         for (idx, &p) in path.iter().enumerate() {
             let steps = u16::try_from(idx + 1).unwrap_or(u16::MAX);
             let is_final = idx + 1 == path.len();
@@ -10014,6 +10086,14 @@ impl Game {
                 continue;
             }
             if self.obstacles.contains(&p) || !self.is_safe_final_p(p, steps, checking_player) {
+                return false;
+            }
+            if steps > 1
+                && steps <= Self::RIVAL_HEAD_HORIZON
+                && lane_mask
+                    .get(&p)
+                    .is_some_and(|m| m & (1_u32 << steps) != 0)
+            {
                 return false;
             }
         }
@@ -10038,7 +10118,7 @@ impl Game {
             else {
                 continue;
             };
-            if !self.path_is_safe(&path, &[target], checking_player) {
+            if !self.path_is_safe(start, &path, &[target], checking_player) {
                 continue;
             }
             let space = self.reachable_space_after_path(start, &path, checking_player);
@@ -10069,6 +10149,19 @@ impl Game {
         let mut came_from = std::collections::HashMap::new();
         let mut tie_breaker_counter = 0u64;
         g_score.insert(start, 0);
+
+        let lane_mask = if self.is_invincible_active() {
+            std::collections::HashMap::new()
+        } else {
+            self.rival_head_lane_mask(checking_player, start)
+        };
+        let lane_hit = |p: Point, steps: u16| -> bool {
+            steps > 1
+                && steps <= Self::RIVAL_HEAD_HORIZON
+                && lane_mask
+                    .get(&p)
+                    .is_some_and(|m| m & (1_u32 << steps) != 0)
+        };
 
         let can_pass_through_walls = self.power_up.as_ref().is_some_and(|pu| {
             pu.p_type == PowerUpType::PassThroughWalls
@@ -10550,6 +10643,8 @@ impl Game {
 
                 let tentative_g = current_g.saturating_add(edge_cost);
                 if let Some(final_p) = self.get_final_p(next_p)
+                    && !lane_hit(next_p, tentative_g)
+                    && !lane_hit(final_p, tentative_g)
                     && (next_p == final_p
                         || (self.is_safe_final_p(next_p, tentative_g, checking_player)
                             && !self.obstacles.contains(&next_p)))
