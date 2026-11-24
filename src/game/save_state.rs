@@ -149,6 +149,7 @@ pub struct SaveState {
     pub rubble_tiles: HashSet<Point>,
     #[serde(default)]
     pub tremor_count: u32,
+    pub meteor_strikes: u32,
 }
 
 #[must_use]

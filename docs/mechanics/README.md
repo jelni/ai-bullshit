@@ -127,3 +127,13 @@ The Druid hero class ignores all weather penalties.
 - **Autopilot:** rubble is a hard obstacle in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks, so the autopilot routes around the shifting rubble field natively.
 - **Rendering:** rubble piles are drawn as dark-yellow `^` (terminal) / brown cells (web), and the status bar shows a `Tremors: <count>` counter.
 - **Tests:** see [tests/test_earthquake_mode.rs](../../tests/test_earthquake_mode.rs).
+## Meteor Shower Mode
+
+`GameMode::MeteorShower` (menu entry "Meteor Shower Mode", index 55) is a survival mode under a constant meteor bombardment:
+
+- **Ambient meteors:** the per-tick spawn chance is raised to 15% (the Asteroids-mode rate; 1% in other modes). A meteor enters at the top of a random column and falls one cell every 2 ticks, destroying obstacles and mines in its path and killing any snake whose head or body it touches.
+- **Scheduled strikes:** on every 6th tick a strike is guaranteed at a fair column chosen by `pick_safe_strike_column` — never a column any snake currently occupies (head *or* body, since a falling meteor sweeps its whole column) or is about to enter. The chosen column is exposed as `meteor_strike_column`.
+- **Clear skies:** `weather` is pinned to `Weather::Clear` every tick (and the mode is excluded from the random weather reroll), so incoming meteors always stay visible.
+- **Autopilot:** falling meteors are already hard hazards in the A* heuristic/edge costs and in `is_safe_final_p`, which rejects any cell in a meteor's column that the meteor will reach within the cell's arrival step count, so the bot routes around meteor columns natively.
+- **Persistence:** the `meteor_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent; meteors themselves were already persisted), and the status bar shows a `Meteors: <count>` counter.
+- **Tests:** see [tests/test_meteor_shower_mode.rs](../../tests/test_meteor_shower_mode.rs).

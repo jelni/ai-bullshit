@@ -78,6 +78,7 @@ pub struct Game {
     pub portals: Option<(Point, Point)>,
     pub weather: Weather,
     pub lightning_column: Option<u16>,
+    pub meteor_strike_column: Option<u16>,
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
@@ -138,6 +139,7 @@ pub struct Game {
     pub tornado_gusts: u32,
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
+    pub meteor_strikes: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -509,6 +511,7 @@ impl Game {
             portals: None,
             weather: Weather::Clear,
             lightning_column: None,
+            meteor_strike_column: None,
             mines: HashSet::new(),
             black_hole: None,
             meteors: Vec::new(),
@@ -569,6 +572,7 @@ impl Game {
             tornado_gusts: 0,
             rubble_tiles: HashSet::new(),
             tremor_count: 0,
+            meteor_strikes: 0,
         }
     }
     #[must_use]
@@ -821,6 +825,7 @@ impl Game {
             tornado_gusts: self.tornado_gusts,
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
+            meteor_strikes: self.meteor_strikes,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -971,6 +976,7 @@ impl Game {
                 self.tornado_gusts = state.tornado_gusts;
                 self.rubble_tiles = state.rubble_tiles;
                 self.tremor_count = state.tremor_count;
+                self.meteor_strikes = state.meteor_strikes;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1242,11 +1248,14 @@ impl Game {
         }
     }
     fn manage_meteors(&mut self) {
-        if self.rng.gen_bool(if self.mode == GameMode::Asteroids {
+        let spawn_chance = if self.mode == GameMode::Asteroids {
+            0.15
+        } else if self.mode == GameMode::MeteorShower {
             0.15
         } else {
             0.01
-        }) {
+        };
+        if self.rng.gen_bool(spawn_chance) {
             let margin = if self.mode == GameMode::BattleRoyale {
                 self.safe_zone_margin
             } else {
@@ -1269,6 +1278,29 @@ impl Game {
                         timer: 0,
                     });
                 }
+            }
+        }
+        // Meteor Shower mode: a strike is guaranteed on every 6th tick
+        if self.mode == GameMode::MeteorShower && self.tick_counter.is_multiple_of(6) {
+            let margin = if self.mode == GameMode::BattleRoyale {
+                self.safe_zone_margin
+            } else {
+                0
+            };
+            let min_x = margin + 1;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+            if max_x > min_x
+                && let Some(strike_x) = self.pick_safe_strike_column(min_x, max_x)
+            {
+                self.meteor_strikes += 1;
+                self.meteor_strike_column = Some(strike_x);
+                self.meteors.push(Meteor {
+                    position: Point {
+                        x: strike_x,
+                        y: margin + 1,
+                    },
+                    timer: 0,
+                });
             }
         }
         let mut meteors_to_keep = Vec::new();
@@ -1515,6 +1547,13 @@ impl Game {
                 }
             }
         }
+        }
+    fn manage_meteor_shower(&mut self) {
+        if self.mode != GameMode::MeteorShower {
+            return;
+        }
+        // Clear skies in Meteor Shower mode: incoming meteors must always stay visible
+        self.weather = Weather::Clear;
     }
     fn manage_quake(&mut self) {
         if self.mode != GameMode::Quake {
@@ -1829,8 +1868,9 @@ impl Game {
             self.power_up = Some(pu);
         }
     }
-    fn pick_storm_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
-        // Fairness: never strike the column a snake currently occupies or is about to enter
+    fn pick_safe_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
+        // Fairness: never strike a column any snake currently occupies (a falling meteor
+        // sweeps its whole column, so body segments count too) or is about to enter
         let mut forbidden: Vec<u16> = Vec::new();
         let mut snakes: Vec<&Snake> = vec![&self.snake];
         if let Some(p2) = &self.player2 {
@@ -1841,6 +1881,9 @@ impl Game {
             let head = s.head();
             forbidden.push(head.x);
             forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
+            for p in s.body_map.keys() {
+                forbidden.push(p.x);
+            }
         }
         let allowed: Vec<u16> = (min_x..max_x).filter(|x| !forbidden.contains(x)).collect();
         if allowed.is_empty() {
@@ -2642,7 +2685,8 @@ impl Game {
             | GameMode::Quake
             | GameMode::Volcano
             | GameMode::Tornado
-            | GameMode::Earthquake => {
+            | GameMode::Earthquake
+            | GameMode::MeteorShower => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2727,6 +2771,7 @@ impl Game {
                 || self.mode == GameMode::Volcano
                 || self.mode == GameMode::Tornado
                 || self.mode == GameMode::Earthquake
+                || self.mode == GameMode::MeteorShower
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2780,6 +2825,7 @@ impl Game {
             || self.mode == GameMode::Volcano
             || self.mode == GameMode::Tornado
             || self.mode == GameMode::Earthquake
+            || self.mode == GameMode::MeteorShower
         {
             &self.snake
         } else {
@@ -2898,6 +2944,7 @@ impl Game {
         }
         self.rubble_tiles.clear();
         self.tremor_count = 0;
+        self.meteor_strikes = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -3208,7 +3255,11 @@ impl Game {
         if self.mode == GameMode::Earthquake {
             self.weather = Weather::Earthquake;
         }
+        if self.mode == GameMode::MeteorShower {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
+        self.meteor_strike_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
         self.meteors.clear();
@@ -3402,7 +3453,8 @@ impl Game {
             | GameMode::Quake
             | GameMode::Volcano
             | GameMode::Tornado
-            | GameMode::Earthquake => {
+            | GameMode::Earthquake
+            | GameMode::MeteorShower => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4004,6 +4056,7 @@ impl Game {
             self.tornado_gusts = state.tornado_gusts;
             self.rubble_tiles = state.rubble_tiles;
             self.tremor_count = state.tremor_count;
+            self.meteor_strikes = state.meteor_strikes;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -4112,6 +4165,7 @@ impl Game {
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
+            meteor_strikes: self.meteor_strikes,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6841,6 +6895,7 @@ impl Game {
             && self.mode != GameMode::Quake
             && self.mode != GameMode::Tornado
             && self.mode != GameMode::Earthquake
+            && self.mode != GameMode::MeteorShower
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -6867,7 +6922,7 @@ impl Game {
             let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
             if max_x > min_x {
                 let strike_x = if self.mode == GameMode::Storm {
-                    self.pick_storm_strike_column(min_x, max_x)
+                    self.pick_safe_strike_column(min_x, max_x)
                 } else {
                     Some(self.rng.gen_range(min_x..max_x))
                 };
@@ -7800,6 +7855,7 @@ impl Game {
         self.manage_volcano();
         self.manage_tornado();
         self.manage_earthquake();
+        self.manage_meteor_shower();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();

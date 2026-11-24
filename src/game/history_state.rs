@@ -72,4 +72,5 @@ pub struct HistoryState {
     pub tornado_gusts: u32,
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
+    pub meteor_strikes: u32,
 }

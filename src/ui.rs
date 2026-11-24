@@ -635,6 +635,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Volcano Mode",
         "Tornado Mode",
         "Earthquake Mode",
+        "Meteor Shower Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2617,6 +2618,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     };
     let meteors_str = if game.mode == crate::game::GameMode::Asteroids {
         format!(" | Meteors: {}", game.asteroid_strikes)
+    } else if game.mode == crate::game::GameMode::MeteorShower {
+        format!(" | Meteors: {}", game.meteor_strikes)
     } else {
         String::new()
     };
