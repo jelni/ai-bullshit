@@ -2976,6 +2976,18 @@ impl Game {
                         let current_dir = self.bots[i].direction;
                         let tail = self.bots[i].body.back().copied();
 
+                        // Offensive layer: cut off a shorter rival when a
+                        // verified-safe, non-trapping kill path exists.
+                        if let Some((dir, path)) = self.hunting_move(start, Some(current_dir), 4) {
+                            self.bots_autopilot_paths[i] = path;
+                            self.bots[i].direction_queue.push_back(dir);
+                            let player_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                            if self.should_bot_shoot(player_id) {
+                                self.shoot_laser(player_id);
+                            }
+                            continue;
+                        }
+
                         // Use flow field for MassiveMultiplayer and Zombie to save performance
                         let expected_targets = if self.mode == GameMode::Zombie {
                             if self.is_invisible() {
@@ -10170,6 +10182,10 @@ impl Game {
             turf_targets.append(&mut targets);
             targets = turf_targets;
         }
+        if let Some((dir, path)) = self.hunting_move(start, Some(current_dir), 1) {
+            self.autopilot_path = path;
+            return Some(dir);
+        }
         if let Some((dir, path)) =
             self.astar_search_verified_contested(start, Some(current_dir), &targets, 1)
         {
@@ -10286,6 +10302,10 @@ impl Game {
                         y: self.height / 2,
                     }];
                 }
+            }
+            if let Some((dir, path)) = self.hunting_move(start, Some(current_dir), 2) {
+                self.p2_autopilot_path = path;
+                return Some(dir);
             }
             if let Some((dir, path)) =
                 self.astar_search_verified_contested(start, Some(current_dir), &targets, 2)
@@ -10596,6 +10616,181 @@ impl Game {
             }
         }
         best.map(|(_, _, dir, path)| (dir, path))
+    }
+    /// Maximum number of steps ahead for which rival head paths are projected
+    /// when looking for cut-off (hunting) opportunities.
+    pub const CUTOFF_HORIZON: u16 = 12;
+    /// The rival snakes a given mover considers prey: everyone except itself.
+    fn rivals_of(&self, checking_player: u8, mover_head: Point) -> Vec<&Snake> {
+        let mut rivals = Vec::new();
+        if checking_player != 1 && self.snake.head() != mover_head {
+            rivals.push(&self.snake);
+        }
+        if checking_player != 2
+            && let Some(p2) = &self.player2
+        {
+            rivals.push(p2);
+        }
+        for b in &self.bots {
+            if b.head() != mover_head {
+                rivals.push(b);
+            }
+        }
+        rivals
+    }
+    /// Hunting (offensive cut-off) is only enabled in modes with rival snakes.
+    /// Arena bots in Zombie mode already hunt the player, so they are excluded.
+    const fn hunting_enabled(&self, checking_player: u8) -> bool {
+        match self.mode {
+            GameMode::PlayerVsBot
+            | GameMode::BotVsBot
+            | GameMode::MassiveMultiplayer
+            | GameMode::Tron
+            | GameMode::KingOfTheHill
+            | GameMode::CaptureTheFlag => true,
+            GameMode::Zombie => checking_player == 1 || checking_player == 2,
+            _ => false,
+        }
+    }
+    /// Candidate intercept cells on rival head paths: if the mover can reach
+    /// the cell where a shorter rival's head will be after `k` steps within
+    /// `k - 1` steps, the rival crashes into the mover's body on step `k`.
+    #[must_use]
+    pub fn cutoff_targets(
+        &self,
+        checking_player: u8,
+        mover_head: Point,
+        mover_len: usize,
+    ) -> Vec<Point> {
+        let mut out = Vec::new();
+        if !self.hunting_enabled(checking_player) {
+            return out;
+        }
+        let max_rival_dist = u32::from(Self::CUTOFF_HORIZON).saturating_mul(2);
+        for rival in self.rivals_of(checking_player, mover_head) {
+            if rival.body.len() >= mover_len {
+                continue;
+            }
+            let rival_head = rival.head();
+            let dist = u32::from(rival_head.x.abs_diff(mover_head.x))
+                + u32::from(rival_head.y.abs_diff(mover_head.y));
+            if dist > max_rival_dist {
+                continue;
+            }
+            let head_path = self.enemy_head_path(rival, Self::CUTOFF_HORIZON);
+            for (k, &cell) in head_path.iter().enumerate().skip(2) {
+                if k > usize::from(Self::CUTOFF_HORIZON) {
+                    break;
+                }
+                if cell == mover_head || out.contains(&cell) {
+                    continue;
+                }
+                out.push(cell);
+            }
+        }
+        out
+    }
+    /// Simulates following `path` while every shorter rival follows its
+    /// committed direction queue, and reports whether any rival's head lands
+    /// on a cell of the mover's body (collision checks use pre-move bodies,
+    /// so the mover's body after `k - 1` moves is what kills a rival arriving
+    /// on step `k`). The mover's tail cell does not count (it vacates in time).
+    #[must_use]
+    pub fn path_cuts_off_rival(&self, start: Point, path: &[Point], checking_player: u8) -> bool {
+        if path.is_empty() {
+            return false;
+        }
+        let Some(mover_body) = self.moving_body_for(start, checking_player) else {
+            return false;
+        };
+        // A rival arriving at its step-`k` head cell dies if the mover's
+        // pre-move body (after `k - 1` moves) covers that cell, so the kill
+        // can land one tick after the path ends: check up to path.len() + 1.
+        let max_k =
+            path.len().saturating_add(1).min(usize::from(Self::CUTOFF_HORIZON).saturating_add(1));
+        for rival in self.rivals_of(checking_player, start) {
+            if rival.body.len() >= mover_body.len() {
+                continue;
+            }
+            let enemy_path = self.enemy_head_path(rival, u16::try_from(max_k).unwrap_or(u16::MAX));
+            let mut sim: std::collections::VecDeque<Point> = mover_body.iter().copied().collect();
+            for k in 1..=max_k {
+                if let Some(&enemy_cell) = enemy_path.get(k)
+                    && sim.contains(&enemy_cell)
+                    && sim.back() != Some(&enemy_cell)
+                {
+                    return true;
+                }
+                if k <= path.len() {
+                    sim.push_front(path[k - 1]);
+                    sim.pop_back();
+                }
+            }
+        }
+        false
+    }
+    /// Offensive layer of the autopilot: when a shorter rival is close enough
+    /// that the mover could cut it off, search for a verified-safe,
+    /// non-trapping path that actually lands the cut-off, and prefer the
+    /// shortest such kill. Returns `None` when no safe cut-off exists.
+    #[must_use]
+    pub fn hunting_move(
+        &self,
+        start: Point,
+        current_dir: Option<Direction>,
+        checking_player: u8,
+    ) -> Option<(Direction, Vec<Point>)> {
+        if !self.hunting_enabled(checking_player) {
+            return None;
+        }
+        if self.mode == GameMode::CaptureTheFlag {
+            let carrying = if checking_player == 1 {
+                self.p1_has_flag
+            } else if checking_player == 2 {
+                self.p2_has_flag
+            } else {
+                false
+            };
+            if carrying {
+                return None;
+            }
+        }
+        let mover_len = self.moving_body_for(start, checking_player)?.len();
+        let mut targets = self.cutoff_targets(checking_player, start, mover_len);
+        if targets.is_empty() {
+            return None;
+        }
+        targets
+            .sort_by_key(|t| u32::from(t.x.abs_diff(start.x)) + u32::from(t.y.abs_diff(start.y)));
+        targets.truncate(8);
+        let mut best: Option<(usize, Direction, Vec<Point>)> = None;
+        for &target in &targets {
+            let Some((dir, path)) =
+                self.astar_search(start, current_dir, &[target], checking_player)
+            else {
+                continue;
+            };
+            if path.len() > usize::from(Self::CUTOFF_HORIZON) {
+                continue;
+            }
+            if !self.path_is_safe(start, &path, &[target], checking_player) {
+                continue;
+            }
+            if !self.path_keeps_tail_reachable(start, &path, checking_player) {
+                continue;
+            }
+            if !self.path_cuts_off_rival(start, &path, checking_player) {
+                continue;
+            }
+            let is_better = match &best {
+                None => true,
+                Some((best_len, _, _)) => path.len() < *best_len,
+            };
+            if is_better {
+                best = Some((path.len(), dir, path));
+            }
+        }
+        best.map(|(_, dir, path)| (dir, path))
     }
     #[expect(clippy::too_many_lines, reason = "Search algorithm is inherently complex and long")]
     fn astar_search(
