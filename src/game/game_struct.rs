@@ -137,6 +137,7 @@ pub struct Game {
     pub tournament: Option<Tournament>,
     pub tornado: Option<Point>,
     pub tornado_gusts: u32,
+    pub tornado_spins: u32,
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
     pub meteor_strikes: u32,
@@ -574,6 +575,7 @@ impl Game {
             tournament: None,
             tornado: None,
             tornado_gusts: 0,
+            tornado_spins: 0,
             rubble_tiles: HashSet::new(),
             tremor_count: 0,
             meteor_strikes: 0,
@@ -831,6 +833,7 @@ impl Game {
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
+            tornado_spins: self.tornado_spins,
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
             meteor_strikes: self.meteor_strikes,
@@ -986,6 +989,7 @@ impl Game {
                 }
                 self.tornado = state.tornado;
                 self.tornado_gusts = state.tornado_gusts;
+                self.tornado_spins = state.tornado_spins;
                 self.rubble_tiles = state.rubble_tiles;
                 self.tremor_count = state.tremor_count;
                 self.meteor_strikes = state.meteor_strikes;
@@ -2020,6 +2024,8 @@ impl Game {
                 );
                 break;
             }
+            // After the gust, a full twister spin reshuffles items and obstacles
+            self.tornado_spin();
         }
         // The vortex drags loose items towards itself
         if self.rng.gen_bool(0.2) {
@@ -2044,6 +2050,202 @@ impl Game {
         {
             self.pull_point_towards(&mut pu.location, t);
             self.power_up = Some(pu);
+        }
+    }
+
+    fn tornado_spin(&mut self) {
+        if self.mode != GameMode::Tornado {
+            return;
+        }
+        self.tornado_spins += 1;
+        let head = self.snake.head();
+        self.spawn_floating_text(
+            f32::from(head.x),
+            f32::from(head.y),
+            "Tornado!".to_string(),
+            crate::color::Color::Magenta,
+        );
+        self.tornado_relocate_items();
+        self.tornado_scatter_obstacles(3);
+    }
+    fn tornado_forbidden_cells(&self) -> HashSet<Point> {
+        let mut forbidden: HashSet<Point> = HashSet::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            forbidden.insert(s.head());
+            forbidden.insert(Self::calculate_next_head_dir(s.head(), s.direction));
+            for cell in s.body_map.keys() {
+                forbidden.insert(*cell);
+            }
+        }
+        forbidden.extend(self.obstacles.iter().copied());
+        if let Some((p1, p2)) = self.portals {
+            forbidden.insert(p1);
+            forbidden.insert(p2);
+        }
+        forbidden.extend(self.mines.iter().copied());
+        if let Some(bh) = self.black_hole {
+            forbidden.insert(bh);
+        }
+        if let Some(g) = &self.goblin {
+            forbidden.insert(g.position);
+        }
+        for b in &self.bosses {
+            forbidden.insert(b.position);
+        }
+        if let Some(c) = &self.companion {
+            forbidden.insert(c.position);
+        }
+        for t in &self.turrets {
+            forbidden.insert(t.position);
+        }
+        forbidden.extend(self.xp_gems.iter().copied());
+        forbidden.extend(self.painted_tiles.keys().copied());
+        forbidden.extend(self.equipment_boxes.iter().copied());
+        for c in &self.crops {
+            forbidden.insert(c.position);
+        }
+        forbidden.extend(self.eggs_on_board.keys().copied());
+        if let Some(z) = self.koth_zone {
+            forbidden.insert(z);
+        }
+        if let Some(f) = self.p1_flag {
+            forbidden.insert(f);
+        }
+        if let Some(f) = self.p2_flag {
+            forbidden.insert(f);
+        }
+        forbidden.extend(self.resources.keys().copied());
+        for l in &self.lasers {
+            forbidden.insert(l.position);
+        }
+        for m in &self.meteors {
+            forbidden.insert(m.position);
+        }
+        // The spin must not drop anything on or next to the roaming vortex (it would
+        // immediately be sucked in again, and the vortex cell itself is lethal)
+        if let Some(t) = self.tornado {
+            let neighbors = [
+                (t.x, t.y),
+                (t.x.saturating_sub(1), t.y),
+                (t.x.saturating_add(1).min(self.width.saturating_sub(1)), t.y),
+                (t.x, t.y.saturating_sub(1)),
+                (t.x, t.y.saturating_add(1).min(self.height.saturating_sub(1))),
+            ];
+            for (x, y) in neighbors {
+                forbidden.insert(Point {
+                    x,
+                    y,
+                });
+            }
+        }
+        forbidden
+    }
+    fn tornado_relocate_items(&mut self) {
+        let mut forbidden = self.tornado_forbidden_cells();
+        forbidden.insert(self.food);
+        if let Some((bp, _)) = self.bonus_food {
+            forbidden.insert(bp);
+        }
+        if let Some((pp, _)) = self.poison_food {
+            forbidden.insert(pp);
+        }
+        if let Some(pu) = &self.power_up {
+            forbidden.insert(pu.location);
+        }
+        let new_food = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            |p| forbidden.contains(p),
+            &mut self.rng,
+            self.safe_zone_margin,
+        );
+        if let Some(pos) = new_food {
+            forbidden.insert(pos);
+            self.food = pos;
+        }
+        if let Some((_, t)) = self.bonus_food {
+            let new = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                |p| forbidden.contains(p),
+                &mut self.rng,
+                self.safe_zone_margin,
+            );
+            if let Some(pos) = new {
+                forbidden.insert(pos);
+                self.bonus_food = Some((pos, t));
+            }
+        }
+        if let Some((_, t)) = self.poison_food {
+            let new = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                |p| forbidden.contains(p),
+                &mut self.rng,
+                self.safe_zone_margin,
+            );
+            if let Some(pos) = new {
+                forbidden.insert(pos);
+                self.poison_food = Some((pos, t));
+            }
+        }
+        if let Some(pu) = self.power_up.clone() {
+            let new = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                |p| forbidden.contains(p),
+                &mut self.rng,
+                self.safe_zone_margin,
+            );
+            if let Some(pos) = new {
+                self.power_up = Some(PowerUp {
+                    location: pos,
+                    ..pu
+                });
+            }
+        }
+    }
+    fn tornado_scatter_obstacles(&mut self, count: usize) {
+        let mut forbidden = self.tornado_forbidden_cells();
+        forbidden.insert(self.food);
+        if let Some((bp, _)) = self.bonus_food {
+            forbidden.insert(bp);
+        }
+        if let Some((pp, _)) = self.poison_food {
+            forbidden.insert(pp);
+        }
+        if let Some(pu) = &self.power_up {
+            forbidden.insert(pu.location);
+        }
+        let candidates: Vec<Point> = self.obstacles.iter().copied().collect();
+        let mut scattered = 0;
+        for old in &candidates {
+            if scattered >= count {
+                break;
+            }
+            let new = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                |p| forbidden.contains(p),
+                &mut self.rng,
+                self.safe_zone_margin,
+            );
+            if let Some(new) = new {
+                self.obstacles.remove(old);
+                self.obstacles.insert(new);
+                forbidden.insert(new);
+                scattered += 1;
+            }
         }
     }
 
@@ -3404,6 +3606,7 @@ impl Game {
         if self.mode == GameMode::Tornado {
             self.tornado = None;
             self.tornado_gusts = 0;
+            self.tornado_spins = 0;
         }
         self.rubble_tiles.clear();
         self.tremor_count = 0;
@@ -3779,6 +3982,7 @@ impl Game {
         self.meteors.clear();
         self.tornado = None;
         self.tornado_gusts = 0;
+        self.tornado_spins = 0;
         if self.mode == GameMode::Tornado {
             let avoid_tornado = |p: &Point| {
                 self.obstacles.contains(p)
@@ -4571,6 +4775,7 @@ impl Game {
             self.tournament = state.tournament;
             self.tornado = state.tornado;
             self.tornado_gusts = state.tornado_gusts;
+            self.tornado_spins = state.tornado_spins;
             self.rubble_tiles = state.rubble_tiles;
             self.tremor_count = state.tremor_count;
             self.meteor_strikes = state.meteor_strikes;
@@ -4684,6 +4889,7 @@ impl Game {
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
+            tornado_spins: self.tornado_spins,
             meteor_strikes: self.meteor_strikes,
             seismic_rubble: self.seismic_rubble.clone(),
             seismic_quakes: self.seismic_quakes,

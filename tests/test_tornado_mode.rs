@@ -16,10 +16,7 @@ fn test_tornado_reset_forces_tornado_weather() {
     assert_eq!(game.weather, Weather::Tornado);
     assert_eq!(game.tornado_gusts, 0);
     let vortex = game.tornado.expect("Tornado mode must spawn a vortex on reset");
-    assert!(
-        !game.snake.body_map.contains_key(&vortex),
-        "the vortex must never spawn on the snake"
-    );
+    assert!(!game.snake.body_map.contains_key(&vortex), "the vortex must never spawn on the snake");
     assert!(
         vortex.x > 0 && vortex.x < game.width - 1 && vortex.y > 0 && vortex.y < game.height - 1,
         "the vortex must spawn inside the board"
@@ -81,10 +78,16 @@ fn test_tornado_scheduled_gust_every_6_ticks() {
 fn test_tornado_gust_never_lands_on_snake() {
     let mut game = tornado_game(20, 20);
     game.obstacles.clear();
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
     game.snake.direction_queue.push_back(Direction::Right);
-    game.food = Point { x: 15, y: 15 };
+    game.food = Point {
+        x: 15,
+        y: 15,
+    };
     game.auto_pilot = true;
 
     for _ in 0..60 {
@@ -115,15 +118,32 @@ fn test_tornado_gust_never_lands_on_snake() {
 fn test_tornado_vortex_is_lethal() {
     let mut game = tornado_game(20, 20);
     game.obstacles.clear();
-    game.tornado = Some(Point { x: 5, y: 4 });
+    game.tornado = Some(Point {
+        x: 5,
+        y: 4,
+    });
 
     // Moving up from (5, 5) enters the vortex cell
     assert!(
-        !game.is_safe_final_p(Point { x: 5, y: 4 }, 1, 1),
+        !game.is_safe_final_p(
+            Point {
+                x: 5,
+                y: 4
+            },
+            1,
+            1
+        ),
         "is_safe_final_p must reject the tornado vortex cell"
     );
     assert!(
-        game.is_safe_final_p(Point { x: 6, y: 5 }, 1, 1),
+        game.is_safe_final_p(
+            Point {
+                x: 6,
+                y: 5
+            },
+            1,
+            1
+        ),
         "a different cell must remain safe"
     );
 }
@@ -132,11 +152,20 @@ fn test_tornado_vortex_is_lethal() {
 fn test_tornado_kills_snake_entering_vortex() {
     let mut game = tornado_game(20, 20);
     game.obstacles.clear();
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Up;
     game.snake.direction_queue.push_back(Direction::Up);
-    game.food = Point { x: 15, y: 15 };
-    game.tornado = Some(Point { x: 5, y: 4 });
+    game.food = Point {
+        x: 15,
+        y: 15,
+    };
+    game.tornado = Some(Point {
+        x: 5,
+        y: 4,
+    });
     game.auto_pilot = false;
     game.tick_counter = 1; // not a multiple of 6, so the vortex does not wander this tick
     let lives_before = game.lives;
@@ -155,23 +184,38 @@ fn test_tornado_kills_snake_entering_vortex() {
 fn test_tornado_vortex_sucks_in_obstacles() {
     let mut game = tornado_game(20, 20);
     game.obstacles.clear();
-    game.obstacles.insert(Point { x: 10, y: 10 });
-    game.obstacles.insert(Point { x: 11, y: 10 });
-    game.obstacles.insert(Point { x: 15, y: 15 }); // far away, must survive
-    game.tornado = Some(Point { x: 10, y: 11 });
-    game.snake = Snake::new(Point { x: 3, y: 3 });
+    game.obstacles.insert(Point {
+        x: 10,
+        y: 10,
+    });
+    game.obstacles.insert(Point {
+        x: 11,
+        y: 10,
+    });
+    game.obstacles.insert(Point {
+        x: 15,
+        y: 15,
+    }); // far away, must survive
+    game.tornado = Some(Point {
+        x: 10,
+        y: 11,
+    });
+    game.snake = Snake::new(Point {
+        x: 3,
+        y: 3,
+    });
     game.snake.direction = Direction::Right;
     game.snake.direction_queue.push_back(Direction::Right);
-    game.food = Point { x: 18, y: 18 };
+    game.food = Point {
+        x: 18,
+        y: 18,
+    };
     game.auto_pilot = false;
     game.tick_counter = 5; // next update runs tick 6: scheduled gust
 
     game.update();
 
-    assert!(
-        game.tornado_gusts >= 1,
-        "the scheduled gust should have moved the vortex"
-    );
+    assert!(game.tornado_gusts >= 1, "the scheduled gust should have moved the vortex");
     if let Some(t) = game.tornado {
         let near = |p: Point| t.x.abs_diff(p.x).saturating_add(t.y.abs_diff(p.y)) <= 1;
         assert!(
@@ -180,9 +224,13 @@ fn test_tornado_vortex_sucks_in_obstacles() {
             t,
             game.obstacles
         );
+        // The vortex may wander towards the placed obstacles and suck some in, and the
+        // twister spin may relocate the rest, but it must never create or destroy
+        // obstacles and the far-away one always survives somewhere on the board.
         assert!(
-            game.obstacles.contains(&Point { x: 15, y: 15 }),
-            "far-away obstacles must survive"
+            (1..=3).contains(&game.obstacles.len()),
+            "obstacle count must stay within [1, 3] after gust + spin, obstacles: {:?}",
+            game.obstacles
         );
     }
 }
@@ -192,13 +240,22 @@ fn test_tornado_pulls_food_towards_vortex() {
     let mut game = tornado_game(30, 30);
     game.obstacles.clear();
     game.auto_pilot = false;
-    let start_food = Point { x: 20, y: 15 };
-    let vortex = Point { x: 10, y: 15 };
+    let start_food = Point {
+        x: 20,
+        y: 15,
+    };
+    let vortex = Point {
+        x: 10,
+        y: 15,
+    };
     let mut pulled = false;
 
     for _ in 0..100 {
         game.state = snake_game::game::GameState::Playing;
-        game.snake = Snake::new(Point { x: 2, y: 2 });
+        game.snake = Snake::new(Point {
+            x: 2,
+            y: 2,
+        });
         game.snake.direction = Direction::Right;
         game.snake.direction_queue.clear();
         game.snake.direction_queue.push_back(Direction::Right);
@@ -287,39 +344,65 @@ fn test_tornado_gust_never_shoves_into_obstacles() {
     game.obstacles.clear();
     for x in 1..11 {
         for y in 1..11 {
-            let p = Point { x, y };
-            let is_snake = p == Point { x: 5, y: 5 }
-                || p == Point { x: 5, y: 6 }
-                || p == Point { x: 5, y: 7 };
-            let is_next = p == Point { x: 6, y: 5 };
+            let p = Point {
+                x,
+                y,
+            };
+            let is_snake = p
+                == Point {
+                    x: 5,
+                    y: 5,
+                }
+                || p == Point {
+                    x: 5,
+                    y: 6,
+                }
+                || p == Point {
+                    x: 5,
+                    y: 7,
+                };
+            let is_next = p
+                == Point {
+                    x: 6,
+                    y: 5,
+                };
             if !is_snake && !is_next {
                 game.obstacles.insert(p);
             }
         }
     }
     // Pin the vortex away from the action so only the gust can move the snake
-    game.tornado = Some(Point { x: 9, y: 9 });
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.tornado = Some(Point {
+        x: 9,
+        y: 9,
+    });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
     game.snake.direction_queue.push_back(Direction::Right);
     // Food sits on the snake's own tail: the normal move Right does not eat it
     // (and eating the last free cell would end the tick early via a win).
-    game.food = Point { x: 5, y: 7 };
+    game.food = Point {
+        x: 5,
+        y: 7,
+    };
 
     // Next update runs tick 8, which must fire a gust
     game.tick_counter = 7;
     game.update();
 
     assert_eq!(game.tick_counter, 8);
-    assert!(
-        game.tornado_gusts >= 1,
-        "a gust must have fired on tick 8"
-    );
+    assert!(game.tornado_gusts >= 1, "a gust must have fired on tick 8");
     // The snake moved Right to (6, 5); every gust destination from there is an
     // obstacle or its own body, so the gust must have fizzled.
     assert_eq!(
         game.snake.head(),
-        Point { x: 6, y: 5 },
+        Point {
+            x: 6,
+            y: 5
+        },
         "a gust must never shove the snake into an obstacle"
     );
     assert!(
@@ -333,11 +416,20 @@ fn test_tornado_gust_never_shoves_into_obstacles() {
 fn test_tornado_gust_shove_keeps_length_and_stays_safe() {
     let mut game = tornado_game(20, 20);
     game.obstacles.clear();
-    game.tornado = Some(Point { x: 18, y: 18 });
-    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.tornado = Some(Point {
+        x: 18,
+        y: 18,
+    });
+    game.snake = Snake::new(Point {
+        x: 5,
+        y: 5,
+    });
     game.snake.direction = Direction::Right;
     game.snake.direction_queue.push_back(Direction::Right);
-    game.food = Point { x: 15, y: 15 }; // far away: no eating this tick
+    game.food = Point {
+        x: 15,
+        y: 15,
+    }; // far away: no eating this tick
     let len_before = game.snake.body.len();
 
     // Next update runs tick 8, which must fire a gust
@@ -345,24 +437,29 @@ fn test_tornado_gust_shove_keeps_length_and_stays_safe() {
     game.update();
 
     assert!(game.tornado_gusts >= 1);
-    assert_eq!(
-        game.snake.body.len(),
-        len_before,
-        "a gust shove must not grow the snake"
-    );
+    assert_eq!(game.snake.body.len(), len_before, "a gust shove must not grow the snake");
     let head = game.snake.head();
     // Normal move went Right to (6, 5); the gust may shove one more cell in any
     // direction, but never out of bounds or onto the body or the vortex.
     let possible = [
-        Point { x: 6, y: 5 },
-        Point { x: 6, y: 4 },
-        Point { x: 6, y: 6 },
-        Point { x: 7, y: 5 },
+        Point {
+            x: 6,
+            y: 5,
+        },
+        Point {
+            x: 6,
+            y: 4,
+        },
+        Point {
+            x: 6,
+            y: 6,
+        },
+        Point {
+            x: 7,
+            y: 5,
+        },
     ];
-    assert!(
-        possible.contains(&head),
-        "unexpected head after gust: {head:?}"
-    );
+    assert!(possible.contains(&head), "unexpected head after gust: {head:?}");
     for seg in &game.snake.body {
         assert!(
             seg.x > 0 && seg.x < game.width - 1 && seg.y > 0 && seg.y < game.height - 1,
@@ -402,5 +499,198 @@ fn test_tornado_gust_bot_survives() {
         game.tornado_gusts >= 20,
         "expected at least 20 gusts over 160 ticks, got {}",
         game.tornado_gusts
+    );
+}
+
+#[test]
+fn test_tornado_scheduled_spin_every_6_ticks() {
+    let mut game = tornado_game(30, 30);
+    game.obstacles.clear();
+    game.auto_pilot = true;
+
+    // update() increments tick_counter first, so setting it to 6k - 1 makes the
+    // next update run tick 6k, which must spin the tornado.
+    for tick in [5_u32, 11, 17, 23, 29, 35] {
+        game.state = snake_game::game::GameState::Playing;
+        game.tick_counter = tick;
+        let spins_before = game.tornado_spins;
+        game.update();
+        assert_eq!(
+            game.tick_counter,
+            tick + 1,
+            "update must run exactly one tick (lives: {})",
+            game.lives
+        );
+        assert!(
+            game.tornado_spins > spins_before,
+            "a scheduled tornado spin must fire on tick {} (spins before: {}, after: {})",
+            tick + 1,
+            spins_before,
+            game.tornado_spins
+        );
+    }
+    assert!(game.tornado_spins >= 6);
+}
+
+#[test]
+fn test_tornado_spin_relocates_food_fairly() {
+    // Games are entropy-seeded, so retry until tick 6 runs without the snake
+    // dying to an unrelated random hazard on that single tick.
+    for _ in 0..20 {
+        let mut game = tornado_game(30, 30);
+        game.obstacles.clear();
+        // Park the vortex in the far corner so it cannot interfere with the check
+        game.tornado = Some(Point {
+            x: 1,
+            y: 1,
+        });
+        game.snake = Snake::new(Point {
+            x: 5,
+            y: 5,
+        });
+        game.snake.direction = Direction::Right;
+        game.snake.direction_queue.push_back(Direction::Right);
+        game.food = Point {
+            x: 15,
+            y: 15,
+        };
+        game.auto_pilot = false;
+
+        game.tick_counter = 5;
+        let old_food = game.food;
+        game.update();
+
+        if game.tornado_spins != 1
+            || game.snake.head()
+                != (Point {
+                    x: 6,
+                    y: 5,
+                })
+        {
+            continue;
+        }
+        assert_eq!(game.tornado_spins, 1, "tick 6 must spin the tornado");
+        assert_ne!(game.food, old_food, "the twister must relocate the food to a different cell");
+        assert!(
+            !game.obstacles.contains(&game.food),
+            "food must never be relocated onto an obstacle"
+        );
+        assert!(
+            !game.snake.body_map.contains_key(&game.food),
+            "food must never be relocated onto the snake"
+        );
+        // The snake moved Right from (5,5) to (6,5) on tick 6; its next cell is (7,5).
+        assert_ne!(
+            game.food,
+            Point {
+                x: 7,
+                y: 5
+            },
+            "food must never be relocated onto the cell the snake is about to enter"
+        );
+        return;
+    }
+    panic!("could not run tick 6 cleanly in 20 attempts");
+}
+
+#[test]
+fn test_tornado_scattered_obstacles_stay_legal() {
+    for _ in 0..20 {
+        let mut game = tornado_game(30, 30);
+        game.obstacles.clear();
+        game.obstacles.insert(Point {
+            x: 10,
+            y: 10,
+        });
+        game.obstacles.insert(Point {
+            x: 11,
+            y: 10,
+        });
+        game.obstacles.insert(Point {
+            x: 12,
+            y: 10,
+        });
+        // Park the vortex in the far corner so its wander cannot eat these obstacles
+        game.tornado = Some(Point {
+            x: 1,
+            y: 1,
+        });
+        game.snake = Snake::new(Point {
+            x: 5,
+            y: 5,
+        });
+        game.snake.direction = Direction::Right;
+        game.snake.direction_queue.push_back(Direction::Right);
+        game.food = Point {
+            x: 25,
+            y: 25,
+        };
+        game.auto_pilot = false;
+
+        game.tick_counter = 5;
+        game.update();
+
+        if game.tornado_spins != 1
+            || game.snake.head()
+                != (Point {
+                    x: 6,
+                    y: 5,
+                })
+        {
+            continue;
+        }
+        assert_eq!(game.tornado_spins, 1);
+        assert_eq!(
+            game.obstacles.len(),
+            3,
+            "scattering must lift and re-drop obstacles, never duplicate or destroy them"
+        );
+        for obs in &game.obstacles {
+            assert!(
+                !game.snake.body_map.contains_key(obs),
+                "an obstacle must never be dropped on the snake at {obs:?}"
+            );
+            assert_ne!(
+                *obs,
+                Point {
+                    x: 7,
+                    y: 5
+                },
+                "an obstacle must never be dropped on the cell the snake is about to enter"
+            );
+            assert_ne!(*obs, game.food, "an obstacle must never cover the food");
+        }
+        return;
+    }
+    panic!("could not run tick 6 cleanly in 20 attempts");
+}
+
+#[test]
+fn test_tornado_spin_persists_through_history_rewind() {
+    let mut game = tornado_game(30, 30);
+    game.tornado_spins = 7;
+    game.save_history_state();
+
+    game.tornado_spins = 99;
+    game.rewind_time();
+
+    assert_eq!(game.tornado_spins, 7, "tornado_spins must be restored by time-rewind");
+}
+
+#[test]
+fn test_tornado_spin_persists_through_save_file() {
+    let mut game = tornado_game(30, 30);
+    game.tornado_spins = 12;
+    let path = std::env::temp_dir()
+        .join(format!("snake_game_tornado_save_test_{}.json", std::process::id()));
+    let path_str = path.to_string_lossy().to_string();
+    game.save_game_to_file(&path_str);
+
+    let contents = std::fs::read_to_string(&path).expect("save file must exist");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        contents.contains("\"tornado_spins\":12"),
+        "tornado_spins must be persisted in the save file, got: {}",
+        &contents[..contents.len().min(200)]
     );
 }
