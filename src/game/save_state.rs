@@ -140,7 +140,7 @@ pub struct SaveState {
     #[serde(default)]
     pub volcano_eruptions: u32,
     #[serde(default)]
-    pub asteroid_strikes: u32,
+    pub meteor_showers: u32,
     pub tournament: Option<Tournament>,
     pub tornado: Option<Point>,
     #[serde(default)]

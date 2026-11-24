@@ -133,7 +133,7 @@ pub struct Game {
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
-    pub asteroid_strikes: u32,
+    pub meteor_showers: u32,
     pub tournament: Option<Tournament>,
     pub tornado: Option<Point>,
     pub tornado_gusts: u32,
@@ -566,7 +566,7 @@ impl Game {
             lava_tiles: HashSet::new(),
             volcano_vents: Vec::new(),
             volcano_eruptions: 0,
-            asteroid_strikes: 0,
+            meteor_showers: 0,
             tournament: None,
             tornado: None,
             tornado_gusts: 0,
@@ -819,7 +819,7 @@ impl Game {
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
-            asteroid_strikes: self.asteroid_strikes,
+            meteor_showers: self.meteor_showers,
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
@@ -961,7 +961,7 @@ impl Game {
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
-                self.asteroid_strikes = state.asteroid_strikes;
+                self.meteor_showers = state.meteor_showers;
                 self.tournament = state.tournament;
                 if self.mode == GameMode::Tournament && self.tournament.is_none() {
                     let player_name = if self.player_name.is_empty() {
@@ -1247,68 +1247,97 @@ impl Game {
             self.goblin = None;
         }
     }
+    fn meteor_safe_spawn_columns(&self, min_x: u16, max_x: u16) -> Vec<u16> {
+        // Fairness: never spawn a meteor in the column a snake currently
+        // occupies or is about to enter, and never in a column that already
+        // has a meteor in flight
+        let mut forbidden: Vec<u16> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            forbidden.push(head.x);
+            forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
+        }
+        for m in &self.meteors {
+            forbidden.push(m.position.x);
+        }
+        (min_x..max_x).filter(|x| !forbidden.contains(x)).collect()
+    }
     fn manage_meteors(&mut self) {
-        let spawn_chance = if self.mode == GameMode::Asteroids {
-            0.15
-        } else if self.mode == GameMode::MeteorShower {
+        let asteroids = self.mode == GameMode::Asteroids;
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min_x = margin + 1;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+        if self.rng.gen_bool(if asteroids || self.mode == GameMode::MeteorShower {
             0.15
         } else {
             0.01
-        };
-        if self.rng.gen_bool(spawn_chance) {
-            let margin = if self.mode == GameMode::BattleRoyale {
-                self.safe_zone_margin
-            } else {
-                0
-            };
-            let min_x = margin + 1;
-            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
-            if max_x > min_x {
-                let spawn_x = if self.mode == GameMode::Asteroids {
-                    self.pick_asteroid_columns(min_x, max_x, 1).into_iter().next()
+        }) && max_x > min_x {
+            let spawn_x = if asteroids {
+                let allowed = self.meteor_safe_spawn_columns(min_x, max_x);
+                if allowed.is_empty() {
+                    None
                 } else {
-                    Some(self.rng.gen_range(min_x..max_x))
-                };
-                if let Some(spawn_x) = spawn_x {
-                    self.meteors.push(Meteor {
-                        position: Point {
-                            x: spawn_x,
-                            y: margin + 1,
-                        },
-                        timer: 0,
-                    });
+                    Some(allowed[self.rng.gen_range(0..allowed.len())])
                 }
-            }
-        }
-        // Meteor Shower mode: a strike is guaranteed on every 6th tick
-        if self.mode == GameMode::MeteorShower && self.tick_counter.is_multiple_of(6) {
-            let margin = if self.mode == GameMode::BattleRoyale {
-                self.safe_zone_margin
             } else {
-                0
+                Some(self.rng.gen_range(min_x..max_x))
             };
-            let min_x = margin + 1;
-            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
-            if max_x > min_x
-                && let Some(strike_x) = self.pick_safe_strike_column(min_x, max_x)
-            {
-                self.meteor_strikes += 1;
-                self.meteor_strike_column = Some(strike_x);
+            if let Some(spawn_x) = spawn_x {
                 self.meteors.push(Meteor {
                     position: Point {
-                        x: strike_x,
+                        x: spawn_x,
                         y: margin + 1,
                     },
                     timer: 0,
                 });
             }
         }
+        // Scheduled meteor showers in Asteroids mode: every 12th tick a burst of
+        // up to 3 meteors falls in distinct fairness-checked columns
+        if asteroids && self.tick_counter.is_multiple_of(12) && max_x > min_x {
+            self.meteor_showers += 1;
+            let mut allowed = self.meteor_safe_spawn_columns(min_x, max_x);
+            for _ in 0..3 {
+                if allowed.is_empty() {
+                    break;
+                }
+                let idx = self.rng.gen_range(0..allowed.len());
+                let spawn_x = allowed.swap_remove(idx);
+                self.meteors.push(Meteor {
+                    position: Point {
+                        x: spawn_x,
+                        y: margin + 1,
+                    },
+                    timer: 0,
+                });
+            }
+        }
+        // Meteor Shower mode: a strike is guaranteed on every 6th tick
+        if self.mode == GameMode::MeteorShower
+            && self.tick_counter.is_multiple_of(6)
+            && max_x > min_x
+            && let Some(strike_x) = self.pick_safe_strike_column(min_x, max_x)
+        {
+            self.meteor_strikes += 1;
+            self.meteor_strike_column = Some(strike_x);
+            self.meteors.push(Meteor {
+                position: Point {
+                    x: strike_x,
+                    y: margin + 1,
+                },
+                timer: 0,
+            });
+        }
         let mut meteors_to_keep = Vec::new();
-        let margin = if self.mode == GameMode::BattleRoyale {
-            self.safe_zone_margin
-        } else {
-            0
-        };
         for mut meteor in std::mem::take(&mut self.meteors) {
             meteor.timer += 1;
             if meteor.timer >= 2 {
@@ -1640,70 +1669,6 @@ impl Game {
                 crate::color::Color::Red,
             );
         }
-    }
-    fn manage_asteroids(&mut self) {
-        if self.mode != GameMode::Asteroids {
-            return;
-        }
-        // Scheduled meteor shower: every 6th tick a guaranteed shower of 2 meteors
-        // falls on fair columns (never a snake's current or next head column, and
-        // never a column that already has a meteor in flight).
-        if self.tick_counter.is_multiple_of(6) {
-            let margin = if self.mode == GameMode::BattleRoyale {
-                self.safe_zone_margin
-            } else {
-                0
-            };
-            let min_x = margin + 1;
-            let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
-            if max_x > min_x {
-                let columns = self.pick_asteroid_columns(min_x, max_x, 2);
-                if !columns.is_empty() {
-                    self.asteroid_strikes += 1;
-                    for x in columns {
-                        self.meteors.push(Meteor {
-                            position: Point {
-                                x,
-                                y: margin + 1,
-                            },
-                            timer: 0,
-                        });
-                        self.spawn_particles(
-                            f32::from(x),
-                            f32::from(margin + 1),
-                            5,
-                            crate::color::Color::Red,
-                            '*',
-                        );
-                    }
-                }
-            }
-        }
-    }
-    fn pick_asteroid_columns(&mut self, min_x: u16, max_x: u16, count: usize) -> Vec<u16> {
-        // Fairness: never spawn on the column a snake currently occupies or is about
-        // to enter, and never on a column that already has a meteor in flight.
-        let mut forbidden: Vec<u16> = Vec::new();
-        let mut snakes: Vec<&Snake> = vec![&self.snake];
-        if let Some(p2) = &self.player2 {
-            snakes.push(p2);
-        }
-        snakes.extend(self.bots.iter());
-        for s in snakes {
-            let head = s.head();
-            forbidden.push(head.x);
-            forbidden.push(Self::calculate_next_head_dir(head, s.direction).x);
-        }
-        for m in &self.meteors {
-            forbidden.push(m.position.x);
-        }
-        let mut pool: Vec<u16> = (min_x..max_x).filter(|x| !forbidden.contains(x)).collect();
-        let mut picked = Vec::new();
-        while picked.len() < count && !pool.is_empty() {
-            let i = self.rng.gen_range(0..pool.len());
-            picked.push(pool.remove(i));
-        }
-        picked
     }
     fn manage_tornado(&mut self) {
         if self.mode != GameMode::Tornado {
@@ -3043,7 +3008,7 @@ impl Game {
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
-        self.asteroid_strikes = 0;
+        self.meteor_showers = 0;
         if self.mode == GameMode::Tornado {
             self.tornado = None;
             self.tornado_gusts = 0;
@@ -4156,7 +4121,7 @@ impl Game {
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
-            self.asteroid_strikes = state.asteroid_strikes;
+            self.meteor_showers = state.meteor_showers;
             self.tournament = state.tournament;
             self.tornado = state.tornado;
             self.tornado_gusts = state.tornado_gusts;
@@ -4267,7 +4232,7 @@ impl Game {
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
-            asteroid_strikes: self.asteroid_strikes,
+            meteor_showers: self.meteor_showers,
             tournament: self.tournament.clone(),
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
@@ -7954,7 +7919,6 @@ impl Game {
         self.manage_mines();
         self.manage_black_hole();
         self.manage_meteors();
-        self.manage_asteroids();
         self.manage_blizzard();
         self.manage_storm();
         self.manage_quake();

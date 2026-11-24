@@ -2616,8 +2616,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
-    let meteors_str = if game.mode == crate::game::GameMode::Asteroids {
-        format!(" | Meteors: {}", game.asteroid_strikes)
+    let showers_str = if game.mode == crate::game::GameMode::Asteroids {
+        format!(" | Showers: {}", game.meteor_showers)
     } else if game.mode == crate::game::GameMode::MeteorShower {
         format!(" | Meteors: {}", game.meteor_strikes)
     } else {
@@ -2645,7 +2645,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}{gusts_str}{tremors_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{tournament_str}{gusts_str}{tremors_str}"
     )?;
 
     if !game.bosses.is_empty() {

@@ -81,15 +81,17 @@ The Druid hero class ignores all weather penalties.
 
 ## Asteroids Mode
 
-`GameMode::Asteroids` (menu entry "Asteroids Mode") is a survival mode under a constant meteor bombardment:
+`GameMode::Asteroids` (menu entry "Asteroids Mode") is a survival mode under a permanent meteor storm:
 
-- **Ambient bombardment:** meteors spawn at the top of the board 15x more often than in other modes (15% per tick instead of 1%) and fall one cell every 2 ticks, destroying obstacles and mines they hit and killing any snake whose head (or body) they land on.
-- **Scheduled showers:** on every 6th tick a guaranteed meteor shower drops 2 meteors at once on random columns, on top of the ambient spawn chance. Each shower increments the `asteroid_strikes` counter.
-- **Fairness:** in Asteroids mode every meteor spawn (ambient or scheduled) picks its column via `pick_asteroid_columns`, which never targets the column a snake currently occupies, the column its head is about to enter this tick, or a column that already has a meteor in flight — so the bombardment is dangerous but never cheap.
+- **Ambient meteor rain:** meteors spawn at the top of a random column with 15% chance per tick (vs. 1% in other modes) and fall one cell every 2 ticks.
+- **Scheduled showers:** on every 12th tick (`tick_counter.is_multiple_of(12)`) a meteor shower fires: a burst of up to 3 meteors spawns in distinct columns at the top row. Each shower increments `meteor_showers`.
+- **Fairness:** in Asteroids mode, meteor spawn columns (ambient and shower alike) are filtered by `meteor_safe_spawn_columns`, which never returns the column a snake (player, player 2, or arena bot) currently occupies or is about to enter this tick, nor a column that already has a meteor in flight — the same fairness rule as Storm Mode's lightning strikes. Other modes keep the old fully random spawn.
 - **Deflection:** eating food deflects the most imminent meteor (the lowest one in flight) with a "Deflected!" flash, giving the player a way to neutralize the closest incoming impact.
-- **Autopilot:** meteors are already hard hazards in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks (which predict the cells a falling meteor will sweep through at each arrival step), so the autopilot rides out the bombardment natively.
-- **Persistence:** the `asteroid_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), and active `meteors` were already persisted. The status bar shows a `Meteors: <count>` counter, and meteors are rendered as dark-yellow `*` (terminal) / orange cells (web).
+- **Impact:** a falling meteor destroys obstacles and mines in its path, despawns at the bottom edge, and kills any snake whose head or body it lands on.
+- **Autopilot:** a meteor's fall lane is a hard hazard in the A* heuristic/edge costs and in `is_safe_final_p` (a path cell in the meteor's column at or below the meteor is rejected when the meteor would reach it within the cell's true arrival step), and `path_is_safe` re-checks it per step, so the verified-safe autopilot dodges incoming meteors natively.
+- **Persistence:** the `meteor_showers` counter is stored in `SaveState` and `HistoryState` (save/load and time-rewind stay consistent), and `meteors` were already persisted. The status bar shows a `Showers: <count>` counter in this mode.
 - **Tests:** see [tests/test_asteroids_mode.rs](../../tests/test_asteroids_mode.rs).
+
 ## Tournament Mode
 
 `GameMode::Tournament` (menu entry "Tournament") runs an 8-entrant single-elimination bracket (`Tournament` in `src/game/tournament.rs`, created on `reset()` via `Tournament::new`):

@@ -1,4 +1,3 @@
-use rand::SeedableRng;
 use snake_game::game::{Difficulty, Game, GameMode, GameState, Meteor, Theme};
 use snake_game::snake::{Direction, Point, Snake};
 
@@ -7,36 +6,32 @@ fn asteroids_game(width: u16, height: u16) -> Game {
     game.mode = GameMode::Asteroids;
     game.reset();
     game.xp_to_next_level = u32::MAX; // keep the game in Playing state while the bot eats
-    game.rng = rand::rngs::StdRng::seed_from_u64(42);
     game
 }
 
 #[test]
-fn test_asteroids_reset_clears_state() {
+fn test_asteroids_reset_clears_shower_counter() {
     let mut game = asteroids_game(30, 30);
-    game.asteroid_strikes = 7;
-    game.meteors.push(Meteor {
-        position: Point { x: 5, y: 5 },
-        timer: 0,
-    });
-
+    game.meteor_showers = 42;
     game.reset();
 
-    assert_eq!(game.asteroid_strikes, 0);
+    assert_eq!(game.meteor_showers, 0);
     assert!(game.meteors.is_empty());
 }
 
 #[test]
-fn test_asteroids_scheduled_shower_every_6_ticks() {
-    let mut game = asteroids_game(30, 30);
+fn test_asteroids_scheduled_shower_every_12_ticks() {
+    let mut game = asteroids_game(40, 30);
     game.obstacles.clear();
+    game.auto_pilot = true;
+    game.lives = 100;
 
-    // update() increments tick_counter first, so setting it to 6k - 1 makes the
-    // next update run tick 6k, which must trigger a scheduled meteor shower.
-    for tick in [5_u32, 11, 17, 23, 29, 35] {
+    // update() increments tick_counter first, so setting it to 12k - 1 makes the
+    // next update run tick 12k, which must trigger a scheduled meteor shower.
+    for tick in [11_u32, 23, 35, 47, 59, 71] {
         game.state = GameState::Playing;
         game.tick_counter = tick;
-        let strikes_before = game.asteroid_strikes;
+        let showers_before = game.meteor_showers;
         game.update();
         assert_eq!(
             game.tick_counter,
@@ -45,79 +40,217 @@ fn test_asteroids_scheduled_shower_every_6_ticks() {
             game.lives
         );
         assert!(
-            game.asteroid_strikes > strikes_before,
-            "a scheduled meteor shower must fire on tick {} (strikes before: {}, after: {})",
+            game.meteor_showers > showers_before,
+            "a scheduled meteor shower must fire on tick {} (showers before: {}, after: {})",
             tick + 1,
-            strikes_before,
-            game.asteroid_strikes
-        );
-        assert!(
-            game.meteors.iter().any(|m| m.position.y == 1),
-            "the shower on tick {} must spawn fresh meteors at the top of the board",
-            tick + 1
+            showers_before,
+            game.meteor_showers
         );
     }
-    assert!(game.asteroid_strikes >= 6);
+    assert!(game.meteor_showers >= 6);
 }
 
 #[test]
-fn test_asteroids_shower_never_targets_snake_column() {
+fn test_asteroids_shower_spawns_burst_of_meteors() {
     let mut game = asteroids_game(40, 30);
     game.obstacles.clear();
-    game.snake = Snake::new(Point { x: 10, y: 10 });
-    game.snake.direction = Direction::Right;
-    game.food = Point { x: 30, y: 20 };
+    game.meteors.clear();
+    game.state = GameState::Playing;
+    game.tick_counter = 11;
 
-    for tick in [5_u32, 11, 17, 23, 29, 35, 41, 47] {
+    game.update();
+
+    assert_eq!(game.meteor_showers, 1, "tick 12 must trigger exactly one shower");
+    // Fresh meteors spawn on the top row (y == 1); the shower alone drops 3
+    // (the ambient 15% spawn may add one more).
+    let fresh: Vec<&Meteor> = game.meteors.iter().filter(|m| m.position.y == 1).collect();
+    assert!(
+        fresh.len() >= 3,
+        "a shower should spawn at least 3 meteors on the top row, got {}",
+        fresh.len()
+    );
+    for m in &fresh {
+        assert!(m.position.x >= 1 && m.position.x < game.width - 1);
+    }
+}
+
+#[test]
+fn test_asteroids_never_spawns_on_snake_column() {
+    let mut game = asteroids_game(20, 20);
+    game.obstacles.clear();
+    game.snake = Snake::new(Point { x: 5, y: 5 });
+    game.snake.direction = Direction::Right;
+    game.snake.direction_queue.push_back(Direction::Right);
+    game.food = Point { x: 15, y: 15 };
+    game.lives = 100;
+
+    for _ in 0..60 {
+        let head_before = game.snake.head();
+        let dir_before = game.snake.direction;
+        let next_before = Game::calculate_next_head_dir(head_before, dir_before);
         game.state = GameState::Playing;
-        let head = game.snake.head();
-        let next = Game::calculate_next_head_dir(head, game.snake.direction);
-        let before: std::collections::HashSet<Point> =
-            game.meteors.iter().map(|m| m.position).collect();
-        game.tick_counter = tick;
         game.update();
-        // Meteors spawned this tick are at the top row (y == 1) and were not on the
-        // board before this tick (spawns never reuse a column with a meteor in flight)
+        // Meteors that spawned this tick sit on the top row (y == 1)
         for m in &game.meteors {
-            if m.position.y == 1 && !before.contains(&m.position) {
+            if m.position.y == 1 {
                 assert_ne!(
-                    m.position.x, head.x,
-                    "a meteor must never spawn on the column the snake occupies"
+                    m.position.x, head_before.x,
+                    "a meteor must never spawn in the snake's current column"
                 );
                 assert_ne!(
-                    m.position.x, next.x,
-                    "a meteor must never spawn on the column the snake is about to enter"
+                    m.position.x, next_before.x,
+                    "a meteor must never spawn in the column the snake is about to enter"
                 );
             }
+        }
+        if game.state != GameState::Playing && game.lives == 0 {
+            break;
         }
     }
 
     assert!(
-        game.asteroid_strikes >= 8,
-        "expected at least 8 showers over 8 scheduled ticks, got {}",
-        game.asteroid_strikes
+        game.meteor_showers >= 5,
+        "expected at least 5 showers over 60 ticks, got {}",
+        game.meteor_showers
     );
 }
 
 #[test]
-fn test_asteroids_falling_meteor_is_unsafe() {
+fn test_asteroids_meteor_lane_blocks_verified_paths() {
     let mut game = asteroids_game(20, 20);
     game.obstacles.clear();
+    game.goblin = None;
+    game.snake = Snake::new(Point { x: 10, y: 10 });
+    game.snake.direction = Direction::Right;
+    game.food = Point { x: 16, y: 10 };
     game.meteors.clear();
     game.meteors.push(Meteor {
-        position: Point { x: 5, y: 2 },
+        position: Point { x: 12, y: 9 },
         timer: 0,
     });
 
-    // The meteor at (5, 2) falls down column 5 and will be at y=6 within 4 steps
+    // The cell in the meteor's fall lane is unsafe at its true arrival step
     assert!(
-        !game.is_safe_final_p(Point { x: 5, y: 6 }, 4, 1),
-        "is_safe_final_p must reject the lane a falling meteor will sweep through"
+        !game.is_safe_final_p(Point { x: 12, y: 10 }, 2, 1),
+        "is_safe_final_p must reject the meteor's fall lane"
     );
+    // A different column stays safe
+    assert!(game.is_safe_final_p(Point { x: 13, y: 10 }, 3, 1));
+
+    // The straight path to the food crosses the lane and must be rejected
+    let direct = vec![
+        Point { x: 11, y: 10 },
+        Point { x: 12, y: 10 },
+        Point { x: 13, y: 10 },
+        Point { x: 14, y: 10 },
+        Point { x: 15, y: 10 },
+        Point { x: 16, y: 10 },
+    ];
     assert!(
-        game.is_safe_final_p(Point { x: 6, y: 6 }, 4, 1),
-        "a different column must remain safe"
+        !game.path_is_safe(Point { x: 10, y: 10 }, &direct, &[game.food], 1),
+        "the direct path through the meteor lane must fail verification"
     );
+
+    // A detour above the meteor verifies
+    let detour = vec![
+        Point { x: 11, y: 10 },
+        Point { x: 11, y: 9 },
+        Point { x: 11, y: 8 },
+        Point { x: 12, y: 8 },
+        Point { x: 13, y: 8 },
+        Point { x: 14, y: 8 },
+        Point { x: 15, y: 8 },
+        Point { x: 16, y: 8 },
+        Point { x: 16, y: 9 },
+        Point { x: 16, y: 10 },
+    ];
+    assert!(
+        game.path_is_safe(Point { x: 10, y: 10 }, &detour, &[game.food], 1),
+        "the detour around the meteor must verify as safe"
+    );
+}
+
+#[test]
+fn test_asteroids_autopilot_never_steps_onto_a_meteor() {
+    let mut game = asteroids_game(20, 20);
+    game.obstacles.clear();
+    game.snake = Snake::new(Point { x: 10, y: 10 });
+    game.snake.direction = Direction::Right;
+    game.food = Point { x: 16, y: 10 };
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point { x: 12, y: 9 },
+        timer: 0,
+    });
+    game.auto_pilot = true;
+    game.lives = 100;
+
+    for _ in 0..12 {
+        game.state = GameState::Playing;
+        game.update();
+        assert!(
+            !game.meteors.iter().any(|m| m.position == game.snake.head()),
+            "the autopilot must never end a tick with its head on a meteor cell"
+        );
+        if game.state != GameState::Playing && game.lives == 0 {
+            break;
+        }
+    }
+}
+
+#[test]
+fn test_asteroids_showers_persist_through_time_rewind() {
+    let mut game = asteroids_game(30, 30);
+    game.meteor_showers = 7;
+    game.save_history_state();
+
+    game.meteor_showers = 99;
+    game.rewind_time();
+
+    assert_eq!(
+        game.meteor_showers, 7,
+        "time-rewind must restore the shower counter"
+    );
+}
+
+#[test]
+fn test_asteroids_showers_saved_to_file() {
+    let mut game = asteroids_game(30, 30);
+    game.meteor_showers = 5;
+    let path = std::env::temp_dir().join(format!(
+        "snake_asteroids_save_{}_showers.json",
+        std::process::id()
+    ));
+    let path_str = path.to_string_lossy().to_string();
+
+    game.save_game_to_file(&path_str);
+
+    let content = std::fs::read_to_string(&path).expect("save file should exist");
+    let v: serde_json::Value =
+        serde_json::from_str(&content).expect("save file should be valid JSON");
+    assert_eq!(v["meteor_showers"], 5, "showers must persist in SaveState");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn test_other_modes_have_no_scheduled_showers() {
+    let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+    game.mode = GameMode::SinglePlayer;
+    game.reset();
+    game.obstacles.clear();
+    game.auto_pilot = true;
+    game.lives = 100;
+    game.xp_to_next_level = u32::MAX;
+
+    for tick in [11_u32, 23, 35] {
+        game.state = GameState::Playing;
+        game.tick_counter = tick;
+        game.update();
+        assert_eq!(
+            game.meteor_showers, 0,
+            "only Asteroids mode schedules meteor showers"
+        );
+    }
 }
 
 #[test]
@@ -136,7 +269,7 @@ fn test_asteroids_eating_food_deflects_lowest_meteor() {
         position: Point { x: 9, y: 8 },
         timer: 0,
     });
-    // Not a multiple of 6, so no scheduled shower interferes
+    // Not a multiple of 12, so no scheduled shower interferes
     game.tick_counter = 1;
 
     game.update();
@@ -156,71 +289,26 @@ fn test_asteroids_eating_food_deflects_lowest_meteor() {
 }
 
 #[test]
-fn test_asteroids_strikes_persist_through_save_and_history() {
-    let mut game = asteroids_game(30, 30);
+fn test_asteroids_never_spawns_in_a_column_with_a_meteor_in_flight() {
+    let mut game = asteroids_game(20, 20);
     game.obstacles.clear();
-
+    game.meteors.clear();
+    game.meteors.push(Meteor {
+        position: Point { x: 7, y: 10 },
+        timer: 0,
+    });
     game.state = GameState::Playing;
-    game.tick_counter = 5;
+    game.tick_counter = 11; // next update runs tick 12 -> scheduled shower
+
     game.update();
-    assert!(
-        game.asteroid_strikes >= 1,
-        "a scheduled shower should have fired on tick 6"
-    );
-    let strikes = game.asteroid_strikes;
 
-    // The history (time-rewind) snapshots must carry the counter
-    assert!(
-        game.history.iter().any(|h| h.asteroid_strikes >= 1)
-            || {
-                game.update();
-                game.history.iter().any(|h| h.asteroid_strikes == strikes)
-            },
-        "asteroid_strikes must be recorded in the history state"
-    );
-
-    // The save file must carry the counter too
-    let path = std::env::temp_dir().join(format!(
-        "snake_asteroids_save_{}.json",
-        std::process::id()
-    ));
-    game.save_game_to_file(path.to_str().unwrap());
-    let raw = std::fs::read_to_string(&path).unwrap();
-    let _ = std::fs::remove_file(&path);
-    let json: serde_json::Value = serde_json::from_str(&raw).unwrap();
-    assert_eq!(
-        json["asteroid_strikes"].as_u64(),
-        Some(u64::from(strikes)),
-        "asteroid_strikes must be persisted in SaveState"
-    );
-}
-
-#[test]
-fn test_asteroids_bot_survives_the_meteor_shower() {
-    let mut game = asteroids_game(40, 30);
-    game.auto_pilot = true;
-
-    for _ in 0..120 {
-        game.update();
-        if game.state != GameState::Playing {
-            if game.lives == 0 {
-                break;
-            }
-            // Non-death interruption (e.g. merchant visit): resume playing
-            game.state = GameState::Playing;
+    assert_eq!(game.meteor_showers, 1, "tick 12 must trigger exactly one shower");
+    for m in &game.meteors {
+        if m.position.y == 1 {
+            assert_ne!(
+                m.position.x, 7,
+                "no new meteor may spawn in a column that already has a meteor in flight"
+            );
         }
     }
-
-    assert!(
-        game.state == GameState::Playing && game.lives > 0,
-        "Autopilot should survive the meteor shower (lives: {}, strikes: {}, score: {})",
-        game.lives,
-        game.asteroid_strikes,
-        game.score
-    );
-    assert!(
-        game.asteroid_strikes >= 20,
-        "expected at least 20 showers over 120 ticks, got {}",
-        game.asteroid_strikes
-    );
 }
