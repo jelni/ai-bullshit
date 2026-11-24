@@ -3051,9 +3051,12 @@ impl Game {
                             turf_targets.append(&mut targets);
                             targets = turf_targets;
                         }
-                        if let Some((dir, path)) =
-                            self.astar_search_verified(start, Some(current_dir), &targets, 4)
-                        {
+                        if let Some((dir, path)) = self.astar_search_verified_contested(
+                            start,
+                            Some(current_dir),
+                            &targets,
+                            4,
+                        ) {
                             self.bots_autopilot_paths[i] = path;
                             self.bots[i].direction_queue.push_back(dir);
                         } else if let Some(tail) = tail
@@ -4094,71 +4097,7 @@ impl Game {
         g_score.insert(start, 0u16);
 
         let calc_dist = |p1: Point, p2: Point| -> u16 {
-            let mut dx = p1.x.abs_diff(p2.x);
-            let mut dy = p1.y.abs_diff(p2.y);
-            if (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale
-            {
-                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
-            }
-            let direct_dist = dx.saturating_add(dy);
-
-            if let Some((portal1, portal2)) = self.portals {
-                let mut dx_p1 = p1.x.abs_diff(portal1.x);
-                let mut dy_p1 = p1.y.abs_diff(portal1.y);
-                let mut dx_p2 = portal2.x.abs_diff(p2.x);
-                let mut dy_p2 = portal2.y.abs_diff(p2.y);
-                if (self.wrap_mode || self.mode == GameMode::Zen)
-                    && self.mode != GameMode::BattleRoyale
-                {
-                    dx_p1 =
-                        std::cmp::min(dx_p1, self.width.saturating_sub(2).saturating_sub(dx_p1));
-                    dy_p1 =
-                        std::cmp::min(dy_p1, self.height.saturating_sub(2).saturating_sub(dy_p1));
-                    dx_p2 =
-                        std::cmp::min(dx_p2, self.width.saturating_sub(2).saturating_sub(dx_p2));
-                    dy_p2 =
-                        std::cmp::min(dy_p2, self.height.saturating_sub(2).saturating_sub(dy_p2));
-                }
-                let dist_via_p1 = dx_p1
-                    .saturating_add(dy_p1)
-                    .saturating_add(dx_p2)
-                    .saturating_add(dy_p2)
-                    .saturating_add(1);
-
-                let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
-                let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
-                let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
-                let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
-                if (self.wrap_mode || self.mode == GameMode::Zen)
-                    && self.mode != GameMode::BattleRoyale
-                {
-                    dx_p2_1 = std::cmp::min(
-                        dx_p2_1,
-                        self.width.saturating_sub(2).saturating_sub(dx_p2_1),
-                    );
-                    dy_p2_1 = std::cmp::min(
-                        dy_p2_1,
-                        self.height.saturating_sub(2).saturating_sub(dy_p2_1),
-                    );
-                    dx_p1_2 = std::cmp::min(
-                        dx_p1_2,
-                        self.width.saturating_sub(2).saturating_sub(dx_p1_2),
-                    );
-                    dy_p1_2 = std::cmp::min(
-                        dy_p1_2,
-                        self.height.saturating_sub(2).saturating_sub(dy_p1_2),
-                    );
-                }
-                let dist_via_p2 = dx_p2_1
-                    .saturating_add(dy_p2_1)
-                    .saturating_add(dx_p1_2)
-                    .saturating_add(dy_p1_2)
-                    .saturating_add(1);
-
-                return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
-            }
-            direct_dist
+            self.travel_dist(p1, p2, false)
         };
 
         let heuristic = |p: Point| -> u32 {
@@ -9342,6 +9281,86 @@ impl Game {
         }
     }
 
+    /// Wrap- and portal-aware Manhattan distance between two cells. Used as the
+    /// A* heuristic base and as the arrival-time estimate for rival snakes.
+    #[must_use]
+    pub fn travel_dist(&self, p1: Point, p2: Point, through_walls: bool) -> u16 {
+        let mut dx = p1.x.abs_diff(p2.x);
+        let mut dy = p1.y.abs_diff(p2.y);
+        if (self.wrap_mode || through_walls || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale
+        {
+            dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
+            dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
+        }
+        let direct_dist = dx.saturating_add(dy);
+
+        if let Some((portal1, portal2)) = self.portals {
+            let mut dx_p1 = p1.x.abs_diff(portal1.x);
+            let mut dy_p1 = p1.y.abs_diff(portal1.y);
+            let mut dx_p2 = portal2.x.abs_diff(p2.x);
+            let mut dy_p2 = portal2.y.abs_diff(p2.y);
+            if (self.wrap_mode || through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
+            {
+                dx_p1 = std::cmp::min(
+                    dx_p1,
+                    self.width.saturating_sub(2).saturating_sub(dx_p1),
+                );
+                dy_p1 = std::cmp::min(
+                    dy_p1,
+                    self.height.saturating_sub(2).saturating_sub(dy_p1),
+                );
+                dx_p2 = std::cmp::min(
+                    dx_p2,
+                    self.width.saturating_sub(2).saturating_sub(dx_p2),
+                );
+                dy_p2 = std::cmp::min(
+                    dy_p2,
+                    self.height.saturating_sub(2).saturating_sub(dy_p2),
+                );
+            }
+            let dist_via_p1 = dx_p1
+                .saturating_add(dy_p1)
+                .saturating_add(dx_p2)
+                .saturating_add(dy_p2)
+                .saturating_add(1);
+
+            let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
+            let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
+            let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
+            let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
+            if (self.wrap_mode || through_walls || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale
+            {
+                dx_p2_1 = std::cmp::min(
+                    dx_p2_1,
+                    self.width.saturating_sub(2).saturating_sub(dx_p2_1),
+                );
+                dy_p2_1 = std::cmp::min(
+                    dy_p2_1,
+                    self.height.saturating_sub(2).saturating_sub(dy_p2_1),
+                );
+                dx_p1_2 = std::cmp::min(
+                    dx_p1_2,
+                    self.width.saturating_sub(2).saturating_sub(dx_p1_2),
+                );
+                dy_p1_2 = std::cmp::min(
+                    dy_p1_2,
+                    self.height.saturating_sub(2).saturating_sub(dy_p1_2),
+                );
+            }
+            let dist_via_p2 = dx_p2_1
+                .saturating_add(dy_p2_1)
+                .saturating_add(dx_p1_2)
+                .saturating_add(dy_p1_2)
+                .saturating_add(1);
+
+            return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
+        }
+        direct_dist
+    }
+
     #[must_use]
     #[expect(clippy::collapsible_if)]
     pub fn bot_smart_pathfind(
@@ -10151,7 +10170,8 @@ impl Game {
             turf_targets.append(&mut targets);
             targets = turf_targets;
         }
-        if let Some((dir, path)) = self.astar_search_verified(start, Some(current_dir), &targets, 1)
+        if let Some((dir, path)) =
+            self.astar_search_verified_contested(start, Some(current_dir), &targets, 1)
         {
             self.autopilot_path = path;
             return Some(dir);
@@ -10268,7 +10288,7 @@ impl Game {
                 }
             }
             if let Some((dir, path)) =
-                self.astar_search_verified(start, Some(current_dir), &targets, 2)
+                self.astar_search_verified_contested(start, Some(current_dir), &targets, 2)
             {
                 self.p2_autopilot_path = path;
                 return Some(dir);
@@ -10369,6 +10389,25 @@ impl Game {
         }
         path
     }
+    /// Every snake competing with `checking_player` for map targets: Player 2,
+    /// the player snake, and each arena bot except the one at `start`.
+    fn rival_snakes(&self, start: Point, checking_player: u8) -> Vec<&Snake> {
+        let mut rivals: Vec<&Snake> = Vec::new();
+        if checking_player != 2
+            && let Some(p2) = &self.player2
+        {
+            rivals.push(p2);
+        }
+        if checking_player != 1 {
+            rivals.push(&self.snake);
+        }
+        for b in &self.bots {
+            if b.head() != start {
+                rivals.push(b);
+            }
+        }
+        rivals
+    }
     fn predicted_enemy_occupancy(
         &self,
         start: Point,
@@ -10377,21 +10416,7 @@ impl Game {
     ) -> std::collections::HashMap<Point, (u16, u16)> {
         let mut occupied: std::collections::HashMap<Point, (u16, u16)> =
             std::collections::HashMap::new();
-        let mut enemies: Vec<&Snake> = Vec::new();
-        if checking_player != 2
-            && let Some(p2) = &self.player2
-        {
-            enemies.push(p2);
-        }
-        if checking_player != 1 {
-            enemies.push(&self.snake);
-        }
-        for b in &self.bots {
-            if b.head() != start {
-                enemies.push(b);
-            }
-        }
-        for enemy in enemies {
+        for enemy in self.rival_snakes(start, checking_player) {
             let body_len = u16::try_from(enemy.body.len()).unwrap_or(u16::MAX);
             let head_path = self.enemy_head_path(enemy, horizon);
             for (idx, &cell) in head_path.iter().enumerate().skip(1) {
@@ -10458,8 +10483,86 @@ impl Game {
         }
         true
     }
+    /// Targets that a rival snake is predicted to reach strictly before the
+    /// mover starting at `start`, either by wrap/portal-aware travel distance
+    /// or because the rival's committed head path crosses the target sooner.
+    /// A target sitting on a rival's current head is never contested (those
+    /// are hunt targets, e.g. Zombie mode). Empty while invincible or when no
+    /// rivals exist, so single-player behavior is unchanged.
+    #[must_use]
+    pub fn contested_targets(
+        &self,
+        start: Point,
+        checking_player: u8,
+        targets: &[Point],
+    ) -> HashSet<Point> {
+        let mut contested = HashSet::new();
+        if self.is_invincible_active() {
+            return contested;
+        }
+        let rivals = self.rival_snakes(start, checking_player);
+        if rivals.is_empty() {
+            return contested;
+        }
+        for &target in targets {
+            let my_arrival = self.travel_dist(start, target, false);
+            for &rival in &rivals {
+                if rival.head() == target {
+                    continue;
+                }
+                let dist_arrival = self.travel_dist(rival.head(), target, false);
+                let predicted_arrival = self
+                    .enemy_head_path(rival, Self::RIVAL_HEAD_HORIZON)
+                    .iter()
+                    .position(|&c| c == target)
+                    .map_or(u16::MAX, |i| u16::try_from(i).unwrap_or(u16::MAX));
+                if dist_arrival.min(predicted_arrival) < my_arrival {
+                    contested.insert(target);
+                    break;
+                }
+            }
+        }
+        contested
+    }
+    /// Verified-safe path selection that avoids contested targets: any target a
+    /// rival is predicted to reach first is only tried when no uncontested
+    /// target yields a verified-safe path.
+    #[must_use]
+    pub fn astar_search_verified_contested(
+        &self,
+        start: Point,
+        current_dir: Option<Direction>,
+        targets: &[Point],
+        checking_player: u8,
+    ) -> Option<(Direction, Vec<Point>)> {
+        let contested = self.contested_targets(start, checking_player, targets);
+        if contested.is_empty() {
+            return self.astar_search_verified(start, current_dir, targets, checking_player);
+        }
+        let uncontested: Vec<Point> = targets
+            .iter()
+            .copied()
+            .filter(|t| !contested.contains(t))
+            .collect();
+        if !uncontested.is_empty()
+            && let Some(res) =
+                self.select_verified_path(start, current_dir, &uncontested, checking_player)
+        {
+            return Some(res);
+        }
+        self.astar_search_verified(start, current_dir, targets, checking_player)
+    }
     #[must_use]
     pub fn astar_search_verified(
+        &self,
+        start: Point,
+        current_dir: Option<Direction>,
+        targets: &[Point],
+        checking_player: u8,
+    ) -> Option<(Direction, Vec<Point>)> {
+        self.select_verified_path(start, current_dir, targets, checking_player)
+    }
+    fn select_verified_path(
         &self,
         start: Point,
         current_dir: Option<Direction>,
@@ -10536,80 +10639,7 @@ impl Game {
             == Some(crate::game::Vehicle::Spaceship);
 
         let calc_dist = |p1: Point, p2: Point| -> u16 {
-            let mut dx = p1.x.abs_diff(p2.x);
-            let mut dy = p1.y.abs_diff(p2.y);
-            if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                && self.mode != GameMode::BattleRoyale
-            {
-                dx = std::cmp::min(dx, self.width.saturating_sub(2).saturating_sub(dx));
-                dy = std::cmp::min(dy, self.height.saturating_sub(2).saturating_sub(dy));
-            }
-            let direct_dist = dx.saturating_add(dy);
-
-            if let Some((portal1, portal2)) = self.portals {
-                let mut dx_p1 = p1.x.abs_diff(portal1.x);
-                let mut dy_p1 = p1.y.abs_diff(portal1.y);
-                let mut dx_p2 = portal2.x.abs_diff(p2.x);
-                let mut dy_p2 = portal2.y.abs_diff(p2.y);
-                if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                    && self.mode != GameMode::BattleRoyale
-                {
-                    dx_p1 = std::cmp::min(
-                        dx_p1,
-                        self.width.saturating_sub(2).saturating_sub(dx_p1),
-                    );
-                    dy_p1 = std::cmp::min(
-                        dy_p1,
-                        self.height.saturating_sub(2).saturating_sub(dy_p1),
-                    );
-                    dx_p2 = std::cmp::min(
-                        dx_p2,
-                        self.width.saturating_sub(2).saturating_sub(dx_p2),
-                    );
-                    dy_p2 = std::cmp::min(
-                        dy_p2,
-                        self.height.saturating_sub(2).saturating_sub(dy_p2),
-                    );
-                }
-                let dist_via_p1 = dx_p1
-                    .saturating_add(dy_p1)
-                    .saturating_add(dx_p2)
-                    .saturating_add(dy_p2)
-                    .saturating_add(1);
-
-                let mut dx_p2_1 = p1.x.abs_diff(portal2.x);
-                let mut dy_p2_1 = p1.y.abs_diff(portal2.y);
-                let mut dx_p1_2 = portal1.x.abs_diff(p2.x);
-                let mut dy_p1_2 = portal1.y.abs_diff(p2.y);
-                if (self.wrap_mode || can_pass_through_walls || self.mode == GameMode::Zen)
-                    && self.mode != GameMode::BattleRoyale
-                {
-                    dx_p2_1 = std::cmp::min(
-                        dx_p2_1,
-                        self.width.saturating_sub(2).saturating_sub(dx_p2_1),
-                    );
-                    dy_p2_1 = std::cmp::min(
-                        dy_p2_1,
-                        self.height.saturating_sub(2).saturating_sub(dy_p2_1),
-                    );
-                    dx_p1_2 = std::cmp::min(
-                        dx_p1_2,
-                        self.width.saturating_sub(2).saturating_sub(dx_p1_2),
-                    );
-                    dy_p1_2 = std::cmp::min(
-                        dy_p1_2,
-                        self.height.saturating_sub(2).saturating_sub(dy_p1_2),
-                    );
-                }
-                let dist_via_p2 = dx_p2_1
-                    .saturating_add(dy_p2_1)
-                    .saturating_add(dx_p1_2)
-                    .saturating_add(dy_p1_2)
-                    .saturating_add(1);
-
-                return std::cmp::min(direct_dist, std::cmp::min(dist_via_p1, dist_via_p2));
-            }
-            direct_dist
+            self.travel_dist(p1, p2, can_pass_through_walls)
         };
 
         let heuristic = |p: Point| -> u32 {
