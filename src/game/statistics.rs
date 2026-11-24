@@ -96,4 +96,8 @@ pub struct Statistics {
     pub bestiary: std::collections::HashMap<crate::game::BossType, u32>,
     #[serde(default)]
     pub bank_balance: u32,
+    #[serde(default)]
+    pub tournaments_played: u32,
+    #[serde(default)]
+    pub tournaments_won: u32,
 }

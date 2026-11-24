@@ -725,6 +725,10 @@ fn draw_achievements<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             "MMO Enthusiast (Play Massive Multiplayer)",
         ),
         (crate::game::Achievement::PoisonEater, "Poison Eater (Eat Poison Food)"),
+        (
+            crate::game::Achievement::TournamentChampion,
+            "Tournament Champion (Win a Tournament)",
+        ),
     ];
 
     for (i, (ach, desc)) in all_achievements.iter().enumerate() {
@@ -1754,7 +1758,10 @@ fn draw_entities<W: Write>(
     }
 
     // Draw autopilot path
-    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot {
+    if game.auto_pilot
+        || game.mode == crate::game::GameMode::BotVsBot
+        || game.mode == crate::game::GameMode::Tournament
+    {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.autopilot_path {
             if is_visible(path_point.x, path_point.y) {
@@ -1765,6 +1772,7 @@ fn draw_entities<W: Write>(
     }
     if game.mode == crate::game::GameMode::PlayerVsBot
         || game.mode == crate::game::GameMode::BotVsBot
+        || game.mode == crate::game::GameMode::Tournament
     {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for path_point in &game.p2_autopilot_path {
@@ -2248,7 +2256,10 @@ fn draw_entities<W: Write>(
     }
 
     // Draw autopilot paths
-    if game.auto_pilot || game.mode == crate::game::GameMode::BotVsBot || game.used_bot_this_session
+    if game.auto_pilot
+        || game.mode == crate::game::GameMode::BotVsBot
+        || game.mode == crate::game::GameMode::Tournament
+        || game.used_bot_this_session
     {
         stdout.queue(SetForegroundColor(Color::DarkGrey))?;
         for p in &game.autopilot_path {
@@ -2261,6 +2272,7 @@ fn draw_entities<W: Write>(
 
     if game.mode == crate::game::GameMode::PlayerVsBot
         || game.mode == crate::game::GameMode::BotVsBot
+        || game.mode == crate::game::GameMode::Tournament
     {
         stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
         for p in &game.p2_autopilot_path {
@@ -2585,12 +2597,19 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let tournament_str = if game.mode == crate::game::GameMode::Tournament
+        && let Some(tournament) = &game.tournament
+    {
+        format!(" | Trophy: {}", tournament.status_line())
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}"
     )?;
 
     if !game.bosses.is_empty() {

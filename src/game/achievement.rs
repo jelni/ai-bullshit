@@ -8,4 +8,5 @@ pub enum Achievement {
     BossSlayer,
     MassiveMultiplayerEnthusiast,
     PoisonEater,
+    TournamentChampion,
 }

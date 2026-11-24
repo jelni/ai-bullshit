@@ -17,9 +17,9 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
-    InGameUpgrade, Instant, Laser, Meteor, Particle, Planet, Point, PowerUp, PowerUpType, Read,
-    Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Turret, Weather, Write, beep,
-    default_unlocked_themes, fs, io,
+    InGameUpgrade, Instant, Laser, MatchOutcome, Meteor, Particle, Planet, Point, PowerUp,
+    PowerUpType, Read, Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Tournament,
+    Turret, Weather, Write, beep, default_unlocked_themes, fs, io,
 };
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
@@ -133,6 +133,7 @@ pub struct Game {
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
     pub asteroid_strikes: u32,
+    pub tournament: Option<Tournament>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -559,6 +560,7 @@ impl Game {
             volcano_vents: Vec::new(),
             volcano_eruptions: 0,
             asteroid_strikes: 0,
+            tournament: None,
         }
     }
     #[must_use]
@@ -806,6 +808,7 @@ impl Game {
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
             asteroid_strikes: self.asteroid_strikes,
+            tournament: self.tournament.clone(),
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -942,6 +945,16 @@ impl Game {
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
                 self.asteroid_strikes = state.asteroid_strikes;
+                self.tournament = state.tournament;
+                if self.mode == GameMode::Tournament && self.tournament.is_none() {
+                    let player_name = if self.player_name.is_empty() {
+                        "You".to_string()
+                    } else {
+                        self.player_name.clone()
+                    };
+                    self.tournament =
+                        Some(Tournament::new(&mut self.rng, &player_name, self.stats.player_elo));
+                }
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -2847,6 +2860,20 @@ impl Game {
         if self.mode == GameMode::Quake {
             self.weather = Weather::Earthquake;
         }
+        if self.mode == GameMode::Tournament {
+            let player_name = if self.player_name.is_empty() {
+                "You".to_string()
+            } else {
+                self.player_name.clone()
+            };
+            self.tournament =
+                Some(Tournament::new(&mut self.rng, &player_name, self.stats.player_elo));
+            // The player's entrant is driven by the autopilot, so any high
+            // score earned here must be recorded under the [BOT] pseudonym.
+            self.used_bot_this_session = true;
+        } else {
+            self.tournament = None;
+        }
         self.lightning_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
@@ -3279,7 +3306,9 @@ impl Game {
             && self.mode != GameMode::Blizzard
             && self.rng.gen_bool(0.2);
         if !delay_bot {
-            if (self.auto_pilot || self.mode == GameMode::BotVsBot)
+            if (self.auto_pilot
+                || self.mode == GameMode::BotVsBot
+                || self.mode == GameMode::Tournament)
                 && self.snake.direction_queue.is_empty()
             {
                 if let Some(dir) = self.calculate_autopilot_move() {
@@ -3289,7 +3318,10 @@ impl Game {
                     self.shoot_laser(1);
                 }
             }
-            if self.mode == GameMode::PlayerVsBot || self.mode == GameMode::BotVsBot {
+            if self.mode == GameMode::PlayerVsBot
+                || self.mode == GameMode::BotVsBot
+                || self.mode == GameMode::Tournament
+            {
                 let is_empty =
                     self.player2.as_ref().is_some_and(|p2| p2.direction_queue.is_empty());
                 if is_empty {
@@ -3605,6 +3637,7 @@ impl Game {
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
             self.asteroid_strikes = state.asteroid_strikes;
+            self.tournament = state.tournament;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3708,6 +3741,7 @@ impl Game {
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
             asteroid_strikes: self.asteroid_strikes,
+            tournament: self.tournament.clone(),
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -8049,6 +8083,10 @@ impl Game {
         if body_p2_dead {
             p2_dead = true;
         }
+        if self.mode == GameMode::Tournament && (p1_dead || p2_dead) {
+            self.handle_tournament_match_end(p1_dead, p2_dead);
+            return;
+        }
         if p1_dead && p2_dead {
             if self.mode == GameMode::PlayerVsBot {
                 self.update_elo(false, true);
@@ -9402,6 +9440,14 @@ impl Game {
             && self.mode == GameMode::MassiveMultiplayer
         {
             new_achievements.push(Achievement::MassiveMultiplayerEnthusiast);
+        }
+        if !self
+            .stats
+            .unlocked_achievements
+            .contains(&Achievement::TournamentChampion)
+            && self.stats.tournaments_won > 0
+        {
+            new_achievements.push(Achievement::TournamentChampion);
         }
         if !new_achievements.is_empty() {
             self.stats.unlocked_achievements.extend(new_achievements);
@@ -11057,6 +11103,7 @@ impl Game {
         match self.mode {
             GameMode::PlayerVsBot
             | GameMode::BotVsBot
+            | GameMode::Tournament
             | GameMode::MassiveMultiplayer
             | GameMode::Tron
             | GameMode::KingOfTheHill
@@ -11970,6 +12017,151 @@ impl Game {
             y,
         }
     }
+    /// Resolves a finished Tournament match: records the result, updates the
+    /// bracket and entrant ELO ratings, then either starts the next match or
+    /// crowns the champion and ends the run.
+    pub fn handle_tournament_match_end(&mut self, p1_dead: bool, p2_dead: bool) {
+        if self.mode != GameMode::Tournament {
+            return;
+        }
+        let outcome = if p1_dead && p2_dead {
+            MatchOutcome::Draw
+        } else if p1_dead {
+            MatchOutcome::B
+        } else {
+            MatchOutcome::A
+        };
+        let (finished, summary) = {
+            let Some(tournament) = self.tournament.as_mut() else {
+                return;
+            };
+            let Some((a, b)) = tournament.current_match() else {
+                return;
+            };
+            let a_name = tournament.entrants[a].name.clone();
+            let b_name = tournament.entrants[b].name.clone();
+            let finished = tournament.record_result(outcome);
+            let summary = if let Some(last) = tournament.results.last() {
+                match last.winner {
+                    Some(w) => format!("{} defeats {}!", tournament.entrants[w].name, if w == a { &b_name } else { &a_name }),
+                    None => format!("{a_name} vs {b_name}: draw, rematch!"),
+                }
+            } else {
+                String::new()
+            };
+            (finished, summary)
+        };
+        if finished {
+            let Some(tournament) = self.tournament.as_ref() else {
+                return;
+            };
+            let champion = tournament.champion.unwrap_or(0);
+            let champ_name = tournament.champion_name().unwrap_or("???").to_string();
+            let champ_is_player = tournament.entrants[champion].is_player;
+            let player_elo = tournament.player_index().map_or(0, |i| tournament.entrants[i].elo);
+            let matches_played = tournament.matches_played();
+            let total_matches = tournament.total_matches();
+            self.stats.tournaments_played += 1;
+            if champ_is_player {
+                self.stats.tournaments_won += 1;
+            }
+            self.stats.player_elo = player_elo;
+            self.save_stats();
+            self.check_achievements();
+            self.lives = 0;
+            self.handle_death(&format!(
+                "Tournament Champion: {champ_name}! ({matches_played}/{total_matches} matches)"
+            ));
+            return;
+        }
+        self.chat_log.push_back((
+            format!("TOURNAMENT: {summary}"),
+            crate::color::Color::Yellow,
+        ));
+        self.start_tournament_match();
+    }
+
+    /// Resets the arena for the next tournament match and announces the pairing.
+    fn start_tournament_match(&mut self) {
+        let start_x = self.width / 2;
+        let start_y = self.height / 2;
+        self.snake = Snake::new(Point {
+            x: start_x - 5,
+            y: start_y,
+        });
+        self.player2 = Some(Snake::new(Point {
+            x: start_x + 5,
+            y: start_y,
+        }));
+        self.snake.direction_queue.clear();
+        if let Some(p2) = &mut self.player2 {
+            p2.direction_queue.clear();
+        }
+        self.autopilot_path.clear();
+        self.p2_autopilot_path.clear();
+        self.obstacles.retain(|p| {
+            !((p.x == start_x - 5 && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2))
+                || (p.x == start_x + 5
+                    && (p.y >= start_y.saturating_sub(1) && p.y <= start_y + 2)))
+        });
+        self.lasers.clear();
+        self.mines.clear();
+        self.black_hole = None;
+        self.meteors.clear();
+        self.portals = None;
+        self.power_up = None;
+        self.bonus_food = None;
+        self.poison_food = None;
+        self.goblin = None;
+        self.turrets.clear();
+        self.bosses.clear();
+        self.snow_tiles.clear();
+        self.lightning_column = None;
+        self.flow_field = None;
+        self.flow_field_targets.clear();
+        self.xp_gems.clear();
+        let avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self
+                    .player2
+                    .as_ref()
+                    .is_some_and(|p2| p2.body_map.contains_key(p))
+        };
+        if let Some(p) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            0,
+        ) {
+            self.food = p;
+        }
+        if let Some(tournament) = &self.tournament
+            && let Some((a, b)) = tournament.current_match()
+        {
+            let msg = format!(
+                "{} {}/{}: {} vs {}",
+                tournament.round_label(),
+                tournament.match_index + 1,
+                tournament.matches_in_round(tournament.round),
+                tournament.entrants[a].name,
+                tournament.entrants[b].name
+            );
+            self.chat_log.push_back((
+                format!("TOURNAMENT: {msg}"),
+                crate::color::Color::Yellow,
+            ));
+            self.spawn_floating_text(
+                f32::from(start_x),
+                f32::from(start_y.saturating_sub(2)),
+                msg,
+                crate::color::Color::Yellow,
+            );
+        }
+    }
+
     pub(crate) fn handle_death(&mut self, cause: &str) {
         let head = self.snake.head();
         self.spawn_particles(

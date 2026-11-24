@@ -1,7 +1,7 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Companion, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser,
-    Meteor, Point, PowerUp, Serialize, Snake, Theme, Weather, default_campaign_level,
+    Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather, default_campaign_level,
     default_lives, default_skin, default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
@@ -141,6 +141,7 @@ pub struct SaveState {
     pub volcano_eruptions: u32,
     #[serde(default)]
     pub asteroid_strikes: u32,
+    pub tournament: Option<Tournament>,
 }
 
 #[must_use]

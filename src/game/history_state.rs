@@ -1,6 +1,6 @@
 use super::{
     Boss, Companion, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake,
-    Weather,
+    Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -67,4 +67,5 @@ pub struct HistoryState {
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
     pub asteroid_strikes: u32,
+    pub tournament: Option<Tournament>,
 }
