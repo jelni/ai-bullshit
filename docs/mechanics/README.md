@@ -16,7 +16,7 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell.
-- **Earthquake:** occasionally adds or removes an obstacle.
+- **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick.
 - **Tornado:** occasionally relocates the food.
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
@@ -53,3 +53,14 @@ The Druid hero class ignores all weather penalties.
 - **Grounding:** eating food clears the currently active lightning column ("Grounded!"), giving the player a way to neutralize an incoming strike.
 - **Autopilot:** the active lightning column is already a hard hazard in the A* heuristic/edge costs and in `is_safe_final_p` verified-safe path checks, so the autopilot routes around it natively.
 - **Persistence:** the `storm_strikes` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), and the active `lightning_column` was already persisted. The status bar shows a `Strikes: <count>` counter, and the column is rendered as a yellow `|` (terminal) / yellow bar (web).
+
+## Quake Mode
+
+`GameMode::Quake` (menu entry "Quake Mode") is a survival mode wrapped in a permanent earthquake (`weather` is forced to `Weather::Earthquake` every tick, and the ambient weather randomization is skipped in this mode):
+
+- **Scheduled quakes:** on every 6th tick a quake is guaranteed (on top of the ambient earthquake chance). A quake either shakes an existing obstacle loose (removed from `obstacles`) or drops a new rubble pile on a random empty cell, capped at 25% of the board so the arena stays playable.
+- **Fairness:** rubble never falls on a snake's body, on the cell any snake is about to move into this tick, or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors).
+- **Stabilizing:** eating food clears one random rubble pile ("Stabilized!"), giving the player a way to fight back against accumulating debris.
+- **Autopilot:** obstacles are already hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance, so the autopilot routes around fresh rubble natively and rides out the quakes.
+- **Persistence:** the `quake_count` counter is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows a `Quakes: <count>` counter, and rubble is rendered as a regular red `X` obstacle (terminal) / red cell (web).
+- **Tests:** see [tests/test_quake_mode.rs](../../tests/test_quake_mode.rs).

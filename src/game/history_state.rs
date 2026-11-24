@@ -62,4 +62,5 @@ pub struct HistoryState {
     pub match_time: u32,
     pub snow_tiles: HashSet<Point>,
     pub storm_strikes: u32,
+    pub quake_count: u32,
 }

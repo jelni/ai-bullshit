@@ -54,4 +54,5 @@ pub enum GameMode {
     Sandbox,
     Blizzard,
     Storm,
+    Quake,
 }

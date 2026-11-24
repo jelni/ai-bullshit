@@ -631,6 +631,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Sandbox Mode",
         "Blizzard Mode",
         "Storm Mode",
+        "Quake Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2546,10 +2547,18 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let quakes_str = if game.mode == crate::game::GameMode::Quake {
+        format!(" | Quakes: {}", game.quake_count)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
-    write!(stdout, "{weather_str}{tod_str}{snow_str}{strikes_str}")?;
+    write!(
+        stdout,
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}"
+    )?;
 
     if !game.bosses.is_empty() {
         let total_health: u32 = game.bosses.iter().map(|b| b.health).sum();

@@ -128,6 +128,7 @@ pub struct Game {
     pub controls_scrambled_timer: u8,
     pub snow_tiles: HashSet<Point>,
     pub storm_strikes: u32,
+    pub quake_count: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -549,6 +550,7 @@ impl Game {
             controls_scrambled_timer: 0,
             snow_tiles: HashSet::new(),
             storm_strikes: 0,
+            quake_count: 0,
         }
     }
     #[must_use]
@@ -791,6 +793,7 @@ impl Game {
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
             storm_strikes: self.storm_strikes,
+            quake_count: self.quake_count,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -922,6 +925,7 @@ impl Game {
                 self.match_time = state.match_time;
                 self.snow_tiles = state.snow_tiles;
                 self.storm_strikes = state.storm_strikes;
+                self.quake_count = state.quake_count;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1367,6 +1371,92 @@ impl Game {
         }
         // The thunderstorm never breaks in Storm mode
         self.weather = Weather::Storm;
+    }
+    fn manage_quake(&mut self) {
+        if self.mode != GameMode::Quake {
+            return;
+        }
+        // The earthquake never stops in Quake mode
+        self.weather = Weather::Earthquake;
+        // Scheduled quake: every 6th tick the ground is guaranteed to shake
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.quake_count += 1;
+        // A quake either shakes an existing obstacle loose or drops a new rubble pile
+        if !self.obstacles.is_empty() && self.rng.gen_bool(0.5) {
+            if let Some(obs) = self.obstacles.iter().next().copied() {
+                self.obstacles.remove(&obs);
+                self.spawn_floating_text(
+                    f32::from(obs.x),
+                    f32::from(obs.y),
+                    "Rubble cleared!".to_string(),
+                    crate::color::Color::Green,
+                );
+            }
+            return;
+        }
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 4;
+        if u32::try_from(self.obstacles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+        };
+        if let Some(pos) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            0,
+        ) {
+            self.obstacles.insert(pos);
+            self.spawn_floating_text(
+                f32::from(pos.x),
+                f32::from(pos.y),
+                "Quake!".to_string(),
+                crate::color::Color::Red,
+            );
+        }
     }
     fn pick_storm_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
         // Fairness: never strike the column a snake currently occupies or is about to enter
@@ -2031,7 +2121,8 @@ impl Game {
             | GameMode::TurfWar
             | GameMode::Sandbox
             | GameMode::Blizzard
-            | GameMode::Storm => {
+            | GameMode::Storm
+            | GameMode::Quake => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -2112,6 +2203,7 @@ impl Game {
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::Blizzard
                 || self.mode == GameMode::Storm
+                || self.mode == GameMode::Quake
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -2161,6 +2253,7 @@ impl Game {
             || self.mode == GameMode::Gravity
             || self.mode == GameMode::Storm
             || self.mode == GameMode::Blizzard
+            || self.mode == GameMode::Quake
         {
             &self.snake
         } else {
@@ -2268,6 +2361,7 @@ impl Game {
 
         self.snow_tiles.clear();
         self.storm_strikes = 0;
+        self.quake_count = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -2511,6 +2605,9 @@ impl Game {
         if self.mode == GameMode::Storm {
             self.weather = Weather::Storm;
         }
+        if self.mode == GameMode::Quake {
+            self.weather = Weather::Earthquake;
+        }
         self.lightning_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
@@ -2676,7 +2773,8 @@ impl Game {
             | GameMode::TurfWar
             | GameMode::Sandbox
             | GameMode::Blizzard
-            | GameMode::Storm => {
+            | GameMode::Storm
+            | GameMode::Quake => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3261,6 +3359,7 @@ impl Game {
             self.match_time = state.match_time;
             self.snow_tiles = state.snow_tiles;
             self.storm_strikes = state.storm_strikes;
+            self.quake_count = state.quake_count;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -3359,6 +3458,7 @@ impl Game {
             match_time: self.match_time,
             snow_tiles: self.snow_tiles.clone(),
             storm_strikes: self.storm_strikes,
+            quake_count: self.quake_count,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -6064,7 +6164,10 @@ impl Game {
                 }
             }
         }
-        if self.rng.gen_bool(0.002) && self.mode != GameMode::Storm {
+        if self.rng.gen_bool(0.002)
+            && self.mode != GameMode::Storm
+            && self.mode != GameMode::Quake
+        {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
                 1 => Weather::Rain,
@@ -7018,6 +7121,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_storm();
+        self.manage_quake();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -8759,6 +8863,17 @@ impl Game {
                 f32::from(final_head.y),
                 "Grounded!".to_string(),
                 crate::color::Color::Yellow,
+            );
+        }
+        if self.mode == GameMode::Quake
+            && let Some(obs) = self.obstacles.iter().next().copied()
+        {
+            self.obstacles.remove(&obs);
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Stabilized!".to_string(),
+                crate::color::Color::Green,
             );
         }
         beep();
