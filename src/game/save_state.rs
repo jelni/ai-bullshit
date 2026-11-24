@@ -142,6 +142,9 @@ pub struct SaveState {
     #[serde(default)]
     pub asteroid_strikes: u32,
     pub tournament: Option<Tournament>,
+    pub tornado: Option<Point>,
+    #[serde(default)]
+    pub tornado_gusts: u32,
 }
 
 #[must_use]

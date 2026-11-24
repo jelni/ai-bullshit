@@ -633,6 +633,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Storm Mode",
         "Quake Mode",
         "Volcano Mode",
+        "Tornado Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1913,6 +1914,15 @@ fn draw_entities<W: Write>(
         write!(stdout, "O")?;
     }
 
+    // Draw Tornado vortex (Tornado mode)
+    if let Some(t) = game.tornado
+        && is_visible(t.x, t.y)
+    {
+        stdout.queue(cursor::MoveTo(t.x, t.y))?;
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        write!(stdout, "@")?;
+    }
+
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
         if is_visible(p1.x, p1.y) {
@@ -2604,12 +2614,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let gusts_str = if game.mode == crate::game::GameMode::Tornado {
+        format!(" | Gusts: {}", game.tornado_gusts)
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}"
+        "{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{meteors_str}{tournament_str}{gusts_str}"
     )?;
 
     if !game.bosses.is_empty() {

@@ -226,6 +226,21 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw Tornado vortex (Tornado mode)
+    if let Some(t) = game.tornado
+        && t.x < game.width
+        && t.y < game.height
+        && is_visible(f64::from(t.x), f64::from(t.y))
+    {
+        ctx.set_fill_style_str("#696969"); // DarkGrey
+        ctx.fill_rect(
+            f64::from(t.x) * cell_size,
+            f64::from(t.y) * cell_size,
+            cell_size,
+            cell_size,
+        );
+    }
+
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food {
         ctx.set_fill_style_str("#800080"); // DarkMagenta

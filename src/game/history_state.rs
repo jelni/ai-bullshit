@@ -68,4 +68,6 @@ pub struct HistoryState {
     pub volcano_eruptions: u32,
     pub asteroid_strikes: u32,
     pub tournament: Option<Tournament>,
+    pub tornado: Option<Point>,
+    pub tornado_gusts: u32,
 }

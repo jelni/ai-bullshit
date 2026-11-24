@@ -17,7 +17,8 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell.
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick.
-- **Tornado:** occasionally relocates the food.
+- **Earthquake:** occasionally adds or removes an obstacle.
+- **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent and a roaming vortex also drags items towards itself (see below).
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s).
 
@@ -101,3 +102,16 @@ The Druid hero class ignores all weather penalties.
 - **Between matches:** `start_tournament_match` respawns both snakes at the usual versus-mode spawn points, clears dynamic hazards (lasers, mines, meteors, portals, power-ups, bosses, snow, lightning, flow field), respawns food on a free cell, and announces the next pairing in the chat log, as a floating text, and in the status bar (`Trophy: <round> <m>/<n>: A (elo) vs B (elo)` via `Tournament::status_line`).
 - **Persistence:** the full `tournament` state is stored in `SaveState` (save/load) and `HistoryState` (time-rewind with `Z`); loading an old Tournament save without bracket data rebuilds a fresh bracket.
 - **Tests:** see [tests/test_tournament_mode.rs](../../tests/test_tournament_mode.rs).
+## Tornado Mode
+
+`GameMode::Tornado` (menu entry "Tornado Mode") is a survival mode wrapped in a permanent twister (`weather` is forced to `Weather::Tornado` every tick, and the random weather roll skips this mode):
+
+- **Vortex:** a single tornado vortex (`tornado`, rendered as a dark-grey `@` terminal / dark-grey cell web) spawns on a random empty cell on reset (never on a snake, an obstacle, or an entity, with a `safe_zone_margin + 2` margin) and reforms the same way if it is ever lost (e.g. after a respawn).
+- **Scheduled gusts:** on every 6th tick the vortex drifts one cell in a shuffled random direction and `tornado_gusts` is incremented (shown as `Gusts: <count>` in the status bar).
+- **Fairness:** a gust never lands on a snake's body, on the cell any snake is about to enter this tick, or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, lasers, meteors, xp gems, equipment boxes, crops, eggs, resources, the KoTH zone, flags), so the twister is dangerous but never cheap.
+- **Destruction:** when the vortex moves, all obstacles and mines on and around its new cell (Manhattan distance <= 1) are sucked in and removed.
+- **Item pull:** every tick the vortex drags the food, bonus food, poison food, and power-up one cell towards itself (20% chance each, reusing the black-hole pull) if the destination is free.
+- **Lethality:** a snake (player, player 2, or arena bot) whose head enters the vortex cell dies, unless invincible.
+- **Autopilot:** the vortex cell is a hard hazard in `is_safe_final_p` (so verified-safe path checks reject it at every step), carries a large heuristic penalty and edge cost in both `astar_search` and `get_boss_path`, and is a blocked cell in `trap_blocked_cells`, so bots and bosses route around the twister natively.
+- **Persistence:** `tornado` and `tornado_gusts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_tornado_mode.rs](../../tests/test_tornado_mode.rs) and the save/load test in `src/game/tests.rs`.
