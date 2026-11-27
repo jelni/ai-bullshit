@@ -123,4 +123,6 @@ pub struct HistoryState {
     pub belt_shifts: u32,
     pub ice_tiles: HashSet<Point>,
     pub ice_slips: u32,
+    pub singularity_wanders: u32,
+    pub singularity_feeds: u32,
 }

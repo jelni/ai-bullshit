@@ -81,4 +81,5 @@ pub enum GameMode {
     GravityWell,
     Conveyor,
     IceRink,
+    BlackHole,
 }

@@ -556,7 +556,6 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
-    #[test]
     fn test_save_and_load_ice_rink_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::IceRink;
@@ -574,6 +573,26 @@ mod tests {
         assert_eq!(loaded.ice_slips, 42);
         let _ = std::fs::remove_file(file_path);
     }
+    #[test]
+    fn test_save_and_load_black_hole_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::BlackHole;
+        game.reset();
+        game.black_hole = Some(Point { x: 12, y: 9 });
+        game.singularity_wanders = 42;
+        game.singularity_feeds = 7;
+        let file_path = "savegame_test_black_hole.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::BlackHole);
+        assert_eq!(loaded.black_hole, Some(Point { x: 12, y: 9 }));
+        assert_eq!(loaded.singularity_wanders, 42);
+        assert_eq!(loaded.singularity_feeds, 7);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

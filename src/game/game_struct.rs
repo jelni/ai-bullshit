@@ -192,6 +192,8 @@ pub struct Game {
     pub belt_shifts: u32,
     pub ice_tiles: HashSet<Point>,
     pub ice_slips: u32,
+    pub singularity_wanders: u32,
+    pub singularity_feeds: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -675,6 +677,8 @@ impl Game {
             laser_telegraph: None,
             ice_tiles: HashSet::new(),
             ice_slips: 0,
+            singularity_wanders: 0,
+            singularity_feeds: 0,
         }
     }
     #[must_use]
@@ -980,6 +984,8 @@ impl Game {
             belt_shifts: self.belt_shifts,
             ice_tiles: self.ice_tiles.clone(),
             ice_slips: self.ice_slips,
+            singularity_wanders: self.singularity_wanders,
+            singularity_feeds: self.singularity_feeds,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1161,7 +1167,8 @@ impl Game {
                 self.fire_ttl = state.fire_ttl;
                 self.ash_tiles = state.ash_tiles;
                 self.wildfire_ignitions = state.wildfire_ignitions;
-                self.monsoon_downpours = state.monsoon_downpours;                self.flow_field = None;
+                self.monsoon_downpours = state.monsoon_downpours;
+                self.flow_field = None;
                 self.event_horizon_drifts = state.event_horizon_drifts;
                 self.event_horizon_surges = state.event_horizon_surges;
                 self.infected_ids = state.infected_ids;
@@ -1187,6 +1194,10 @@ impl Game {
                 self.belt_shifts = state.belt_shifts;
                 self.ice_tiles = state.ice_tiles;
                 self.ice_slips = state.ice_slips;
+                self.monsoon_downpours = state.monsoon_downpours;
+                self.flow_field = None;
+                self.singularity_wanders = state.singularity_wanders;
+                self.singularity_feeds = state.singularity_feeds;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -3799,8 +3810,176 @@ impl Game {
             Some(allowed[self.rng.gen_range(0..allowed.len())])
         }
     }
+    fn spawn_black_hole_fair(&mut self) -> bool {
+        let avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.mines.contains(p)
+                || (self.portals.is_some()
+                    && (p == &self.portals.unwrap().0 || p == &self.portals.unwrap().1))
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || self.tornado == Some(*p)
+        };
+        if let Some(bh) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            self.safe_zone_margin + 2,
+        ) {
+            self.black_hole = Some(bh);
+            self.spawn_particles(
+                f32::from(bh.x),
+                f32::from(bh.y),
+                30,
+                crate::color::Color::DarkGrey,
+                'O',
+            );
+            true
+        } else {
+            false
+        }
+    }
+    fn manage_black_hole_mode(&mut self) {
+        // The singularity never collapses in Black Hole mode; it reforms if lost
+        if self.black_hole.is_none() && !self.spawn_black_hole_fair() {
+            return;
+        }
+        // Scheduled wander: every 6th tick the singularity drifts one cell
+        let mut wandered_to: Option<Point> = None;
+        if self.tick_counter.is_multiple_of(6) {
+            let bh = self.black_hole.unwrap_or(Point { x: 1, y: 1 });
+            // Fairness: the singularity never drifts onto a snake (its body or the
+            // cell a snake is about to enter) or onto any entity on the board
+            let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+            let p2_next = self
+                .player2
+                .as_ref()
+                .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+            let bot_next: Vec<Point> = self
+                .bots
+                .iter()
+                .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                .collect();
+            let mut dirs = [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ];
+            for i in (1..dirs.len()).rev() {
+                let j = self.rng.gen_range(0..=i);
+                dirs.swap(i, j);
+            }
+            let forbidden = |p: &Point| {
+                *p == p1_next
+                    || p2_next == Some(*p)
+                    || bot_next.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|tr| tr.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.equipment_boxes.contains(p)
+                    || self.crops.iter().any(|c| c.position == *p)
+                    || self.eggs_on_board.contains_key(p)
+                    || self.koth_zone == Some(*p)
+                    || self.p1_flag == Some(*p)
+                    || self.p2_flag == Some(*p)
+                    || self.resources.contains_key(p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+            };
+            for dir in dirs {
+                let next = Self::calculate_next_head_dir(bh, dir);
+                if next.x == 0
+                    || next.x >= self.width - 1
+                    || next.y == 0
+                    || next.y >= self.height - 1
+                    || forbidden(&next)
+                {
+                    continue;
+                }
+                wandered_to = Some(next);
+                break;
+            }
+        }
+        if let Some(next) = wandered_to {
+            self.black_hole = Some(next);
+            self.singularity_wanders += 1;
+        }
+        let Some(bh) = self.black_hole else {
+            return;
+        };
+        if wandered_to.is_some() {
+            self.spawn_particles(
+                f32::from(bh.x),
+                f32::from(bh.y),
+                20,
+                crate::color::Color::DarkGrey,
+                'O',
+            );
+        }
+        // The singularity drags loose items towards itself every tick
+        let mut p = self.food;
+        self.pull_point_towards_black_hole(&mut p, bh);
+        self.food = p;
+        if let Some((mut bp, time)) = self.bonus_food {
+            self.pull_point_towards_black_hole(&mut bp, bh);
+            self.bonus_food = Some((bp, time));
+        }
+        if let Some((mut pp, time)) = self.poison_food {
+            self.pull_point_towards_black_hole(&mut pp, bh);
+            self.poison_food = Some((pp, time));
+        }
+        if let Some(mut pu) = self.power_up.clone() {
+            self.pull_point_towards_black_hole(&mut pu.location, bh);
+            self.power_up = Some(pu);
+        }
+        // It devours the obstacles and mines on and around its cell
+        let mut to_remove = Vec::new();
+        for obs in &self.obstacles {
+            let dist = bh.x.abs_diff(obs.x).saturating_add(bh.y.abs_diff(obs.y));
+            if dist <= 1 {
+                to_remove.push(*obs);
+            }
+        }
+        for obs in to_remove {
+            self.obstacles.remove(&obs);
+        }
+        let mut mines_to_remove = Vec::new();
+        for mine in &self.mines {
+            let dist = bh.x.abs_diff(mine.x).saturating_add(bh.y.abs_diff(mine.y));
+            if dist <= 1 {
+                mines_to_remove.push(*mine);
+            }
+        }
+        for mine in mines_to_remove {
+            self.mines.remove(&mine);
+        }
+    }
     fn manage_black_hole(&mut self) {
         if self.mode == GameMode::EventHorizon {
+            return;
+        }
+        if self.mode == GameMode::BlackHole {
+            self.manage_black_hole_mode();
             return;
         }
         let spawn_chance = 0.002;
@@ -5399,7 +5578,8 @@ impl Game {
             | GameMode::Warp
             | GameMode::GravityWell
             | GameMode::Conveyor
-            | GameMode::IceRink => {
+            | GameMode::IceRink
+            | GameMode::BlackHole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5507,6 +5687,7 @@ impl Game {
                 || self.mode == GameMode::GravityWell
                 || self.mode == GameMode::Conveyor
                 || self.mode == GameMode::IceRink
+                || self.mode == GameMode::BlackHole
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5581,6 +5762,7 @@ impl Game {
             || self.mode == GameMode::GravityWell
             || self.mode == GameMode::Conveyor
             || self.mode == GameMode::IceRink
+            || self.mode == GameMode::BlackHole
         {
             &self.snake
         } else {
@@ -5747,6 +5929,8 @@ impl Game {
         self.tsunami_waves = 0;
         self.belt_tiles.clear();
         self.belt_shifts = 0;
+        self.singularity_wanders = 0;
+        self.singularity_feeds = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -6358,6 +6542,9 @@ impl Game {
         if self.mode == GameMode::IceRink {
             self.weather = Weather::Clear;
         }
+        if self.mode == GameMode::BlackHole {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -6392,6 +6579,9 @@ impl Game {
                     'O',
                 );
             }
+        }
+        if self.mode == GameMode::BlackHole {
+            self.spawn_black_hole_fair();
         }
         self.meteors.clear();
         self.tornado = None;
@@ -6726,7 +6916,8 @@ impl Game {
             | GameMode::Warp
             | GameMode::GravityWell
             | GameMode::Conveyor
-            | GameMode::IceRink => {
+            | GameMode::IceRink
+            | GameMode::BlackHole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6776,6 +6967,9 @@ impl Game {
         if self.mode != GameMode::BombTag && self.mode != GameMode::Infection {
             self.bots.clear();
             self.bots_autopilot_paths.clear();
+        }
+        if self.mode == GameMode::BlackHole && self.black_hole.is_none() {
+            self.spawn_black_hole_fair();
         }
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.sand_tiles.retain(|p| self.obstacles.contains(p));
@@ -7430,6 +7624,8 @@ impl Game {
             self.belt_shifts = state.belt_shifts;
             self.ice_tiles = state.ice_tiles;
             self.ice_slips = state.ice_slips;
+            self.singularity_wanders = state.singularity_wanders;
+            self.singularity_feeds = state.singularity_feeds;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -7591,6 +7787,8 @@ impl Game {
             belt_shifts: self.belt_shifts,
             ice_tiles: self.ice_tiles.clone(),
             ice_slips: self.ice_slips,
+            singularity_wanders: self.singularity_wanders,
+            singularity_feeds: self.singularity_feeds,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10350,6 +10548,7 @@ impl Game {
             && self.mode != GameMode::GravityWell
             && self.mode != GameMode::Conveyor
             && self.mode != GameMode::IceRink
+            && self.mode != GameMode::BlackHole
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -12132,6 +12331,7 @@ impl Game {
                 || self.mode == GameMode::Tsunami
                 || self.mode == GameMode::Warp
                 || self.mode == GameMode::Conveyor
+                || self.mode == GameMode::BlackHole
             {
                 self.handle_death("You Died!");
             } else {
@@ -13457,6 +13657,39 @@ impl Game {
                 f32::from(final_head.y),
                 "Sunlit!".to_string(),
                 crate::color::Color::Yellow,
+            );
+        }
+        if self.mode == GameMode::BlackHole
+            && let Some(bh) = self.black_hole
+        {
+            // Eating food feeds the singularity: it devours everything within reach
+            self.singularity_feeds += 1;
+            let mut devoured = 0u32;
+            let obstacles: Vec<Point> = self
+                .obstacles
+                .iter()
+                .copied()
+                .filter(|p| bh.x.abs_diff(p.x).saturating_add(bh.y.abs_diff(p.y)) <= 2)
+                .collect();
+            for p in &obstacles {
+                self.obstacles.remove(p);
+                devoured += 1;
+            }
+            let mines: Vec<Point> = self
+                .mines
+                .iter()
+                .copied()
+                .filter(|m| bh.x.abs_diff(m.x).saturating_add(bh.y.abs_diff(m.y)) <= 2)
+                .collect();
+            for m in &mines {
+                self.mines.remove(m);
+                devoured += 1;
+            }
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                format!("Devoured {devoured}!"),
+                crate::color::Color::DarkGrey,
             );
         }
         beep();

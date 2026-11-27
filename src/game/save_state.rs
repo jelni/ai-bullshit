@@ -238,6 +238,9 @@ pub struct SaveState {
     pub ice_tiles: HashSet<Point>,
     #[serde(default)]
     pub ice_slips: u32,
+    pub singularity_wanders: u32,
+    #[serde(default)]
+    pub singularity_feeds: u32,
 }
 
 #[must_use]
