@@ -548,6 +548,26 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw the telegraphed relocation targets (Warp mode)
+    if game.mode == crate::game::GameMode::Warp
+        && let Some((t1, t2)) = game.warp_targets
+    {
+        for (t, col) in [(t1, "#0000FF"), (t2, "#8B008B")] {
+            if t.x < game.width
+                && t.y < game.height
+                && is_visible(f64::from(t.x), f64::from(t.y))
+            {
+                ctx.set_fill_style_str(col);
+                ctx.fill_rect(
+                    f64::from(t.x) * cell_size,
+                    f64::from(t.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw boss
     for boss in &game.bosses {
         let is_assassin_hidden = boss.kind == crate::game::BossType::Assassin && {

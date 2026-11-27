@@ -184,6 +184,9 @@ pub struct Game {
     pub tsunami_depth: i32,
     pub tsunami_warning: u32,
     pub tsunami_waves: u32,
+    pub warp_targets: Option<(Point, Point)>,
+    pub warp_relocate_countdown: u32,
+    pub warp_relocations: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -628,6 +631,9 @@ impl Game {
             bomb_carrier: None,
             bomb_timer: 0,
             bomb_tags: 0,
+            warp_targets: None,
+            warp_relocate_countdown: 0,
+            warp_relocations: 0,
 
             infected_ids: Vec::new(),
             infection_spreads: 0,
@@ -924,6 +930,9 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            warp_targets: self.warp_targets,
+            warp_relocate_countdown: self.warp_relocate_countdown,
+            warp_relocations: self.warp_relocations,
 
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
@@ -1122,6 +1131,9 @@ impl Game {
                 self.bomb_carrier = state.bomb_carrier;
                 self.bomb_timer = state.bomb_timer;
                 self.bomb_tags = state.bomb_tags;
+                self.warp_targets = state.warp_targets;
+                self.warp_relocate_countdown = state.warp_relocate_countdown;
+                self.warp_relocations = state.warp_relocations;
 
                 self.acid_puddles = state.acid_puddles;
                 self.acid_drops = state.acid_drops;
@@ -5154,7 +5166,8 @@ impl Game {
 
             | GameMode::LaserGrid
             | GameMode::Inferno
-            | GameMode::Tsunami => {
+            | GameMode::Tsunami
+            | GameMode::Warp => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -5259,6 +5272,7 @@ impl Game {
 
                 || self.mode == GameMode::LaserGrid
                 || self.mode == GameMode::Tsunami
+                || self.mode == GameMode::Warp
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5329,6 +5343,7 @@ impl Game {
 
             || self.mode == GameMode::LaserGrid
             || self.mode == GameMode::Tsunami
+            || self.mode == GameMode::Warp
         {
             &self.snake
         } else {
@@ -5460,6 +5475,8 @@ impl Game {
         self.bomb_carrier = None;
         self.bomb_timer = 0;
         self.bomb_tags = 0;
+        self.warp_targets = None;
+        self.warp_relocate_countdown = 0;
 
         self.acid_puddles.clear();
         self.acid_drops = 0;
@@ -5935,6 +5952,13 @@ impl Game {
         self.time_of_day = crate::game::TimeOfDay::Day;
         self.tick_counter = 0;
         self.portals = None;
+        self.warp_targets = None;
+        self.warp_relocate_countdown = 0;
+        if self.mode == GameMode::Warp
+            && let Some(pair) = self.pick_warp_pair(8)
+        {
+            self.portals = Some(pair);
+        }
         self.weather = Weather::Clear;
         if self.current_planet == Planet::Mars {
             self.weather = Weather::Sandstorm;
@@ -6342,7 +6366,8 @@ impl Game {
 
             | GameMode::LaserGrid
             | GameMode::Inferno
-            | GameMode::Tsunami => {
+            | GameMode::Tsunami
+            | GameMode::Warp => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -6985,6 +7010,9 @@ impl Game {
             self.bomb_carrier = state.bomb_carrier;
             self.bomb_timer = state.bomb_timer;
             self.bomb_tags = state.bomb_tags;
+            self.warp_targets = state.warp_targets;
+            self.warp_relocate_countdown = state.warp_relocate_countdown;
+            self.warp_relocations = state.warp_relocations;
 
             self.acid_puddles = state.acid_puddles;
             self.acid_drops = state.acid_drops;
@@ -7139,6 +7167,9 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            warp_targets: self.warp_targets,
+            warp_relocate_countdown: self.warp_relocate_countdown,
+            warp_relocations: self.warp_relocations,
 
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
@@ -10876,6 +10907,7 @@ impl Game {
         self.manage_poison_food();
         self.manage_power_ups();
         self.manage_portals();
+        self.manage_warp();
         self.manage_mines();
         self.manage_black_hole();
         self.manage_singularity();
@@ -11672,6 +11704,7 @@ impl Game {
 
                 || self.mode == GameMode::Minefield
                 || self.mode == GameMode::Tsunami
+                || self.mode == GameMode::Warp
             {
                 self.handle_death("You Died!");
             } else {
@@ -13767,7 +13800,129 @@ impl Game {
         self.tsunami_front += 1;
         self.sweep_tsunami_line(line);
     }
+    /// Scheduled, telegraphed relocation of the portal pair in `GameMode::Warp`.
+    /// The pair is permanent (random portal spawns in `manage_portals` are
+    /// disabled in this mode); every `WARP_RELOCATE_INTERVAL` ticks a fair target
+    /// pair is chosen and shown for `WARP_TELEGRAPH` ticks before the portals
+    /// move there.
+    fn manage_warp(&mut self) {
+        if self.mode != GameMode::Warp {
+            return;
+        }
+        if self.portals.is_none()
+            && let Some(pair) = self.pick_warp_pair(8)
+        {
+            self.portals = Some(pair);
+        }
+        if self.warp_targets.is_none()
+            && self.tick_counter > 0
+            && self
+                .tick_counter
+                .is_multiple_of(Self::WARP_RELOCATE_INTERVAL)
+            && let Some(pair) = self.pick_warp_pair(6)
+        {
+            self.warp_targets = Some(pair);
+            self.warp_relocate_countdown = Self::WARP_TELEGRAPH;
+            if let Some((p1, _)) = self.portals {
+                self.spawn_floating_text(
+                    f32::from(p1.x),
+                    f32::from(p1.y),
+                    format!("Portals relocating in {}!", Self::WARP_TELEGRAPH),
+                    crate::color::Color::Cyan,
+                );
+            }
+        } else if let Some(pair) = self.warp_targets {
+            if self.warp_relocate_countdown > 0 {
+                self.warp_relocate_countdown -= 1;
+            }
+            if self.warp_relocate_countdown == 0 {
+                self.portals = Some(pair);
+                self.warp_targets = None;
+                self.warp_relocations = self.warp_relocations.saturating_add(1);
+                self.spawn_particles(
+                    f32::from(pair.0.x),
+                    f32::from(pair.0.y),
+                    20,
+                    crate::color::Color::Cyan,
+                    'O',
+                );
+                self.spawn_particles(
+                    f32::from(pair.1.x),
+                    f32::from(pair.1.y),
+                    20,
+                    crate::color::Color::Magenta,
+                    'O',
+                );
+                self.spawn_floating_text(
+                    f32::from(pair.0.x),
+                    f32::from(pair.0.y),
+                    "The portals shift!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+    }
+    /// Picks a fair portal pair for `GameMode::Warp`: each cell at least
+    /// `min_snake_dist` (Manhattan) from every snake's head and the cell it is
+    /// about to enter, never on an obstacle, an item, an entity, the current
+    /// portals, or a pending relocation target, and the two cells at least 6
+    /// apart so the teleport is meaningful.
+    fn pick_warp_pair(&mut self, min_snake_dist: u16) -> Option<(Point, Point)> {
+        let mut forbidden: Vec<Point> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            forbidden.push(head);
+            forbidden.push(Self::calculate_next_head_dir(head, s.direction));
+        }
+        let base_avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.tornado == Some(*p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.warp_targets.is_some_and(|(t1, t2)| *p == t1 || *p == t2)
+                || forbidden
+                    .iter()
+                    .any(|f| f.x.abs_diff(p.x).saturating_add(f.y.abs_diff(p.y)) < min_snake_dist)
+        };
+        let p1 = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            base_avoid,
+            &mut self.rng,
+            self.safe_zone_margin + 2,
+        )?;
+        let avoid2 = |p: &Point| {
+            base_avoid(p) || *p == p1 || p.x.abs_diff(p1.x).saturating_add(p.y.abs_diff(p1.y)) < 6
+        };
+        let p2 = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid2,
+            &mut self.rng,
+            self.safe_zone_margin + 2,
+        )?;
+        Some((p1, p2))
+    }
     fn manage_portals(&mut self) {
+        // In Warp mode the portal pair is permanent and managed by manage_warp.
+        if self.mode == GameMode::Warp {
+            return;
+        }
         let spawn_chance = if self.skin == 'Ξ' {
             0.02
         } else {
@@ -15167,6 +15322,10 @@ impl Game {
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
     pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
+    /// Ticks between scheduled portal-pair relocations in `GameMode::Warp`.
+    pub const WARP_RELOCATE_INTERVAL: u32 = 45;
+    /// Ticks a relocation target pair is telegraphed before the portals move.
+    pub const WARP_TELEGRAPH: u32 = 6;
 
     pub const INFERNO_BURN_TICKS: u32 = 36;
 
@@ -16647,6 +16806,8 @@ impl Game {
         self.black_hole = None;
         self.meteors.clear();
         self.portals = None;
+        self.warp_targets = None;
+        self.warp_relocate_countdown = 0;
         self.power_up = None;
         self.bonus_food = None;
         self.poison_food = None;

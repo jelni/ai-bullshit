@@ -77,4 +77,5 @@ pub enum GameMode {
 
     LaserGrid,
     Tsunami,
+    Warp,
 }

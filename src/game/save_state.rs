@@ -223,6 +223,12 @@ pub struct SaveState {
     pub tsunami_warning: u32,
     #[serde(default)]
     pub tsunami_waves: u32,
+    #[serde(default)]
+    pub warp_targets: Option<(Point, Point)>,
+    #[serde(default)]
+    pub warp_relocate_countdown: u32,
+    #[serde(default)]
+    pub warp_relocations: u32,
 }
 
 #[must_use]

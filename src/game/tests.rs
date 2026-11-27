@@ -497,6 +497,33 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_warp_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Warp;
+        game.reset();
+        game.portals = Some((Point { x: 20, y: 20 }, Point { x: 8, y: 8 }));
+        game.warp_targets = Some((Point { x: 12, y: 9 }, Point { x: 25, y: 25 }));
+        game.warp_relocate_countdown = 4;
+        game.warp_relocations = 7;
+        let file_path = "savegame_test_warp.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Warp);
+        assert_eq!(
+            loaded.portals,
+            Some((Point { x: 20, y: 20 }, Point { x: 8, y: 8 }))
+        );
+        assert_eq!(
+            loaded.warp_targets,
+            Some((Point { x: 12, y: 9 }, Point { x: 25, y: 25 }))
+        );
+        assert_eq!(loaded.warp_relocate_countdown, 4);
+        assert_eq!(loaded.warp_relocations, 7);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

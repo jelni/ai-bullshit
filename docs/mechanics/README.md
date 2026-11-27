@@ -340,3 +340,13 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** `tsunami_threatens` (used by `is_safe_final_p`) rejects any cell within the wave's depth whose line is at or ahead of the wave front (not yet swept), so verified-safe paths never enter the incoming wave; lines beyond `tsunami_depth` and lines already behind the front remain safe. The bot therefore rides out every telegraphed wave natively.
 - **Persistence:** `tsunami_edge`, `tsunami_front`, `tsunami_depth`, `tsunami_warning`, and `tsunami_waves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_tsunami_mode.rs](../../tests/test_tsunami_mode.rs) and the save/load unit test in `src/game/tests.rs`.
+
+## Warp Mode
+
+`GameMode::Warp` (menu entry "Warp Mode") is a dedicated portal mode built on the existing `portals` entity:
+
+- **Persistence:** the ambient random portal spawn in `manage_portals` is disabled in this mode; `manage_warp` keeps a permanent pair alive — on reset (and after any respawn) it is seeded via `pick_warp_pair(8)`: each cell at least 8 (Manhattan) from every snake's head and the cell it is about to enter, never on an obstacle, item, mine, the black hole, the tornado, a snake body, the current portals, or a pending target, and the two cells at least 6 apart. The pair never despawns.
+- **Teleport:** moving into one portal cell teleports the head to the other portal cell (existing engine behavior); `get_final_p` and the A* `travel_dist` already resolve portals, so the autopilot uses the warp natively and the verified-safe checks evaluate the teleport destination.
+- **Scheduled relocations:** every `Game::WARP_RELOCATE_INTERVAL` (45) ticks a relocation is telegraphed: `pick_warp_pair(6)` chooses a fair target pair (>= 6 from every snake head/next cell), stored in `warp_targets` with `warp_relocate_countdown = Game::WARP_TELEGRAPH` (6). The targets are rendered as blue/dark-magenta `o` (terminal) / blue/dark cells (web) and the status bar shows `Relocate in: <ticks>`. When the countdown reaches 0, `portals` moves to the target pair ("The portals shift!") and `warp_relocations` is incremented.
+- **Persistence:** `portals` (already persisted) plus `warp_targets`, `warp_relocate_countdown`, and `warp_relocations` are stored in `SaveState` and `HistoryState`, so save/load and time-rewind stay consistent. The status bar shows `Warp: Relocations: <count>`.
+- **Tests:** see [tests/test_warp_mode.rs](../../tests/test_warp_mode.rs).
