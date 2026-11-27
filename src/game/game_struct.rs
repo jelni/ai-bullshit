@@ -5152,7 +5152,7 @@ impl Game {
             | GameMode::Inferno
             | GameMode::Minefield
 
-            | GameMode::LaserGrid => {
+            | GameMode::LaserGrid
             | GameMode::Inferno
             | GameMode::Tsunami => {
 
@@ -6002,6 +6002,7 @@ impl Game {
             self.weather = Weather::Clear;
             self.lasers.clear();
             self.laser_telegraph = None;
+        }
         if self.mode == GameMode::Tsunami {
             self.weather = Weather::Rain;
         }
@@ -6339,7 +6340,7 @@ impl Game {
             | GameMode::Inferno
             | GameMode::Minefield
 
-            | GameMode::LaserGrid => {
+            | GameMode::LaserGrid
             | GameMode::Inferno
             | GameMode::Tsunami => {
 
