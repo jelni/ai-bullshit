@@ -135,6 +135,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw acid puddles (Acid Rain mode)
+    if game.mode == crate::game::GameMode::AcidRain {
+        ctx.set_fill_style_str("#00FF00"); // Green
+        for puddle in &game.acid_puddles {
+            if puddle.x < game.width
+                && puddle.y < game.height
+                && is_visible(f64::from(puddle.x), f64::from(puddle.y))
+            {
+                ctx.fill_rect(
+                    f64::from(puddle.x) * cell_size,
+                    f64::from(puddle.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw puddles (Monsoon mode)
     if game.mode == crate::game::GameMode::Monsoon {
         ctx.set_fill_style_str("#0066FF"); // Blue

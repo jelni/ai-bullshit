@@ -84,6 +84,8 @@ pub struct HistoryState {
     pub bomb_carrier: Option<u8>,
     pub bomb_timer: u32,
     pub bomb_tags: u32,
+    pub acid_puddles: HashSet<Point>,
+    pub acid_drops: u32,
     pub puddle_tiles: HashSet<Point>,
     pub monsoon_downpours: u32,
 }

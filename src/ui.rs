@@ -640,6 +640,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Eclipse Mode",
         "Sandstorm Mode",
         "Bomb Tag",
+        "Acid Rain Mode",
         "Monsoon Mode",
         "Load Game",
         "Settings",
@@ -1884,6 +1885,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw acid puddles (Acid Rain mode)
+    if game.mode == crate::game::GameMode::AcidRain {
+        stdout.queue(SetForegroundColor(Color::Green))?;
+        for puddle in &game.acid_puddles {
+            if is_visible(puddle.x, puddle.y) {
+                stdout.queue(cursor::MoveTo(puddle.x, puddle.y))?;
+                write!(stdout, "\"")?;
+            }
+        }
+    }
+
     // Draw puddles (Monsoon mode)
     if game.mode == crate::game::GameMode::Monsoon {
         stdout.queue(SetForegroundColor(Color::Blue))?;
@@ -2740,6 +2752,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let acid_str = if game.mode == crate::game::GameMode::AcidRain {
+        format!(
+            " | Acid: {} | Drops: {}",
+            game.acid_puddles.len(),
+            game.acid_drops
+        )
+    } else {
+        String::new()
+    };
     let puddle_str = if game.mode == crate::game::GameMode::Monsoon {
         format!(
             " | Puddles: {} | Downpours: {}",
@@ -2765,7 +2786,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{puddle_str}{bomb_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}"
     )?;
 
     if !game.bosses.is_empty() {
