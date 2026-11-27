@@ -501,3 +501,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Rendering/status:** boulders render as dark-yellow `O` (terminal) / goldenrod cells (web), and the status bar shows `Boulders: <count> | Rolls: <count>`.
 - **Persistence:** `boulders` and `avalanche_rolls` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_avalanche_mode.rs](../../tests/test_avalanche_mode.rs) plus a save/load unit test in `src/game/tests.rs`.
+
+## Pinball Mode
+
+`GameMode::Pinball` (menu entry "Pinball Mode") is a movement mode where bumpers on the board deflect the snake like pinball flippers instead of killing it:
+
+- **Bumpers:** at reset `spawn_pinball_bumpers` seeds bumpers (`pinball_bumpers`, mirrored into `obstacles`) on fair cells, up to a cap of `clamp(min(width, height) / 5, 4, 8)`. Bumpers render as a magenta `O` (terminal) / magenta cells (web), and the status bar shows `Bumpers: <count> | Bumps: <count>`.
+- **Deflection:** when the player's final head would enter a bumper cell, `pinball_deflect` picks a free perpendicular lane (up/down for horizontal approaches, left/right for vertical ones), falling back to a straight bounce-back; the reflected direction is re-queued, `pinball_bumps` is incremented, +5 score is awarded ("Bump! +5"), and the game beeps. If every deflection lane is blocked (obstacle, snake body, out of bounds), the bumper stays lethal and the normal obstacle-death flow applies.
+- **Shuffles:** on every 6th tick `manage_pinball` either tops up towards the bumper cap or relocates one existing bumper to a fresh fair cell (`pinball_relocations`, "Bumper moved!"); at tick 200 of every 250-tick cycle all bumpers are removed from `pinball_bumpers` and `obstacles` ("The bumpers reset!"). The skies are pinned to `Weather::Clear` every tick so the bumpers always stay visible.
+- **Fairness:** a bumper is never placed on a snake's body, on the cell any snake is about to enter this tick (`pinball_next_cells`: the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on any entity or hazard tile (`pinball_avoid`: food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, and all hazard tile sets). Stale bumper records are pruned each tick if another effect cleared the obstacles.
+- **Autopilot:** bumpers are ordinary obstacles, so they are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance — the bot routes around them natively and never needs to bounce.
+- **Clearing:** eating food removes the bumpers adjacent to the eaten cell ("Cleared N bumper(s)!").
+- **Persistence:** `pinball_bumpers`, `pinball_bumps`, and `pinball_relocations` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_pinball_mode.rs](../../tests/test_pinball_mode.rs).

@@ -135,6 +135,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw pinball bumpers (Pinball mode)
+    if game.mode == crate::game::GameMode::Pinball {
+        ctx.set_fill_style_str("#FF00FF");
+        for bumper in &game.pinball_bumpers {
+            if bumper.x < game.width
+                && bumper.y < game.height
+                && is_visible(f64::from(bumper.x), f64::from(bumper.y))
+            {
+                ctx.fill_rect(
+                    f64::from(bumper.x) * cell_size,
+                    f64::from(bumper.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

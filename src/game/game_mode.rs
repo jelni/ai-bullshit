@@ -86,6 +86,7 @@ pub enum GameMode {
     TurretBattery,
     Firestorm,
     Fortress,
+    Pinball,
     Geyser,
     Thornfield,
     Mirage,

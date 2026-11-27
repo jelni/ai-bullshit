@@ -200,6 +200,9 @@ pub struct Game {
     pub fortress_walls: HashSet<Point>,
     pub fortress_depth: u16,
     pub fortress_rings: u32,
+    pub pinball_bumpers: HashSet<Point>,
+    pub pinball_bumps: u32,
+    pub pinball_relocations: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -709,6 +712,9 @@ impl Game {
             fortress_walls: HashSet::new(),
             fortress_depth: 0,
             fortress_rings: 0,
+            pinball_bumpers: HashSet::new(),
+            pinball_bumps: 0,
+            pinball_relocations: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -966,6 +972,9 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            pinball_bumpers: self.pinball_bumpers.clone(),
+            pinball_bumps: self.pinball_bumps,
+            pinball_relocations: self.pinball_relocations,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1181,6 +1190,9 @@ impl Game {
                 self.fortress_walls = state.fortress_walls;
                 self.fortress_depth = state.fortress_depth;
                 self.fortress_rings = state.fortress_rings;
+                self.pinball_bumpers = state.pinball_bumpers;
+                self.pinball_bumps = state.pinball_bumps;
+                self.pinball_relocations = state.pinball_relocations;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -2878,6 +2890,191 @@ impl Game {
         if self.tick_counter.is_multiple_of(6) {
             self.spawn_mirage();
         }
+    }
+    fn pinball_bumper_cap(&self) -> usize {
+        (usize::from(u16::min(self.width, self.height) / 5)).clamp(4, 8)
+    }
+    fn pinball_next_cells(&self) -> Vec<Point> {
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let mut next = vec![Self::calculate_next_head_dir(
+            self.snake.head(),
+            self.snake.direction,
+        )];
+        if let Some(p2) = &self.player2 {
+            next.push(Self::calculate_next_head_dir(p2.head(), p2.direction));
+        }
+        for bot in &self.bots {
+            let d = bot.direction_queue.front().copied().unwrap_or(bot.direction);
+            next.push(Self::calculate_next_head_dir(bot.head(), d));
+        }
+        next
+    }
+    fn pinball_avoid(&self, p: Point, next_cells: &[Point]) -> bool {
+        next_cells.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+    }
+    fn pick_fair_pinball_cell(&mut self, next_cells: &[Point]) -> Option<Point> {
+        let mut candidates = Vec::new();
+        for x in 1..self.width.saturating_sub(1) {
+            for y in 1..self.height.saturating_sub(1) {
+                let p = Point { x, y };
+                if !self.pinball_avoid(p, next_cells) {
+                    candidates.push(p);
+                }
+            }
+        }
+        if candidates.is_empty() {
+            None
+        } else {
+            Some(candidates[self.rng.gen_range(0..candidates.len())])
+        }
+    }
+    fn spawn_pinball_bumpers(&mut self) {
+        let next_cells = self.pinball_next_cells();
+        for _ in 0..self.pinball_bumper_cap() {
+            if let Some(pos) = self.pick_fair_pinball_cell(&next_cells) {
+                self.pinball_bumpers.insert(pos);
+                self.obstacles.insert(pos);
+            }
+        }
+    }
+    fn manage_pinball(&mut self) {
+        if self.mode != GameMode::Pinball {
+            return;
+        }
+        // The skies stay clear in Pinball mode so the bumpers are always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale bumper records
+        self.pinball_bumpers.retain(|p| self.obstacles.contains(p));
+        // Periodic reset: at tick 200 of every 250-tick cycle the machine clears its bumpers
+        if self.tick_counter == 200 {
+            if !self.pinball_bumpers.is_empty() {
+                for p in self.pinball_bumpers.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The bumpers reset!".to_string(),
+                    crate::color::Color::Magenta,
+                );
+            }
+            return;
+        }
+        // Every 6th tick the machine shuffles: top up towards the cap, otherwise
+        // relocate one existing bumper to a fresh fair cell
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        let cap = self.pinball_bumper_cap();
+        let next_cells = self.pinball_next_cells();
+        let Some(pos) = self.pick_fair_pinball_cell(&next_cells) else {
+            return;
+        };
+        if self.pinball_bumpers.len() < cap {
+            self.pinball_bumpers.insert(pos);
+            self.obstacles.insert(pos);
+            self.pinball_relocations += 1;
+        } else {
+            let existing: Vec<Point> = self.pinball_bumpers.iter().copied().collect();
+            let from = existing[self.rng.gen_range(0..existing.len())];
+            self.pinball_bumpers.remove(&from);
+            self.obstacles.remove(&from);
+            self.pinball_bumpers.insert(pos);
+            self.obstacles.insert(pos);
+            self.pinball_relocations += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "Bumper moved!".to_string(),
+                crate::color::Color::Magenta,
+            );
+        }
+    }
+    fn pinball_deflect(&self, head: Point) -> Option<(Point, Direction)> {
+        // A bumper deflects the snake sideways like a pinball flipper: prefer a
+        // perpendicular lane, fall back to a straight bounce-back, and give up
+        // (lethal bumper) when every lane is blocked.
+        let cur = self.snake.direction;
+        let perpendiculars: [Direction; 2] = match cur {
+            Direction::Left | Direction::Right => [Direction::Up, Direction::Down],
+            Direction::Up | Direction::Down => [Direction::Left, Direction::Right],
+        };
+        let back = match cur {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
+        };
+        let lane_free = |p: Point| {
+            p.x > 0
+                && p.x < self.width - 1
+                && p.y > 0
+                && p.y < self.height - 1
+                && !self.obstacles.contains(&p)
+                && !self.snake.body_map.contains_key(&p)
+                && self
+                    .player2
+                    .as_ref()
+                    .is_none_or(|p2| !p2.body_map.contains_key(&p))
+                && !self.bots.iter().any(|b| b.body_map.contains_key(&p))
+        };
+        for d in perpendiculars {
+            let p = Self::calculate_next_head_dir(head, d);
+            if lane_free(p) {
+                return Some((p, d));
+            }
+        }
+        let p = Self::calculate_next_head_dir(head, back);
+        if lane_free(p) {
+            return Some((p, back));
+        }
+        None
     }
     fn manage_monsoon(&mut self) {
         if self.mode != GameMode::Monsoon {
@@ -6886,7 +7083,8 @@ impl Game {
             | GameMode::Geyser
             | GameMode::Thornfield
             | GameMode::Mirage
-            | GameMode::Avalanche => {
+            | GameMode::Avalanche
+            | GameMode::Pinball => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7003,6 +7201,7 @@ impl Game {
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
                 || self.mode == GameMode::Avalanche
+                || self.mode == GameMode::Pinball
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -7086,6 +7285,7 @@ impl Game {
             || self.mode == GameMode::Thornfield
             || self.mode == GameMode::Mirage
             || self.mode == GameMode::Avalanche
+            || self.mode == GameMode::Pinball
         {
             &self.snake
         } else {
@@ -7199,6 +7399,9 @@ impl Game {
         self.fortress_walls.clear();
         self.fortress_depth = 0;
         self.fortress_rings = 0;
+        self.pinball_bumpers.clear();
+        self.pinball_bumps = 0;
+        self.pinball_relocations = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -7678,6 +7881,9 @@ impl Game {
         if self.mode == GameMode::Firestorm {
             self.spawn_blaze_sources();
         }
+        if self.mode == GameMode::Pinball {
+            self.spawn_pinball_bumpers();
+        }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
@@ -7900,6 +8106,9 @@ impl Game {
         }
         if self.mode == GameMode::Firestorm {
             self.weather = Weather::Firestorm;
+        }
+        if self.mode == GameMode::Pinball {
+            self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Geyser {
             self.weather = Weather::Clear;
@@ -8332,7 +8541,8 @@ impl Game {
             | GameMode::Geyser
             | GameMode::Thornfield
             | GameMode::Mirage
-            | GameMode::Avalanche => {
+            | GameMode::Avalanche
+            | GameMode::Pinball => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9010,6 +9220,9 @@ impl Game {
             self.fortress_walls = state.fortress_walls;
             self.fortress_depth = state.fortress_depth;
             self.fortress_rings = state.fortress_rings;
+            self.pinball_bumpers = state.pinball_bumpers;
+            self.pinball_bumps = state.pinball_bumps;
+            self.pinball_relocations = state.pinball_relocations;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -9192,6 +9405,9 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            pinball_bumpers: self.pinball_bumpers.clone(),
+            pinball_bumps: self.pinball_bumps,
+            pinball_relocations: self.pinball_relocations,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -13010,6 +13226,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_fortress();
+        self.manage_pinball();
         self.manage_geyser();
         self.manage_thornfield();
         self.manage_mirage();
@@ -13121,6 +13338,25 @@ impl Game {
                     "Bounce!".to_string(),
                     crate::color::Color::Cyan,
                 );
+            }
+        }
+        // In Pinball mode bumpers deflect the snake like pinball flippers instead of killing it
+        if self.mode == GameMode::Pinball && self.pinball_bumpers.contains(&final_head1) {
+            let head1 = self.snake.head();
+            if let Some((deflected, new_dir)) = self.pinball_deflect(head1) {
+                final_head1 = deflected;
+                self.snake.direction = new_dir;
+                self.snake.direction_queue.clear();
+                self.snake.direction_queue.push_back(new_dir);
+                self.pinball_bumps += 1;
+                self.score += 5;
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Bump! +5".to_string(),
+                    crate::color::Color::Magenta,
+                );
+                crate::game::beep();
             }
         }
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
@@ -13917,6 +14153,7 @@ impl Game {
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
                 || self.mode == GameMode::Avalanche
+                || self.mode == GameMode::Pinball
             {
                 self.handle_death("You Died!");
             } else {
@@ -14951,6 +15188,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Breached {breached} wall!"),
                     crate::color::Color::DarkGrey,
+                );
+            }
+        }
+        if self.mode == GameMode::Pinball {
+            let mut cleared = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.pinball_bumpers.remove(&np) {
+                    self.obstacles.remove(&np);
+                    cleared += 1;
+                }
+            }
+            if cleared > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Cleared {cleared} bumper(s)!"),
+                    crate::color::Color::Magenta,
                 );
             }
         }

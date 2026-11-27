@@ -148,6 +148,12 @@ pub struct SaveState {
     #[serde(default)]
     pub fortress_rings: u32,
     #[serde(default)]
+    pub pinball_bumpers: HashSet<Point>,
+    #[serde(default)]
+    pub pinball_bumps: u32,
+    #[serde(default)]
+    pub pinball_relocations: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,
