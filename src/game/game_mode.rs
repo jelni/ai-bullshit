@@ -82,4 +82,5 @@ pub enum GameMode {
     Conveyor,
     IceRink,
     BlackHole,
+    Ricochet,
 }

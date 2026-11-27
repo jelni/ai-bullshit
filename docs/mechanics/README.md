@@ -397,3 +397,13 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Weather:** ambient weather randomization is skipped in this mode; the sky stays clear so the singularity is always visible.
 - **Persistence:** `black_hole`, `singularity_wanders`, and `singularity_feeds` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_black_hole_mode.rs](../../tests/test_black_hole_mode.rs) and the save/load unit test in `src/game/tests.rs`.
+
+## Ricochet Mode
+
+`GameMode::Ricochet` (menu entry "Ricochet Mode", entry 75 in the main menu) is a movement mode: the board walls bounce the snake Pong-style instead of killing it.
+
+- **Bounce:** in `update_tick`, when `calculate_final_heads` reports a wall hit (`hit_wall1`) for the player in this mode, `ricochet_bounce` reflects the direction on the offending axis (left wall → `Right`, right wall → `Left`, top wall → `Down`, bottom wall → `Up`) and re-targets from the current head, so the bounced cell is always back inside the board. The snake's direction is set (and re-queued) to the reflected direction, `ricochet_bounces` is incremented, and "Bounce!" is shown; the wall never sets `p1_dead` in this mode.
+- **Everything else stays lethal:** obstacles, mines, hazards, and self-collision (a bounce straight into your own body still kills) are unchanged, and in every other mode walls still kill via the standard `hit_wall` flow.
+- **Autopilot:** `get_final_p`/`is_safe_final_p` still treat out-of-bounds cells as unsafe, so the bot keeps walls as hard constraints and never plans a bounce — but if it is ever forced into a wall it now bounces instead of dying.
+- **Persistence:** `ricochet_bounces` is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Bounces: <count>`.
+- **Tests:** see [tests/test_ricochet_mode.rs](../../tests/test_ricochet_mode.rs).

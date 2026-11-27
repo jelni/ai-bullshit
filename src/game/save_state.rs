@@ -214,6 +214,8 @@ pub struct SaveState {
 
     #[serde(default)]
     pub mine_drops: u32,
+    #[serde(default)]
+    pub ricochet_bounces: u32,
     pub tsunami_edge: u8,
     #[serde(default)]
     pub tsunami_front: i32,

@@ -6,6 +6,7 @@ The `snake_game` is designed using a monolithic modular structure in Rust.
 - **Library Root:** `src/lib.rs` exports all internal modules.
 - **Game Engine:** `src/game/` handles all logic related to state progression, scoring, pathfinding, and interactions.
 - **UI & Rendering:** `src/ui.rs` manages drawing elements on the terminal via the `crossterm` crate.
+- **Wall handling:** `calculate_final_heads`/`get_final_p` treat out-of-bounds cells as lethal walls (or wrap them when `wrap_mode` is on); in Ricochet mode a player wall hit is instead reflected by `ricochet_bounce` (see [Ricochet Mode](../mechanics/README.md#ricochet-mode)).
 
 ## Autopilot Safety Pipeline
 

@@ -176,6 +176,7 @@ pub struct Game {
     pub inferno_burned: u32,
 
     pub mine_drops: u32,
+    pub ricochet_bounces: u32,
 
     pub laser_volleys: u32,
     pub laser_telegraph: Option<(bool, u16)>,
@@ -673,6 +674,7 @@ impl Game {
             event_horizon_drifts: 0,
             event_horizon_surges: 0,
             mine_drops: 0,
+            ricochet_bounces: 0,
             laser_volleys: 0,
             laser_telegraph: None,
             ice_tiles: HashSet::new(),
@@ -971,6 +973,7 @@ impl Game {
             inferno_burned: self.inferno_burned,
 
             mine_drops: self.mine_drops,
+            ricochet_bounces: self.ricochet_bounces,
 
             laser_volleys: self.laser_volleys,
             laser_telegraph: self.laser_telegraph,
@@ -1181,6 +1184,7 @@ impl Game {
                 self.inferno_burned = state.inferno_burned;
 
                 self.mine_drops = state.mine_drops;
+                self.ricochet_bounces = state.ricochet_bounces;
 
                 self.laser_volleys = state.laser_volleys;
                 self.laser_telegraph = state.laser_telegraph;
@@ -5579,7 +5583,8 @@ impl Game {
             | GameMode::GravityWell
             | GameMode::Conveyor
             | GameMode::IceRink
-            | GameMode::BlackHole => {
+            | GameMode::BlackHole
+            | GameMode::Ricochet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5688,6 +5693,7 @@ impl Game {
                 || self.mode == GameMode::Conveyor
                 || self.mode == GameMode::IceRink
                 || self.mode == GameMode::BlackHole
+                || self.mode == GameMode::Ricochet
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5763,6 +5769,7 @@ impl Game {
             || self.mode == GameMode::Conveyor
             || self.mode == GameMode::IceRink
             || self.mode == GameMode::BlackHole
+            || self.mode == GameMode::Ricochet
         {
             &self.snake
         } else {
@@ -6590,6 +6597,7 @@ impl Game {
         self.event_horizon_drifts = 0;
         self.event_horizon_surges = 0;
         self.mine_drops = 0;
+        self.ricochet_bounces = 0;
         if self.mode == GameMode::Tornado {
             let avoid_tornado = |p: &Point| {
                 self.obstacles.contains(p)
@@ -6917,7 +6925,8 @@ impl Game {
             | GameMode::GravityWell
             | GameMode::Conveyor
             | GameMode::IceRink
-            | GameMode::BlackHole => {
+            | GameMode::BlackHole
+            | GameMode::Ricochet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7412,6 +7421,28 @@ impl Game {
         frontier.truncate(max);
         frontier.into_iter().map(|(_, p)| p).collect()
     }
+    const fn ricochet_bounce(&self, next_head: Point, head: Point) -> Option<(Point, Direction)> {
+        let out_of_bounds = next_head.x == 0
+            || next_head.x >= self.width - 1
+            || next_head.y == 0
+            || next_head.y >= self.height - 1;
+        if !out_of_bounds {
+            return None;
+        }
+        // Reflect off the wall that was hit: reverse the direction on the
+        // offending axis and re-target from the current head, so the bounced
+        // cell is always back inside the board
+        let new_dir = if next_head.x == 0 {
+            Direction::Right
+        } else if next_head.x >= self.width - 1 {
+            Direction::Left
+        } else if next_head.y == 0 {
+            Direction::Down
+        } else {
+            Direction::Up
+        };
+        Some((Self::calculate_next_head_dir(head, new_dir), new_dir))
+    }
     pub(crate) fn calculate_final_heads(&self) -> (Point, Option<Point>, bool, bool) {
         let head1 = self.snake.head();
         let next_head1 = Self::calculate_next_head_dir(head1, self.snake.direction);
@@ -7611,6 +7642,7 @@ impl Game {
             self.inferno_burned = state.inferno_burned;
 
             self.mine_drops = state.mine_drops;
+            self.ricochet_bounces = state.ricochet_bounces;
 
             self.laser_volleys = state.laser_volleys;
             self.laser_telegraph = state.laser_telegraph;
@@ -7774,6 +7806,7 @@ impl Game {
             inferno_burned: self.inferno_burned,
 
             mine_drops: self.mine_drops,
+            ricochet_bounces: self.ricochet_bounces,
 
             laser_volleys: self.laser_volleys,
             laser_telegraph: self.laser_telegraph,
@@ -11612,7 +11645,26 @@ impl Game {
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
-        let (final_head1, final_head2_opt, hit_wall1, hit_wall2) = self.calculate_final_heads();
+        let (mut final_head1, final_head2_opt, mut hit_wall1, hit_wall2) =
+            self.calculate_final_heads();
+        // In Ricochet mode walls bounce the snake back instead of killing it
+        if hit_wall1 && self.mode == GameMode::Ricochet {
+            let head1 = self.snake.head();
+            if let Some((bounced, new_dir)) = self.ricochet_bounce(final_head1, head1) {
+                final_head1 = bounced;
+                hit_wall1 = false;
+                self.snake.direction = new_dir;
+                self.snake.direction_queue.clear();
+                self.snake.direction_queue.push_back(new_dir);
+                self.ricochet_bounces += 1;
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Bounce!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
         let hit_obstacle1 = self.obstacles.contains(&final_head1);
         let hit_obstacle2 = final_head2_opt.is_some_and(|fh2| self.obstacles.contains(&fh2));
         let out_of_bounds1 = if self.mode == GameMode::BattleRoyale {
@@ -12332,6 +12384,7 @@ impl Game {
                 || self.mode == GameMode::Warp
                 || self.mode == GameMode::Conveyor
                 || self.mode == GameMode::BlackHole
+                || self.mode == GameMode::Ricochet
             {
                 self.handle_death("You Died!");
             } else {

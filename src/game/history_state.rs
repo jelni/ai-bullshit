@@ -110,6 +110,7 @@ pub struct HistoryState {
     pub inferno_burned: u32,
 
     pub mine_drops: u32,
+    pub ricochet_bounces: u32,
     pub tsunami_edge: u8,
     pub tsunami_front: i32,
     pub tsunami_depth: i32,
