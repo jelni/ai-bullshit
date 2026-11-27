@@ -63,4 +63,5 @@ pub enum GameMode {
     Eclipse,
     Sandstorm,
     BombTag,
+    AcidRain,
 }

@@ -152,6 +152,8 @@ pub struct Game {
     pub bomb_carrier: Option<u8>,
     pub bomb_timer: u32,
     pub bomb_tags: u32,
+    pub acid_puddles: HashSet<Point>,
+    pub acid_drops: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -597,6 +599,8 @@ impl Game {
             bomb_timer: 0,
             bomb_tags: 0,
             sand_blasts: 0,
+            acid_puddles: HashSet::new(),
+            acid_drops: 0,
         }
     }
     #[must_use]
@@ -862,6 +866,8 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            acid_puddles: self.acid_puddles.clone(),
+            acid_drops: self.acid_drops,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1028,6 +1034,8 @@ impl Game {
                 self.bomb_carrier = state.bomb_carrier;
                 self.bomb_timer = state.bomb_timer;
                 self.bomb_tags = state.bomb_tags;
+                self.acid_puddles = state.acid_puddles;
+                self.acid_drops = state.acid_drops;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1952,6 +1960,104 @@ impl Game {
                     self.sand_tiles.insert(pos);
                     self.obstacles.insert(pos);
                 }
+            }
+        }
+    }
+    fn manage_acid_rain(&mut self) {
+        if self.mode != GameMode::AcidRain {
+            return;
+        }
+        // The acid rain never breaks in Acid Rain mode
+        self.weather = Weather::Rain;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale puddle records
+        self.acid_puddles.retain(|p| self.obstacles.contains(p));
+        // Periodic break in the rain: all accumulated acid evaporates
+        if self.tick_counter == 200 {
+            if !self.acid_puddles.is_empty() {
+                for p in self.acid_puddles.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The acid evaporates!".to_string(),
+                    crate::color::Color::Green,
+                );
+            }
+            return;
+        }
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        // Scheduled downpour: every 6th tick acid is guaranteed to fall on a fair empty cell
+        self.acid_drops += 1;
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+        if u32::try_from(self.acid_puddles.len()).unwrap_or(u32::MAX) < cap {
+            let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+            let p2_next = self
+                .player2
+                .as_ref()
+                .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+            let bot_next: Vec<Point> = self
+                .bots
+                .iter()
+                .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                .collect();
+            let avoid = |p: &Point| {
+                *p == p1_next
+                    || p2_next == Some(*p)
+                    || bot_next.contains(p)
+                    || self.obstacles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.painted_tiles.contains_key(p)
+                    || self.equipment_boxes.contains(p)
+                    || self.crops.iter().any(|c| c.position == *p)
+                    || self.eggs_on_board.contains_key(p)
+                    || self.koth_zone == Some(*p)
+                    || self.p1_flag == Some(*p)
+                    || self.p2_flag == Some(*p)
+                    || self.resources.contains_key(p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.tornado == Some(*p)
+                    || self.lava_tiles.contains(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.rubble_tiles.contains(p)
+                    || self.snow_tiles.contains(p)
+                    || self.sand_tiles.contains(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.acid_puddles.insert(pos);
+                self.obstacles.insert(pos);
+                self.spawn_floating_text(
+                    f32::from(pos.x),
+                    f32::from(pos.y),
+                    "Acid rain!".to_string(),
+                    crate::color::Color::Green,
+                );
             }
         }
     }
@@ -3632,7 +3738,8 @@ impl Game {
             | GameMode::Seismic
             | GameMode::Eclipse
             | GameMode::Sandstorm
-            | GameMode::BombTag => {
+            | GameMode::BombTag
+            | GameMode::AcidRain => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3722,6 +3829,7 @@ impl Game {
                 || self.mode == GameMode::Eclipse
                 || self.mode == GameMode::Sandstorm
                 || self.mode == GameMode::BombTag
+                || self.mode == GameMode::AcidRain
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -3779,6 +3887,7 @@ impl Game {
             || self.mode == GameMode::Seismic
             || self.mode == GameMode::Eclipse
             || self.mode == GameMode::Sandstorm
+            || self.mode == GameMode::AcidRain
         {
             &self.snake
         } else {
@@ -3910,6 +4019,8 @@ impl Game {
         self.bomb_carrier = None;
         self.bomb_timer = 0;
         self.bomb_tags = 0;
+        self.acid_puddles.clear();
+        self.acid_drops = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -4065,6 +4176,47 @@ impl Game {
                     0,
                 ) {
                     self.sand_tiles.insert(p);
+                    self.obstacles.insert(p);
+                }
+            }
+        } else if self.mode == GameMode::AcidRain {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let initial_acid = (u32::from(self.width) * u32::from(self.height)) / 80;
+            for _ in 0..initial_acid {
+                let acid_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    acid_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.acid_puddles.insert(p);
                     self.obstacles.insert(p);
                 }
             }
@@ -4314,6 +4466,9 @@ impl Game {
         if self.mode == GameMode::Sandstorm {
             self.weather = Weather::Sandstorm;
         }
+        if self.mode == GameMode::AcidRain {
+            self.weather = Weather::Rain;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -4530,7 +4685,8 @@ impl Game {
             | GameMode::Seismic
             | GameMode::Eclipse
             | GameMode::Sandstorm
-            | GameMode::BombTag => {
+            | GameMode::BombTag
+            | GameMode::AcidRain => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4583,6 +4739,7 @@ impl Game {
         }
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.sand_tiles.retain(|p| self.obstacles.contains(p));
+        self.acid_puddles.retain(|p| self.obstacles.contains(p));
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
@@ -5156,6 +5313,8 @@ impl Game {
             self.bomb_carrier = state.bomb_carrier;
             self.bomb_timer = state.bomb_timer;
             self.bomb_tags = state.bomb_tags;
+            self.acid_puddles = state.acid_puddles;
+            self.acid_drops = state.acid_drops;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -5277,6 +5436,8 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            acid_puddles: self.acid_puddles.clone(),
+            acid_drops: self.acid_drops,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -8021,6 +8182,7 @@ impl Game {
             && self.mode != GameMode::Seismic
             && self.mode != GameMode::Eclipse
             && self.mode != GameMode::Sandstorm
+            && self.mode != GameMode::AcidRain
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -8975,6 +9137,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_sandstorm();
+        self.manage_acid_rain();
         self.manage_storm();
         self.manage_quake();
         self.manage_volcano();
@@ -10777,6 +10940,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Cleared {cleared} sand!"),
                     crate::color::Color::Yellow,
+                );
+            }
+        }
+        if self.mode == GameMode::AcidRain {
+            let mut neutralized = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.acid_puddles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    neutralized += 1;
+                }
+            }
+            if neutralized > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Neutralized {neutralized} acid!"),
+                    crate::color::Color::Green,
                 );
             }
         }
@@ -14174,6 +14360,7 @@ impl Game {
         self.bosses.clear();
         self.snow_tiles.clear();
         self.sand_tiles.clear();
+        self.acid_puddles.clear();
         self.lightning_column = None;
         self.flow_field = None;
         self.flow_field_targets.clear();

@@ -15,6 +15,7 @@ The game features several complex mechanics beyond simple snake movement:
 
 The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse` and `Fog` (randomly over time, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
 
+- **Rain:** raises the ambient bonus-food spawn chance. In Acid Rain Mode the rain is permanent and a downpour is guaranteed every 6th tick, dropping lethal acid puddles (see below).
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
 - **Sandstorm:** occasionally shuffles the food to a neighboring cell. In Sandstorm Mode the storm is permanent, a sandblast is guaranteed every 6th tick, visibility is limited to a radius of 6, and sand drifts accumulate on the board (see below).
 - **Earthquake:** occasionally adds or removes an obstacle. In Quake Mode the earthquake is permanent and a quake is guaranteed every 6th tick. In Earthquake Mode the earthquake is also permanent, with a fair scheduled tremor every 5th tick.
@@ -207,3 +208,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** arena bots and the player bot run the usual verified-safe pipeline; additionally, a carrier prepends up to 4 targets — the in-bounds cells adjacent to the nearest rival's head (`bomb_rival_adjacent_targets`) — so it actively chases, while non-carriers flee the carrier via the predicted-enemy-occupancy hard constraints in `path_is_safe`. Passing then happens through normal movement.
 - **Persistence:** `bomb_carrier`, `bomb_timer`, and `bomb_tags` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_bomb_tag.rs](../../tests/test_bomb_tag.rs).
+
+## Acid Rain Mode
+
+`GameMode::AcidRain` (menu entry "Acid Rain Mode") is a survival mode wrapped in a permanent acid rain (`weather` is forced to `Weather::Rain` every tick and ambient weather re-rolls are skipped in this mode):
+
+- **Downpours:** every 6th tick a scheduled downpour drops one acid puddle on a random fair empty cell, capped at 10% of the board. Puddles are stored in `acid_puddles` and mirrored into `obstacles`, so they are lethal on entry and block movement for the player, the autopilot, and all arena bots like any other obstacle.
+- **Fairness:** acid never falls on a snake's body, on the cell any snake is about to move into this tick, on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, bosses, turrets, companion, goblin, lasers, meteors, the tornado vortex, ...), on an obstacle, or on another puddle.
+- **Evaporation:** at tick 200 of every 250-tick cycle the rain breaks and all accumulated acid evaporates ("The acid evaporates!"), keeping the board playable.
+- **Neutralizing by food:** eating food neutralizes all acid puddles adjacent to the eaten cell ("Neutralized N acid!").
+- **Initial rainfall:** on reset the mode seeds a small initial acid rainfall (1/80 of the board) on fair cells.
+- **Autopilot:** puddles are hard obstacles in the A* search and the `is_safe_final_p` verified-safe path checks, so the bot rides out the rain natively. Rain weather also raises the ambient bonus-food spawn chance (see `manage_bonus_food`).
+- **Persistence:** `acid_puddles` and `acid_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale puddle records are pruned on the next tick if another effect clears obstacles (e.g. the Bomb power-up).
+- **Rendering:** acid puddles are drawn as a green `"` (terminal) / green cell (web), and the status bar shows `Acid: <count> | Drops: <count>` counters.
+- **Tests:** see [tests/test_acid_rain_mode.rs](../../tests/test_acid_rain_mode.rs).
