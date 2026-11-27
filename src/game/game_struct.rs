@@ -12335,6 +12335,31 @@ impl Game {
                 "Shielded!".to_string(),
                 crate::color::Color::Cyan,
             );
+            // Eating also feeds the void: obstacles and mines adjacent to the
+            // eaten cell are swallowed
+            let mut fed = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.obstacles.remove(&np) {
+                    fed += 1;
+                }
+                if self.mines.remove(&np) {
+                    fed += 1;
+                }
+            }
+            if fed > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Fed the void! Cleared {fed}!"),
+                    crate::color::Color::DarkMagenta,
+                );
+            }
         }
         if self.mode == GameMode::Wildfire {
             let mut doused = 0u32;

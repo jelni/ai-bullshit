@@ -430,9 +430,13 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
-    // Draw Black Hole
+    // Draw Black Hole (dark magenta while it stalks the board in Singularity mode)
     if let Some(bh) = game.black_hole {
-        ctx.set_fill_style_str("#1A1A1A"); // DarkGrey/Blackish
+        if game.mode == crate::game::GameMode::Singularity {
+            ctx.set_fill_style_str("#8B008B"); // DarkMagenta
+        } else {
+            ctx.set_fill_style_str("#1A1A1A"); // DarkGrey/Blackish
+        }
         if bh.x < game.width && bh.y < game.height {
             ctx.fill_rect(
                 f64::from(bh.x) * cell_size,

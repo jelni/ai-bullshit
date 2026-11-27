@@ -2080,12 +2080,17 @@ fn draw_entities<W: Write>(
         }
     }
 
-    // Draw Black Hole
+    // Draw Black Hole (dark magenta while it stalks the board in Singularity mode)
     if let Some(bh) = game.black_hole
         && is_visible(bh.x, bh.y)
     {
         stdout.queue(cursor::MoveTo(bh.x, bh.y))?;
-        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        let bh_color = if game.mode == crate::game::GameMode::Singularity {
+            Color::DarkMagenta
+        } else {
+            Color::DarkGrey
+        };
+        stdout.queue(SetForegroundColor(bh_color))?;
         write!(stdout, "O")?;
     }
 
