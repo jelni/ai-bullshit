@@ -69,4 +69,5 @@ pub enum GameMode {
     Wildfire,
     EventHorizon,
     Infection,
+    Inferno,
 }

@@ -199,6 +199,12 @@ pub struct SaveState {
     pub infected_ids: Vec<u8>,
     #[serde(default)]
     pub infection_spreads: u32,
+    pub inferno_tiles: HashSet<Point>,
+    pub inferno_hotspots: Vec<Point>,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub inferno_burn: std::collections::HashMap<Point, u32>,
+    pub inferno_flares: u32,
+    pub inferno_burned: u32,
 }
 
 #[must_use]

@@ -12,4 +12,5 @@ pub enum Weather {
     Eclipse,
     Fog,
     Wildfire,
+    Inferno,
 }

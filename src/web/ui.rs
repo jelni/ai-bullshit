@@ -297,6 +297,39 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+
+    // Draw inferno flames and hotspots (Inferno mode)
+    if game.mode == crate::game::GameMode::Inferno {
+        ctx.set_fill_style_str("#FF8C00"); // DarkOrange
+        for fire in &game.inferno_tiles {
+            if fire.x < game.width
+                && fire.y < game.height
+                && is_visible(f64::from(fire.x), f64::from(fire.y))
+            {
+                ctx.fill_rect(
+                    f64::from(fire.x) * cell_size,
+                    f64::from(fire.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#FF0000"); // Red
+        for hotspot in &game.inferno_hotspots {
+            if hotspot.x < game.width
+                && hotspot.y < game.height
+                && is_visible(f64::from(hotspot.x), f64::from(hotspot.y))
+            {
+                ctx.fill_rect(
+                    f64::from(hotspot.x) * cell_size,
+                    f64::from(hotspot.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rubble piles (Earthquake mode)
     if game.mode == crate::game::GameMode::Earthquake {
         ctx.set_fill_style_str("#8B4513"); // SaddleBrown
@@ -725,6 +758,29 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                         f64::from(y) * cell_size,
                         cell_size,
                         cell_size * 0.2,
+                    );
+                }
+            }
+        },
+        crate::game::Weather::Inferno => {
+            for _ in 0..12 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(f64::from(x), f64::from(y))
+                    && !game.obstacles.contains(&crate::snake::Point { x, y })
+                {
+                    if rng.gen_bool(0.5) {
+                        ctx.set_fill_style_str("#FF8C00"); // DarkOrange
+                    } else {
+                        ctx.set_fill_style_str("#FF0000"); // Red
+                    }
+                    ctx.fill_rect(
+                        f64::from(x).mul_add(cell_size, cell_size * 0.3),
+                        f64::from(y).mul_add(cell_size, cell_size * 0.3),
+                        cell_size * 0.4,
+                        cell_size * 0.4,
                     );
                 }
             }

@@ -646,6 +646,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Wildfire Mode",
         "Event Horizon Mode",
         "Infection",
+        "Inferno Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1735,6 +1736,23 @@ fn draw_entities<W: Write>(
                 }
             }
         },
+        Weather::Inferno => {
+            for _ in 0..12 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y) && !game.obstacles.contains(&Point { x, y }) {
+                    if rng.gen_bool(0.5) {
+                        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+                    } else {
+                        stdout.queue(SetForegroundColor(Color::Red))?;
+                    }
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "&")?;
+                }
+            }
+        },
         _ => {},
     }
 
@@ -1985,6 +2003,25 @@ fn draw_entities<W: Write>(
             if is_visible(ash.x, ash.y) {
                 stdout.queue(cursor::MoveTo(ash.x, ash.y))?;
                 write!(stdout, ".")?;
+            }
+        }
+    }
+
+
+    // Draw inferno flames and hotspots (Inferno mode)
+    if game.mode == crate::game::GameMode::Inferno {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for fire in &game.inferno_tiles {
+            if is_visible(fire.x, fire.y) {
+                stdout.queue(cursor::MoveTo(fire.x, fire.y))?;
+                write!(stdout, "&")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for hotspot in &game.inferno_hotspots {
+            if is_visible(hotspot.x, hotspot.y) {
+                stdout.queue(cursor::MoveTo(hotspot.x, hotspot.y))?;
+                write!(stdout, "&")?;
             }
         }
     }
@@ -2711,6 +2748,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Eclipse => " | Weather: Eclipse",
         crate::game::Weather::Fog => " | Weather: Fog",
         crate::game::Weather::Wildfire => " | Weather: Wildfire",
+        crate::game::Weather::Inferno => " | Weather: Inferno",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
@@ -2883,11 +2921,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         String::new()
     };
 
+    let inferno_str = if game.mode == crate::game::GameMode::Inferno {
+        format!(
+            " | Fire: {} | Flares: {}",
+            game.inferno_tiles.len(),
+            game.inferno_flares
+        )
+    } else {
+        String::new()
+    };
+
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}"
     )?;
 
     if !game.bosses.is_empty() {
