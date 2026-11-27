@@ -1,3 +1,4 @@
+#![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Boulder, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, LandslideRock,
     Laser, Meteor, Point, PowerUp, Snake, Tournament, Weather,
@@ -83,6 +84,9 @@ pub struct HistoryState {
     pub mirage_spawns: u32,
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
+    pub phase_gates: HashSet<Point>,
+    pub phase_solid: bool,
+    pub phase_shifts: u32,
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,

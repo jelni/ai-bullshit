@@ -666,6 +666,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Thornfield Mode",
         "Mirage Mode",
         "Pinball Mode",
+        "Phase Shift Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2088,6 +2089,24 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw phase gates (Phase Shift mode): solid gates are magenta '#',
+    // ghosted gates are dark-magenta '.' so the phase is always telegraphed
+    if game.mode == crate::game::GameMode::PhaseShift {
+        for gate in &game.phase_gates {
+            if is_visible(gate.x, gate.y) {
+                if game.phase_solid {
+                    stdout.queue(SetForegroundColor(Color::Magenta))?;
+                    stdout.queue(cursor::MoveTo(gate.x, gate.y))?;
+                    write!(stdout, "#")?;
+                } else {
+                    stdout.queue(SetForegroundColor(Color::DarkMagenta))?;
+                    stdout.queue(cursor::MoveTo(gate.x, gate.y))?;
+                    write!(stdout, ".")?;
+                }
+            }
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         stdout.queue(SetForegroundColor(Color::White))?;
@@ -3426,12 +3445,22 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         String::new()
     };
 
+    let phase_str = if game.mode == crate::game::GameMode::PhaseShift {
+        format!(
+            " | Gates: {} | Phase: {} | Shifts: {}",
+            game.phase_gates.len(),
+            if game.phase_solid { "Solid" } else { "Ghost" },
+            game.phase_shifts
+        )
+    } else {
+        String::new()
+    };
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}"
     )?;
 
     if !game.bosses.is_empty() {

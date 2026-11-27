@@ -304,6 +304,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw phase gates (Phase Shift mode): solid gates purple, ghosted gates dark purple
+    if game.mode == crate::game::GameMode::PhaseShift {
+        ctx.set_fill_style_str(if game.phase_solid {
+            "#CC00CC"
+        } else {
+            "#3A003A"
+        });
+        for gate in &game.phase_gates {
+            if gate.x < game.width
+                && gate.y < game.height
+                && is_visible(f64::from(gate.x), f64::from(gate.y))
+            {
+                ctx.fill_rect(
+                    f64::from(gate.x) * cell_size,
+                    f64::from(gate.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw sand drifts (Sandstorm mode)
     if game.mode == crate::game::GameMode::Sandstorm {
         ctx.set_fill_style_str("#D2B48C"); // Tan

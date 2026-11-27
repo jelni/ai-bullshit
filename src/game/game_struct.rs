@@ -219,6 +219,9 @@ pub struct Game {
     pub thorn_blooms: u32,
     pub mirage_foods: std::collections::HashMap<Point, u32>,
     pub mirage_spawns: u32,
+    pub phase_gates: HashSet<Point>,
+    pub phase_solid: bool,
+    pub phase_shifts: u32,
 
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
@@ -745,6 +748,9 @@ impl Game {
 
             rocks: Vec::new(),
             landslide_rolls: 0,
+            phase_gates: HashSet::new(),
+            phase_solid: false,
+            phase_shifts: 0,
         }
     }
     #[must_use]
@@ -1016,6 +1022,9 @@ impl Game {
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
+            phase_gates: self.phase_gates.clone(),
+            phase_solid: self.phase_solid,
+            phase_shifts: self.phase_shifts,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1245,6 +1254,9 @@ impl Game {
 
                 self.rocks = state.rocks;
                 self.landslide_rolls = state.landslide_rolls;
+                self.phase_gates = state.phase_gates;
+                self.phase_solid = state.phase_solid;
+                self.phase_shifts = state.phase_shifts;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -3675,6 +3687,163 @@ impl Game {
             || self.fortress_walls.contains(&p)
             || self.geyser_jets.contains_key(&p)
             || self.thorn_tiles.contains(&p)
+    }
+    // Whether a phase-gate cell is fair to solidify on: never on a snake's
+    // body, on the cell any snake is about to enter this tick, or on any entity.
+    fn phase_gate_clear(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        !(p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.tornado.is_some_and(|t| t == p)
+            || self.geyser_jets.contains_key(&p)
+            || self.geyser_vents.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p))
+    }
+    fn phase_next_cells(&self) -> (Point, Option<Point>, Vec<Point>) {
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        (p1_next, p2_next, bot_next)
+    }
+    fn manage_phase_shift(&mut self) {
+        if self.mode != GameMode::PhaseShift {
+            return;
+        }
+        // Scheduled phase flip: every PHASE_PERIOD-th tick the gates toggle
+        // between solid (lethal) and ghost (passable).
+        if self.tick_counter.is_multiple_of(Self::PHASE_PERIOD) {
+            self.phase_solid = !self.phase_solid;
+            self.phase_shifts += 1;
+            let head = self.snake.head();
+            if self.phase_solid {
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The gates solidify!".to_string(),
+                    crate::color::Color::Magenta,
+                );
+            } else {
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The gates phase out!".to_string(),
+                    crate::color::Color::DarkMagenta,
+                );
+            }
+        }
+        // Keep the obstacle mirror in sync every tick (this also self-heals if
+        // something else cleared obstacles mid-tick, e.g. a Bomb). A gate only
+        // becomes solid on a fair cell, so the phase can never crush a snake.
+        let (p1_next, p2_next, bot_next) = self.phase_next_cells();
+        if self.phase_solid {
+            let fair: Vec<Point> = self
+                .phase_gates
+                .iter()
+                .copied()
+                .filter(|p| self.phase_gate_clear(*p, p1_next, p2_next, &bot_next))
+                .collect();
+            for p in fair {
+                self.obstacles.insert(p);
+            }
+        } else {
+            for p in &self.phase_gates {
+                self.obstacles.remove(p);
+            }
+        }
+    }
+    fn spawn_phase_gates(&mut self) {
+        self.phase_gates.clear();
+        self.phase_solid = true;
+        self.phase_shifts = 0;
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        // Two vertical gate walls at the one-third and two-thirds columns,
+        // each with one gap of two consecutive rows so the board stays crossable.
+        let gap_len = 2u16;
+        for col in [self.width / 3, self.width * 2 / 3] {
+            if col == 0 || col >= self.width.saturating_sub(1) || self.height <= gap_len + 1 {
+                continue;
+            }
+            let gap_start = self.rng.gen_range(1..self.height - gap_len);
+            for y in 1..self.height.saturating_sub(1) {
+                if y >= gap_start && y < gap_start + gap_len {
+                    continue;
+                }
+                let p = Point { x: col, y };
+                if self.phase_gate_clear(p, p1_next, None, &[]) {
+                    self.phase_gates.insert(p);
+                }
+            }
+        }
+        // The phase starts solid: mirror the fair gates into obstacles.
+        let fair: Vec<Point> = self
+            .phase_gates
+            .iter()
+            .copied()
+            .filter(|p| self.phase_gate_clear(*p, p1_next, None, &[]))
+            .collect();
+        for p in fair {
+            self.obstacles.insert(p);
+        }
     }
     fn manage_monsoon(&mut self) {
         if self.mode != GameMode::Monsoon {
@@ -7747,7 +7916,7 @@ impl Game {
             | GameMode::Avalanche
             | GameMode::Pinball
             | GameMode::Steamroller
-            | GameMode::Landslide => {
+            | GameMode::Landslide | GameMode::PhaseShift => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7869,6 +8038,7 @@ impl Game {
             || self.mode == GameMode::Steamroller
 
                 || self.mode == GameMode::Landslide
+            || self.mode == GameMode::PhaseShift
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -7957,6 +8127,7 @@ impl Game {
         || self.mode == GameMode::Steamroller
 
             || self.mode == GameMode::Landslide
+        || self.mode == GameMode::PhaseShift
         {
             &self.snake
         } else {
@@ -8088,6 +8259,9 @@ impl Game {
         self.thorn_blooms = 0;
         self.mirage_foods.clear();
         self.mirage_spawns = 0;
+        self.phase_gates.clear();
+        self.phase_solid = false;
+        self.phase_shifts = 0;
         self.boulders.clear();
         self.avalanche_rolls = 0;
 
@@ -8563,6 +8737,9 @@ impl Game {
         if self.mode == GameMode::Firestorm {
             self.spawn_blaze_sources();
         }
+        if self.mode == GameMode::PhaseShift {
+            self.spawn_phase_gates();
+        }
         if self.mode == GameMode::Pinball {
             self.spawn_pinball_bumpers();
         }
@@ -8806,6 +8983,9 @@ impl Game {
         }
         if self.mode == GameMode::Landslide {
             self.weather = Weather::Snow;
+        }
+        if self.mode == GameMode::PhaseShift {
+            self.weather = Weather::Clear;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -9234,7 +9414,7 @@ impl Game {
             | GameMode::Avalanche
             | GameMode::Pinball
             | GameMode::Steamroller
-            | GameMode::Landslide => {
+            | GameMode::Landslide | GameMode::PhaseShift => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9934,6 +10114,9 @@ impl Game {
 
             self.rocks = state.rocks;
             self.landslide_rolls = state.landslide_rolls;
+            self.phase_gates = state.phase_gates;
+            self.phase_solid = state.phase_solid;
+            self.phase_shifts = state.phase_shifts;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -10130,6 +10313,9 @@ impl Game {
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
+            phase_gates: self.phase_gates.clone(),
+            phase_solid: self.phase_solid,
+            phase_shifts: self.phase_shifts,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -12993,6 +13179,7 @@ impl Game {
             && self.mode != GameMode::SpikePit
 
             && self.mode != GameMode::Landslide
+            && self.mode != GameMode::PhaseShift
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -13974,6 +14161,7 @@ impl Game {
         self.manage_steamroller();
         self.manage_pinball();
         self.manage_geyser();
+        self.manage_phase_shift();
         self.manage_thornfield();
         self.manage_mirage();
 
@@ -14949,6 +15137,7 @@ impl Game {
             || self.mode == GameMode::Steamroller
 
                 || self.mode == GameMode::Landslide
+            || self.mode == GameMode::PhaseShift
             {
                 self.handle_death("You Died!");
             } else {
@@ -16057,6 +16246,29 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Doused {doused} jet!"),
                     crate::color::Color::Cyan,
+                );
+            }
+        }
+        if self.mode == GameMode::PhaseShift {
+            let mut disrupted = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.phase_gates.remove(&np) {
+                    self.obstacles.remove(&np);
+                    disrupted += 1;
+                }
+            }
+            if disrupted > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Disrupted {disrupted} gate!"),
+                    crate::color::Color::Magenta,
                 );
             }
         }
@@ -18090,6 +18302,12 @@ if self.mode == GameMode::Steamroller {
                     return false;
                 }
             }
+            // Phase gates are treated as permanent walls by the autopilot, in
+            // both their solid and their ghost phase, so the bot never plans a
+            // route through a gate that might solidify mid-path.
+            if self.mode == GameMode::PhaseShift && self.phase_gates.contains(&final_p) {
+                return false;
+            }
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
             }
@@ -18966,6 +19184,7 @@ if self.mode == GameMode::Steamroller {
     pub const TSUNAMI_NO_EDGE: u8 = 255;
     pub const TSUNAMI_PERIOD: u32 = 40;
     pub const TSUNAMI_WARNING: u32 = 8;
+    pub const PHASE_PERIOD: u32 = 12;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
@@ -20134,6 +20353,9 @@ if self.mode == GameMode::Steamroller {
     }
     fn trap_blocked_cells(&self, start: Point, checking_player: u8) -> HashSet<Point> {
         let mut blocked: HashSet<Point> = self.obstacles.iter().copied().collect();
+        if self.mode == GameMode::PhaseShift {
+            blocked.extend(self.phase_gates.iter().copied());
+        }
         blocked.extend(self.mines.iter().copied());
         for t in &self.turrets {
             blocked.insert(t.position);

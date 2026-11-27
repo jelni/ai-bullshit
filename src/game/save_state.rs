@@ -181,6 +181,12 @@ pub struct SaveState {
     #[serde(default)]
     pub landslide_rolls: u32,
     #[serde(default)]
+    pub phase_gates: HashSet<Point>,
+    #[serde(default)]
+    pub phase_solid: bool,
+    #[serde(default)]
+    pub phase_shifts: u32,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,

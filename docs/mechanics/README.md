@@ -554,3 +554,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Rendering:** rocks draw as a white `>` / `<` arrow telegraphing the roll direction (terminal) and as white cells (web); the status bar shows `Rocks: <count> | Slides: <count>`.
 - **Persistence:** `rocks` and `landslide_rolls` are stored in `SaveState` and `HistoryState` (save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_landslide_mode.rs](../../tests/test_landslide_mode.rs).
+## Phase Shift Mode
+
+`GameMode::PhaseShift` (menu entry "Phase Shift Mode") is a survival mode where two vertical gate walls phase between solid and ghost:
+
+- **Gates:** `spawn_phase_gates` seeds two permanent vertical gate walls (`phase_gates`) at columns `width/3` and `2*width/3`, each spanning the playable rows `1..=height-2` except a 2-row gap, with the weather pinned to `Weather::Clear` (ambient weather randomization is skipped in this mode).
+- **Phasing:** every `PHASE_PERIOD` (12) ticks `manage_phase_shift` toggles `phase_solid` and counts the flip in `phase_shifts` ("The gates phase!"). While solid, every gate cell is mirrored into `obstacles` (lethal on entry); while ghost, the cells are passable. The gates render as a magenta `#` (solid) / dark-magenta `.` (ghost) on the terminal and magenta / dark-magenta cells on the web.
+- **Fairness:** a gate never solidifies on a snake's body, on the cell any snake is about to enter this tick (`phase_next_cells`: the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on any entity (`phase_gate_clear`), so the phase flip can never kill anyone cheaply.
+- **Autopilot:** the gates are treated as permanent walls in `is_safe_final_p` and in the `trap_blocked_cells` flood fill, so the bot never routes through a gate regardless of the current phase.
+- **Disruption:** eating food removes the gate cells adjacent to the eaten cell from the solid set ("Disrupted N gate!").
+- **Persistence:** `phase_gates`, `phase_solid`, and `phase_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Gates: <count> | Phase: <phase> | Shifts: <count>` (`phase_str`).
+- **Tests:** see [tests/test_phase_shift_mode.rs](../../tests/test_phase_shift_mode.rs).

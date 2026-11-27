@@ -94,4 +94,5 @@ pub enum GameMode {
     Steamroller,
     SpikePit,
     Landslide,
+    PhaseShift,
 }
