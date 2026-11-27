@@ -658,6 +658,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Ice Rink",
         "Black Hole",
         "Ricochet Mode",
+        "Turret Battery Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -3099,6 +3100,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let turret_str = if game.mode == crate::game::GameMode::TurretBattery {
+        let jammed_str = if game.turret_jammed > 0 {
+            format!(" | Jammed: {}", game.turret_jammed)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Turrets: {} | Volleys: {}{}",
+            game.turrets.iter().filter(|t| t.is_enemy).count(),
+            game.turret_volleys,
+            jammed_str
+        )
+    } else {
+        String::new()
+    };
 
     let inferno_str = if game.mode == crate::game::GameMode::Inferno {
         format!(
@@ -3149,7 +3165,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}"
     )?;
 
     if !game.bosses.is_empty() {

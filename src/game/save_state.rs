@@ -243,6 +243,10 @@ pub struct SaveState {
     pub singularity_wanders: u32,
     #[serde(default)]
     pub singularity_feeds: u32,
+    #[serde(default)]
+    pub turret_volleys: u32,
+    #[serde(default)]
+    pub turret_jammed: u32,
 }
 
 #[must_use]

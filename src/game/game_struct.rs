@@ -195,6 +195,9 @@ pub struct Game {
     pub ice_slips: u32,
     pub singularity_wanders: u32,
     pub singularity_feeds: u32,
+
+    pub turret_volleys: u32,
+    pub turret_jammed: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -658,6 +661,8 @@ impl Game {
             tsunami_waves: 0,
             belt_tiles: std::collections::HashMap::new(),
             belt_shifts: 0,
+            turret_volleys: 0,
+            turret_jammed: 0,
             sand_blasts: 0,
             gravity_well_surges: 0,
             acid_puddles: HashSet::new(),
@@ -989,6 +994,9 @@ impl Game {
             ice_slips: self.ice_slips,
             singularity_wanders: self.singularity_wanders,
             singularity_feeds: self.singularity_feeds,
+
+            turret_volleys: self.turret_volleys,
+            turret_jammed: self.turret_jammed,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1195,6 +1203,8 @@ impl Game {
                 self.tsunami_waves = state.tsunami_waves;
                 self.gravity_well_surges = state.gravity_well_surges;
                 self.belt_tiles = state.belt_tiles;
+                self.turret_volleys = state.turret_volleys;
+                self.turret_jammed = state.turret_jammed;
                 self.belt_shifts = state.belt_shifts;
                 self.ice_tiles = state.ice_tiles;
                 self.ice_slips = state.ice_slips;
@@ -1335,6 +1345,134 @@ impl Game {
             }
         }
         self.lasers.extend(new_lasers);
+    }
+
+    fn manage_turret_battery(&mut self) {
+        if self.mode != GameMode::TurretBattery {
+            return;
+        }
+        // The skies stay clear so every turret and beam is always visible
+        self.weather = Weather::Clear;
+        // Keep the battery fully armed: re-seed missing enemy turrets on fair cells
+        let enemy_count = self.turrets.iter().filter(|t| t.is_enemy).count();
+        if enemy_count < Self::TURRET_BATTERY_COUNT {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            let next_heads = self.singularity_next_heads();
+            for _ in enemy_count..Self::TURRET_BATTERY_COUNT {
+                let avoid_turret = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.mines.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                        || self.bosses.iter().any(|b| b.position == *p)
+                        || self.turrets.iter().any(|t| t.position == *p)
+                        || self.lasers.iter().any(|l| l.position == *p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || next_heads.contains(p)
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                match Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_turret,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    Some(pos) => {
+                        self.turrets.push(Turret {
+                            position: pos,
+                            shoot_timer: 0,
+                            is_enemy: true,
+                        });
+                        self.spawn_particles(
+                            f32::from(pos.x),
+                            f32::from(pos.y),
+                            10,
+                            crate::color::Color::DarkRed,
+                            'T',
+                        );
+                    },
+                    None => break,
+                }
+            }
+        }
+        // While jammed (right after eating food) the battery holds its fire
+        if self.turret_jammed > 0 {
+            self.turret_jammed = self.turret_jammed.saturating_sub(1);
+            return;
+        }
+        // Scheduled volley: every 6th tick every enemy turret fires one laser in
+        // a shuffled random direction. Fairness: a beam fizzles when its first
+        // cell is out of bounds or unsafe (never onto a snake, an entity, or the
+        // cell any snake is about to enter), so a volley is dangerous but never cheap
+        if self.tick_counter.is_multiple_of(6) {
+            self.turret_volleys += 1;
+            let battery: Vec<Point> = self
+                .turrets
+                .iter()
+                .filter(|t| t.is_enemy)
+                .map(|t| t.position)
+                .collect();
+            let mut fired = 0u32;
+            for tp in &battery {
+                let tp = *tp;
+                let mut dirs = [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ];
+                for i in (1..dirs.len()).rev() {
+                    let j = self.rng.gen_range(0..=i);
+                    dirs.swap(i, j);
+                }
+                for dir in dirs {
+                    let first = Self::calculate_next_head_dir(tp, dir);
+                    if first.x == 0
+                        || first.x >= self.width - 1
+                        || first.y == 0
+                        || first.y >= self.height - 1
+                        || !self.singularity_cell_free(first)
+                    {
+                        continue;
+                    }
+                    self.lasers.push(Laser {
+                        position: tp,
+                        direction: dir,
+                        player: 3,
+                    });
+                    fired += 1;
+                    self.spawn_particles(
+                        f32::from(tp.x),
+                        f32::from(tp.y),
+                        6,
+                        crate::color::Color::Red,
+                        '!',
+                    );
+                    break;
+                }
+            }
+            if fired > 0
+                && let Some(tp) = battery.first()
+            {
+                self.spawn_floating_text(
+                    f32::from(tp.x),
+                    f32::from(tp.y),
+                    format!("Volley! ({fired} beams)"),
+                    crate::color::Color::Red,
+                );
+            }
+        }
     }
 
     #[expect(
@@ -5584,7 +5722,8 @@ impl Game {
             | GameMode::Conveyor
             | GameMode::IceRink
             | GameMode::BlackHole
-            | GameMode::Ricochet => {
+            | GameMode::Ricochet
+            | GameMode::TurretBattery => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5694,6 +5833,7 @@ impl Game {
                 || self.mode == GameMode::IceRink
                 || self.mode == GameMode::BlackHole
                 || self.mode == GameMode::Ricochet
+                || self.mode == GameMode::TurretBattery
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5770,6 +5910,7 @@ impl Game {
             || self.mode == GameMode::IceRink
             || self.mode == GameMode::BlackHole
             || self.mode == GameMode::Ricochet
+            || self.mode == GameMode::TurretBattery
         {
             &self.snake
         } else {
@@ -5938,6 +6079,9 @@ impl Game {
         self.belt_shifts = 0;
         self.singularity_wanders = 0;
         self.singularity_feeds = 0;
+
+        self.turret_volleys = 0;
+        self.turret_jammed = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -6552,6 +6696,9 @@ impl Game {
         if self.mode == GameMode::BlackHole {
             self.weather = Weather::Clear;
         }
+        if self.mode == GameMode::TurretBattery {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -6751,6 +6898,47 @@ impl Game {
         self.level_up_options.clear();
         self.level_up_selection = 0;
         self.turrets.clear();
+        if self.mode == GameMode::TurretBattery {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            let next_heads = self.singularity_next_heads();
+            for _ in 0..Self::TURRET_BATTERY_COUNT {
+                let avoid_turret = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.mines.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                        || self.bosses.iter().any(|b| b.position == *p)
+                        || self.turrets.iter().any(|t| t.position == *p)
+                        || self.lasers.iter().any(|l| l.position == *p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || next_heads.contains(p)
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                if let Some(pos) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_turret,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.turrets.push(Turret {
+                        position: pos,
+                        shoot_timer: 0,
+                        is_enemy: true,
+                    });
+                }
+            }
+        }
         self.bots.clear();
         self.bots_autopilot_paths.clear();
 
@@ -6926,7 +7114,8 @@ impl Game {
             | GameMode::Conveyor
             | GameMode::IceRink
             | GameMode::BlackHole
-            | GameMode::Ricochet => {
+            | GameMode::Ricochet
+            | GameMode::TurretBattery => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7653,6 +7842,8 @@ impl Game {
             self.tsunami_waves = state.tsunami_waves;
             self.gravity_well_surges = state.gravity_well_surges;
             self.belt_tiles = state.belt_tiles;
+            self.turret_volleys = state.turret_volleys;
+            self.turret_jammed = state.turret_jammed;
             self.belt_shifts = state.belt_shifts;
             self.ice_tiles = state.ice_tiles;
             self.ice_slips = state.ice_slips;
@@ -7822,6 +8013,9 @@ impl Game {
             ice_slips: self.ice_slips,
             singularity_wanders: self.singularity_wanders,
             singularity_feeds: self.singularity_feeds,
+
+            turret_volleys: self.turret_volleys,
+            turret_jammed: self.turret_jammed,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10582,6 +10776,7 @@ impl Game {
             && self.mode != GameMode::Conveyor
             && self.mode != GameMode::IceRink
             && self.mode != GameMode::BlackHole
+            && self.mode != GameMode::TurretBattery
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -11574,6 +11769,7 @@ impl Game {
         self.manage_minefield();
         self.manage_goblin();
         self.manage_turrets();
+        self.manage_turret_battery();
         self.manage_companion();
         self.manage_crops();
         self.manage_eggs();
@@ -12385,6 +12581,7 @@ impl Game {
                 || self.mode == GameMode::Conveyor
                 || self.mode == GameMode::BlackHole
                 || self.mode == GameMode::Ricochet
+                || self.mode == GameMode::TurretBattery
             {
                 self.handle_death("You Died!");
             } else {
@@ -13550,6 +13747,16 @@ impl Game {
             }
         if self.mode == GameMode::LaserGrid {
             self.zap_laser_grid();
+        }
+        if self.mode == GameMode::TurretBattery {
+            // Eating food jams the battery: scheduled volleys are suppressed for a while
+            self.turret_jammed = Self::TURRET_JAM_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Jammed!".to_string(),
+                crate::color::Color::Red,
+            );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
             // Eating food greases the belts: one random belt rotates 90 degrees
@@ -16115,6 +16322,10 @@ impl Game {
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
     pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
+    /// Number of enemy turrets kept on the board in `GameMode::TurretBattery`.
+    pub const TURRET_BATTERY_COUNT: usize = 3;
+    /// Ticks of volley immunity granted by eating food in Turret Battery mode.
+    pub const TURRET_JAM_TICKS: u32 = 12;
     /// Ticks between scheduled portal-pair relocations in `GameMode::Warp`.
     pub const WARP_RELOCATE_INTERVAL: u32 = 45;
     /// Ticks a relocation target pair is telegraphed before the portals move.

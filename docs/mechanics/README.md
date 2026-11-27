@@ -245,7 +245,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 
 ## Singularity Mode
 
-`GameMode::Singularity` (menu entry "Singularity Mode", entry 64 in the main menu) is a survival mode built around a permanent black hole:
+`GameMode::Singularity` (menu entry "Singularity Mode", entry 79 in the main menu) is a survival mode built around a permanent black hole:
 
 - **Permanent singularity:** in this mode `manage_black_hole` skips the random spawn/despawn rolls; `manage_singularity` (re)spawns the hole on a fair cell if it is missing — never on a snake, an entity, an obstacle, the food, or within Manhattan distance 6 of the spawn point (`get_random_empty_point` with `safe_zone_margin + 2`) — so a hole is always on the board. The hole cell is lethal on entry (existing `hit_black_hole` check), and the hole swallows adjacent obstacles and mines every tick (`singularity_consume_adjacent`).
 - **Drift:** on every 8th tick the hole creeps one cell in a random direction, but only onto a fair cell (`singularity_cell_free`: in bounds within the safe-zone margin, not on any snake body or the cell any snake is about to enter, not on the hole itself, an obstacle, the food, any entity, or a hazard). Drifts are counted in `singularity_drifts` and announced with "The singularity drifts!".
@@ -269,7 +269,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Tests:** see [tests/test_wildfire_mode.rs](../../tests/test_wildfire_mode.rs) and the save/load unit test `test_save_and_load_wildfire_mode` in `src/game/tests.rs`.
 ## Event Horizon Mode
 
-`GameMode::EventHorizon` (menu entry "Event Horizon Mode", entry 64 in the main menu) is a survival mode built around a permanent black hole (`black_hole`, rendered as a dark `O` on terminal and web):
+`GameMode::EventHorizon` (menu entry "Event Horizon Mode", entry 79 in the main menu) is a survival mode built around a permanent black hole (`black_hole`, rendered as a dark `O` on terminal and web):
 
 - **Permanence:** the event horizon is seeded on a fair cell at reset (never on a snake, an obstacle, or any entity) and never despawns — the ambient random black-hole spawn/despawn in `manage_black_hole` is disabled in this mode, and `manage_event_horizon` re-seeds the hole if it was ever lost. The skies stay `Weather::Clear` (ambient weather randomization is skipped in this mode).
 - **Scheduled drifts:** every 6th tick the event horizon drifts one cell in a random direction (`event_horizon_drifts`, shown as `Drifts: <count>`). Fairness: a drift never lands off the board, on a snake's body, on the cell any snake is about to enter, on an obstacle, or on any entity (food, bonus/poison food, power-ups, portals, mines, lava, the tornado vortex, goblin, bosses, companion, turrets, XP gems, equipment boxes, crops, eggs, the KotH zone, flags, resources, lasers, meteors) — if every direction is blocked the drift fizzles and the hole stays put (`manage_event_horizon` via `event_horizon_forbidden`).
@@ -407,3 +407,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** `get_final_p`/`is_safe_final_p` still treat out-of-bounds cells as unsafe, so the bot keeps walls as hard constraints and never plans a bounce — but if it is ever forced into a wall it now bounces instead of dying.
 - **Persistence:** `ricochet_bounces` is stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Bounces: <count>`.
 - **Tests:** see [tests/test_ricochet_mode.rs](../../tests/test_ricochet_mode.rs).
+## Turret Battery Mode
+
+`GameMode::TurretBattery` (menu entry "Turret Battery Mode", entry 79 in the main menu) is a survival mode with a permanent enemy turret battery:
+
+- **Battery:** on reset `TURRET_BATTERY_COUNT` (3) enemy turrets (`is_enemy: true`, drawn as `T`) are seeded on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, a laser, or the cell any snake is about to enter. `manage_turret_battery` re-seeds missing enemy turrets every tick, so the battery always stays armed. The weather is pinned to `Weather::Clear` on reset and every tick (the ambient weather re-roll is skipped in this mode), so every turret and beam is visible.
+- **Scheduled volley:** every 6th tick a volley fires (`turret_volleys += 1`, "Volley! (N beams)"): each enemy turret fires one laser (`Laser { position: turret, direction, player: 3 }`) in a shuffled random direction. Fairness: a beam fizzles when its first cell (`turret + direction`) is out of bounds or fails `singularity_cell_free` — never onto a snake's body, the cell any snake is about to enter, an obstacle, a mine, or any entity — so a volley is dangerous but never cheap.
+- **Lethality & autopilot:** enemy beams (`player != 1`) kill on contact via the existing `hit_laser` check, and laser cells/lanes are already hard hazards/penalties in the A* edge costs and the `is_safe_final_p` verified-safe checks, so the bot dodges the fire natively. Turrets also keep their ambient aimed fire (every 10 ticks toward a snake sharing a row/column).
+- **Jam:** eating food sets `turret_jammed = TURRET_JAM_TICKS` (12) ("Jammed!"); while the timer is positive it counts down once per tick and scheduled volleys are suppressed.
+- **Status bar:** `Turrets: <count> | Volleys: <count>` plus `Jammed: <ticks>` while jammed.
+- **Persistence:** `turret_volleys` and `turret_jammed` are stored in `SaveState` and `HistoryState` (`turrets` and `lasers` were already persisted), so save/load and time-rewind stay consistent.
+- **Tests:** see [tests/test_turret_battery_mode.rs](../../tests/test_turret_battery_mode.rs) and the save/load test in `src/game/tests.rs`.

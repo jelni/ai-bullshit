@@ -126,4 +126,6 @@ pub struct HistoryState {
     pub ice_slips: u32,
     pub singularity_wanders: u32,
     pub singularity_feeds: u32,
+    pub turret_volleys: u32,
+    pub turret_jammed: u32,
 }

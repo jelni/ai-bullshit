@@ -83,4 +83,5 @@ pub enum GameMode {
     IceRink,
     BlackHole,
     Ricochet,
+    TurretBattery,
 }
