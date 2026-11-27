@@ -647,8 +647,11 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Event Horizon Mode",
         "Infection",
         "Inferno Mode",
+
         "Minefield Mode",
+
         "Laser Grid",
+        "Tsunami Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1975,6 +1978,7 @@ fn draw_entities<W: Write>(
         }
     }
 
+
     // Draw the contagion on infected heads (Infection mode)
     if game.mode == crate::game::GameMode::Infection {
         for id in &game.infected_ids {
@@ -1991,6 +1995,61 @@ fn draw_entities<W: Write>(
                 stdout.queue(SetForegroundColor(Color::Green))?;
                 stdout.queue(cursor::MoveTo(head.x, head.y))?;
                 write!(stdout, "Z")?;
+            }
+        }
+    }
+
+    // Draw the tsunami warning edge / wave front (Tsunami mode)
+    if game.mode == crate::game::GameMode::Tsunami {
+        let line_cells = |line: i32| -> Vec<Point> {
+            let mut cells = Vec::new();
+            let l = u16::try_from(line).unwrap_or(0);
+            match game.tsunami_edge {
+                0 => {
+                    for x in 0..game.width {
+                        cells.push(Point { x, y: l });
+                    }
+                },
+                1 => {
+                    for x in 0..game.width {
+                        cells.push(Point {
+                            x,
+                            y: game.height.saturating_sub(1).saturating_sub(l),
+                        });
+                    }
+                },
+                2 => {
+                    for y in 0..game.height {
+                        cells.push(Point { x: l, y });
+                    }
+                },
+                _ => {
+                    for y in 0..game.height {
+                        cells.push(Point {
+                            x: game.width.saturating_sub(1).saturating_sub(l),
+                            y,
+                        });
+                    }
+                },
+            }
+            cells
+        };
+        if game.tsunami_warning > 0 {
+            stdout.queue(SetForegroundColor(Color::Cyan))?;
+            for p in line_cells(0) {
+                if is_visible(p.x, p.y) {
+                    stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                    write!(stdout, "~")?;
+                }
+            }
+        }
+        if game.tsunami_front >= 0 {
+            stdout.queue(SetForegroundColor(Color::Blue))?;
+            for p in line_cells(game.tsunami_front) {
+                if is_visible(p.x, p.y) {
+                    stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                    write!(stdout, "~")?;
+                }
             }
         }
     }
@@ -2893,11 +2952,13 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+
     let laser_grid_str = if game.mode == crate::game::GameMode::LaserGrid {
         format!(" | Volleys: {}", game.laser_volleys)
     } else {
         String::new()
     };
+
     let singularity_str = if game.mode == crate::game::GameMode::Singularity {
         let shield_str = if game.singularity_shield > 0 {
             format!(" | Shield: {}", game.singularity_shield)
@@ -2954,6 +3015,20 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let tsunami_str = if game.mode == crate::game::GameMode::Tsunami {
+        if game.tsunami_warning > 0 {
+            format!(" | Tsunami in {}!", game.tsunami_warning)
+        } else if game.tsunami_front >= 0 {
+            format!(
+                " | Wave: {} | Waves: {}",
+                game.tsunami_front, game.tsunami_waves
+            )
+        } else {
+            format!(" | Waves: {}", game.tsunami_waves)
+        }
+    } else {
+        String::new()
+    };
 
     let inferno_str = if game.mode == crate::game::GameMode::Inferno {
         format!(
@@ -2978,7 +3053,8 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}"
+
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}"
     )?;
 
     if !game.bosses.is_empty() {

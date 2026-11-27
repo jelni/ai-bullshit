@@ -210,6 +210,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `bomb_carrier`, `bomb_timer`, and `bomb_tags` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_bomb_tag.rs](../../tests/test_bomb_tag.rs).
 
+
 ## Acid Rain Mode
 
 `GameMode::AcidRain` (menu entry "Acid Rain Mode") is a survival mode wrapped in a permanent acid rain (`weather` is forced to `Weather::Rain` every tick and ambient weather re-rolls are skipped in this mode):
@@ -290,6 +291,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** arena bots run the usual verified-safe pipeline; additionally, an infected bot prepends up to 4 targets — the in-bounds cells adjacent to the nearest healthy rival's head (`infection_prey_adjacent_targets`) — so it actively chases, while healthy snakes flee the infected via the predicted-enemy-occupancy hard constraints in `path_is_safe`.
 - **Persistence:** `infected_ids` and `infection_spreads` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_infection.rs](../../tests/test_infection.rs).
+
 ## Inferno Mode
 `GameMode::Inferno` (menu entry "Inferno Mode") is a survival mode wrapped in a permanent inferno (`weather` is forced to `Weather::Inferno` every tick, and ambient weather randomization is skipped in this mode):
 - **Hotspots:** on reset, 3 burning hotspots (`inferno_hotspots`) are seeded on random fair empty cells (never on a snake, an obstacle, or the food). Hotspots are permanent fixtures: they always stay in `inferno_tiles` and `obstacles` and never get a burn timer (`spawn_inferno_hotspots`).
@@ -301,6 +303,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Fairness:** a flare-up never spreads fire out of bounds, on a snake (head or body of any participant), on the cell any snake is about to enter this tick, or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors, the tornado vortex) or obstacle (`is_inferno_spread_blocked`).
 - **Persistence:** `inferno_tiles`, `inferno_hotspots`, `inferno_burn` (via `map_as_pairs`), `inferno_flares`, and `inferno_burned` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Fire: <count> | Flares: <count>`, and flames are rendered as a dark-yellow `&` with hotspots overdrawn in red `&` (terminal) / orange and red cells (web).
 - **Tests:** see [tests/test_inferno_mode.rs](../../tests/test_inferno_mode.rs).
+
 
 ## Minefield Mode
 
@@ -314,6 +317,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `mines` (already) and `mine_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Mines: <count> | Drops: <count>`.
 - **Tests:** see [tests/test_minefield_mode.rs](../../tests/test_minefield_mode.rs) plus a save/load unit test in `src/game/tests.rs`.
 
+
 ## Laser Grid Mode
 
 `GameMode::LaserGrid` (menu entry "Laser Grid") is a solo hazard mode with scheduled, telegraphed sweeping laser beams:
@@ -325,3 +329,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** moving lasers and their predicted 2-cells-per-tick trajectories are already hard hazards in the A* search and the `is_safe_final_p` verified-safe checks, so the bot dodges sweeping beams natively.
 - **Persistence:** `laser_volleys` and `laser_telegraph` (plus the `lasers` themselves) are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_laser_grid_mode.rs](../../tests/test_laser_grid_mode.rs) plus a save/load unit test in `src/game/tests.rs`.
+## Tsunami
+
+`GameMode::Tsunami` (menu entry "Tsunami Mode", index 69) is a survival mode wrapped in permanent torrential rain (`weather` is forced to `Weather::Rain` every tick, and the ambient weather randomization is skipped in this mode):
+
+- **Scheduled waves:** on every `Game::TSUNAMI_PERIOD` (40th) tick, when no wave is active or warning, a wave is announced from a random edge (`tsunami_edge` 0=top, 1=bottom, 2=left, 3=right) with `tsunami_warning = Game::TSUNAMI_WARNING` (8) ticks of warning ("Tsunami from the <edge>!"). The warning edge is rendered as a cyan `~` line (terminal) / cyan cells (web), and the status bar shows `Tsunami in <n>!`.
+- **Fairness (depth cap):** at announcement, `tsunami_depth` is set to the minimum line occupied by any snake's body or next-head cell, minus one. The wave therefore never sweeps a line any snake currently occupies or is about to enter — the same "never cheap" rule as Storm Mode's lightning columns and Seismic's shaken rows. Lines beyond `tsunami_depth` are permanently safe.
+- **The sweep:** once the warning runs out, `tsunami_front` starts at 0 and the wave sweeps one line per tick (`sweep_tsunami_line`), from the announced edge up to `tsunami_depth`; when the front passes the depth the wave ends and `tsunami_waves` is incremented. The front line is rendered as a blue `~` line (terminal) / blue cells (web), and the status bar shows `Wave: <line> | Waves: <count>`.
+- **Sweep effects:** the swept line smashes obstacles, mines, and hazard tiles (snow/sand/lava/seismic rubble/rubble) on it; loose items on it (bonus food, poison food, power-up) are washed away, and the food is relocated to a random fair empty cell (never on a snake, an entity, an obstacle, or the cell any snake is about to enter). A snake whose head is on the swept line dies (head-only kill, like Storm's lightning column; invincibility protects) — the player loses a life via `handle_death("Swept away by the tsunami!")`, player 2 is removed, bots are removed with particles.
+- **Autopilot:** `tsunami_threatens` (used by `is_safe_final_p`) rejects any cell within the wave's depth whose line is at or ahead of the wave front (not yet swept), so verified-safe paths never enter the incoming wave; lines beyond `tsunami_depth` and lines already behind the front remain safe. The bot therefore rides out every telegraphed wave natively.
+- **Persistence:** `tsunami_edge`, `tsunami_front`, `tsunami_depth`, `tsunami_warning`, and `tsunami_waves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_tsunami_mode.rs](../../tests/test_tsunami_mode.rs) and the save/load unit test in `src/game/tests.rs`.

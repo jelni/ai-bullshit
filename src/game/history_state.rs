@@ -86,6 +86,7 @@ pub struct HistoryState {
     pub bomb_carrier: Option<u8>,
     pub bomb_timer: u32,
     pub bomb_tags: u32,
+
     pub acid_puddles: HashSet<Point>,
     pub acid_drops: u32,
     pub puddle_tiles: HashSet<Point>,
@@ -101,10 +102,17 @@ pub struct HistoryState {
     pub event_horizon_surges: u32,
     pub infected_ids: Vec<u8>,
     pub infection_spreads: u32,
+
     pub inferno_tiles: HashSet<Point>,
     pub inferno_hotspots: Vec<Point>,
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+
     pub mine_drops: u32,
+    pub tsunami_edge: u8,
+    pub tsunami_front: i32,
+    pub tsunami_depth: i32,
+    pub tsunami_warning: u32,
+    pub tsunami_waves: u32,
 }

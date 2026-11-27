@@ -152,6 +152,7 @@ pub struct Game {
     pub bomb_carrier: Option<u8>,
     pub bomb_timer: u32,
     pub bomb_tags: u32,
+
     pub acid_puddles: HashSet<Point>,
     pub acid_drops: u32,
     pub puddle_tiles: HashSet<Point>,
@@ -167,14 +168,22 @@ pub struct Game {
     pub event_horizon_surges: u32,
     pub infected_ids: Vec<u8>,
     pub infection_spreads: u32,
+
     pub inferno_tiles: HashSet<Point>,
     pub inferno_hotspots: Vec<Point>,
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+
     pub mine_drops: u32,
+
     pub laser_volleys: u32,
     pub laser_telegraph: Option<(bool, u16)>,
+    pub tsunami_edge: u8,
+    pub tsunami_front: i32,
+    pub tsunami_depth: i32,
+    pub tsunami_warning: u32,
+    pub tsunami_waves: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -619,13 +628,20 @@ impl Game {
             bomb_carrier: None,
             bomb_timer: 0,
             bomb_tags: 0,
+
             infected_ids: Vec::new(),
             infection_spreads: 0,
+
             inferno_tiles: HashSet::new(),
             inferno_hotspots: Vec::new(),
             inferno_burn: std::collections::HashMap::new(),
             inferno_flares: 0,
             inferno_burned: 0,
+            tsunami_edge: Self::TSUNAMI_NO_EDGE,
+            tsunami_front: -1,
+            tsunami_depth: -1,
+            tsunami_warning: 0,
+            tsunami_waves: 0,
             sand_blasts: 0,
             acid_puddles: HashSet::new(),
             acid_drops: 0,
@@ -908,6 +924,7 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
             puddle_tiles: self.puddle_tiles.clone(),
@@ -923,14 +940,22 @@ impl Game {
             event_horizon_surges: self.event_horizon_surges,
             infected_ids: self.infected_ids.clone(),
             infection_spreads: self.infection_spreads,
+
             inferno_tiles: self.inferno_tiles.clone(),
             inferno_hotspots: self.inferno_hotspots.clone(),
             inferno_burn: self.inferno_burn.clone(),
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
+
             mine_drops: self.mine_drops,
+
             laser_volleys: self.laser_volleys,
             laser_telegraph: self.laser_telegraph,
+            tsunami_edge: self.tsunami_edge,
+            tsunami_front: self.tsunami_front,
+            tsunami_depth: self.tsunami_depth,
+            tsunami_warning: self.tsunami_warning,
+            tsunami_waves: self.tsunami_waves,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1097,6 +1122,7 @@ impl Game {
                 self.bomb_carrier = state.bomb_carrier;
                 self.bomb_timer = state.bomb_timer;
                 self.bomb_tags = state.bomb_tags;
+
                 self.acid_puddles = state.acid_puddles;
                 self.acid_drops = state.acid_drops;
                 self.puddle_tiles = state.puddle_tiles;
@@ -1113,14 +1139,22 @@ impl Game {
                 self.event_horizon_surges = state.event_horizon_surges;
                 self.infected_ids = state.infected_ids;
                 self.infection_spreads = state.infection_spreads;
+
                 self.inferno_tiles = state.inferno_tiles;
                 self.inferno_hotspots = state.inferno_hotspots;
                 self.inferno_burn = state.inferno_burn;
                 self.inferno_flares = state.inferno_flares;
                 self.inferno_burned = state.inferno_burned;
+
                 self.mine_drops = state.mine_drops;
+
                 self.laser_volleys = state.laser_volleys;
                 self.laser_telegraph = state.laser_telegraph;
+                self.tsunami_edge = state.tsunami_edge;
+                self.tsunami_front = state.tsunami_front;
+                self.tsunami_depth = state.tsunami_depth;
+                self.tsunami_warning = state.tsunami_warning;
+                self.tsunami_waves = state.tsunami_waves;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -5107,15 +5141,21 @@ impl Game {
             | GameMode::Eclipse
             | GameMode::Sandstorm
             | GameMode::BombTag
+
             | GameMode::AcidRain
             | GameMode::Monsoon
             | GameMode::Singularity
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
+
             | GameMode::Inferno
             | GameMode::Minefield
+
             | GameMode::LaserGrid => {
+            | GameMode::Inferno
+            | GameMode::Tsunami => {
+
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5205,15 +5245,20 @@ impl Game {
                 || self.mode == GameMode::Eclipse
                 || self.mode == GameMode::Sandstorm
                 || self.mode == GameMode::BombTag
+
                 || self.mode == GameMode::AcidRain
                 || self.mode == GameMode::Monsoon
                 || self.mode == GameMode::Singularity
                 || self.mode == GameMode::Wildfire
                 || self.mode == GameMode::EventHorizon
                 || self.mode == GameMode::Infection
+
                 || self.mode == GameMode::Inferno
+
                 || self.mode == GameMode::Minefield
+
                 || self.mode == GameMode::LaserGrid
+                || self.mode == GameMode::Tsunami
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5271,14 +5316,19 @@ impl Game {
             || self.mode == GameMode::Seismic
             || self.mode == GameMode::Eclipse
             || self.mode == GameMode::Sandstorm
+
             || self.mode == GameMode::AcidRain
             || self.mode == GameMode::Monsoon
             || self.mode == GameMode::Singularity
             || self.mode == GameMode::Wildfire
             || self.mode == GameMode::EventHorizon
+
             || self.mode == GameMode::Inferno
+
             || self.mode == GameMode::Minefield
+
             || self.mode == GameMode::LaserGrid
+            || self.mode == GameMode::Tsunami
         {
             &self.snake
         } else {
@@ -5410,6 +5460,7 @@ impl Game {
         self.bomb_carrier = None;
         self.bomb_timer = 0;
         self.bomb_tags = 0;
+
         self.acid_puddles.clear();
         self.acid_drops = 0;
         self.puddle_tiles.clear();
@@ -5423,13 +5474,20 @@ impl Game {
         self.wildfire_ignitions = 0;
         self.infected_ids.clear();
         self.infection_spreads = 0;
+
         self.inferno_tiles.clear();
         self.inferno_hotspots.clear();
         self.inferno_burn.clear();
         self.inferno_flares = 0;
         self.inferno_burned = 0;
+
         self.laser_volleys = 0;
         self.laser_telegraph = None;
+        self.tsunami_edge = Self::TSUNAMI_NO_EDGE;
+        self.tsunami_front = -1;
+        self.tsunami_depth = -1;
+        self.tsunami_warning = 0;
+        self.tsunami_waves = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -5922,6 +5980,7 @@ impl Game {
         if self.mode == GameMode::Sandstorm {
             self.weather = Weather::Sandstorm;
         }
+
         if self.mode == GameMode::AcidRain {
             self.weather = Weather::Rain;
         }
@@ -5934,13 +5993,17 @@ impl Game {
         if self.mode == GameMode::EventHorizon {
             self.weather = Weather::Clear;
         }
+
         if self.mode == GameMode::Inferno {
             self.weather = Weather::Inferno;
         }
+
         if self.mode == GameMode::LaserGrid {
             self.weather = Weather::Clear;
             self.lasers.clear();
             self.laser_telegraph = None;
+        if self.mode == GameMode::Tsunami {
+            self.weather = Weather::Rain;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -6265,15 +6328,21 @@ impl Game {
             | GameMode::Eclipse
             | GameMode::Sandstorm
             | GameMode::BombTag
+
             | GameMode::AcidRain
             | GameMode::Monsoon
             | GameMode::Singularity
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
+
             | GameMode::Inferno
             | GameMode::Minefield
+
             | GameMode::LaserGrid => {
+            | GameMode::Inferno
+            | GameMode::Tsunami => {
+
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6915,6 +6984,7 @@ impl Game {
             self.bomb_carrier = state.bomb_carrier;
             self.bomb_timer = state.bomb_timer;
             self.bomb_tags = state.bomb_tags;
+
             self.acid_puddles = state.acid_puddles;
             self.acid_drops = state.acid_drops;
             self.puddle_tiles = state.puddle_tiles;
@@ -6931,14 +7001,22 @@ impl Game {
             self.event_horizon_surges = state.event_horizon_surges;
             self.infected_ids = state.infected_ids;
             self.infection_spreads = state.infection_spreads;
+
             self.inferno_tiles = state.inferno_tiles;
             self.inferno_hotspots = state.inferno_hotspots;
             self.inferno_burn = state.inferno_burn;
             self.inferno_flares = state.inferno_flares;
             self.inferno_burned = state.inferno_burned;
+
             self.mine_drops = state.mine_drops;
+
             self.laser_volleys = state.laser_volleys;
             self.laser_telegraph = state.laser_telegraph;
+            self.tsunami_edge = state.tsunami_edge;
+            self.tsunami_front = state.tsunami_front;
+            self.tsunami_depth = state.tsunami_depth;
+            self.tsunami_warning = state.tsunami_warning;
+            self.tsunami_waves = state.tsunami_waves;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -7060,6 +7138,7 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
             puddle_tiles: self.puddle_tiles.clone(),
@@ -7075,14 +7154,22 @@ impl Game {
             event_horizon_surges: self.event_horizon_surges,
             infected_ids: self.infected_ids.clone(),
             infection_spreads: self.infection_spreads,
+
             inferno_tiles: self.inferno_tiles.clone(),
             inferno_hotspots: self.inferno_hotspots.clone(),
             inferno_burn: self.inferno_burn.clone(),
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
+
             mine_drops: self.mine_drops,
+
             laser_volleys: self.laser_volleys,
             laser_telegraph: self.laser_telegraph,
+            tsunami_edge: self.tsunami_edge,
+            tsunami_front: self.tsunami_front,
+            tsunami_depth: self.tsunami_depth,
+            tsunami_warning: self.tsunami_warning,
+            tsunami_waves: self.tsunami_waves,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -9827,13 +9914,18 @@ impl Game {
             && self.mode != GameMode::Seismic
             && self.mode != GameMode::Eclipse
             && self.mode != GameMode::Sandstorm
+
             && self.mode != GameMode::AcidRain
             && self.mode != GameMode::Monsoon
             && self.mode != GameMode::Wildfire
             && self.mode != GameMode::EventHorizon
+
             && self.mode != GameMode::Inferno
+
             && self.mode != GameMode::Minefield
+
             && self.mode != GameMode::LaserGrid
+            && self.mode != GameMode::Tsunami
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -11573,9 +11665,12 @@ impl Game {
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::BombTag
+
                 || self.mode == GameMode::Singularity
                 || self.mode == GameMode::Infection
+
                 || self.mode == GameMode::Minefield
+                || self.mode == GameMode::Tsunami
             {
                 self.handle_death("You Died!");
             } else {
@@ -11868,7 +11963,9 @@ impl Game {
         self.bots = alive_bots;
         self.bots_autopilot_paths = alive_paths;
         self.manage_bomb_tag();
+
         self.manage_infection();
+        self.manage_tsunami();
 
         if self.mode == GameMode::TurfWar {
             for segment in &self.snake.body {
@@ -13305,6 +13402,7 @@ impl Game {
             self.handle_win();
         }
     }
+
     fn participant_head(&self, id: u8) -> Option<(u8, Point)> {
         match id {
             1 => Some((1, self.snake.head())),
@@ -13425,6 +13523,248 @@ impl Game {
         {
             self.handle_win();
         }
+    }
+    fn tsunami_line_of(&self, p: Point) -> Option<i32> {
+        if self.tsunami_edge == Self::TSUNAMI_NO_EDGE {
+            return None;
+        }
+        Some(match self.tsunami_edge {
+            0 => i32::from(p.y),
+            1 => i32::from(self.height.saturating_sub(1)).saturating_sub(i32::from(p.y)),
+            2 => i32::from(p.x),
+            _ => i32::from(self.width.saturating_sub(1)).saturating_sub(i32::from(p.x)),
+        })
+    }
+    /// A cell within the wave's depth is safe only if its line is already behind
+    /// the wave front (swept). During the warning nothing is swept yet, so every
+    /// line within the depth is rejected; lines beyond `tsunami_depth` are
+    /// permanently safe. This keeps the verified-safe pipeline out of the
+    /// incoming wave entirely.
+    fn tsunami_threatens(&self, p: Point) -> bool {
+        if self.mode != GameMode::Tsunami {
+            return false;
+        }
+        let Some(line) = self.tsunami_line_of(p) else {
+            return false;
+        };
+        if line > self.tsunami_depth {
+            return false;
+        }
+        let front = self.tsunami_front.max(0);
+        line >= front
+    }
+    fn sweep_tsunami_line(&mut self, line: i32) {
+        let edge = self.tsunami_edge;
+        let (w, h) = (self.width, self.height);
+        let on_line = move |p: &Point| {
+            match edge {
+                0 => i32::from(p.y) == line,
+                1 => i32::from(h.saturating_sub(1)).saturating_sub(i32::from(p.y)) == line,
+                2 => i32::from(p.x) == line,
+                _ => i32::from(w.saturating_sub(1)).saturating_sub(i32::from(p.x)) == line,
+            }
+        };
+        // The wave smashes through obstacles and hazard tiles on the swept line
+        let smashed: Vec<Point> = self.obstacles.iter().copied().filter(|p| on_line(p)).collect();
+        for p in smashed {
+            self.obstacles.remove(&p);
+        }
+        self.snow_tiles.retain(|p| !on_line(p));
+        self.sand_tiles.retain(|p| !on_line(p));
+        self.lava_tiles.retain(|p| !on_line(p));
+        self.seismic_rubble.retain(|p| !on_line(p));
+        self.rubble_tiles.retain(|p| !on_line(p));
+        self.mines.retain(|p| !on_line(p));
+        // Loose items are washed away; the food is relocated to a fair empty cell
+        if on_line(&self.food) {
+            let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+            let p2_next = self
+                .player2
+                .as_ref()
+                .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+            let bot_next: Vec<Point> = self
+                .bots
+                .iter()
+                .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                .collect();
+            let avoid = |p: &Point| {
+                *p == p1_next
+                    || p2_next == Some(*p)
+                    || bot_next.contains(p)
+                    || self.obstacles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                1,
+            ) {
+                self.food = pos;
+            }
+        }
+        if self.bonus_food.is_some_and(|(p, _)| on_line(&p)) {
+            self.bonus_food = None;
+        }
+        if self.poison_food.is_some_and(|(p, _)| on_line(&p)) {
+            self.poison_food = None;
+        }
+        if self.power_up.as_ref().is_some_and(|pu| on_line(&pu.location)) {
+            self.power_up = None;
+        }
+        // A snake whose head is on the swept line is swept away (invincibility
+        // protects); like Storm's lightning column, the kill is head-only
+        if !self.is_invincible_active() {
+            if on_line(&self.snake.head()) {
+                let head = self.snake.head();
+                self.spawn_particles(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    30,
+                    crate::color::Color::Blue,
+                    '~',
+                );
+                self.handle_death("Swept away by the tsunami!");
+                return;
+            }
+            if self.player2.as_ref().is_some_and(|p2| on_line(&p2.head())) {
+                self.player2 = None;
+            }
+            let mut i = 0;
+            while i < self.bots.len() {
+                if on_line(&self.bots[i].head()) {
+                    let pos = self.bots[i].head();
+                    self.spawn_particles(
+                        f32::from(pos.x),
+                        f32::from(pos.y),
+                        30,
+                        crate::color::Color::Blue,
+                        '~',
+                    );
+                    self.spawn_floating_text(
+                        f32::from(pos.x),
+                        f32::from(pos.y),
+                        "Swept away!".to_string(),
+                        crate::color::Color::Blue,
+                    );
+                    self.bots.remove(i);
+                    if i < self.bots_autopilot_paths.len() {
+                        self.bots_autopilot_paths.remove(i);
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    fn manage_tsunami(&mut self) {
+        if self.mode != GameMode::Tsunami {
+            return;
+        }
+        // Torrential rain never breaks in Tsunami mode
+        self.weather = Weather::Rain;
+        if self.tsunami_warning > 0 {
+            self.tsunami_warning -= 1;
+            if self.tsunami_warning > 0 {
+                return;
+            }
+            self.tsunami_front = 0;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "Tsunami!".to_string(),
+                crate::color::Color::Blue,
+            );
+        } else if self.tsunami_front < 0 {
+            // A new wave is announced from a random edge every TSUNAMI_PERIOD ticks
+            if self.tick_counter.is_multiple_of(Self::TSUNAMI_PERIOD) {
+                let edge = self.rng.gen_range(0..4);
+                // Fairness: the wave never sweeps the line any snake currently
+                // occupies (body) or is about to enter (next head), so it always
+                // stops just short of the closest snake — like Storm's lightning
+                // column never striking a snake's column.
+                let line_of = |p: &Point| -> i32 {
+                    match edge {
+                        0 => i32::from(p.y),
+                        1 => i32::from(self.height.saturating_sub(1)).saturating_sub(i32::from(p.y)),
+                        2 => i32::from(p.x),
+                        _ => i32::from(self.width.saturating_sub(1)).saturating_sub(i32::from(p.x)),
+                    }
+                };
+                let mut min_line = i32::MAX;
+                for p in &self.snake.body {
+                    min_line = min_line.min(line_of(p));
+                }
+                if let Some(p2) = &self.player2 {
+                    for p in &p2.body {
+                        min_line = min_line.min(line_of(p));
+                    }
+                }
+                for b in &self.bots {
+                    for p in &b.body {
+                        min_line = min_line.min(line_of(p));
+                    }
+                }
+                min_line = min_line.min(line_of(&Self::calculate_next_head_dir(
+                    self.snake.head(),
+                    self.snake.direction,
+                )));
+                if let Some(p2) = &self.player2 {
+                    min_line = min_line.min(line_of(&Self::calculate_next_head_dir(
+                        p2.head(),
+                        p2.direction,
+                    )));
+                }
+                for b in &self.bots {
+                    min_line = min_line.min(line_of(&Self::calculate_next_head_dir(
+                        b.head(),
+                        b.direction,
+                    )));
+                }
+                let depth = min_line.saturating_sub(1);
+                if depth >= 1 {
+                    self.tsunami_edge = edge;
+                    self.tsunami_depth = depth;
+                    self.tsunami_warning = Self::TSUNAMI_WARNING;
+                    let head = self.snake.head();
+                    let from = match edge {
+                        0 => "top",
+                        1 => "bottom",
+                        2 => "left",
+                        _ => "right",
+                    };
+                    self.spawn_floating_text(
+                        f32::from(head.x),
+                        f32::from(head.y),
+                        format!("Tsunami from the {from}!"),
+                        crate::color::Color::Cyan,
+                    );
+                }
+            }
+            return;
+        }
+        // The wave sweeps one line per tick, from the announced edge up to its depth
+        if self.tsunami_front > self.tsunami_depth {
+            self.tsunami_front = -1;
+            self.tsunami_depth = -1;
+            self.tsunami_edge = Self::TSUNAMI_NO_EDGE;
+            self.tsunami_waves += 1;
+            return;
+        }
+        let line = self.tsunami_front;
+        self.tsunami_front += 1;
+        self.sweep_tsunami_line(line);
     }
     fn manage_portals(&mut self) {
         let spawn_chance = if self.skin == 'Ξ' {
@@ -14032,6 +14372,9 @@ impl Game {
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
+                return false;
+            }
+            if self.tsunami_threatens(final_p) {
                 return false;
             }
             if steps == 1 {
@@ -14819,11 +15162,17 @@ impl Game {
     /// Maximum number of steps ahead for which rival snake heads are predicted
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
+
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
     pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
+
     pub const INFERNO_BURN_TICKS: u32 = 36;
+
     pub const LASER_GRID_MAX_BEAMS: usize = 3;
+    pub const TSUNAMI_NO_EDGE: u8 = 255;
+    pub const TSUNAMI_PERIOD: u32 = 40;
+    pub const TSUNAMI_WARNING: u32 = 8;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

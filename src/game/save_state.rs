@@ -172,6 +172,7 @@ pub struct SaveState {
     #[serde(default)]
     pub bomb_tags: u32,
     #[serde(default)]
+
     pub acid_puddles: HashSet<Point>,
     #[serde(default)]
     pub acid_drops: u32,
@@ -203,14 +204,25 @@ pub struct SaveState {
     pub infected_ids: Vec<u8>,
     #[serde(default)]
     pub infection_spreads: u32,
+
     pub inferno_tiles: HashSet<Point>,
     pub inferno_hotspots: Vec<Point>,
     #[serde(default, with = "super::map_as_pairs")]
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+
     #[serde(default)]
     pub mine_drops: u32,
+    pub tsunami_edge: u8,
+    #[serde(default)]
+    pub tsunami_front: i32,
+    #[serde(default)]
+    pub tsunami_depth: i32,
+    #[serde(default)]
+    pub tsunami_warning: u32,
+    #[serde(default)]
+    pub tsunami_waves: u32,
 }
 
 #[must_use]

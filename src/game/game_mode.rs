@@ -63,13 +63,18 @@ pub enum GameMode {
     Eclipse,
     Sandstorm,
     BombTag,
+
     AcidRain,
     Monsoon,
     Singularity,
     Wildfire,
     EventHorizon,
     Infection,
+
     Inferno,
+
     Minefield,
+
     LaserGrid,
+    Tsunami,
 }

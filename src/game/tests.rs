@@ -462,7 +462,6 @@ mod tests {
         game.inferno_burn.insert(Point { x: 12, y: 9 }, 17);
         game.inferno_flares = 42;
         let file_path = "savegame_test_inferno_unit.json";
-        let _ = std::fs::remove_file(file_path);
         game.save_game_to_file(file_path);
         let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         let success = loaded.load_game_from_file(file_path);
@@ -472,6 +471,29 @@ mod tests {
         assert!(loaded.inferno_hotspots.contains(&Point { x: 3, y: 3 }));
         assert_eq!(loaded.inferno_burn.get(&Point { x: 12, y: 9 }), Some(&17));
         assert_eq!(loaded.inferno_flares, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
+    fn test_save_and_load_tsunami_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Tsunami;
+        game.reset();
+        game.tsunami_edge = 2;
+        game.tsunami_front = 7;
+        game.tsunami_depth = 9;
+        game.tsunami_warning = 3;
+        game.tsunami_waves = 42;
+        let file_path = "savegame_test_tsunami.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Tsunami);
+        assert_eq!(loaded.tsunami_edge, 2);
+        assert_eq!(loaded.tsunami_front, 7);
+        assert_eq!(loaded.tsunami_depth, 9);
+        assert_eq!(loaded.tsunami_warning, 3);
+        assert_eq!(loaded.tsunami_waves, 42);
         let _ = std::fs::remove_file(file_path);
     }
     #[test]

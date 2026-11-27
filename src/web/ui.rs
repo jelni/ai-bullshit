@@ -184,6 +184,7 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+
     // Draw the contagion on infected heads (Infection mode)
     if game.mode == crate::game::GameMode::Infection {
         for id in &game.infected_ids {
@@ -212,6 +213,53 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                     cell_size,
                 );
             }
+    // Draw the tsunami warning edge / wave front (Tsunami mode)
+    if game.mode == crate::game::GameMode::Tsunami {
+        let line_cells = |line: i32| -> Vec<(f64, f64)> {
+            let mut cells = Vec::new();
+            let l = f64::from(u16::try_from(line).unwrap_or(0));
+            match game.tsunami_edge {
+                0 => {
+                    for x in 0..game.width {
+                        cells.push((f64::from(x), l));
+                    }
+                },
+                1 => {
+                    for x in 0..game.width {
+                        cells.push((f64::from(x), f64::from(game.height.saturating_sub(1)) - l));
+                    }
+                },
+                2 => {
+                    for y in 0..game.height {
+                        cells.push((l, f64::from(y)));
+                    }
+                },
+                _ => {
+                    for y in 0..game.height {
+                        cells.push((f64::from(game.width.saturating_sub(1)) - l, f64::from(y)));
+                    }
+                },
+            }
+            cells
+        };
+        let draw_cells = |cells: Vec<(f64, f64)>, color: &str| {
+            ctx.set_fill_style_str(color);
+            for (x, y) in cells {
+                if x >= 0.0
+                    && y >= 0.0
+                    && x < f64::from(game.width)
+                    && y < f64::from(game.height)
+                    && is_visible(x, y)
+                {
+                    ctx.fill_rect(x * cell_size, y * cell_size, cell_size, cell_size);
+                }
+            }
+        };
+        if game.tsunami_warning > 0 {
+            draw_cells(line_cells(0), "#00FFFF"); // Cyan warning edge
+        }
+        if game.tsunami_front >= 0 {
+            draw_cells(line_cells(game.tsunami_front), "#0000FF"); // Blue wave front
         }
     }
 
