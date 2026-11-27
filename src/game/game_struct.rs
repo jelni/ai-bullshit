@@ -1468,7 +1468,8 @@ impl Game {
             });
         }
         for p in crater {
-            if self.obstacles.remove(&p) {
+            if self.obstacles.contains(&p) {
+                self.remove_obstacle_and_hazards(p);
                 self.spawn_particles(
                     f32::from(p.x),
                     f32::from(p.y),
@@ -1517,6 +1518,16 @@ impl Game {
             cells.push(impact);
         }
         cells
+    }
+    fn remove_obstacle_and_hazards(&mut self, p: Point) {
+        self.obstacles.remove(&p);
+        self.snow_tiles.remove(&p);
+        self.sand_tiles.remove(&p);
+        self.lava_tiles.remove(&p);
+        self.fire_tiles.remove(&p);
+        self.acid_puddles.remove(&p);
+        self.rubble_tiles.remove(&p);
+        self.seismic_rubble.remove(&p);
     }
     fn manage_meteors(&mut self) {
         let asteroids = self.mode == GameMode::Asteroids;
@@ -1631,7 +1642,7 @@ impl Game {
                 continue;
             }
             if self.obstacles.contains(&meteor.position) {
-                self.obstacles.remove(&meteor.position);
+                self.remove_obstacle_and_hazards(meteor.position);
                 self.spawn_particles(
                     f32::from(meteor.position.x),
                     f32::from(meteor.position.y),
@@ -1644,7 +1655,7 @@ impl Game {
                 continue;
             }
             if self.obstacles.contains(&meteor.position) {
-                self.obstacles.remove(&meteor.position);
+                self.remove_obstacle_and_hazards(meteor.position);
                 self.spawn_particles(
                     f32::from(meteor.position.x),
                     f32::from(meteor.position.y),
@@ -12834,6 +12845,16 @@ impl Game {
             );
             self.obstacles.extend(new_obstacles);
         }
+        // Self-heal hazard mirrors: any effect that cleared obstacles this tick
+        // (meteor craters, quakes, bombs, ...) also drops the stale hazard records,
+        // so snow/sand/lava/fire/acid/rubble tiles are always a subset of `obstacles`.
+        self.snow_tiles.retain(|p| self.obstacles.contains(p));
+        self.sand_tiles.retain(|p| self.obstacles.contains(p));
+        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        self.fire_tiles.retain(|p| self.obstacles.contains(p));
+        self.acid_puddles.retain(|p| self.obstacles.contains(p));
+        self.rubble_tiles.retain(|p| self.obstacles.contains(p));
+        self.seismic_rubble.retain(|p| self.obstacles.contains(p));
     }
     pub fn update_quest_progress(&mut self, q_type: crate::game::QuestType, amount: u32) {
         let mut completed_any = false;
