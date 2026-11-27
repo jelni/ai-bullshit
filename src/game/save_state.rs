@@ -185,6 +185,14 @@ pub struct SaveState {
     pub singularity_drifts: u32,
     #[serde(default)]
     pub singularity_shield: u32,
+    #[serde(default)]
+    pub fire_tiles: HashSet<Point>,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub fire_ttl: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub ash_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub wildfire_ignitions: u32,
 }
 
 #[must_use]

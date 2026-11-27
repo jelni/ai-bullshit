@@ -159,6 +159,10 @@ pub struct Game {
     pub singularity_pulses: u32,
     pub singularity_drifts: u32,
     pub singularity_shield: u32,
+    pub fire_tiles: HashSet<Point>,
+    pub fire_ttl: std::collections::HashMap<Point, u32>,
+    pub ash_tiles: HashSet<Point>,
+    pub wildfire_ignitions: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -611,6 +615,10 @@ impl Game {
             singularity_pulses: 0,
             singularity_drifts: 0,
             singularity_shield: 0,
+            fire_tiles: HashSet::new(),
+            fire_ttl: std::collections::HashMap::new(),
+            ash_tiles: HashSet::new(),
+            wildfire_ignitions: 0,
         }
     }
     #[must_use]
@@ -883,6 +891,10 @@ impl Game {
             singularity_pulses: self.singularity_pulses,
             singularity_drifts: self.singularity_drifts,
             singularity_shield: self.singularity_shield,
+            fire_tiles: self.fire_tiles.clone(),
+            fire_ttl: self.fire_ttl.clone(),
+            ash_tiles: self.ash_tiles.clone(),
+            wildfire_ignitions: self.wildfire_ignitions,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1056,6 +1068,10 @@ impl Game {
                 self.singularity_pulses = state.singularity_pulses;
                 self.singularity_drifts = state.singularity_drifts;
                 self.singularity_shield = state.singularity_shield;
+                self.fire_tiles = state.fire_tiles;
+                self.fire_ttl = state.fire_ttl;
+                self.ash_tiles = state.ash_tiles;
+                self.wildfire_ignitions = state.wildfire_ignitions;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -2077,6 +2093,7 @@ impl Game {
                         || self.meteors.iter().any(|m| m.position == *p)
                         || self.tornado.is_some_and(|t| t == *p)
                         || self.lava_tiles.contains(p)
+                        || self.fire_tiles.contains(p)
                         || self.seismic_rubble.contains(p)
                         || self.rubble_tiles.contains(p)
                 };
@@ -2168,6 +2185,7 @@ impl Game {
                     || self.meteors.iter().any(|m| m.position == *p)
                     || self.tornado == Some(*p)
                     || self.lava_tiles.contains(p)
+                    || self.fire_tiles.contains(p)
                     || self.seismic_rubble.contains(p)
                     || self.rubble_tiles.contains(p)
                     || self.snow_tiles.contains(p)
@@ -2277,6 +2295,7 @@ impl Game {
                         || self.lasers.iter().any(|l| l.position == *p)
                         || self.meteors.iter().any(|m| m.position == *p)
                         || self.lava_tiles.contains(p)
+                        || self.fire_tiles.contains(p)
                 };
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
@@ -3040,6 +3059,175 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+    }
+
+    fn ignite_at(&mut self, p: Point) {
+        self.fire_tiles.insert(p);
+        self.fire_ttl.insert(p, Self::FIRE_TTL);
+        self.obstacles.insert(p);
+        self.ash_tiles.remove(&p);
+    }
+    fn ignite_initial_wildfire(&mut self) {
+        for _ in 0..2 {
+            self.ignite_wildfire_cell();
+        }
+    }
+    fn ignite_wildfire_cell(&mut self) {
+        let cap = (u32::from(self.width) * u32::from(self.height)) * 12 / 100;
+        if u32::try_from(self.fire_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next =
+            self.player2.as_ref().map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let max_x = (self.width - 1).max(2);
+        let max_y = (self.height - 1).max(2);
+        for _ in 0..100 {
+            let p = Point {
+                x: self.rng.gen_range(1..max_x),
+                y: self.rng.gen_range(1..max_y),
+            };
+            if !self.is_wildfire_spread_blocked(p, p1_next, p2_next, &bot_next) {
+                self.wildfire_ignitions += 1;
+                self.ignite_at(p);
+                return;
+            }
+        }
+    }
+    fn manage_wildfire(&mut self) {
+        if self.mode != GameMode::Wildfire {
+            return;
+        }
+        // The wildfire never breaks in Wildfire mode
+        self.weather = Weather::Wildfire;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale fire records
+        self.fire_tiles.retain(|p| self.obstacles.contains(p));
+        self.fire_ttl.retain(|p, _| self.fire_tiles.contains(p));
+        // Burn-down: every burning cell has a limited lifetime, then smolders out into ash
+        let mut burned_out: Vec<Point> = Vec::new();
+        for (p, ttl) in &mut self.fire_ttl {
+            if *ttl <= 1 {
+                burned_out.push(*p);
+            } else {
+                *ttl -= 1;
+            }
+        }
+        for p in burned_out {
+            self.fire_tiles.remove(&p);
+            self.fire_ttl.remove(&p);
+            self.obstacles.remove(&p);
+            self.ash_tiles.insert(p);
+        }
+        // Periodic douse: at tick 200 of every 250-tick cycle rain puts the whole fire out
+        if self.tick_counter == 200 {
+            let mut doused = false;
+            for p in self.fire_tiles.drain() {
+                self.fire_ttl.remove(&p);
+                self.obstacles.remove(&p);
+                doused = true;
+            }
+            self.ash_tiles.clear();
+            if doused {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Rain douses the wildfire!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            return;
+        }
+        // Scheduled blaze every 6th tick: the fire spreads and a new ignition starts
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.spread_wildfire();
+        self.ignite_wildfire_cell();
+    }
+    fn spread_wildfire(&mut self) {
+        let cap = (u32::from(self.width) * u32::from(self.height)) * 12 / 100;
+        if u32::try_from(self.fire_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next =
+            self.player2.as_ref().map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let frontier: Vec<Point> = self.fire_tiles.iter().copied().collect();
+        if frontier.is_empty() {
+            return;
+        }
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        for _ in 0..3 {
+            if u32::try_from(self.fire_tiles.len()).unwrap_or(u32::MAX) >= cap {
+                break;
+            }
+            let base = frontier[self.rng.gen_range(0..frontier.len())];
+            let np = Self::calculate_next_head_dir(base, dirs[self.rng.gen_range(0..4)]);
+            if np.x >= self.width || np.y >= self.height {
+                continue;
+            }
+            if self.is_wildfire_spread_blocked(np, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            self.ignite_at(np);
+        }
+    }
+    fn is_wildfire_spread_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.tornado.is_some_and(|t| t == p)
+            || self.lava_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
     }
 
     fn manage_seismic(&mut self) {
@@ -4149,7 +4337,8 @@ impl Game {
             | GameMode::BombTag
             | GameMode::AcidRain
             | GameMode::Monsoon
-            | GameMode::Singularity => {
+            | GameMode::Singularity
+            | GameMode::Wildfire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4242,6 +4431,7 @@ impl Game {
                 || self.mode == GameMode::AcidRain
                 || self.mode == GameMode::Monsoon
                 || self.mode == GameMode::Singularity
+                || self.mode == GameMode::Wildfire
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -4302,6 +4492,7 @@ impl Game {
             || self.mode == GameMode::AcidRain
             || self.mode == GameMode::Monsoon
             || self.mode == GameMode::Singularity
+            || self.mode == GameMode::Wildfire
         {
             &self.snake
         } else {
@@ -4440,6 +4631,10 @@ impl Game {
         self.singularity_pulses = 0;
         self.singularity_drifts = 0;
         self.singularity_shield = 0;
+        self.fire_tiles.clear();
+        self.fire_ttl.clear();
+        self.ash_tiles.clear();
+        self.wildfire_ignitions = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -4801,6 +4996,9 @@ impl Game {
         if self.mode == GameMode::Volcano {
             self.spawn_volcano_vents();
         }
+        if self.mode == GameMode::Wildfire {
+            self.ignite_initial_wildfire();
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -4931,6 +5129,9 @@ impl Game {
         }
         if self.mode == GameMode::Monsoon {
             self.weather = Weather::Rain;
+        }
+        if self.mode == GameMode::Wildfire {
+            self.weather = Weather::Wildfire;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -5185,7 +5386,8 @@ impl Game {
             | GameMode::BombTag
             | GameMode::AcidRain
             | GameMode::Monsoon
-            | GameMode::Singularity => {
+            | GameMode::Singularity
+            | GameMode::Wildfire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5239,7 +5441,10 @@ impl Game {
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.sand_tiles.retain(|p| self.obstacles.contains(p));
         self.acid_puddles.retain(|p| self.obstacles.contains(p));
-        self.puddle_tiles.retain(|p| self.obstacles.contains(p));        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        self.puddle_tiles.retain(|p| self.obstacles.contains(p));
+        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        self.fire_tiles.retain(|p| self.obstacles.contains(p));
+        self.fire_ttl.retain(|p, _| self.fire_tiles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
@@ -5819,6 +6024,10 @@ impl Game {
             self.singularity_pulses = state.singularity_pulses;
             self.singularity_drifts = state.singularity_drifts;
             self.singularity_shield = state.singularity_shield;
+            self.fire_tiles = state.fire_tiles;
+            self.fire_ttl = state.fire_ttl;
+            self.ash_tiles = state.ash_tiles;
+            self.wildfire_ignitions = state.wildfire_ignitions;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -5947,6 +6156,10 @@ impl Game {
             singularity_pulses: self.singularity_pulses,
             singularity_drifts: self.singularity_drifts,
             singularity_shield: self.singularity_shield,
+            fire_tiles: self.fire_tiles.clone(),
+            fire_ttl: self.fire_ttl.clone(),
+            ash_tiles: self.ash_tiles.clone(),
+            wildfire_ignitions: self.wildfire_ignitions,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -8693,6 +8906,7 @@ impl Game {
             && self.mode != GameMode::Sandstorm
             && self.mode != GameMode::AcidRain
             && self.mode != GameMode::Monsoon
+            && self.mode != GameMode::Wildfire
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -9658,6 +9872,7 @@ impl Game {
         self.manage_eclipse();
         self.manage_seismic();
         self.manage_monsoon();
+        self.manage_wildfire();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -11510,6 +11725,31 @@ impl Game {
                 "Shielded!".to_string(),
                 crate::color::Color::Cyan,
             );
+        }
+        if self.mode == GameMode::Wildfire {
+            let mut doused = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.fire_tiles.remove(&np) {
+                    self.fire_ttl.remove(&np);
+                    self.obstacles.remove(&np);
+                    self.ash_tiles.insert(np);
+                    doused += 1;
+                }
+            }
+            if doused > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Doused {doused} flames!"),
+                    crate::color::Color::Cyan,
+                );
+            }
         }
         if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
             self.spawn_floating_text(
@@ -13424,6 +13664,7 @@ impl Game {
     /// Maximum number of steps ahead for which rival snake heads are predicted
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
+    pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
     pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;

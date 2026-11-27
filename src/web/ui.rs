@@ -153,24 +153,6 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
-    // Draw puddles (Monsoon mode)
-    if game.mode == crate::game::GameMode::Monsoon {
-        ctx.set_fill_style_str("#0066FF"); // Blue
-        for puddle in &game.puddle_tiles {
-            if puddle.x < game.width
-                && puddle.y < game.height
-                && is_visible(f64::from(puddle.x), f64::from(puddle.y))
-            {
-                ctx.fill_rect(
-                    f64::from(puddle.x) * cell_size,
-                    f64::from(puddle.y) * cell_size,
-                    cell_size,
-                    cell_size,
-                );
-            }
-        }
-    }
-
     // Draw the bomb on the carrier's head (Bomb Tag mode)
     if game.mode == crate::game::GameMode::BombTag
         && let Some(carrier) = game.bomb_carrier
@@ -245,6 +227,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 ctx.fill_rect(
                     f64::from(vent.x) * cell_size,
                     f64::from(vent.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
+    // Draw burning cells and ash (Wildfire mode)
+    if game.mode == crate::game::GameMode::Wildfire {
+        ctx.set_fill_style_str("#FF0000"); // Red
+        for fire in &game.fire_tiles {
+            if fire.x < game.width
+                && fire.y < game.height
+                && is_visible(f64::from(fire.x), f64::from(fire.y))
+            {
+                ctx.fill_rect(
+                    f64::from(fire.x) * cell_size,
+                    f64::from(fire.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#404040"); // Dark grey ash
+        for ash in &game.ash_tiles {
+            if ash.x < game.width
+                && ash.y < game.height
+                && is_visible(f64::from(ash.x), f64::from(ash.y))
+            {
+                ctx.fill_rect(
+                    f64::from(ash.x) * cell_size,
+                    f64::from(ash.y) * cell_size,
                     cell_size,
                     cell_size,
                 );
@@ -641,6 +655,25 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                         f64::from(y) * cell_size,
                         cell_size,
                         cell_size,
+                    );
+                }
+            }
+        },
+        crate::game::Weather::Wildfire => {
+            ctx.set_fill_style_str("#FF4500"); // OrangeRed embers
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(f64::from(x), f64::from(y))
+                    && !game.fire_tiles.contains(&crate::snake::Point { x, y })
+                {
+                    ctx.fill_rect(
+                        f64::from(x).mul_add(cell_size, cell_size * 0.3),
+                        f64::from(y).mul_add(cell_size, cell_size * 0.3),
+                        cell_size * 0.4,
+                        cell_size * 0.4,
                     );
                 }
             }

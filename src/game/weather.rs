@@ -11,4 +11,5 @@ pub enum Weather {
     Earthquake,
     Eclipse,
     Fog,
+    Wildfire,
 }

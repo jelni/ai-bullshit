@@ -91,4 +91,8 @@ pub struct HistoryState {
     pub singularity_pulses: u32,
     pub singularity_drifts: u32,
     pub singularity_shield: u32,
+    pub fire_tiles: HashSet<Point>,
+    pub fire_ttl: std::collections::HashMap<Point, u32>,
+    pub ash_tiles: HashSet<Point>,
+    pub wildfire_ignitions: u32,
 }

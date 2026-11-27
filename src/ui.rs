@@ -643,6 +643,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Acid Rain Mode",
         "Monsoon Mode",
         "Singularity Mode",
+        "Wildfire Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1703,6 +1704,19 @@ fn draw_entities<W: Write>(
                 }
             }
         },
+        Weather::Wildfire => {
+            stdout.queue(SetForegroundColor(Color::DarkRed))?;
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y) && !game.fire_tiles.contains(&Point { x, y }) {
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, ".")?;
+                }
+            }
+        },
         Weather::Fog => {
             stdout.queue(SetForegroundColor(Color::Grey))?;
             for _ in 0..15 {
@@ -1897,17 +1911,6 @@ fn draw_entities<W: Write>(
         }
     }
 
-    // Draw puddles (Monsoon mode)
-    if game.mode == crate::game::GameMode::Monsoon {
-        stdout.queue(SetForegroundColor(Color::Blue))?;
-        for puddle in &game.puddle_tiles {
-            if is_visible(puddle.x, puddle.y) {
-                stdout.queue(cursor::MoveTo(puddle.x, puddle.y))?;
-                write!(stdout, "≈")?;
-            }
-        }
-    }
-
     // Draw the bomb on the carrier's head (Bomb Tag mode)
     if game.mode == crate::game::GameMode::BombTag
         && let Some(carrier) = game.bomb_carrier
@@ -1942,6 +1945,24 @@ fn draw_entities<W: Write>(
             if is_visible(vent.x, vent.y) {
                 stdout.queue(cursor::MoveTo(vent.x, vent.y))?;
                 write!(stdout, "V")?;
+            }
+        }
+    }
+
+    // Draw burning cells and ash (Wildfire mode)
+    if game.mode == crate::game::GameMode::Wildfire {
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for fire in &game.fire_tiles {
+            if is_visible(fire.x, fire.y) {
+                stdout.queue(cursor::MoveTo(fire.x, fire.y))?;
+                write!(stdout, "*")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for ash in &game.ash_tiles {
+            if is_visible(ash.x, ash.y) {
+                stdout.queue(cursor::MoveTo(ash.x, ash.y))?;
+                write!(stdout, ".")?;
             }
         }
     }
@@ -2667,6 +2688,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Earthquake => " | Weather: Earthquake",
         crate::game::Weather::Eclipse => " | Weather: Eclipse",
         crate::game::Weather::Fog => " | Weather: Fog",
+        crate::game::Weather::Wildfire => " | Weather: Wildfire",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
@@ -2795,12 +2817,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let fire_str = if game.mode == crate::game::GameMode::Wildfire {
+        format!(
+            " | Fire: {} | Ignitions: {}",
+            game.fire_tiles.len(),
+            game.wildfire_ignitions
+        )
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}"
     )?;
 
     if !game.bosses.is_empty() {

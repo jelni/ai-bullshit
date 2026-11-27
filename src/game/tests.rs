@@ -343,6 +343,31 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_wildfire_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Wildfire;
+        game.reset();
+        game.fire_tiles.clear();
+        game.fire_ttl.clear();
+        game.ash_tiles.clear();
+        game.fire_tiles.insert(Point { x: 12, y: 9 });
+        game.fire_ttl.insert(Point { x: 12, y: 9 }, 17);
+        game.obstacles.insert(Point { x: 12, y: 9 });
+        game.ash_tiles.insert(Point { x: 4, y: 4 });
+        game.wildfire_ignitions = 42;
+        let file_path = "savegame_test_wildfire.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Wildfire);
+        assert!(loaded.fire_tiles.contains(&Point { x: 12, y: 9 }));
+        assert_eq!(loaded.fire_ttl.get(&Point { x: 12, y: 9 }), Some(&17));
+        assert!(loaded.ash_tiles.contains(&Point { x: 4, y: 4 }));
+        assert_eq!(loaded.wildfire_ignitions, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

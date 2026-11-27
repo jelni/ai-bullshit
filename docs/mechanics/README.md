@@ -13,7 +13,7 @@ The game features several complex mechanics beyond simple snake movement:
 
 ## Weather System
 
-The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse` and `Fog` (randomly over time, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
+The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse`, `Fog` and `Wildfire` (randomly over time for the ambient types, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
 
 - **Rain:** raises the ambient bonus-food spawn chance. In Acid Rain Mode the rain is permanent and a downpour is guaranteed every 6th tick, dropping lethal acid puddles (see below).
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
@@ -23,6 +23,7 @@ The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `S
 - **Tornado:** occasionally relocates the food. In Tornado Mode the twister is permanent: a roaming vortex drifts every 6th tick and drags items towards itself, every 8th tick a board-wide gust shoves every snake one cell in a shared random direction, and every 6th tick a full twister spin reshuffles items and obstacles (see below).
 - **Storm:** occasionally calls down a lightning column that devastates a whole row (including bosses standing in it). In Storm Mode the storm is permanent and a strike is guaranteed every 6th tick.
 - **Eclipse / Fog / Night:** restrict visibility to a radius around the snake(s). In Eclipse Mode the eclipse is permanent and only solar flares (see below) lift the darkness.
+- **Wildfire:** drifting embers are drawn while a wildfire rages. In Wildfire Mode the wildfire is permanent: cells ignite and spread every 6th tick (see below).
 
 The Druid hero class ignores all weather penalties.
 
@@ -209,7 +210,6 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `bomb_carrier`, `bomb_timer`, and `bomb_tags` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_bomb_tag.rs](../../tests/test_bomb_tag.rs).
 
-
 ## Acid Rain Mode
 
 `GameMode::AcidRain` (menu entry "Acid Rain Mode") is a survival mode wrapped in a permanent acid rain (`weather` is forced to `Weather::Rain` every tick and ambient weather re-rolls are skipped in this mode):
@@ -223,6 +223,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `acid_puddles` and `acid_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale puddle records are pruned on the next tick if another effect clears obstacles (e.g. the Bomb power-up).
 - **Rendering:** acid puddles are drawn as a green `"` (terminal) / green cell (web), and the status bar shows `Acid: <count> | Drops: <count>` counters.
 - **Tests:** see [tests/test_acid_rain_mode.rs](../../tests/test_acid_rain_mode.rs) plus a save/load unit test in `src/game/tests.rs` (`test_save_and_load_acid_rain_mode`).
+
 ## Monsoon Mode
 
 `GameMode::Monsoon` (menu entry "Monsoon Mode") is a permanent rainstorm mode:
@@ -236,10 +237,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `puddle_tiles` and `monsoon_downpours` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Puddles: <count> | Downpours: <count>`, and puddles are rendered as a blue `≈` (terminal) / blue cell (web).
 - **Tests:** see [tests/test_monsoon_mode.rs](../../tests/test_monsoon_mode.rs).
 
+## Wildfire Mode
+
+`GameMode::Wildfire` (menu entry "Wildfire Mode", entry 61 in the main menu) is a survival mode wrapped in a permanent wildfire (`weather` is forced to `Weather::Wildfire` every tick, and the ambient weather randomization is skipped in this mode):
+
 
 ## Singularity Mode
 
-`GameMode::Singularity` (menu entry "Singularity Mode", entry 62 in the main menu) is a survival mode built around a permanent black hole:
+`GameMode::Singularity` (menu entry "Singularity Mode", entry 63 in the main menu) is a survival mode built around a permanent black hole:
 
 - **Permanent singularity:** in this mode `manage_black_hole` skips the random spawn/despawn rolls; `manage_singularity` (re)spawns the hole on a fair cell if it is missing — never on a snake, an entity, an obstacle, the food, or within Manhattan distance 6 of the spawn point (`get_random_empty_point` with `safe_zone_margin + 2`) — so a hole is always on the board. The hole cell is lethal on entry (existing `hit_black_hole` check), and the hole swallows adjacent obstacles and mines every tick (`singularity_consume_adjacent`).
 - **Drift:** on every 8th tick the hole creeps one cell in a random direction, but only onto a fair cell (`singularity_cell_free`: in bounds within the safe-zone margin, not on any snake body or the cell any snake is about to enter, not on the hole itself, an obstacle, the food, any entity, or a hazard). Drifts are counted in `singularity_drifts` and announced with "The singularity drifts!".
@@ -249,3 +254,14 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** the black-hole cell is already a hard hazard in the A* edge costs and the `is_safe_final_p` verified-safe checks (as in every mode), so the bot never paths into the hole; since pulses are non-lethal by fairness (they only ever move a snake onto a fair cell), the verified path pipeline stays valid and the bot rides out the gravity natively, replanning from its actual position each tick (same as Tornado gusts).
 - **Persistence:** `singularity_pulses`, `singularity_drifts`, and `singularity_shield` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent), and `black_hole` was already persisted. The status bar shows `Pulses: <count> | Drifts: <count>` plus a `Shield: <ticks>` indicator while the shield is active, and the hole is rendered as a dark-grey `O` (terminal) / dark cell (web).
 - **Tests:** see [tests/test_singularity_mode.rs](../../tests/test_singularity_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+- **Initial ignitions:** at reset, two random fair cells ignite (`ignite_initial_wildfire`).
+- **Scheduled blazes:** on every 6th tick a blaze fires: `spread_wildfire` spreads the fire from a random burning-frontier cell to up to 3 random orthogonal neighbors, and `ignite_wildfire_cell` starts one new ignition on a random fair cell. The burning field is capped at 12% of the board. New ignitions are counted in `wildfire_ignitions` and shown as `Ignitions: <count>` in the status bar.
+- **Lethality:** burning cells are stored in `fire_tiles` and mirrored into `obstacles`, so entering a burning cell kills the snake, and the autopilot treats fire as a hard obstacle natively (A* heuristic/edge costs, `is_safe_final_p` verified-safe path checks, and trap-avoidance flood fills all see it through `obstacles`).
+- **Burn-down:** every burning cell carries a per-cell timer (`fire_ttl`, `FIRE_TTL` = 30 ticks). Each tick the timers count down; when a cell's timer expires it stops burning, leaves `obstacles`, and smolders into walkable `ash_tiles`.
+- **Fairness:** fire never ignites or spreads onto a snake's body, the cell any snake is about to enter this tick, or any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, lasers, meteors, the tornado vortex, lava, rubble, snow, sand, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources) — see `is_wildfire_spread_blocked`.
+- **Douse cycle:** at tick 200 of every 250-tick cycle rain douses the whole fire ("Rain douses the wildfire!") and washes all ash away, keeping the board playable.
+- **Douse by food:** eating food douses all burning cells adjacent to the eaten cell ("Doused N flames!"), which smolder into ash.
+- **Persistence:** `fire_tiles`, `fire_ttl`, `ash_tiles` and `wildfire_ignitions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). If another effect clears obstacles (e.g. the Bomb power-up), stale fire records are pruned on the next tick.
+- **Rendering:** burning cells are drawn as a red `*` (terminal) / red cell (web), ash as a dark-grey `.` (terminal) / dark-grey cell (web), the wildfire weather draws dark-red ember specks (both UIs), and the status bar shows `Fire: <count> | Ignitions: <count>` plus ` | Weather: Wildfire`.
+- **Tests:** see [tests/test_wildfire_mode.rs](../../tests/test_wildfire_mode.rs) and the save/load unit test `test_save_and_load_wildfire_mode` in `src/game/tests.rs`.

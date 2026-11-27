@@ -66,4 +66,5 @@ pub enum GameMode {
     AcidRain,
     Monsoon,
     Singularity,
+    Wildfire,
 }
