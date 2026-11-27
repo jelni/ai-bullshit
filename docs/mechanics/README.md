@@ -221,4 +221,4 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** puddles are hard obstacles in the A* search and the `is_safe_final_p` verified-safe path checks, so the bot rides out the rain natively. Rain weather also raises the ambient bonus-food spawn chance (see `manage_bonus_food`).
 - **Persistence:** `acid_puddles` and `acid_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale puddle records are pruned on the next tick if another effect clears obstacles (e.g. the Bomb power-up).
 - **Rendering:** acid puddles are drawn as a green `"` (terminal) / green cell (web), and the status bar shows `Acid: <count> | Drops: <count>` counters.
-- **Tests:** see [tests/test_acid_rain_mode.rs](../../tests/test_acid_rain_mode.rs).
+- **Tests:** see [tests/test_acid_rain_mode.rs](../../tests/test_acid_rain_mode.rs) plus a save/load unit test in `src/game/tests.rs` (`test_save_and_load_acid_rain_mode`).
