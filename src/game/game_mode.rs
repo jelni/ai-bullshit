@@ -71,4 +71,5 @@ pub enum GameMode {
     Infection,
     Inferno,
     Minefield,
+    LaserGrid,
 }

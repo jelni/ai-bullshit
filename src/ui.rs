@@ -648,6 +648,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Infection",
         "Inferno Mode",
         "Minefield Mode",
+        "Laser Grid",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1768,6 +1769,28 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw the laser grid telegraph line (Laser Grid mode)
+    if game.mode == crate::game::GameMode::LaserGrid
+        && let Some((is_row, idx)) = game.laser_telegraph
+    {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        if is_row {
+            for x in 1..game.width - 1 {
+                if is_visible(x, idx) {
+                    stdout.queue(cursor::MoveTo(x, idx))?;
+                    write!(stdout, "-")?;
+                }
+            }
+        } else {
+            for y in 1..game.height - 1 {
+                if is_visible(idx, y) {
+                    stdout.queue(cursor::MoveTo(idx, y))?;
+                    write!(stdout, "|")?;
+                }
+            }
+        }
+    }
+
     // Draw lasers
     for laser in &game.lasers {
         if is_visible(laser.position.x, laser.position.y) {
@@ -2870,6 +2893,11 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let laser_grid_str = if game.mode == crate::game::GameMode::LaserGrid {
+        format!(" | Volleys: {}", game.laser_volleys)
+    } else {
+        String::new()
+    };
     let singularity_str = if game.mode == crate::game::GameMode::Singularity {
         let shield_str = if game.singularity_shield > 0 {
             format!(" | Shield: {}", game.singularity_shield)
@@ -2950,7 +2978,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}"
     )?;
 
     if !game.bosses.is_empty() {

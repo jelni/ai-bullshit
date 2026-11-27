@@ -405,6 +405,23 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_laser_grid_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::LaserGrid;
+        game.reset();
+        game.laser_volleys = 42;
+        game.laser_telegraph = Some((true, 7));
+        let file_path = "savegame_test_laser_grid.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::LaserGrid);
+        assert_eq!(loaded.laser_volleys, 42);
+        assert_eq!(loaded.laser_telegraph, Some((true, 7)));
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_event_horizon_recoil_moves_hole_away_from_food() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::EventHorizon;

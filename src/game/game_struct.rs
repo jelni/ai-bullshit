@@ -173,6 +173,8 @@ pub struct Game {
     pub inferno_flares: u32,
     pub inferno_burned: u32,
     pub mine_drops: u32,
+    pub laser_volleys: u32,
+    pub laser_telegraph: Option<(bool, u16)>,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -639,6 +641,8 @@ impl Game {
             event_horizon_drifts: 0,
             event_horizon_surges: 0,
             mine_drops: 0,
+            laser_volleys: 0,
+            laser_telegraph: None,
         }
     }
     #[must_use]
@@ -925,6 +929,8 @@ impl Game {
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
             mine_drops: self.mine_drops,
+            laser_volleys: self.laser_volleys,
+            laser_telegraph: self.laser_telegraph,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1113,6 +1119,8 @@ impl Game {
                 self.inferno_flares = state.inferno_flares;
                 self.inferno_burned = state.inferno_burned;
                 self.mine_drops = state.mine_drops;
+                self.laser_volleys = state.laser_volleys;
+                self.laser_telegraph = state.laser_telegraph;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -4086,6 +4094,148 @@ impl Game {
             );
         }
     }
+    fn hostile_laser_count(&self) -> usize {
+        self.lasers.iter().filter(|l| l.player != 1).count()
+    }
+    fn beam_forbidden_lines(&self) -> (Vec<u16>, Vec<u16>) {
+        // A sweeping beam covers its whole row or column, so every row and column
+        // any snake occupies (head, body, or the cell it is about to enter) is forbidden.
+        let mut rows = Vec::new();
+        let mut cols = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            let head = s.head();
+            let next = Self::calculate_next_head_dir(head, s.direction);
+            rows.push(head.y);
+            rows.push(next.y);
+            cols.push(head.x);
+            cols.push(next.x);
+            for p in s.body_map.keys() {
+                rows.push(p.y);
+                cols.push(p.x);
+            }
+        }
+        (rows, cols)
+    }
+    fn beam_line_fair(&self, is_row: bool, idx: u16) -> bool {
+        let (forbidden_rows, forbidden_cols) = self.beam_forbidden_lines();
+        if is_row {
+            !forbidden_rows.contains(&idx)
+        } else {
+            !forbidden_cols.contains(&idx)
+        }
+    }
+    fn pick_safe_beam_line(&mut self) -> Option<(bool, u16)> {
+        let (forbidden_rows, forbidden_cols) = self.beam_forbidden_lines();
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min = margin + 1;
+        let max_row = (self.height - 1).saturating_sub(margin).max(min);
+        let max_col = (self.width - 1).saturating_sub(margin).max(min);
+        let mut options: Vec<(bool, u16)> = Vec::new();
+        for y in min..max_row {
+            if !forbidden_rows.contains(&y) {
+                options.push((true, y));
+            }
+        }
+        for x in min..max_col {
+            if !forbidden_cols.contains(&x) {
+                options.push((false, x));
+            }
+        }
+        if options.is_empty() {
+            None
+        } else {
+            Some(options[self.rng.gen_range(0..options.len())])
+        }
+    }
+    fn manage_laser_grid(&mut self) {
+        if self.mode != GameMode::LaserGrid {
+            return;
+        }
+        // The grid runs on clear skies so incoming beams stay visible
+        self.weather = Weather::Clear;
+        // Periodic recalibration: at tick 200 of every 250-tick cycle all beams are destroyed
+        if self.tick_counter == 200 {
+            let beams = self.hostile_laser_count();
+            if beams > 0 || self.laser_telegraph.is_some() {
+                self.lasers.retain(|l| l.player == 1);
+                self.laser_telegraph = None;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The grid recalibrates!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+            }
+        }
+        if self.tick_counter.is_multiple_of(6) {
+            // Fire the telegraphed beam if its line is still fair
+            if let Some((is_row, idx)) = self.laser_telegraph.take()
+                && self.beam_line_fair(is_row, idx)
+                && self.hostile_laser_count() < Self::LASER_GRID_MAX_BEAMS
+            {
+                self.laser_volleys += 1;
+                let (pos, dir) = if is_row {
+                    if self.rng.gen_bool(0.5) {
+                        (Point { x: 1, y: idx }, Direction::Right)
+                    } else {
+                        (Point { x: self.width - 2, y: idx }, Direction::Left)
+                    }
+                } else if self.rng.gen_bool(0.5) {
+                    (Point { x: idx, y: 1 }, Direction::Down)
+                } else {
+                    (
+                        Point {
+                            x: idx,
+                            y: self.height - 2,
+                        },
+                        Direction::Up,
+                    )
+                };
+                self.lasers.push(Laser {
+                    position: pos,
+                    direction: dir,
+                    player: 2,
+                });
+                self.spawn_floating_text(
+                    f32::from(pos.x),
+                    f32::from(pos.y),
+                    "Beam!".to_string(),
+                    crate::color::Color::Red,
+                );
+            }
+        } else if self.tick_counter % 6 == 5 {
+            // Telegraph next tick's beam one tick in advance
+            self.laser_telegraph = self.pick_safe_beam_line();
+        }
+    }
+    fn zap_laser_grid(&mut self) {
+        // Eating food disrupts the grid: all active beams are destroyed
+        if self.mode != GameMode::LaserGrid {
+            return;
+        }
+        let beams = self.hostile_laser_count();
+        if beams > 0 {
+            self.lasers.retain(|l| l.player == 1);
+            self.laser_telegraph = None;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Zapped {beams} beam(s)!"),
+                crate::color::Color::Yellow,
+            );
+        }
+    }
     fn pull_point_towards(&self, point: &mut Point, target: Point) {
         let dx = i32::from(target.x) - i32::from(point.x);
         let dy = i32::from(target.y) - i32::from(point.y);
@@ -4964,7 +5114,8 @@ impl Game {
             | GameMode::EventHorizon
             | GameMode::Infection
             | GameMode::Inferno
-            | GameMode::Minefield => {
+            | GameMode::Minefield
+            | GameMode::LaserGrid => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5062,6 +5213,7 @@ impl Game {
                 || self.mode == GameMode::Infection
                 || self.mode == GameMode::Inferno
                 || self.mode == GameMode::Minefield
+                || self.mode == GameMode::LaserGrid
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5126,6 +5278,7 @@ impl Game {
             || self.mode == GameMode::EventHorizon
             || self.mode == GameMode::Inferno
             || self.mode == GameMode::Minefield
+            || self.mode == GameMode::LaserGrid
         {
             &self.snake
         } else {
@@ -5275,6 +5428,8 @@ impl Game {
         self.inferno_burn.clear();
         self.inferno_flares = 0;
         self.inferno_burned = 0;
+        self.laser_volleys = 0;
+        self.laser_telegraph = None;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -5782,6 +5937,11 @@ impl Game {
         if self.mode == GameMode::Inferno {
             self.weather = Weather::Inferno;
         }
+        if self.mode == GameMode::LaserGrid {
+            self.weather = Weather::Clear;
+            self.lasers.clear();
+            self.laser_telegraph = None;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -6112,7 +6272,8 @@ impl Game {
             | GameMode::EventHorizon
             | GameMode::Infection
             | GameMode::Inferno
-            | GameMode::Minefield => {
+            | GameMode::Minefield
+            | GameMode::LaserGrid => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6776,6 +6937,8 @@ impl Game {
             self.inferno_flares = state.inferno_flares;
             self.inferno_burned = state.inferno_burned;
             self.mine_drops = state.mine_drops;
+            self.laser_volleys = state.laser_volleys;
+            self.laser_telegraph = state.laser_telegraph;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -6918,6 +7081,8 @@ impl Game {
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
             mine_drops: self.mine_drops,
+            laser_volleys: self.laser_volleys,
+            laser_telegraph: self.laser_telegraph,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -9668,6 +9833,7 @@ impl Game {
             && self.mode != GameMode::EventHorizon
             && self.mode != GameMode::Inferno
             && self.mode != GameMode::Minefield
+            && self.mode != GameMode::LaserGrid
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -10621,6 +10787,7 @@ impl Game {
         self.manage_black_hole();
         self.manage_singularity();
         self.manage_event_horizon();
+        self.manage_laser_grid();
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_sandstorm();
@@ -12568,6 +12735,9 @@ impl Game {
                     crate::color::Color::DarkGrey,
                 );
             }
+            }
+        if self.mode == GameMode::LaserGrid {
+            self.zap_laser_grid();
         }
         if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
             self.spawn_floating_text(
@@ -14653,6 +14823,7 @@ impl Game {
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
     pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
     pub const INFERNO_BURN_TICKS: u32 = 36;
+    pub const LASER_GRID_MAX_BEAMS: usize = 3;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

@@ -313,3 +313,15 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Defusing by food:** eating food defuses all mines adjacent to the eaten cell ("Defused N mines!").
 - **Persistence:** `mines` (already) and `mine_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Mines: <count> | Drops: <count>`.
 - **Tests:** see [tests/test_minefield_mode.rs](../../tests/test_minefield_mode.rs) plus a save/load unit test in `src/game/tests.rs`.
+
+## Laser Grid Mode
+
+`GameMode::LaserGrid` (menu entry "Laser Grid") is a solo hazard mode with scheduled, telegraphed sweeping laser beams:
+
+- **Permanence:** weather is pinned to `Weather::Clear` every tick (ambient weather randomization is skipped in this mode) so beams always stay visible, and reset clears all lasers and the telegraph.
+- **Telegraph:** on every 5th tick (`tick_counter % 6 == 5`) `manage_laser_grid` picks a beam line via `pick_safe_beam_line` — a random row (`(true, y)`) or column (`(false, x)`) that no snake occupies (head, body, or the cell any snake is about to enter, see `beam_forbidden_lines`) — and stores it in `laser_telegraph`. The line is rendered one tick in advance as a yellow `-` / `|` row/column (terminal) or yellow cells (web).
+- **Firing:** on every 6th tick the telegraphed line is re-checked with `beam_line_fair` (snakes move between telegraph and fire); if the line is still fair and fewer than `Game::LASER_GRID_MAX_BEAMS` (3) hostile lasers are active, a hostile `Laser` (`player = 2`) spawns at a random edge of the line with a direction across it and sweeps the whole line (moving 2 cells per tick, destroyed at the far wall), lethal on contact through the standard `hit_laser1` flow. `laser_volleys` is incremented (status bar `Volleys: <count>`). If the line became occupied, the beam fizzles without firing — never cheap.
+- **Cycle:** at tick 200 of every 250-tick cycle the grid recalibrates: all hostile beams are destroyed and the telegraph is cleared ("The grid recalibrates!"). Eating food zaps the grid, destroying all active beams (`zap_laser_grid`, "Zapped N beam(s)!").
+- **Autopilot:** moving lasers and their predicted 2-cells-per-tick trajectories are already hard hazards in the A* search and the `is_safe_final_p` verified-safe checks, so the bot dodges sweeping beams natively.
+- **Persistence:** `laser_volleys` and `laser_telegraph` (plus the `lasers` themselves) are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_laser_grid_mode.rs](../../tests/test_laser_grid_mode.rs) plus a save/load unit test in `src/game/tests.rs`.

@@ -182,6 +182,10 @@ pub struct SaveState {
     #[serde(default)]
     pub singularity_pulses: u32,
     #[serde(default)]
+    pub laser_volleys: u32,
+    #[serde(default)]
+    pub laser_telegraph: Option<(bool, u16)>,
+    #[serde(default)]
     pub singularity_drifts: u32,
     #[serde(default)]
     pub singularity_shield: u32,

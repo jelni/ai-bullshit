@@ -601,6 +601,32 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         );
     }
 
+    // Draw the laser grid telegraph line (Laser Grid mode)
+    if game.mode == crate::game::GameMode::LaserGrid
+        && let Some((is_row, idx)) = game.laser_telegraph
+    {
+        ctx.set_fill_style_str("#AAAA00");
+        if is_row {
+            for x in 1..game.width - 1 {
+                ctx.fill_rect(
+                    f64::from(x) * cell_size,
+                    f64::from(idx) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        } else {
+            for y in 1..game.height - 1 {
+                ctx.fill_rect(
+                    f64::from(idx) * cell_size,
+                    f64::from(y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw lasers
     for laser in &game.lasers {
         if laser.position.x < game.width
