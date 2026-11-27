@@ -134,4 +134,7 @@ pub struct HistoryState {
     pub blaze_tiles: std::collections::HashMap<Point, u32>,
     pub blaze_sources: Vec<Point>,
     pub firestorm_blazes: u32,
+    pub geyser_vents: Vec<Point>,
+    pub geyser_jets: std::collections::HashMap<Point, u32>,
+    pub geyser_eruptions: u32,
 }

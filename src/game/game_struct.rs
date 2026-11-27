@@ -198,6 +198,9 @@ pub struct Game {
     pub fortress_walls: HashSet<Point>,
     pub fortress_depth: u16,
     pub fortress_rings: u32,
+    pub geyser_vents: Vec<Point>,
+    pub geyser_jets: std::collections::HashMap<Point, u32>,
+    pub geyser_eruptions: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -698,6 +701,9 @@ impl Game {
             fortress_walls: HashSet::new(),
             fortress_depth: 0,
             fortress_rings: 0,
+            geyser_vents: Vec::new(),
+            geyser_jets: std::collections::HashMap::new(),
+            geyser_eruptions: 0,
         }
     }
     #[must_use]
@@ -946,6 +952,9 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            geyser_vents: self.geyser_vents.clone(),
+            geyser_jets: self.geyser_jets.clone(),
+            geyser_eruptions: self.geyser_eruptions,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1152,6 +1161,9 @@ impl Game {
                 self.fortress_walls = state.fortress_walls;
                 self.fortress_depth = state.fortress_depth;
                 self.fortress_rings = state.fortress_rings;
+                self.geyser_vents = state.geyser_vents;
+                self.geyser_jets = state.geyser_jets;
+                self.geyser_eruptions = state.geyser_eruptions;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -2278,6 +2290,210 @@ impl Game {
                 format!("The walls close in! (+{erected})"),
                 crate::color::Color::DarkGrey,
             );
+        }
+    }
+    fn manage_geyser(&mut self) {
+        if self.mode != GameMode::Geyser {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale jet records
+        self.geyser_jets.retain(|p, _| self.obstacles.contains(p));
+        // Geyser vents are permanent fixtures: keep them blocked
+        for vent in self.geyser_vents.clone() {
+            self.obstacles.insert(vent);
+            self.geyser_jets.insert(vent, u32::MAX);
+        }
+        // Each jet dissipates one tick at a time and then leaves open ground
+        let dissipated: Vec<Point> = self
+            .geyser_jets
+            .iter()
+            .filter(|(p, ticks)| **ticks <= 1 && !self.geyser_vents.contains(p))
+            .map(|(p, _)| *p)
+            .collect();
+        for p in dissipated {
+            self.geyser_jets.remove(&p);
+            self.obstacles.remove(&p);
+        }
+        for ticks in self.geyser_jets.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        // Periodic rest: at tick 200 of every 250-tick cycle the geysers rest (vents remain)
+        if self.tick_counter == 200 {
+            let vents = self.geyser_vents.clone();
+            let doomed: Vec<Point> = self
+                .geyser_jets
+                .keys()
+                .filter(|p| !vents.contains(p))
+                .copied()
+                .collect();
+            let n = doomed.len();
+            for p in doomed {
+                self.geyser_jets.remove(&p);
+                self.obstacles.remove(&p);
+            }
+            if n > 0 {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The geysers rest!".to_string(),
+                    crate::color::Color::DarkCyan,
+                );
+            }
+            return;
+        }
+        // Scheduled eruption every 6th tick
+        if self.tick_counter.is_multiple_of(6) {
+            self.geyser_eruptions += 1;
+            self.erupt_geyser();
+        }
+    }
+    fn erupt_geyser(&mut self) {
+        if self.geyser_vents.is_empty() {
+            return;
+        }
+        let cap = (u32::from(self.width) * u32::from(self.height)) * 15 / 100;
+        if u32::try_from(self.geyser_jets.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        // Erupt from the vents in round-robin order
+        let idx = (self.geyser_eruptions as usize).saturating_sub(1) % self.geyser_vents.len();
+        let vent = self.geyser_vents[idx];
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        let mut sprayed = 0u32;
+        for dir in dirs {
+            let mut cur = vent;
+            for _ in 0..Self::GEYSER_JET_RANGE {
+                if u32::try_from(self.geyser_jets.len()).unwrap_or(u32::MAX) >= cap {
+                    break;
+                }
+                let np = Self::calculate_next_head_dir(cur, dir);
+                if np.x >= self.width || np.y >= self.height {
+                    break;
+                }
+                if self.is_geyser_jet_blocked(np, p1_next, p2_next, &bot_next) {
+                    break;
+                }
+                cur = np;
+                self.geyser_jets.insert(np, Self::GEYSER_JET_TICKS);
+                self.obstacles.insert(np);
+                sprayed += 1;
+            }
+        }
+        if sprayed > 0 {
+            self.spawn_floating_text(
+                f32::from(vent.x),
+                f32::from(vent.y),
+                format!("Geyser erupts! (+{sprayed})"),
+                crate::color::Color::Cyan,
+            );
+        }
+    }
+    fn is_geyser_jet_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.geyser_vents.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.tornado == Some(p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+    }
+    fn spawn_geyser_vents(&mut self) {
+        for _ in 0..2 {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.geyser_vents.contains(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                0,
+            ) {
+                self.geyser_vents.push(pos);
+                self.geyser_jets.insert(pos, u32::MAX);
+                self.obstacles.insert(pos);
+            }
         }
     }
     fn manage_monsoon(&mut self) {
@@ -6068,7 +6284,8 @@ impl Game {
             | GameMode::Ricochet
             | GameMode::TurretBattery
             | GameMode::Firestorm
-            | GameMode::Fortress => {
+            | GameMode::Fortress
+            | GameMode::Geyser => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6181,6 +6398,7 @@ impl Game {
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
+                || self.mode == GameMode::Geyser
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -6260,6 +6478,7 @@ impl Game {
             || self.mode == GameMode::TurretBattery
             || self.mode == GameMode::Firestorm
             || self.mode == GameMode::Fortress
+            || self.mode == GameMode::Geyser
         {
             &self.snake
         } else {
@@ -6373,6 +6592,9 @@ impl Game {
         self.fortress_walls.clear();
         self.fortress_depth = 0;
         self.fortress_rings = 0;
+        self.geyser_vents.clear();
+        self.geyser_jets.clear();
+        self.geyser_eruptions = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -6843,6 +7065,9 @@ impl Game {
         if self.mode == GameMode::Firestorm {
             self.spawn_blaze_sources();
         }
+        if self.mode == GameMode::Geyser {
+            self.spawn_geyser_vents();
+        }
         if self.mode == GameMode::Wildfire {
             self.ignite_initial_wildfire();
         }
@@ -7059,6 +7284,9 @@ impl Game {
         }
         if self.mode == GameMode::Firestorm {
             self.weather = Weather::Firestorm;
+        }
+        if self.mode == GameMode::Geyser {
+            self.weather = Weather::Clear;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -7478,7 +7706,8 @@ impl Game {
             | GameMode::Ricochet
             | GameMode::TurretBattery
             | GameMode::Firestorm
-            | GameMode::Fortress => {
+            | GameMode::Fortress
+            | GameMode::Geyser => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8153,6 +8382,9 @@ impl Game {
             self.fortress_walls = state.fortress_walls;
             self.fortress_depth = state.fortress_depth;
             self.fortress_rings = state.fortress_rings;
+            self.geyser_vents = state.geyser_vents;
+            self.geyser_jets = state.geyser_jets;
+            self.geyser_eruptions = state.geyser_eruptions;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -8326,6 +8558,9 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            geyser_vents: self.geyser_vents.clone(),
+            geyser_jets: self.geyser_jets.clone(),
+            geyser_eruptions: self.geyser_eruptions,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -12132,6 +12367,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_fortress();
+        self.manage_geyser();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -12964,6 +13200,7 @@ impl Game {
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
+                || self.mode == GameMode::Geyser
             {
                 self.handle_death("You Died!");
             } else {
@@ -13998,6 +14235,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Breached {breached} wall!"),
                     crate::color::Color::DarkGrey,
+                );
+            }
+        }
+        if self.mode == GameMode::Geyser {
+            let mut doused = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if !self.geyser_vents.contains(&np) && self.geyser_jets.remove(&np).is_some() {
+                    self.obstacles.remove(&np);
+                    doused += 1;
+                }
+            }
+            if doused > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Doused {doused} jet!"),
+                    crate::color::Color::Cyan,
                 );
             }
         }
@@ -16752,6 +17012,10 @@ impl Game {
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
     pub const BLAZE_BURN_TICKS: u32 = 12;
+    /// Ticks a geyser steam jet stays lethal before it dissipates.
+    pub const GEYSER_JET_TICKS: u32 = 6;
+    /// How many cells a geyser jet reaches in each cardinal direction per eruption.
+    pub const GEYSER_JET_RANGE: u16 = 4;
 
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode

@@ -86,4 +86,5 @@ pub enum GameMode {
     TurretBattery,
     Firestorm,
     Fortress,
+    Geyser,
 }

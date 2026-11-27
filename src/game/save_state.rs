@@ -259,6 +259,12 @@ pub struct SaveState {
     pub blaze_sources: Vec<Point>,
     #[serde(default)]
     pub firestorm_blazes: u32,
+    #[serde(default)]
+    pub geyser_vents: Vec<Point>,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub geyser_jets: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub geyser_eruptions: u32,
 }
 
 #[must_use]

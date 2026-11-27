@@ -445,3 +445,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Breaching:** eating food removes the fortress walls adjacent to the eaten cell ("Breached N wall!").
 - **Persistence:** `fortress_walls`, `fortress_depth`, and `fortress_rings` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale wall records are pruned each tick if another effect cleared the obstacles.
 - **Tests:** see [tests/test_fortress_mode.rs](../../tests/test_fortress_mode.rs).
+
+## Geyser Mode
+
+`GameMode::Geyser` (menu entry "Geyser Mode") is a survival mode where two permanent geyser vents erupt on a schedule:
+
+- **Vents:** at reset `spawn_geyser_vents` seeds 2 vents (`geyser_vents`) on fair empty cells (never on a snake, the food, another entity, or an obstacle). Vents are permanent fixtures: they stay in `geyser_jets` with `u32::MAX` ticks and in `obstacles`, and render as a dark-cyan `G` (terminal) / dark-cyan cell (web).
+- **Scheduled eruptions:** on every 6th tick `manage_geyser` fires one eruption (counted in `geyser_eruptions`) from the vents in round-robin order. `erupt_geyser` sprays a steam jet up to `GEYSER_JET_RANGE` (4) cells in each cardinal direction, stopping at the board edge or any blocked cell. Jets are stored in `geyser_jets` (cell → remaining ticks) and mirrored into `obstacles`, capped at 15% of the board, and shown as `Jets: <count> | Eruptions: <count>` in the status bar, with a "Geyser erupts! (+N)" floating text. Jets render as a cyan `w` (terminal) / cyan cell (web).
+- **Fairness:** `is_geyser_jet_blocked` stops a jet before the board edge, obstacles, vents, existing jets, any snake's body, the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or any entity (food, bonus/poison food, power-ups, portals, mines, black hole, tornado, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, and all hazard tile sets).
+- **Dissipation:** each jet burns down one tick at a time and dissipates after `GEYSER_JET_TICKS` (6) ticks, leaving the cell open again.
+- **Rest cycle:** at tick 200 of every 250-tick cycle all non-vent jets dissipate ("The geysers rest!"), while the vents remain.
+- **Autopilot:** jets are ordinary obstacles, so they are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance — the bot rides out the eruptions natively.
+- **Dousing:** eating food removes the jets adjacent to the eaten cell ("Doused N jet!").
+- **Persistence:** `geyser_vents`, `geyser_jets` (serialized through `map_as_pairs` as `[point, ticks]` pairs), and `geyser_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale jet records are pruned each tick if another effect cleared the obstacles.
+- **Tests:** see [tests/test_geyser_mode.rs](../../tests/test_geyser_mode.rs).

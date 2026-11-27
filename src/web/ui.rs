@@ -135,6 +135,39 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw geyser jets and vents (Geyser mode)
+    if game.mode == crate::game::GameMode::Geyser {
+        ctx.set_fill_style_str("#00FFFF"); // Cyan steam jets
+        for jet in game.geyser_jets.keys() {
+            if !game.geyser_vents.contains(jet)
+                && jet.x < game.width
+                && jet.y < game.height
+                && is_visible(f64::from(jet.x), f64::from(jet.y))
+            {
+                ctx.fill_rect(
+                    f64::from(jet.x) * cell_size,
+                    f64::from(jet.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#008B8B"); // Dark cyan vents
+        for vent in &game.geyser_vents {
+            if vent.x < game.width
+                && vent.y < game.height
+                && is_visible(f64::from(vent.x), f64::from(vent.y))
+            {
+                ctx.fill_rect(
+                    f64::from(vent.x) * cell_size,
+                    f64::from(vent.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw sand drifts (Sandstorm mode)
     if game.mode == crate::game::GameMode::Sandstorm {
         ctx.set_fill_style_str("#D2B48C"); // Tan
