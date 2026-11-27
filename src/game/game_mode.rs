@@ -68,4 +68,5 @@ pub enum GameMode {
     Singularity,
     Wildfire,
     EventHorizon,
+    Infection,
 }

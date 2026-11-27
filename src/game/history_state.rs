@@ -97,4 +97,6 @@ pub struct HistoryState {
     pub wildfire_ignitions: u32,
     pub event_horizon_drifts: u32,
     pub event_horizon_surges: u32,
+    pub infected_ids: Vec<u8>,
+    pub infection_spreads: u32,
 }

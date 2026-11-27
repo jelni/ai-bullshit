@@ -645,6 +645,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Singularity Mode",
         "Wildfire Mode",
         "Event Horizon Mode",
+        "Infection",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1932,6 +1933,26 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw the contagion on infected heads (Infection mode)
+    if game.mode == crate::game::GameMode::Infection {
+        for id in &game.infected_ids {
+            let head = if *id == 1 {
+                game.snake.head()
+            } else if *id == 2 {
+                game.player2.as_ref().map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+            } else {
+                game.bots
+                    .get(usize::from(id.saturating_sub(3)))
+                    .map_or_else(|| game.snake.head(), crate::snake::Snake::head)
+            };
+            if is_visible(head.x, head.y) {
+                stdout.queue(SetForegroundColor(Color::Green))?;
+                stdout.queue(cursor::MoveTo(head.x, head.y))?;
+                write!(stdout, "Z")?;
+            }
+        }
+    }
+
     // Draw lava flows and volcano vents (Volcano mode)
     if game.mode == crate::game::GameMode::Volcano {
         stdout.queue(SetForegroundColor(Color::Red))?;
@@ -2835,12 +2856,38 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let infection_str = if game.mode == crate::game::GameMode::Infection {
+        let names: Vec<String> = game
+            .infected_ids
+            .iter()
+            .map(|id| {
+                if *id == 1 {
+                    "You".to_string()
+                } else if *id == 2 {
+                    "Player 2".to_string()
+                } else {
+                    format!("Bot {}", id.saturating_sub(2))
+                }
+            })
+            .collect();
+        format!(
+            " | Infected: {} | Spreads: {}",
+            if names.is_empty() {
+                "-".to_string()
+            } else {
+                names.join(", ")
+            },
+            game.infection_spreads
+        )
+    } else {
+        String::new()
+    };
 
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
     write!(
         stdout,
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}"
     )?;
 
     if !game.bosses.is_empty() {

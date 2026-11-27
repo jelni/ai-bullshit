@@ -165,6 +165,8 @@ pub struct Game {
     pub wildfire_ignitions: u32,
     pub event_horizon_drifts: u32,
     pub event_horizon_surges: u32,
+    pub infected_ids: Vec<u8>,
+    pub infection_spreads: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -609,6 +611,8 @@ impl Game {
             bomb_carrier: None,
             bomb_timer: 0,
             bomb_tags: 0,
+            infected_ids: Vec::new(),
+            infection_spreads: 0,
             sand_blasts: 0,
             acid_puddles: HashSet::new(),
             acid_drops: 0,
@@ -901,6 +905,8 @@ impl Game {
             wildfire_ignitions: self.wildfire_ignitions,
             event_horizon_drifts: self.event_horizon_drifts,
             event_horizon_surges: self.event_horizon_surges,
+            infected_ids: self.infected_ids.clone(),
+            infection_spreads: self.infection_spreads,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1081,6 +1087,8 @@ impl Game {
                 self.monsoon_downpours = state.monsoon_downpours;                self.flow_field = None;
                 self.event_horizon_drifts = state.event_horizon_drifts;
                 self.event_horizon_surges = state.event_horizon_surges;
+                self.infected_ids = state.infected_ids;
+                self.infection_spreads = state.infection_spreads;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -4643,7 +4651,8 @@ impl Game {
             | GameMode::Monsoon
             | GameMode::Singularity
             | GameMode::Wildfire
-            | GameMode::EventHorizon => {
+            | GameMode::EventHorizon
+            | GameMode::Infection => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4738,6 +4747,7 @@ impl Game {
                 || self.mode == GameMode::Singularity
                 || self.mode == GameMode::Wildfire
                 || self.mode == GameMode::EventHorizon
+                || self.mode == GameMode::Infection
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -4942,6 +4952,8 @@ impl Game {
         self.fire_ttl.clear();
         self.ash_tiles.clear();
         self.wildfire_ignitions = 0;
+        self.infected_ids.clear();
+        self.infection_spreads = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -5616,6 +5628,7 @@ impl Game {
             || self.mode == GameMode::KingOfTheHill
             || self.mode == GameMode::TurfWar
             || self.mode == GameMode::BombTag
+            || self.mode == GameMode::Infection
         {
             let margin = self.safe_zone_margin;
             let count = if self.mode == GameMode::MassiveMultiplayer {
@@ -5627,6 +5640,8 @@ impl Game {
             } else if self.mode == GameMode::TurfWar {
                 3
             } else if self.mode == GameMode::BombTag {
+                3
+            } else if self.mode == GameMode::Infection {
                 3
             } else {
                 1
@@ -5662,6 +5677,18 @@ impl Game {
             let idx = self.rng.gen_range(0..ids.len());
             self.bomb_carrier = Some(ids[idx]);
             self.bomb_timer = Self::BOMB_TIMER_MAX;
+        }
+        if self.mode == GameMode::Infection {
+            let bot_ids: Vec<u8> = (0..self.bots.len())
+                .map(|i| u8::try_from(i).unwrap_or(255).saturating_add(3))
+                .collect();
+            if bot_ids.is_empty() {
+                self.infected_ids = vec![1];
+            } else {
+                let idx = self.rng.gen_range(0..bot_ids.len());
+                self.infected_ids = vec![bot_ids[idx]];
+            }
+            self.infection_spreads = 0;
         }
     }
     fn respawn(&mut self) {
@@ -5725,7 +5752,8 @@ impl Game {
             | GameMode::Monsoon
             | GameMode::Singularity
             | GameMode::Wildfire
-            | GameMode::EventHorizon => {
+            | GameMode::EventHorizon
+            | GameMode::Infection => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5772,7 +5800,7 @@ impl Game {
                 }
             },
         }
-        if self.mode != GameMode::BombTag {
+        if self.mode != GameMode::BombTag && self.mode != GameMode::Infection {
             self.bots.clear();
             self.bots_autopilot_paths.clear();
         }
@@ -6034,6 +6062,7 @@ impl Game {
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::TurfWar
                 || self.mode == GameMode::BombTag
+                || self.mode == GameMode::Infection
             {
                 for i in 0..self.bots.len() {
                     if self.bots[i].direction_queue.is_empty() {
@@ -6134,6 +6163,14 @@ impl Game {
                                 let mut tag_targets = self.bomb_rival_adjacent_targets(bot_id);
                                 tag_targets.append(&mut targets);
                                 targets = tag_targets;
+                            }
+                        }
+                        if self.mode == GameMode::Infection {
+                            let bot_id = u8::try_from(i).unwrap_or(255).saturating_add(3);
+                            if self.infected_ids.contains(&bot_id) {
+                                let mut prey_targets = self.infection_prey_adjacent_targets(bot_id);
+                                prey_targets.append(&mut targets);
+                                targets = prey_targets;
                             }
                         }
                         if let Some((dir, path)) = self.astar_search_verified_contested(
@@ -6369,6 +6406,8 @@ impl Game {
 
             self.event_horizon_drifts = state.event_horizon_drifts;
             self.event_horizon_surges = state.event_horizon_surges;
+            self.infected_ids = state.infected_ids;
+            self.infection_spreads = state.infection_spreads;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -6503,6 +6542,8 @@ impl Game {
             wildfire_ignitions: self.wildfire_ignitions,
             event_horizon_drifts: self.event_horizon_drifts,
             event_horizon_surges: self.event_horizon_surges,
+            infected_ids: self.infected_ids.clone(),
+            infection_spreads: self.infection_spreads,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10988,6 +11029,7 @@ impl Game {
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::BombTag
                 || self.mode == GameMode::Singularity
+                || self.mode == GameMode::Infection
             {
                 self.handle_death("You Died!");
             } else {
@@ -11280,6 +11322,7 @@ impl Game {
         self.bots = alive_bots;
         self.bots_autopilot_paths = alive_paths;
         self.manage_bomb_tag();
+        self.manage_infection();
 
         if self.mode == GameMode::TurfWar {
             for segment in &self.snake.body {
@@ -12627,6 +12670,127 @@ impl Game {
             && self.bots.is_empty()
             && self.lives > 0
             && self.state == GameState::Playing
+        {
+            self.handle_win();
+        }
+    }
+    fn participant_head(&self, id: u8) -> Option<(u8, Point)> {
+        match id {
+            1 => Some((1, self.snake.head())),
+            2 => self.player2.as_ref().map(|p2| (2, p2.head())),
+            _ => self.bots.get(usize::from(id.saturating_sub(3))).map(|b| (id, b.head())),
+        }
+    }
+    fn infection_prey_adjacent_targets(&self, hunter_id: u8) -> Vec<Point> {
+        let Some((_, hunter_head)) = self.participant_head(hunter_id) else {
+            return Vec::new();
+        };
+        let mut best: Option<(Point, u16)> = None;
+        for (id, head) in self.alive_participant_heads() {
+            if id == hunter_id || self.infected_ids.contains(&id) {
+                continue;
+            }
+            let dist =
+                head.x.abs_diff(hunter_head.x).saturating_add(head.y.abs_diff(hunter_head.y));
+            if best.is_none_or(|(_, bd)| dist < bd) {
+                best = Some((head, dist));
+            }
+        }
+        let Some((prey_head, _)) = best else {
+            return Vec::new();
+        };
+        let mut targets = Vec::new();
+        for dir in [Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+            let np = Self::calculate_next_head_dir(prey_head, dir);
+            if np.x > 0 && np.x < self.width - 1 && np.y > 0 && np.y < self.height - 1 {
+                targets.push(np);
+            }
+        }
+        targets
+    }
+    fn manage_infection(&mut self) {
+        if self.mode != GameMode::Infection {
+            return;
+        }
+        let alive = self.alive_participant_heads();
+        // Drop infected participants that are no longer alive
+        self.infected_ids
+            .retain(|id| alive.iter().any(|(aid, _)| aid == id));
+        if self.infected_ids.is_empty() {
+            // Reseed Patient Zero: prefer a random alive bot, else any participant
+            let mut candidates: Vec<u8> = alive
+                .iter()
+                .map(|(id, _)| *id)
+                .filter(|id| *id >= 3)
+                .collect();
+            if candidates.is_empty() {
+                candidates = alive.iter().map(|(id, _)| *id).collect();
+            }
+            if candidates.is_empty() {
+                return;
+            }
+            let idx = self.rng.gen_range(0..candidates.len());
+            self.infected_ids.push(candidates[idx]);
+        }
+        // Spread: an infected head orthogonally adjacent to a healthy head infects it
+        let mut newly_infected: Vec<(u8, Point)> = Vec::new();
+        for (infected_id, infected_head) in &alive {
+            if !self.infected_ids.contains(infected_id) {
+                continue;
+            }
+            for (healthy_id, healthy_head) in &alive {
+                if healthy_id == infected_id || self.infected_ids.contains(healthy_id) {
+                    continue;
+                }
+                if healthy_head
+                    .x
+                    .abs_diff(infected_head.x)
+                    .saturating_add(healthy_head.y.abs_diff(infected_head.y))
+                    == 1
+                {
+                    newly_infected.push((*healthy_id, *healthy_head));
+                }
+            }
+        }
+        for (id, head) in newly_infected {
+            self.infection_spreads += 1;
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "Infected!".to_string(),
+                crate::color::Color::Green,
+            );
+            if id == 1 {
+                // The player catches the contagion: standard death flow (bots stay)
+                self.handle_death("Infected!");
+                return;
+            }
+            if !self.infected_ids.contains(&id) {
+                self.infected_ids.push(id);
+            }
+        }
+        // Match clock
+        if self.match_time > 0 {
+            self.match_time -= 1;
+        }
+        if self.match_time == 0 {
+            if self.lives > 0
+                && self.state == GameState::Playing
+                && !self.infected_ids.contains(&1)
+            {
+                self.handle_win();
+            }
+            return;
+        }
+        // Last healthy standing wins: every bot is infected and the player is healthy
+        if self.lives > 0
+            && self.state == GameState::Playing
+            && !self.infected_ids.contains(&1)
+            && !self.bots.is_empty()
+            && self.bots.iter().enumerate().all(|(i, _)| {
+                self.infected_ids
+                    .contains(&u8::try_from(i).unwrap_or(255).saturating_add(3))
+            })
         {
             self.handle_win();
         }

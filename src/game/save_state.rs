@@ -196,6 +196,9 @@ pub struct SaveState {
     pub event_horizon_drifts: u32,
     #[serde(default)]
     pub event_horizon_surges: u32,
+    pub infected_ids: Vec<u8>,
+    #[serde(default)]
+    pub infection_spreads: u32,
 }
 
 #[must_use]
