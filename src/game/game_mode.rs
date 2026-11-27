@@ -84,4 +84,5 @@ pub enum GameMode {
     BlackHole,
     Ricochet,
     TurretBattery,
+    Firestorm,
 }

@@ -655,6 +655,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Warp Mode",
         "Gravity Well",
         "Conveyor Mode",
+        "Firestorm Mode",
         "Ice Rink",
         "Black Hole",
         "Ricochet Mode",
@@ -1765,6 +1766,26 @@ fn draw_entities<W: Write>(
                 }
             }
         },
+        Weather::Firestorm => {
+            stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(x, y)
+                    && !game.obstacles.contains(&Point {
+                        x,
+                        y,
+                    })
+                {
+                    let chars = ['*', '.', '\u{b0}'];
+                    let c = chars[rng.gen_range(0..chars.len())];
+                    stdout.queue(cursor::MoveTo(x, y))?;
+                    write!(stdout, "{c}")?;
+                }
+            }
+        },
         _ => {},
     }
 
@@ -2086,6 +2107,24 @@ fn draw_entities<W: Write>(
             if is_visible(vent.x, vent.y) {
                 stdout.queue(cursor::MoveTo(vent.x, vent.y))?;
                 write!(stdout, "V")?;
+            }
+        }
+    }
+
+    // Draw burning ground and blaze sources (Firestorm mode)
+    if game.mode == crate::game::GameMode::Firestorm {
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for blaze in game.blaze_tiles.keys() {
+            if is_visible(blaze.x, blaze.y) {
+                stdout.queue(cursor::MoveTo(blaze.x, blaze.y))?;
+                write!(stdout, "*")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::DarkRed))?;
+        for source in &game.blaze_sources {
+            if is_visible(source.x, source.y) {
+                stdout.queue(cursor::MoveTo(source.x, source.y))?;
+                write!(stdout, "B")?;
             }
         }
     }
@@ -2885,6 +2924,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         crate::game::Weather::Fog => " | Weather: Fog",
         crate::game::Weather::Wildfire => " | Weather: Wildfire",
         crate::game::Weather::Inferno => " | Weather: Inferno",
+        crate::game::Weather::Firestorm => " | Weather: Firestorm",
     };
     let combo_str =
         if game.combo > 1 && game.last_food_time.is_some_and(|t| t.elapsed().as_secs() < 5) {
@@ -3043,6 +3083,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let blaze_str = if game.mode == crate::game::GameMode::Firestorm {
+        format!(
+            " | Blaze: {} | Blazes: {}",
+            game.blaze_tiles.len(),
+            game.firestorm_blazes
+        )
+    } else {
+        String::new()
+    };
     let event_horizon_str = if game.mode == crate::game::GameMode::EventHorizon {
         format!(
             " | Drifts: {} | Surges: {}",
@@ -3165,7 +3214,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}"
     )?;
 
     if !game.bosses.is_empty() {

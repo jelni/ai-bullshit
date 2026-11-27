@@ -247,6 +247,12 @@ pub struct SaveState {
     pub turret_volleys: u32,
     #[serde(default)]
     pub turret_jammed: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub blaze_tiles: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub blaze_sources: Vec<Point>,
+    #[serde(default)]
+    pub firestorm_blazes: u32,
 }
 
 #[must_use]

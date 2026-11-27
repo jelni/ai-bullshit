@@ -331,6 +331,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw burning ground and blaze sources (Firestorm mode)
+    if game.mode == crate::game::GameMode::Firestorm {
+        ctx.set_fill_style_str("#FFA500"); // Orange blazes
+        for blaze in game.blaze_tiles.keys() {
+            if blaze.x < game.width
+                && blaze.y < game.height
+                && is_visible(f64::from(blaze.x), f64::from(blaze.y))
+            {
+                ctx.fill_rect(
+                    f64::from(blaze.x) * cell_size,
+                    f64::from(blaze.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#8B0000"); // DarkRed blaze sources
+        for source in &game.blaze_sources {
+            if source.x < game.width
+                && source.y < game.height
+                && is_visible(f64::from(source.x), f64::from(source.y))
+            {
+                ctx.fill_rect(
+                    f64::from(source.x) * cell_size,
+                    f64::from(source.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw burning cells and ash (Wildfire mode)
     if game.mode == crate::game::GameMode::Wildfire {
         ctx.set_fill_style_str("#FF0000"); // Red
@@ -910,6 +942,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                     } else {
                         ctx.set_fill_style_str("#FF0000"); // Red
                     }
+                    ctx.fill_rect(
+                        f64::from(x).mul_add(cell_size, cell_size * 0.3),
+                        f64::from(y).mul_add(cell_size, cell_size * 0.3),
+                        cell_size * 0.4,
+                        cell_size * 0.4,
+                    );
+                }
+            }
+        },
+        crate::game::Weather::Firestorm => {
+            ctx.set_fill_style_str("#FF8C00"); // DarkOrange embers
+            for _ in 0..15 {
+                let x =
+                    rng.gen_range(margin + 1..game.width.saturating_sub(margin).max(margin + 2));
+                let y =
+                    rng.gen_range(margin + 1..game.height.saturating_sub(margin).max(margin + 2));
+                if is_visible(f64::from(x), f64::from(y))
+                    && !game.obstacles.contains(&crate::snake::Point {
+                        x,
+                        y,
+                    })
+                {
                     ctx.fill_rect(
                         f64::from(x).mul_add(cell_size, cell_size * 0.3),
                         f64::from(y).mul_add(cell_size, cell_size * 0.3),

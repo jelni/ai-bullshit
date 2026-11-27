@@ -128,4 +128,7 @@ pub struct HistoryState {
     pub singularity_feeds: u32,
     pub turret_volleys: u32,
     pub turret_jammed: u32,
+    pub blaze_tiles: std::collections::HashMap<Point, u32>,
+    pub blaze_sources: Vec<Point>,
+    pub firestorm_blazes: u32,
 }

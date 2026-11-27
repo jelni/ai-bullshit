@@ -610,6 +610,27 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_firestorm_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Firestorm;
+        game.reset();
+        game.blaze_tiles.clear();
+        game.blaze_tiles.insert(Point { x: 12, y: 9 }, 8);
+        game.obstacles.insert(Point { x: 12, y: 9 });
+        game.blaze_sources = vec![Point { x: 3, y: 3 }];
+        game.firestorm_blazes = 42;
+        let file_path = "savegame_test_firestorm.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Firestorm);
+        assert_eq!(loaded.weather, Weather::Firestorm);
+        assert_eq!(loaded.blaze_tiles.get(&Point { x: 12, y: 9 }), Some(&8));
+        assert_eq!(loaded.blaze_sources, vec![Point { x: 3, y: 3 }]);
+        assert_eq!(loaded.firestorm_blazes, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

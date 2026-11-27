@@ -198,6 +198,9 @@ pub struct Game {
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
+    pub blaze_tiles: std::collections::HashMap<Point, u32>,
+    pub blaze_sources: Vec<Point>,
+    pub firestorm_blazes: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -663,6 +666,9 @@ impl Game {
             belt_shifts: 0,
             turret_volleys: 0,
             turret_jammed: 0,
+            blaze_tiles: std::collections::HashMap::new(),
+            blaze_sources: Vec::new(),
+            firestorm_blazes: 0,
             sand_blasts: 0,
             gravity_well_surges: 0,
             acid_puddles: HashSet::new(),
@@ -997,6 +1003,9 @@ impl Game {
 
             turret_volleys: self.turret_volleys,
             turret_jammed: self.turret_jammed,
+            blaze_tiles: self.blaze_tiles.clone(),
+            blaze_sources: self.blaze_sources.clone(),
+            firestorm_blazes: self.firestorm_blazes,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1205,6 +1214,9 @@ impl Game {
                 self.belt_tiles = state.belt_tiles;
                 self.turret_volleys = state.turret_volleys;
                 self.turret_jammed = state.turret_jammed;
+                self.blaze_tiles = state.blaze_tiles;
+                self.blaze_sources = state.blaze_sources;
+                self.firestorm_blazes = state.firestorm_blazes;
                 self.belt_shifts = state.belt_shifts;
                 self.ice_tiles = state.ice_tiles;
                 self.ice_slips = state.ice_slips;
@@ -1752,6 +1764,7 @@ impl Game {
         self.sand_tiles.remove(&p);
         self.lava_tiles.remove(&p);
         self.fire_tiles.remove(&p);
+        self.blaze_tiles.remove(&p);
         self.acid_puddles.remove(&p);
         self.rubble_tiles.remove(&p);
         self.seismic_rubble.remove(&p);
@@ -2373,6 +2386,7 @@ impl Game {
                         || self.tornado.is_some_and(|t| t == *p)
                         || self.lava_tiles.contains(p)
                         || self.fire_tiles.contains(p)
+                        || self.blaze_tiles.contains_key(p)
                         || self.seismic_rubble.contains(p)
                         || self.rubble_tiles.contains(p)
                         || self.inferno_tiles.contains(p)
@@ -2466,6 +2480,7 @@ impl Game {
                     || self.tornado == Some(*p)
                     || self.lava_tiles.contains(p)
                     || self.fire_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
                     || self.seismic_rubble.contains(p)
                     || self.rubble_tiles.contains(p)
                     || self.snow_tiles.contains(p)
@@ -2576,6 +2591,7 @@ impl Game {
                         || self.meteors.iter().any(|m| m.position == *p)
                         || self.lava_tiles.contains(p)
                         || self.fire_tiles.contains(p)
+                        || self.blaze_tiles.contains_key(p)
                         || self.inferno_tiles.contains(p)
                 };
                 if let Some(pos) = Self::get_random_empty_point(
@@ -3778,6 +3794,179 @@ impl Game {
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
             || self.tornado == Some(p)
+    }
+
+    fn spawn_blaze_sources(&mut self) {
+        for _ in 0..2 {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.blaze_sources.contains(p)
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                0,
+            ) {
+                self.blaze_sources.push(pos);
+                self.blaze_tiles.insert(pos, u32::MAX);
+                self.obstacles.insert(pos);
+            }
+        }
+    }
+    fn manage_firestorm(&mut self) {
+        if self.mode != GameMode::Firestorm {
+            return;
+        }
+        // The firestorm never breaks in Firestorm mode
+        self.weather = Weather::Firestorm;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale blaze records
+        self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
+        // Blaze sources are permanent fixtures: keep them burning
+        for source in self.blaze_sources.clone() {
+            self.obstacles.insert(source);
+            self.blaze_tiles.insert(source, u32::MAX);
+        }
+        // Each blaze burns down one tick at a time and then dies out, leaving open ground
+        let burned_out: Vec<Point> = self
+            .blaze_tiles
+            .iter()
+            .filter(|(p, ticks)| **ticks <= 1 && !self.blaze_sources.contains(p))
+            .map(|(p, _)| *p)
+            .collect();
+        for p in burned_out {
+            self.blaze_tiles.remove(&p);
+            self.obstacles.remove(&p);
+        }
+        for ticks in self.blaze_tiles.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        // Periodic die-down: at tick 200 of every 250-tick cycle the firestorm dies down (sources remain)
+        if self.tick_counter == 200 {
+            let sources = self.blaze_sources.clone();
+            let doomed: Vec<Point> = self
+                .blaze_tiles
+                .keys()
+                .filter(|p| !sources.contains(p))
+                .copied()
+                .collect();
+            let died = !doomed.is_empty();
+            for p in doomed {
+                self.blaze_tiles.remove(&p);
+                self.obstacles.remove(&p);
+            }
+            if died {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The firestorm dies down!".to_string(),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        // Scheduled blaze every 6th tick
+        if self.tick_counter.is_multiple_of(6) {
+            self.firestorm_blazes += 1;
+            self.spread_firestorm();
+        }
+    }
+    fn spread_firestorm(&mut self) {
+        let cap = (u32::from(self.width) * u32::from(self.height)) * 15 / 100;
+        if u32::try_from(self.blaze_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let frontier: Vec<Point> = self.blaze_tiles.keys().copied().collect();
+        if frontier.is_empty() {
+            return;
+        }
+        let spread_attempts = 2 + self.blaze_sources.len();
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        for _ in 0..spread_attempts {
+            if u32::try_from(self.blaze_tiles.len()).unwrap_or(u32::MAX) >= cap {
+                break;
+            }
+            let base = frontier[self.rng.gen_range(0..frontier.len())];
+            let np = Self::calculate_next_head_dir(base, dirs[self.rng.gen_range(0..4)]);
+            if np.x >= self.width || np.y >= self.height {
+                continue;
+            }
+            if self.is_firestorm_spread_blocked(np, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            // Fire chars through obstacles: the cell becomes burning ground, and once
+            // the blaze dies out the charred cell is left open
+            self.blaze_tiles.insert(np, Self::BLAZE_BURN_TICKS);
+            self.obstacles.insert(np);
+        }
+    }
+    fn is_firestorm_spread_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.lava_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
     }
 
     fn manage_seismic(&mut self) {
@@ -5723,7 +5912,8 @@ impl Game {
             | GameMode::IceRink
             | GameMode::BlackHole
             | GameMode::Ricochet
-            | GameMode::TurretBattery => {
+            | GameMode::TurretBattery
+            | GameMode::Firestorm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5834,6 +6024,7 @@ impl Game {
                 || self.mode == GameMode::BlackHole
                 || self.mode == GameMode::Ricochet
                 || self.mode == GameMode::TurretBattery
+                || self.mode == GameMode::Firestorm
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5911,6 +6102,7 @@ impl Game {
             || self.mode == GameMode::BlackHole
             || self.mode == GameMode::Ricochet
             || self.mode == GameMode::TurretBattery
+            || self.mode == GameMode::Firestorm
         {
             &self.snake
         } else {
@@ -6054,6 +6246,9 @@ impl Game {
         self.singularity_drifts = 0;
         self.singularity_shield = 0;
         self.fire_tiles.clear();
+        self.blaze_tiles.clear();
+        self.blaze_sources.clear();
+        self.firestorm_blazes = 0;
         self.ice_tiles.clear();
         self.ice_slips = 0;
         self.fire_ttl.clear();
@@ -6485,6 +6680,9 @@ impl Game {
         if self.mode == GameMode::Volcano {
             self.spawn_volcano_vents();
         }
+        if self.mode == GameMode::Firestorm {
+            self.spawn_blaze_sources();
+        }
         if self.mode == GameMode::Wildfire {
             self.ignite_initial_wildfire();
         }
@@ -6698,6 +6896,9 @@ impl Game {
         }
         if self.mode == GameMode::TurretBattery {
             self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Firestorm {
+            self.weather = Weather::Firestorm;
         }
         self.lightning_column = None;
         self.meteor_strike_column = None;
@@ -7115,7 +7316,8 @@ impl Game {
             | GameMode::IceRink
             | GameMode::BlackHole
             | GameMode::Ricochet
-            | GameMode::TurretBattery => {
+            | GameMode::TurretBattery
+            | GameMode::Firestorm => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7176,7 +7378,9 @@ impl Game {
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.fire_tiles.retain(|p| self.obstacles.contains(p));
         self.fire_ttl.retain(|p, _| self.fire_tiles.contains(p));
-        self.puddle_tiles.retain(|p| self.obstacles.contains(p));        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        self.puddle_tiles.retain(|p| self.obstacles.contains(p));
+        self.lava_tiles.retain(|p| self.obstacles.contains(p));
+        self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
         self.inferno_tiles.retain(|p| self.obstacles.contains(p));
         self.inferno_burn.retain(|p, _| self.inferno_tiles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
@@ -7844,6 +8048,9 @@ impl Game {
             self.belt_tiles = state.belt_tiles;
             self.turret_volleys = state.turret_volleys;
             self.turret_jammed = state.turret_jammed;
+            self.blaze_tiles = state.blaze_tiles;
+            self.blaze_sources = state.blaze_sources;
+            self.firestorm_blazes = state.firestorm_blazes;
             self.belt_shifts = state.belt_shifts;
             self.ice_tiles = state.ice_tiles;
             self.ice_slips = state.ice_slips;
@@ -8016,6 +8223,9 @@ impl Game {
 
             turret_volleys: self.turret_volleys,
             turret_jammed: self.turret_jammed,
+            blaze_tiles: self.blaze_tiles.clone(),
+            blaze_sources: self.blaze_sources.clone(),
+            firestorm_blazes: self.firestorm_blazes,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10777,6 +10987,7 @@ impl Game {
             && self.mode != GameMode::IceRink
             && self.mode != GameMode::BlackHole
             && self.mode != GameMode::TurretBattery
+            && self.mode != GameMode::Firestorm
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -11767,6 +11978,7 @@ impl Game {
         self.manage_monsoon();
         self.manage_wildfire();
         self.manage_minefield();
+        self.manage_firestorm();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_turret_battery();
@@ -12582,6 +12794,7 @@ impl Game {
                 || self.mode == GameMode::BlackHole
                 || self.mode == GameMode::Ricochet
                 || self.mode == GameMode::TurretBattery
+                || self.mode == GameMode::Firestorm
             {
                 self.handle_death("You Died!");
             } else {
@@ -12973,6 +13186,10 @@ impl Game {
 
         self.manage_tornado_gust();
         self.manage_event_horizon_surge();
+        // Keep the blaze/obstacle mirror exact even if something else cleared obstacles mid-tick
+        if self.mode == GameMode::Firestorm {
+            self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
+        }
     }
     fn check_body_collisions(
         &self,
@@ -13834,6 +14051,30 @@ impl Game {
                     f32::from(final_head.x),
                     f32::from(final_head.y),
                     format!("Cooled {cooled} lava!"),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+        if self.mode == GameMode::Firestorm {
+            let sources = self.blaze_sources.clone();
+            let mut doused = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if !sources.contains(&np) && self.blaze_tiles.remove(&np).is_some() {
+                    self.obstacles.remove(&np);
+                    doused += 1;
+                }
+            }
+            if doused > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Doused {doused} blazes!"),
                     crate::color::Color::Cyan,
                 );
             }
@@ -16318,6 +16559,7 @@ impl Game {
     /// Maximum number of steps ahead for which rival snake heads are predicted
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
+    pub const BLAZE_BURN_TICKS: u32 = 12;
 
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode

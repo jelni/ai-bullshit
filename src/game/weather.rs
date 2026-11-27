@@ -13,4 +13,5 @@ pub enum Weather {
     Fog,
     Wildfire,
     Inferno,
+    Firestorm,
 }

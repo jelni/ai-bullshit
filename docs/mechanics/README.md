@@ -13,7 +13,7 @@ The game features several complex mechanics beyond simple snake movement:
 
 ## Weather System
 
-The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse`, `Fog` and `Wildfire` (randomly over time for the ambient types, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
+The `weather` field on the game state cycles through `Clear`, `Rain`, `Snow`, `Storm`, `Tornado`, `Sandstorm`, `Earthquake`, `Eclipse`, `Fog`, `Wildfire` and `Firestorm` (randomly over time for the ambient types, and forced per-mode/per-planet in some cases). Each weather type has concrete gameplay effects, not just visuals:
 
 - **Rain:** raises the ambient bonus-food spawn chance. In Acid Rain Mode the rain is permanent and a downpour is guaranteed every 6th tick, dropping lethal acid puddles (see below).
 - **Snow:** occasionally delays the autopilot bot (except in Blizzard mode, where the storm is permanent but the bot is never delayed).
@@ -418,3 +418,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Turrets: <count> | Volleys: <count>` plus `Jammed: <ticks>` while jammed.
 - **Persistence:** `turret_volleys` and `turret_jammed` are stored in `SaveState` and `HistoryState` (`turrets` and `lasers` were already persisted), so save/load and time-rewind stay consistent.
 - **Tests:** see [tests/test_turret_battery_mode.rs](../../tests/test_turret_battery_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+## Firestorm Mode
+
+`GameMode::Firestorm` (menu entry "Firestorm Mode") is a survival mode wrapped in a permanent firestorm (`weather` is forced to `Weather::Firestorm` every tick, and the ambient weather randomization is skipped in this mode):
+
+- **Blaze sources:** two blaze sources (`blaze_sources`) are seeded on random empty cells at reset and burn permanently (rendered as a dark-red `B` terminal / dark-red cell web).
+- **Scheduled blazes:** on every 6th tick a blaze is guaranteed and spreads flames from the burning frontier onto neighboring cells, up to a cap of 15% of the board and counted in `firestorm_blazes`. Unlike Volcano lava, fire chars through obstacles — the charred cell becomes burning ground.
+- **Burn-out:** each blaze is stored in `blaze_tiles` as `cell -> remaining burn ticks` and burns out after `Game::BLAZE_BURN_TICKS` (12) ticks, leaving the charred cell open (removed from both `blaze_tiles` and `obstacles`).
+- **Fairness:** a blaze never spreads off the board, onto a snake's body, onto any entity (bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors, lava, wildfire, acid puddles, monsoon puddles, inferno tiles, rubble, snow, sand), or onto the cell any snake is about to move into this tick (`is_firestorm_spread_blocked`).
+- **Die-down cycle:** at tick 200 of every 250-tick cycle the whole firestorm dies down ("The firestorm dies down!"), keeping only the blaze sources.
+- **Dousing by food:** eating food douses all blazes adjacent to the eaten cell ("Doused N blazes!").
+- **Autopilot:** blazes are mirrored into `obstacles`, so they are a hard obstacle in the A* heuristic/edge costs, the `is_safe_final_p` verified-safe path checks, and the trap-avoidance flood fills, and the bot routes around the flames natively. An end-of-tick self-heal drops stale blaze records if something else (e.g. a meteor crash or a Bomb) cleared obstacles mid-tick.
+- **Persistence:** `blaze_tiles` (serialized through `map_as_pairs` as `[point, ticks]` pairs), `blaze_sources`, and `firestorm_blazes` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Blaze: <count> | Blazes: <count>`, and blazes are rendered as a red `*` (terminal) / orange cell (web).
+- **Tests:** see [tests/test_firestorm_mode.rs](../../tests/test_firestorm_mode.rs).
