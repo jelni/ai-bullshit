@@ -67,4 +67,5 @@ pub enum GameMode {
     Monsoon,
     Singularity,
     Wildfire,
+    EventHorizon,
 }

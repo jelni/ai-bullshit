@@ -95,4 +95,6 @@ pub struct HistoryState {
     pub fire_ttl: std::collections::HashMap<Point, u32>,
     pub ash_tiles: HashSet<Point>,
     pub wildfire_ignitions: u32,
+    pub event_horizon_drifts: u32,
+    pub event_horizon_surges: u32,
 }

@@ -368,6 +368,54 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_event_horizon_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::EventHorizon;
+        game.reset();
+        game.black_hole = Some(Point { x: 12, y: 9 });
+        game.event_horizon_drifts = 7;
+        game.event_horizon_surges = 3;
+        let file_path = "savegame_test_event_horizon.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::EventHorizon);
+        assert_eq!(loaded.black_hole, Some(Point { x: 12, y: 9 }));
+        assert_eq!(loaded.event_horizon_drifts, 7);
+        assert_eq!(loaded.event_horizon_surges, 3);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
+    fn test_event_horizon_recoil_moves_hole_away_from_food() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::EventHorizon;
+        game.reset();
+        game.obstacles.clear();
+        game.black_hole = Some(Point { x: 10, y: 10 });
+        game.event_horizon_recoil(Point { x: 10, y: 13 });
+        assert_eq!(
+            game.black_hole,
+            Some(Point { x: 10, y: 9 }),
+            "eating below the hole must recoil it one cell away (up)"
+        );
+    }
+    #[test]
+    fn test_event_horizon_recoil_respects_fairness() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::EventHorizon;
+        game.reset();
+        game.obstacles.clear();
+        game.black_hole = Some(Point { x: 10, y: 10 });
+        game.obstacles.insert(Point { x: 10, y: 9 });
+        game.event_horizon_recoil(Point { x: 10, y: 13 });
+        assert_eq!(
+            game.black_hole,
+            Some(Point { x: 10, y: 10 }),
+            "the recoil must fizzle when the away-cell is blocked"
+        );
+    }
+    #[test]
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

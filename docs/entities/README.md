@@ -10,3 +10,4 @@ The primary entities in the game include:
 - **Food/Crops/Artifacts:** Items the snake collects to progress.
 - **Sand drifts:** In Sandstorm mode, accumulating drifts (`sand_tiles`, mirrored into `obstacles`) that are lethal on entry and treated as hard obstacles by the autopilot.
 - **Acid puddles:** In Acid Rain mode, accumulating puddles (`acid_puddles`, mirrored into `obstacles`) that are lethal on entry and treated as hard obstacles by the autopilot.
+- **Black hole:** A lethal singularity cell (`black_hole`, rendered as a dark `O`) that spawns occasionally at random and constantly drags loose items (food, bonus/poison food, power-ups) towards itself while swallowing adjacent obstacles and mines. In Event Horizon mode the hole is permanent and additionally drifts one cell every 6th tick and surges every 12th tick (see docs/mechanics).

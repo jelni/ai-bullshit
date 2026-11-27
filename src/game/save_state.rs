@@ -193,6 +193,9 @@ pub struct SaveState {
     pub ash_tiles: HashSet<Point>,
     #[serde(default)]
     pub wildfire_ignitions: u32,
+    pub event_horizon_drifts: u32,
+    #[serde(default)]
+    pub event_horizon_surges: u32,
 }
 
 #[must_use]
