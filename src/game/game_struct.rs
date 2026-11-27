@@ -201,6 +201,8 @@ pub struct Game {
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
+    pub thorn_tiles: HashSet<Point>,
+    pub thorn_blooms: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -704,6 +706,8 @@ impl Game {
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
+            thorn_tiles: HashSet::new(),
+            thorn_blooms: 0,
         }
     }
     #[must_use]
@@ -955,6 +959,8 @@ impl Game {
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
+            thorn_tiles: self.thorn_tiles.clone(),
+            thorn_blooms: self.thorn_blooms,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1164,6 +1170,8 @@ impl Game {
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
+                self.thorn_tiles = state.thorn_tiles;
+                self.thorn_blooms = state.thorn_blooms;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -2266,6 +2274,7 @@ impl Game {
                 || self.ice_tiles.contains(p)
                 || self.blaze_tiles.contains_key(p)
                 || self.fortress_walls.contains(p)
+                || self.thorn_tiles.contains(p)
         };
         let mut ring_cells = Vec::new();
         for x in 0..self.width {
@@ -2494,6 +2503,213 @@ impl Game {
                 self.geyser_jets.insert(pos, u32::MAX);
                 self.obstacles.insert(pos);
             }
+        }
+    }
+
+    #[must_use]
+    pub fn thorn_lashes(&self, p: Point) -> bool {
+        if self.thorn_tiles.is_empty() {
+            return false;
+        }
+        if self.thorn_tiles.contains(&p) {
+            return true;
+        }
+        [Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+            .iter()
+            .any(|&d| self.thorn_tiles.contains(&Self::calculate_next_head_dir(p, d)))
+    }
+    fn is_thorn_spread_blocked(&self, p: Point, next_heads: &[Point]) -> bool {
+        if p.x == 0
+            || p.x >= self.width - 1
+            || p.y == 0
+            || p.y >= self.height - 1
+            || self.obstacles.contains(&p)
+            || self.thorn_tiles.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+        {
+            return true;
+        }
+        // A thorn lashes at every orthogonally adjacent cell, so its whole lash
+        // zone (itself plus its 4 neighbors) must stay clear of snakes and of
+        // the cells snakes are about to enter, or the bloom would be a cheap kill
+        let lash_zone = [
+            p,
+            Self::calculate_next_head_dir(p, Direction::Up),
+            Self::calculate_next_head_dir(p, Direction::Down),
+            Self::calculate_next_head_dir(p, Direction::Left),
+            Self::calculate_next_head_dir(p, Direction::Right),
+        ];
+        self.snake.body_map.iter().any(|(bp, _)| lash_zone.contains(bp))
+            || self
+                .player2
+                .as_ref()
+                .is_some_and(|p2| p2.body_map.iter().any(|(bp, _)| lash_zone.contains(bp)))
+            || self
+                .bots
+                .iter()
+                .any(|b| b.body_map.iter().any(|(bp, _)| lash_zone.contains(bp)))
+            || lash_zone.iter().any(|c| next_heads.contains(c))
+    }
+    fn spawn_initial_thorns(&mut self) {
+        let thorn_count = (u32::from(self.width) * u32::from(self.height) / 100).max(2);
+        let mut placed = 0u32;
+        for _ in 0..thorn_count * 20 {
+            if placed >= thorn_count {
+                break;
+            }
+            let next_heads = self.next_head_cells();
+            let avoid_thorn = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.thorn_tiles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_thorn,
+                &mut self.rng,
+                0,
+            ) {
+                // Keep the initial thorns away from the spawn area lash zones too
+                if !self.is_thorn_spread_blocked(p, &next_heads) {
+                    self.thorn_tiles.insert(p);
+                    self.obstacles.insert(p);
+                    placed += 1;
+                }
+            }
+        }
+    }
+    fn manage_thornfield(&mut self) {
+        if self.mode != GameMode::Thornfield {
+            return;
+        }
+        // The skies stay clear in Thornfield mode so the briars always stay visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale thorn records
+        self.thorn_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic wither: at tick 200 of every 250-tick cycle all thorns wither away
+        if self.tick_counter == 200 {
+            if !self.thorn_tiles.is_empty() {
+                let thorns: Vec<Point> = self.thorn_tiles.drain().collect();
+                for p in thorns {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The thorns wither!".to_string(),
+                    crate::color::Color::Green,
+                );
+            }
+            return;
+        }
+        // Every 6th tick a bloom spreads the briars from the frontier
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 12;
+        if u32::try_from(self.thorn_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let mut next_heads = vec![p1_next];
+        if let Some(p2n) = p2_next {
+            next_heads.push(p2n);
+        }
+        for b in &self.bots {
+            let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+            next_heads.push(Self::calculate_next_head_dir(b.head(), d));
+        }
+        self.thorn_blooms += 1;
+        let frontier: Vec<Point> = self.thorn_tiles.iter().copied().collect();
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        let mut spread = 0u32;
+        for _ in 0..3 {
+            if frontier.is_empty()
+                || u32::try_from(self.thorn_tiles.len()).unwrap_or(u32::MAX) >= cap
+            {
+                break;
+            }
+            let from = frontier[self.rng.gen_range(0..frontier.len())];
+            let d = dirs[self.rng.gen_range(0..dirs.len())];
+            let np = Self::calculate_next_head_dir(from, d);
+            if self.is_thorn_spread_blocked(np, &next_heads) {
+                continue;
+            }
+            self.thorn_tiles.insert(np);
+            self.obstacles.insert(np);
+            spread += 1;
+        }
+        if spread > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The briars bloom! (+{spread})"),
+                crate::color::Color::Green,
+            );
         }
     }
     fn manage_monsoon(&mut self) {
@@ -6285,7 +6501,8 @@ impl Game {
             | GameMode::TurretBattery
             | GameMode::Firestorm
             | GameMode::Fortress
-            | GameMode::Geyser => {
+            | GameMode::Geyser
+            | GameMode::Thornfield => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6399,6 +6616,7 @@ impl Game {
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
                 || self.mode == GameMode::Geyser
+                || self.mode == GameMode::Thornfield
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -6479,6 +6697,7 @@ impl Game {
             || self.mode == GameMode::Firestorm
             || self.mode == GameMode::Fortress
             || self.mode == GameMode::Geyser
+            || self.mode == GameMode::Thornfield
         {
             &self.snake
         } else {
@@ -6595,6 +6814,8 @@ impl Game {
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
+        self.thorn_tiles.clear();
+        self.thorn_blooms = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -7111,6 +7332,9 @@ impl Game {
                 }
             }
         }
+        if self.mode == GameMode::Thornfield {
+            self.spawn_initial_thorns();
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -7286,6 +7510,9 @@ impl Game {
             self.weather = Weather::Firestorm;
         }
         if self.mode == GameMode::Geyser {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Thornfield {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -7707,7 +7934,8 @@ impl Game {
             | GameMode::TurretBattery
             | GameMode::Firestorm
             | GameMode::Fortress
-            | GameMode::Geyser => {
+            | GameMode::Geyser
+            | GameMode::Thornfield => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7773,6 +8001,7 @@ impl Game {
         self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
         self.inferno_tiles.retain(|p| self.obstacles.contains(p));
         self.inferno_burn.retain(|p, _| self.inferno_tiles.contains(p));
+        self.thorn_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
@@ -8385,6 +8614,8 @@ impl Game {
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
+            self.thorn_tiles = state.thorn_tiles;
+            self.thorn_blooms = state.thorn_blooms;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -8561,6 +8792,8 @@ impl Game {
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
+            thorn_tiles: self.thorn_tiles.clone(),
+            thorn_blooms: self.thorn_blooms,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -11390,6 +11623,7 @@ impl Game {
             && self.mode != GameMode::BlackHole
             && self.mode != GameMode::TurretBattery
             && self.mode != GameMode::Firestorm
+            && self.mode != GameMode::Thornfield
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -12368,6 +12602,7 @@ impl Game {
         self.manage_blizzard();
         self.manage_fortress();
         self.manage_geyser();
+        self.manage_thornfield();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -12734,6 +12969,31 @@ impl Game {
             }
             p2_dead = true;
         }
+        let hit_thorn1 = self.mode == GameMode::Thornfield && self.thorn_lashes(final_head1);
+        let hit_thorn2 = final_head2_opt
+            .is_some_and(|fh2| self.mode == GameMode::Thornfield && self.thorn_lashes(fh2));
+        if hit_thorn1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                20,
+                crate::color::Color::Green,
+                'Y',
+            );
+        }
+        if hit_thorn2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    20,
+                    crate::color::Color::Green,
+                    'Y',
+                );
+            }
+        }
         let hit_black_hole1 = self.black_hole.is_some_and(|bh| final_head1 == bh);
         let hit_black_hole2 =
             final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
@@ -13037,6 +13297,10 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.mode == GameMode::Thornfield && self.thorn_lashes(*final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             if self.lasers.iter().any(|l| l.position == *final_head) {
                 bots_to_remove.insert(*i);
                 continue;
@@ -13201,6 +13465,7 @@ impl Game {
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
                 || self.mode == GameMode::Geyser
+                || self.mode == GameMode::Thornfield
             {
                 self.handle_death("You Died!");
             } else {
@@ -14258,6 +14523,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Doused {doused} jet!"),
                     crate::color::Color::Cyan,
+                );
+            }
+        }
+        if self.mode == GameMode::Thornfield {
+            let mut pruned = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.thorn_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    pruned += 1;
+                }
+            }
+            if pruned > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Pruned {pruned} thorns!"),
+                    crate::color::Color::Green,
                 );
             }
         }
@@ -16188,6 +16476,9 @@ impl Game {
             if self.mines.contains(&final_p) {
                 return false;
             }
+            if self.mode == GameMode::Thornfield && self.thorn_lashes(final_p) {
+                return false;
+            }
             if self.black_hole.is_some_and(|bh| bh == final_p) {
                 return false;
             }
@@ -17641,6 +17932,9 @@ impl Game {
                     }
                 }
             }
+            if self.mode == GameMode::Thornfield && self.thorn_lashes(p) {
+                penalty = penalty.saturating_add(10_000);
+            }
             if checking_player == 1 {
                 if let Some(p2) = &self.player2 {
                     for part in &p2.body {
@@ -18143,6 +18437,19 @@ impl Game {
         }
         if let Some(t) = self.tornado {
             blocked.insert(t);
+        }
+        if self.mode == GameMode::Thornfield {
+            for thorn in &self.thorn_tiles {
+                blocked.insert(*thorn);
+                for d in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    blocked.insert(Self::calculate_next_head_dir(*thorn, d));
+                }
+            }
         }
         if let Some(col) = self.lightning_column {
             for y in 1..self.height.saturating_sub(1) {

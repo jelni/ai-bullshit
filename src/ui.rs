@@ -662,6 +662,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Turret Battery Mode",
         "Fortress Mode",
         "Geyser Mode",
+        "Thornfield Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1984,6 +1985,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw thorn briars (Thornfield mode)
+    if game.mode == crate::game::GameMode::Thornfield {
+        stdout.queue(SetForegroundColor(Color::DarkGreen))?;
+        for thorn in &game.thorn_tiles {
+            if is_visible(thorn.x, thorn.y) {
+                stdout.queue(cursor::MoveTo(thorn.x, thorn.y))?;
+                write!(stdout, "Y")?;
+            }
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         stdout.queue(SetForegroundColor(Color::White))?;
@@ -3141,6 +3153,16 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+
+    let thorn_str = if game.mode == crate::game::GameMode::Thornfield {
+        format!(
+            " | Thorns: {} | Blooms: {}",
+            game.thorn_tiles.len(),
+            game.thorn_blooms
+        )
+    } else {
+        String::new()
+    };
     let event_horizon_str = if game.mode == crate::game::GameMode::EventHorizon {
         format!(
             " | Drifts: {} | Surges: {}",
@@ -3263,7 +3285,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}"
     )?;
 
     if !game.bosses.is_empty() {

@@ -168,6 +168,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw thorn briars (Thornfield mode)
+    if game.mode == crate::game::GameMode::Thornfield {
+        ctx.set_fill_style_str("#228B22"); // Forest green
+        for thorn in &game.thorn_tiles {
+            if thorn.x < game.width
+                && thorn.y < game.height
+                && is_visible(f64::from(thorn.x), f64::from(thorn.y))
+            {
+                ctx.fill_rect(
+                    f64::from(thorn.x) * cell_size,
+                    f64::from(thorn.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw sand drifts (Sandstorm mode)
     if game.mode == crate::game::GameMode::Sandstorm {
         ctx.set_fill_style_str("#D2B48C"); // Tan

@@ -459,3 +459,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Dousing:** eating food removes the jets adjacent to the eaten cell ("Doused N jet!").
 - **Persistence:** `geyser_vents`, `geyser_jets` (serialized through `map_as_pairs` as `[point, ticks]` pairs), and `geyser_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale jet records are pruned each tick if another effect cleared the obstacles.
 - **Tests:** see [tests/test_geyser_mode.rs](../../tests/test_geyser_mode.rs).
+
+## Thornfield Mode
+
+`GameMode::Thornfield` (menu entry "Thornfield Mode", index 80 in the main menu) is a survival mode built around a growing **thorn field** (`thorn_tiles`, rendered as a dark-green `Y` terminal / forest-green cell web):
+
+- **Initial briars:** on reset, `max(board/100, 2)` thorns are seeded on fair cells (never on a snake, an entity, an obstacle, or the cell any snake is about to enter) via `spawn_initial_thorns`. The weather is pinned to `Weather::Clear` every tick (ambient weather randomization is skipped in this mode) so the briars always stay visible.
+- **Scheduled blooms:** on every 6th tick `manage_thornfield` fires a bloom (`thorn_blooms += 1`, shown as `Blooms: <count>`): up to 3 thorns spread from the current thorn frontier onto random orthogonal neighbors, capped at `board/12` (~8% of the board). A bloom announces itself with "The briars bloom! (+N)".
+- **Double lethality:** thorns are mirrored into `obstacles`, so entering a thorn cell kills the snake like any wall — and each thorn also **lashes** at every orthogonally adjacent cell: a head ending its tick within Manhattan distance 1 of a thorn dies (`thorn_lashes`, checked for the player, player 2, and every arena bot in `update_tick`, gated by invincibility just like mines).
+- **Fairness:** a bloom never places a thorn out of bounds, on an obstacle, on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, tornado, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KoTH zone, flags, resources, lasers, meteors, belts, ice, and every other hazard tile set), or on any cell whose **lash zone** (itself plus its 4 neighbors) contains a snake body cell or the cell any snake is about to enter this tick (`is_thorn_spread_blocked`) — so a bloom can never cheap-kill.
+- **Wither cycle:** at tick 200 of every 250-tick cycle all thorns wither away ("The thorns wither!"), keeping the board playable.
+- **Pruning by food:** eating food prunes all thorns adjacent to the eaten cell ("Pruned N thorns!").
+- **Autopilot:** thorn cells are ordinary obstacles, and their whole lash zone is an additional hard hazard in `is_safe_final_p` (verified-safe path checks), penalized in the `astar_search` heuristic, and blocked in `trap_blocked_cells` flood fills — so the bot routes around the briars natively and never gets pricked.
+- **Persistence:** `thorn_tiles` and `thorn_blooms` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale thorn records are pruned each tick if another effect cleared the obstacles.
+- **Tests:** see [tests/test_thornfield_mode.rs](../../tests/test_thornfield_mode.rs) plus the save/load unit test `test_save_and_load_thornfield_mode` in `src/game/tests.rs`.

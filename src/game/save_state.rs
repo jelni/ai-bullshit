@@ -144,6 +144,10 @@ pub struct SaveState {
     #[serde(default)]
     pub fortress_rings: u32,
     #[serde(default)]
+    pub thorn_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub thorn_blooms: u32,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,

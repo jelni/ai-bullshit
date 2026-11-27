@@ -87,4 +87,5 @@ pub enum GameMode {
     Firestorm,
     Fortress,
     Geyser,
+    Thornfield,
 }
