@@ -655,6 +655,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Warp Mode",
         "Gravity Well",
         "Conveyor Mode",
+        "Ice Rink",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1961,6 +1962,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw ice patches (Ice Rink mode)
+    if game.mode == crate::game::GameMode::IceRink {
+        stdout.queue(SetForegroundColor(Color::Cyan))?;
+        for ice in &game.ice_tiles {
+            if is_visible(ice.x, ice.y) {
+                stdout.queue(cursor::MoveTo(ice.x, ice.y))?;
+                write!(stdout, ".")?;
+            }
+        }
+    }
+
     // Draw the bomb on the carrier's head (Bomb Tag mode)
     if game.mode == crate::game::GameMode::BombTag
         && let Some(carrier) = game.bomb_carrier
@@ -2979,6 +2991,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let ice_str = if game.mode == crate::game::GameMode::IceRink {
+        format!(
+            " | Ice: {} | Slips: {}",
+            game.ice_tiles.len(),
+            game.ice_slips
+        )
+    } else {
+        String::new()
+    };
     let bomb_str = if game.mode == crate::game::GameMode::BombTag {
         let carrier = match game.bomb_carrier {
             Some(1) => "You".to_string(),
@@ -3112,7 +3133,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}"
     )?;
 
     if !game.bosses.is_empty() {

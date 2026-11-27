@@ -121,4 +121,6 @@ pub struct HistoryState {
     pub gravity_well_surges: u32,
     pub belt_tiles: std::collections::HashMap<Point, Direction>,
     pub belt_shifts: u32,
+    pub ice_tiles: HashSet<Point>,
+    pub ice_slips: u32,
 }

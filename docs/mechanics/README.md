@@ -374,3 +374,13 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `belt_tiles` (serialized as `[key, value]` pairs via `map_as_pairs`) and `belt_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Rendering:** belts are drawn as yellow `^`/`v`/`<`/`>` glyphs (terminal) / orange cells (web).
 - **Tests:** see [tests/test_conveyor_mode.rs](../../tests/test_conveyor_mode.rs) plus a save/load unit test in `src/game/tests.rs` (`test_save_and_load_conveyor_mode`).
+
+## Ice Rink
+
+`GameMode::IceRink` (menu entry "Ice Rink") is a movement-physics mode: the board is seeded with slippery **ice patches** (`ice_tiles`, ~10% of the board) and while a snake's head is on an ice patch it **cannot turn**.
+
+- **Board setup:** on reset the mode generates the usual obstacle set plus `width * height / 10` ice patches on fair empty cells (never off the board, on a snake's body, on an obstacle, or on the food). Weather is pinned to `Weather::Clear` (ambient re-rolls are skipped in this mode).
+- **Engine rule:** the rule is enforced at the single point where every snake's queued direction is applied each tick (player, player 2, and every bot): `ice_blocks_turn` ignores a queued direction that differs from the current one while the head is on an ice patch, and counts the blocked turn in `ice_slips`. Continuing straight across ice is always allowed; turning off ice works normally.
+- **Autopilot:** `astar_search` never expands a turn out of an ice cell (both the initial expansion from `start` and the per-node expansion, using the incoming direction from `came_from`), `path_is_safe` rejects any path that turns on an ice cell (comparing each step's direction with the previous step's, using the snake's current direction at the first step), and `flood_fill_fallback` only continues straight when starting on ice — so the bot routes through normal floor whenever it needs to turn.
+- **Persistence:** `ice_tiles` and `ice_slips` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). Ice patches render as a cyan `.` (terminal) / light-blue cell (web), and the status bar shows `Ice: <count> | Slips: <count>`.
+- **Tests:** see [tests/test_ice_rink.rs](../../tests/test_ice_rink.rs) plus a save/load unit test in `src/game/tests.rs` (`test_save_and_load_ice_rink_mode`).

@@ -235,6 +235,9 @@ pub struct SaveState {
     pub belt_tiles: std::collections::HashMap<Point, Direction>,
     #[serde(default)]
     pub belt_shifts: u32,
+    pub ice_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub ice_slips: u32,
 }
 
 #[must_use]

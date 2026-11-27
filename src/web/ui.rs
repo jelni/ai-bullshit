@@ -153,6 +153,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw ice patches (Ice Rink mode)
+    if game.mode == crate::game::GameMode::IceRink {
+        ctx.set_fill_style_str("#ADD8E6"); // Light blue
+        for ice in &game.ice_tiles {
+            if ice.x < game.width
+                && ice.y < game.height
+                && is_visible(f64::from(ice.x), f64::from(ice.y))
+            {
+                ctx.fill_rect(
+                    f64::from(ice.x) * cell_size,
+                    f64::from(ice.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw the bomb on the carrier's head (Bomb Tag mode)
     if game.mode == crate::game::GameMode::BombTag
         && let Some(carrier) = game.bomb_carrier

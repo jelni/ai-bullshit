@@ -190,6 +190,8 @@ pub struct Game {
     pub gravity_well_surges: u32,
     pub belt_tiles: std::collections::HashMap<Point, Direction>,
     pub belt_shifts: u32,
+    pub ice_tiles: HashSet<Point>,
+    pub ice_slips: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -671,6 +673,8 @@ impl Game {
             mine_drops: 0,
             laser_volleys: 0,
             laser_telegraph: None,
+            ice_tiles: HashSet::new(),
+            ice_slips: 0,
         }
     }
     #[must_use]
@@ -974,6 +978,8 @@ impl Game {
             gravity_well_surges: self.gravity_well_surges,
             belt_tiles: self.belt_tiles.clone(),
             belt_shifts: self.belt_shifts,
+            ice_tiles: self.ice_tiles.clone(),
+            ice_slips: self.ice_slips,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1179,6 +1185,8 @@ impl Game {
                 self.gravity_well_surges = state.gravity_well_surges;
                 self.belt_tiles = state.belt_tiles;
                 self.belt_shifts = state.belt_shifts;
+                self.ice_tiles = state.ice_tiles;
+                self.ice_slips = state.ice_slips;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -5390,8 +5398,8 @@ impl Game {
             | GameMode::Tsunami
             | GameMode::Warp
             | GameMode::GravityWell
-            | GameMode::Conveyor => {
-
+            | GameMode::Conveyor
+            | GameMode::IceRink => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5498,6 +5506,7 @@ impl Game {
                 || self.mode == GameMode::Warp
                 || self.mode == GameMode::GravityWell
                 || self.mode == GameMode::Conveyor
+                || self.mode == GameMode::IceRink
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5571,6 +5580,7 @@ impl Game {
             || self.mode == GameMode::Warp
             || self.mode == GameMode::GravityWell
             || self.mode == GameMode::Conveyor
+            || self.mode == GameMode::IceRink
         {
             &self.snake
         } else {
@@ -5714,6 +5724,8 @@ impl Game {
         self.singularity_drifts = 0;
         self.singularity_shield = 0;
         self.fire_tiles.clear();
+        self.ice_tiles.clear();
+        self.ice_slips = 0;
         self.fire_ttl.clear();
         self.ash_tiles.clear();
         self.wildfire_ignitions = 0;
@@ -5973,6 +5985,48 @@ impl Game {
                 ) {
                     self.puddle_tiles.insert(p);
                     self.obstacles.insert(p);
+                }
+            }
+        } else if self.mode == GameMode::IceRink {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let ice_count = (u32::from(self.width) * u32::from(self.height)) / 10;
+            for _ in 0..ice_count {
+                let ice_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.ice_tiles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || *p == self.food
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    ice_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.ice_tiles.insert(p);
                 }
             }
         } else if self.mode == GameMode::Earthquake {
@@ -6300,6 +6354,8 @@ impl Game {
         if self.mode == GameMode::GravityWell {
         }
         if self.mode == GameMode::Conveyor {
+        }
+        if self.mode == GameMode::IceRink {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -6669,8 +6725,8 @@ impl Game {
             | GameMode::Tsunami
             | GameMode::Warp
             | GameMode::GravityWell
-            | GameMode::Conveyor => {
-
+            | GameMode::Conveyor
+            | GameMode::IceRink => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6941,6 +6997,15 @@ impl Game {
             current_pos = Self::calculate_next_head_dir(current_pos, dir);
         }
         false
+    }
+    fn ice_blocks_turn(
+        mode: GameMode,
+        ice_tiles: &HashSet<Point>,
+        head: Point,
+        current: Direction,
+        new: Direction,
+    ) -> bool {
+        mode == GameMode::IceRink && new != current && ice_tiles.contains(&head)
     }
     pub fn handle_autopilot_moves(&mut self) {
         let delay_bot = self.weather == Weather::Snow
@@ -7363,6 +7428,8 @@ impl Game {
             self.gravity_well_surges = state.gravity_well_surges;
             self.belt_tiles = state.belt_tiles;
             self.belt_shifts = state.belt_shifts;
+            self.ice_tiles = state.ice_tiles;
+            self.ice_slips = state.ice_slips;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -7522,6 +7589,8 @@ impl Game {
             gravity_well_surges: self.gravity_well_surges,
             belt_tiles: self.belt_tiles.clone(),
             belt_shifts: self.belt_shifts,
+            ice_tiles: self.ice_tiles.clone(),
+            ice_slips: self.ice_slips,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10280,6 +10349,7 @@ impl Game {
             && self.mode != GameMode::Tsunami
             && self.mode != GameMode::GravityWell
             && self.mode != GameMode::Conveyor
+            && self.mode != GameMode::IceRink
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -11213,15 +11283,33 @@ impl Game {
 
         self.handle_autopilot_moves();
         if let Some(dir) = self.snake.direction_queue.pop_front() {
-            self.snake.direction = dir;
+            if Self::ice_blocks_turn(
+                self.mode,
+                &self.ice_tiles,
+                self.snake.head(),
+                self.snake.direction,
+                dir,
+            ) {
+                self.ice_slips += 1;
+            } else {
+                self.snake.direction = dir;
+            }
         }
         if self.mode == GameMode::Speedrun {
             self.current_replay.push(self.snake.direction);
         }
-        if let Some(p2) = &mut self.player2
-            && let Some(dir) = p2.direction_queue.pop_front()
+        let p2_dir = self
+            .player2
+            .as_mut()
+            .and_then(|p2| p2.direction_queue.pop_front());
+        if let Some(dir) = p2_dir
+            && let Some(p2) = &mut self.player2
         {
-            p2.direction = dir;
+            if Self::ice_blocks_turn(self.mode, &self.ice_tiles, p2.head(), p2.direction, dir) {
+                self.ice_slips += 1;
+            } else {
+                p2.direction = dir;
+            }
         }
         self.manage_resources();
         self.manage_merchant();
@@ -11279,7 +11367,17 @@ impl Game {
 
         for i in 0..self.bots.len() {
             if let Some(dir) = self.bots[i].direction_queue.pop_front() {
-                self.bots[i].direction = dir;
+                if Self::ice_blocks_turn(
+                    self.mode,
+                    &self.ice_tiles,
+                    self.bots[i].head(),
+                    self.bots[i].direction,
+                    dir,
+                ) {
+                    self.ice_slips += 1;
+                } else {
+                    self.bots[i].direction = dir;
+                }
             }
             let next_head =
                 Self::calculate_next_head_dir(self.bots[i].head(), self.bots[i].direction);
@@ -15928,8 +16026,39 @@ impl Game {
                 }
             }
         }
+        let dir_between = |a: Point, b: Point| -> Direction {
+            if b.x > a.x {
+                Direction::Right
+            } else if b.x < a.x {
+                Direction::Left
+            } else if b.y > a.y {
+                Direction::Down
+            } else {
+                Direction::Up
+            }
+        };
+        let start_dir = match checking_player {
+            1 => self.snake.direction,
+            2 => self.player2.as_ref().map_or(Direction::Up, |p2| p2.direction),
+            id => self
+                .bots
+                .get(usize::from(id.saturating_sub(3)))
+                .map_or(Direction::Up, |b| b.direction),
+        };
         for (idx, &p) in path.iter().enumerate() {
             let steps = u16::try_from(idx + 1).unwrap_or(u16::MAX);
+            if self.mode == GameMode::IceRink && idx >= 1 {
+                let prev = path[idx - 1];
+                let new_dir = dir_between(prev, p);
+                let cur_dir = if idx >= 2 {
+                    dir_between(path[idx - 2], prev)
+                } else {
+                    start_dir
+                };
+                if new_dir != cur_dir && self.ice_tiles.contains(&prev) {
+                    return false;
+                }
+            }
             let is_final = idx + 1 == path.len();
             if is_final && targets.contains(&p) && self.bosses.iter().any(|b| b.position == p) {
                 continue;
@@ -16523,6 +16652,15 @@ impl Game {
             {
                 continue;
             }
+            if Self::ice_blocks_turn(
+                self.mode,
+                &self.ice_tiles,
+                start,
+                current_dir.unwrap_or(d),
+                d,
+            ) {
+                continue;
+            }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
                 && (next_p == final_p
@@ -16646,6 +16784,29 @@ impl Game {
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
+                let dir_at_current = came_from.get(&current).map_or_else(
+                    || current_dir.unwrap_or(d),
+                    |&prev| {
+                        if prev.x < current.x {
+                            Direction::Right
+                        } else if prev.x > current.x {
+                            Direction::Left
+                        } else if prev.y < current.y {
+                            Direction::Down
+                        } else {
+                            Direction::Up
+                        }
+                    },
+                );
+                if Self::ice_blocks_turn(
+                    self.mode,
+                    &self.ice_tiles,
+                    current,
+                    dir_at_current,
+                    d,
+                ) {
+                    continue;
+                }
                 let mut edge_cost = 1u16;
                 if let Some(final_p) = self.get_final_p(next_p) {
                     for l in &self.lasers {
@@ -17011,6 +17172,9 @@ impl Game {
             if d.is_opposite(current_dir) {
                 continue;
             }
+            if Self::ice_blocks_turn(self.mode, &self.ice_tiles, start, current_dir, d) {
+                continue;
+            }
             let next_p = Self::calculate_next_head_dir(start, d);
             if let Some(final_p) = self.get_final_p(next_p)
                 && (next_p == final_p
@@ -17065,6 +17229,9 @@ impl Game {
             let mut fallback_max = 0;
             for &d in &dirs {
                 if d.is_opposite(current_dir) {
+                    continue;
+                }
+                if Self::ice_blocks_turn(self.mode, &self.ice_tiles, start, current_dir, d) {
                     continue;
                 }
                 let next_p = Self::calculate_next_head_dir(start, d);
