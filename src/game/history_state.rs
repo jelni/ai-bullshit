@@ -88,4 +88,7 @@ pub struct HistoryState {
     pub acid_drops: u32,
     pub puddle_tiles: HashSet<Point>,
     pub monsoon_downpours: u32,
+    pub singularity_pulses: u32,
+    pub singularity_drifts: u32,
+    pub singularity_shield: u32,
 }

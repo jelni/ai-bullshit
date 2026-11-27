@@ -179,6 +179,12 @@ pub struct SaveState {
     pub puddle_tiles: HashSet<Point>,
     #[serde(default)]
     pub monsoon_downpours: u32,
+    #[serde(default)]
+    pub singularity_pulses: u32,
+    #[serde(default)]
+    pub singularity_drifts: u32,
+    #[serde(default)]
+    pub singularity_shield: u32,
 }
 
 #[must_use]

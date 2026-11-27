@@ -322,6 +322,27 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_singularity_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Singularity;
+        game.reset();
+        game.black_hole = Some(Point { x: 12, y: 9 });
+        game.singularity_pulses = 7;
+        game.singularity_drifts = 42;
+        game.singularity_shield = 3;
+        let file_path = "savegame_test_singularity.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Singularity);
+        assert_eq!(loaded.black_hole, Some(Point { x: 12, y: 9 }));
+        assert_eq!(loaded.singularity_pulses, 7);
+        assert_eq!(loaded.singularity_drifts, 42);
+        assert_eq!(loaded.singularity_shield, 3);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

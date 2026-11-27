@@ -65,4 +65,5 @@ pub enum GameMode {
     BombTag,
     AcidRain,
     Monsoon,
+    Singularity,
 }

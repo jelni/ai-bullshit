@@ -155,7 +155,11 @@ pub struct Game {
     pub acid_puddles: HashSet<Point>,
     pub acid_drops: u32,
     pub puddle_tiles: HashSet<Point>,
-    pub monsoon_downpours: u32,}
+    pub monsoon_downpours: u32,
+    pub singularity_pulses: u32,
+    pub singularity_drifts: u32,
+    pub singularity_shield: u32,
+}
 impl Game {
     pub fn spawn_turret(&mut self) {
         self.turrets.push(Turret {
@@ -603,7 +607,11 @@ impl Game {
             acid_puddles: HashSet::new(),
             acid_drops: 0,
             puddle_tiles: HashSet::new(),
-            monsoon_downpours: 0,        }
+            monsoon_downpours: 0,
+            singularity_pulses: 0,
+            singularity_drifts: 0,
+            singularity_shield: 0,
+        }
     }
     #[must_use]
     pub fn get_high_score_filename(difficulty: Difficulty, mode: GameMode) -> String {
@@ -871,7 +879,11 @@ impl Game {
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
             puddle_tiles: self.puddle_tiles.clone(),
-            monsoon_downpours: self.monsoon_downpours,        };
+            monsoon_downpours: self.monsoon_downpours,
+            singularity_pulses: self.singularity_pulses,
+            singularity_drifts: self.singularity_drifts,
+            singularity_shield: self.singularity_shield,
+        };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
         }
@@ -1040,7 +1052,11 @@ impl Game {
                 self.acid_puddles = state.acid_puddles;
                 self.acid_drops = state.acid_drops;
                 self.puddle_tiles = state.puddle_tiles;
-                self.monsoon_downpours = state.monsoon_downpours;                self.flow_field = None;
+                self.monsoon_downpours = state.monsoon_downpours;
+                self.singularity_pulses = state.singularity_pulses;
+                self.singularity_drifts = state.singularity_drifts;
+                self.singularity_shield = state.singularity_shield;
+                self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
                 self.current_replay = Vec::new();
@@ -3200,6 +3216,14 @@ impl Game {
     }
     fn manage_black_hole(&mut self) {
         let spawn_chance = 0.002;
+        // In Singularity mode the black hole is permanent: it never spawns or
+        // despawns randomly, it is (re)spawned and drifted by manage_singularity.
+        if self.mode == GameMode::Singularity {
+            if let Some(bh) = self.black_hole {
+                self.singularity_consume_adjacent(bh);
+            }
+            return;
+        }
         if self.black_hole.is_none() && self.rng.gen_bool(spawn_chance) {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
@@ -3277,6 +3301,275 @@ impl Game {
             for mine in mines_to_remove {
                 self.mines.remove(&mine);
             }
+        }
+    }
+    fn singularity_consume_adjacent(&mut self, bh: Point) {
+        let mut to_remove = Vec::new();
+        for obs in &self.obstacles {
+            let dist = bh.x.abs_diff(obs.x).saturating_add(bh.y.abs_diff(obs.y));
+            if dist <= 1 {
+                to_remove.push(*obs);
+            }
+        }
+        for obs in to_remove {
+            self.obstacles.remove(&obs);
+        }
+        let mut mines_to_remove = Vec::new();
+        for mine in &self.mines {
+            let dist = bh.x.abs_diff(mine.x).saturating_add(bh.y.abs_diff(mine.y));
+            if dist <= 1 {
+                mines_to_remove.push(*mine);
+            }
+        }
+        for mine in mines_to_remove {
+            self.mines.remove(&mine);
+        }
+    }
+    fn singularity_next_heads(&self) -> Vec<Point> {
+        let mut next_heads = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            next_heads.push(Self::calculate_next_head_dir(s.head(), s.direction));
+        }
+        next_heads
+    }
+    fn singularity_cell_free(&self, p: Point) -> bool {
+        // A cell is fair for the singularity to drift onto or to pull something
+        // onto only if it is in bounds within the safe-zone margin and free of
+        // snakes (bodies and the cells they are about to enter), the hole
+        // itself, and every entity or hazard.
+        let margin = self.safe_zone_margin;
+        if p.x <= margin
+            || p.x >= self.width - 1 - margin
+            || p.y <= margin
+            || p.y >= self.height - 1 - margin
+        {
+            return false;
+        }
+        if self.obstacles.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || self.singularity_next_heads().contains(&p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.tornado == Some(p)
+        {
+            return false;
+        }
+        true
+    }
+    fn singularity_step_destination(&self, from: Point, bh: Point) -> Option<Point> {
+        // One gravity step from `from` toward the singularity along the dominant
+        // axis, accepted only when the destination is fair (never out of bounds,
+        // onto the hole, onto a snake or the cell a snake is about to enter, or
+        // onto any hazard), so a pulse can never directly kill.
+        let dx = i32::from(bh.x) - i32::from(from.x);
+        let dy = i32::from(bh.y) - i32::from(from.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let mut raw = from;
+        if dx.abs() > dy.abs() {
+            raw.x = if dx > 0 {
+                raw.x.saturating_add(1)
+            } else {
+                raw.x.saturating_sub(1)
+            };
+        } else {
+            raw.y = if dy > 0 {
+                raw.y.saturating_add(1)
+            } else {
+                raw.y.saturating_sub(1)
+            };
+        }
+        let wraps = (self.wrap_mode || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale;
+        let dest = if wraps {
+            self.calculate_wrapped_head(raw)
+        } else {
+            raw
+        };
+        if !self.singularity_cell_free(dest) {
+            return None;
+        }
+        if self.lightning_column.is_some_and(|col| dest.x == col) {
+            return None;
+        }
+        Some(dest)
+    }
+    fn manage_singularity(&mut self) {
+        if self.mode != GameMode::Singularity {
+            return;
+        }
+        // The singularity is permanent: (re)spawn it on a fair cell if it is missing
+        if self.black_hole.is_none() {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 6
+            };
+            if let Some(bh) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin + 2,
+            ) {
+                self.black_hole = Some(bh);
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        }
+        if self.singularity_shield > 0 {
+            self.singularity_shield -= 1;
+        }
+        let Some(bh) = self.black_hole else {
+            return;
+        };
+        // Drift: every 8th tick the singularity creeps one cell in a random
+        // direction, but only onto a fair cell
+        if self.tick_counter.is_multiple_of(8) {
+            let dirs = [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ];
+            let dir = dirs[self.rng.gen_range(0..4)];
+            let raw = Self::calculate_next_head_dir(bh, dir);
+            let wraps = (self.wrap_mode || self.mode == GameMode::Zen)
+                && self.mode != GameMode::BattleRoyale;
+            let cand = if wraps {
+                self.calculate_wrapped_head(raw)
+            } else {
+                raw
+            };
+            if cand != bh && self.singularity_cell_free(cand) {
+                self.black_hole = Some(cand);
+                self.singularity_drifts += 1;
+                self.spawn_floating_text(
+                    f32::from(cand.x),
+                    f32::from(cand.y),
+                    "The singularity drifts!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+        }
+        // Pulse: every 6th tick gravity pulls every snake one cell toward the
+        // singularity and drags the items along. Snakes are pulled sequentially
+        // so earlier pulls are respected by later checks.
+        if self.tick_counter.is_multiple_of(6) {
+            self.singularity_pulses += 1;
+            if self.singularity_shield > 0 {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Shielded!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            } else if let Some(dest) = self.singularity_step_destination(self.snake.head(), bh) {
+                self.snake.move_to(dest, false);
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    "Pulled!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            let p2_dest = self
+                .player2
+                .as_ref()
+                .and_then(|p2| self.singularity_step_destination(p2.head(), bh));
+            if let Some(dest) = p2_dest {
+                if let Some(p2) = &mut self.player2 {
+                    p2.move_to(dest, false);
+                }
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    "Pulled!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            for i in 0..self.bots.len() {
+                let dest = self.singularity_step_destination(self.bots[i].head(), bh);
+                if let Some(dest) = dest {
+                    self.bots[i].move_to(dest, false);
+                    self.spawn_floating_text(
+                        f32::from(dest.x),
+                        f32::from(dest.y),
+                        "Pulled!".to_string(),
+                        crate::color::Color::DarkGrey,
+                    );
+                }
+            }
+            if let Some(dest) = self.singularity_step_destination(self.food, bh) {
+                self.food = dest;
+            }
+            if let Some((bp, time)) = self.bonus_food
+                && let Some(dest) = self.singularity_step_destination(bp, bh)
+            {
+                self.bonus_food = Some((dest, time));
+            }
+            if let Some((pp, time)) = self.poison_food
+                && let Some(dest) = self.singularity_step_destination(pp, bh)
+            {
+                self.poison_food = Some((dest, time));
+            }
+            if let Some(mut pu) = self.power_up.clone()
+                && let Some(dest) = self.singularity_step_destination(pu.location, bh)
+            {
+                pu.location = dest;
+                self.power_up = Some(pu);
+            }
+            self.spawn_floating_text(
+                f32::from(bh.x),
+                f32::from(bh.y),
+                "Gravity pulse!".to_string(),
+                crate::color::Color::DarkGrey,
+            );
         }
     }
     fn pull_point_towards(&self, point: &mut Point, target: Point) {
@@ -3855,7 +4148,8 @@ impl Game {
             | GameMode::Sandstorm
             | GameMode::BombTag
             | GameMode::AcidRain
-            | GameMode::Monsoon => {
+            | GameMode::Monsoon
+            | GameMode::Singularity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3947,6 +4241,7 @@ impl Game {
                 || self.mode == GameMode::BombTag
                 || self.mode == GameMode::AcidRain
                 || self.mode == GameMode::Monsoon
+                || self.mode == GameMode::Singularity
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -4006,6 +4301,7 @@ impl Game {
             || self.mode == GameMode::Sandstorm
             || self.mode == GameMode::AcidRain
             || self.mode == GameMode::Monsoon
+            || self.mode == GameMode::Singularity
         {
             &self.snake
         } else {
@@ -4140,7 +4436,11 @@ impl Game {
         self.acid_puddles.clear();
         self.acid_drops = 0;
         self.puddle_tiles.clear();
-        self.monsoon_downpours = 0;        if self.mode == GameMode::CustomLevel {
+        self.monsoon_downpours = 0;
+        self.singularity_pulses = 0;
+        self.singularity_drifts = 0;
+        self.singularity_shield = 0;
+        if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
             self.obstacles.retain(|p| !body_map.contains_key(p));
@@ -4663,6 +4963,40 @@ impl Game {
                 self.tornado = Some(t);
             }
         }
+        if self.mode == GameMode::Singularity {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            let avoid_singularity = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 6
+            };
+            if let Some(bh) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_singularity,
+                &mut self.rng,
+                self.safe_zone_margin + 2,
+            ) {
+                self.black_hole = Some(bh);
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        }
         self.goblin = None;
         self.xp = 0;
         self.player_level = 1;
@@ -4850,7 +5184,8 @@ impl Game {
             | GameMode::Sandstorm
             | GameMode::BombTag
             | GameMode::AcidRain
-            | GameMode::Monsoon => {
+            | GameMode::Monsoon
+            | GameMode::Singularity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -5480,7 +5815,11 @@ impl Game {
             self.acid_puddles = state.acid_puddles;
             self.acid_drops = state.acid_drops;
             self.puddle_tiles = state.puddle_tiles;
-            self.monsoon_downpours = state.monsoon_downpours;        }
+            self.monsoon_downpours = state.monsoon_downpours;
+            self.singularity_pulses = state.singularity_pulses;
+            self.singularity_drifts = state.singularity_drifts;
+            self.singularity_shield = state.singularity_shield;
+        }
     }
     pub fn gain_xp(&mut self, amount: u32) {
         self.stats.battle_pass_xp += amount;
@@ -5604,7 +5943,11 @@ impl Game {
             acid_puddles: self.acid_puddles.clone(),
             acid_drops: self.acid_drops,
             puddle_tiles: self.puddle_tiles.clone(),
-            monsoon_downpours: self.monsoon_downpours,        };
+            monsoon_downpours: self.monsoon_downpours,
+            singularity_pulses: self.singularity_pulses,
+            singularity_drifts: self.singularity_drifts,
+            singularity_shield: self.singularity_shield,
+        };
         self.history.push_back(state);
         if self.history.len() > 50 {
             self.history.pop_front();
@@ -9301,6 +9644,7 @@ impl Game {
         self.manage_portals();
         self.manage_mines();
         self.manage_black_hole();
+        self.manage_singularity();
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_sandstorm();
@@ -10083,6 +10427,7 @@ impl Game {
                 || self.mode == GameMode::Gravity
                 || self.mode == GameMode::KingOfTheHill
                 || self.mode == GameMode::BombTag
+                || self.mode == GameMode::Singularity
             {
                 self.handle_death("You Died!");
             } else {
@@ -11156,6 +11501,15 @@ impl Game {
                     crate::color::Color::Blue,
                 );
             }
+        }
+        if self.mode == GameMode::Singularity {
+            self.singularity_shield = Self::SINGULARITY_SHIELD_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Shielded!".to_string(),
+                crate::color::Color::Cyan,
+            );
         }
         if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
             self.spawn_floating_text(
@@ -13070,6 +13424,8 @@ impl Game {
     /// Maximum number of steps ahead for which rival snake heads are predicted
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
+    /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode
+    pub const SINGULARITY_SHIELD_TICKS: u32 = 6;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
