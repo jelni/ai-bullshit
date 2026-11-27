@@ -1,6 +1,6 @@
 use super::{
-    Boss, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point,
-    PowerUp, Snake, Tournament, Weather,
+    Boss, Boulder, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor,
+    Point, PowerUp, Snake, Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -31,6 +31,8 @@ pub struct HistoryState {
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
     pub meteors: Vec<Meteor>,
+    pub boulders: Vec<Boulder>,
+    pub avalanche_rolls: u32,
     pub goblin: Option<Goblin>,
     pub xp: u32,
     pub player_level: u32,

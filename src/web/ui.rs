@@ -135,6 +135,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw rolling boulders (Avalanche mode)
+    if game.mode == crate::game::GameMode::Avalanche {
+        ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders
+        for boulder in &game.boulders {
+            if boulder.position.x < game.width
+                && boulder.position.y < game.height
+                && is_visible(f64::from(boulder.position.x), f64::from(boulder.position.y))
+            {
+                ctx.fill_rect(
+                    f64::from(boulder.position.x) * cell_size,
+                    f64::from(boulder.position.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw geyser jets and vents (Geyser mode)
     if game.mode == crate::game::GameMode::Geyser {
         ctx.set_fill_style_str("#00FFFF"); // Cyan steam jets

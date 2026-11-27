@@ -803,6 +803,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.settings_selection = 0;
             },
             114 => {
+                game.mode = game::GameMode::Avalanche;
+                game.reset();
+            },
+            115 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },

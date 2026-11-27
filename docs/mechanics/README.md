@@ -486,3 +486,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** mirages live in their own `mirage_foods` map and are never added to the bot's target list, so the autopilot only chases real food and is never lured.
 - **Persistence:** `mirage_foods` (serialized through `map_as_pairs` as `[point, ticks]` pairs) and `mirage_spawns` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_mirage_mode.rs](../../tests/test_mirage_mode.rs).
+## Avalanche Mode
+
+`GameMode::Avalanche` (menu entry "Avalanche Mode") is a survival mode where boulders roll across the board in straight rows:
+
+- **Scheduled rockfalls:** on every 6th tick `manage_avalanche` fires a rockfall (counted in `avalanche_rolls`) as long as fewer than `AVALANCHE_MAX_BOULDERS` (6) boulders are rolling. `spawn_boulder` picks a random row and side edge (left spawns moving `Right`, right spawns moving `Left`) and pushes a `Boulder { position, dir }` into `boulders`, with a "Rockfall!" floating text.
+- **Rolling:** every tick `roll_boulders` moves each boulder one cell in its direction. A boulder crushes obstacles and hazard tiles in its path (`remove_obstacle_and_hazards`) and crumbles when it rolls off the far edge.
+- **Lethality:** a boulder landing on a snake's head or body kills it (`hit_boulder1`/`hit_boulder2` in the player death checks, plus a `boulders` check in the bot `bots_to_remove` loop).
+- **Fairness:** a boulder never breaks loose in a row any snake occupies (head or body) or is about to enter this tick (player/p2 use their current direction, bots their queued direction), and never on an entity (food, power-ups, portals, mines, black hole, tornado, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, other boulders).
+- **Settling:** at tick 200 of every 250-tick cycle all boulders crumble ("The avalanche settles!").
+- **Blasting:** eating food removes the boulders adjacent to the eaten cell ("Blasted N boulder!").
+- **Autopilot:** the bot predicts each boulder's exact lane: `boulder_position_after` projects a boulder `steps` ticks ahead, `boulder_would_hit` reports whether a boulder occupies a cell at a given step. `is_safe_final_p` rejects any cell a boulder will occupy at its arrival step; `path_is_safe` rejects paths whose cells (or still-occupied body cells) a boulder sweeps within the path horizon; the A* expansion's blocked set includes every predicted boulder lane; and `boulder_edge_cost`/`boulder_lane_penalty` add large costs near rolling lanes, so the bot dodges the rockfall natively.
+- **Weather:** the skies are pinned to `Weather::Clear` (ambient weather randomization is skipped in this mode) so boulders always stay visible.
+- **Rendering/status:** boulders render as dark-yellow `O` (terminal) / goldenrod cells (web), and the status bar shows `Boulders: <count> | Rolls: <count>`.
+- **Persistence:** `boulders` and `avalanche_rolls` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_avalanche_mode.rs](../../tests/test_avalanche_mode.rs) plus a save/load unit test in `src/game/tests.rs`.

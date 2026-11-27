@@ -15,7 +15,7 @@
     clippy::similar_names
 )]
 use super::{
-    AStarState, Achievement, Boss, BossType, Companion, CompanionType, Difficulty, Direction,
+    AStarState, Achievement, Boss, BossType, Boulder, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
     InGameUpgrade, Instant, Laser, MatchOutcome, Meteor, Particle, Planet, Point, PowerUp,
     PowerUpType, Read, Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Tournament,
@@ -81,6 +81,8 @@ pub struct Game {
     pub meteor_strike_column: Option<u16>,
     pub mines: HashSet<Point>,
     pub black_hole: Option<Point>,
+    pub boulders: Vec<Boulder>,
+    pub avalanche_rolls: u32,
     pub meteors: Vec<Meteor>,
     pub goblin: Option<Goblin>,
     pub ghost_moves: std::collections::VecDeque<crate::snake::Direction>,
@@ -585,6 +587,8 @@ impl Game {
             meteor_strike_column: None,
             mines: HashSet::new(),
             black_hole: None,
+            boulders: Vec::new(),
+            avalanche_rolls: 0,
             meteors: Vec::new(),
             goblin: None,
             ghost_moves: std::collections::VecDeque::new(),
@@ -920,6 +924,8 @@ impl Game {
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
             black_hole: self.black_hole,
+            boulders: self.boulders.clone(),
+            avalanche_rolls: self.avalanche_rolls,
             meteors: self.meteors.clone(),
             goblin: self.goblin,
             xp: self.xp,
@@ -1131,6 +1137,8 @@ impl Game {
                 self.lightning_column = state.lightning_column;
                 self.mines = state.mines;
                 self.black_hole = state.black_hole;
+                self.boulders = state.boulders;
+                self.avalanche_rolls = state.avalanche_rolls;
                 self.meteors = state.meteors;
                 self.goblin = state.goblin;
                 self.xp = state.xp;
@@ -3359,6 +3367,221 @@ impl Game {
         }
         // Clear skies in Meteor Shower mode: incoming meteors must always stay visible
         self.weather = Weather::Clear;
+    }
+    fn manage_avalanche(&mut self) {
+        if self.mode != GameMode::Avalanche {
+            return;
+        }
+        // Clear skies in Avalanche mode: the rolling boulders must always stay visible
+        self.weather = Weather::Clear;
+        // Periodic settling: at tick 200 of every 250-tick cycle the avalanche comes to rest
+        if self.tick_counter == 200 {
+            if !self.boulders.is_empty() {
+                self.boulders.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The avalanche settles!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // Scheduled rockfall: every 6th tick a new boulder breaks loose from a side edge
+        if self.tick_counter.is_multiple_of(6)
+            && self.boulders.len() < Self::AVALANCHE_MAX_BOULDERS
+        {
+            self.avalanche_rolls += 1;
+            self.spawn_boulder();
+        }
+        // Every tick each boulder rolls one cell in its direction
+        self.roll_boulders();
+    }
+    fn spawn_boulder(&mut self) {
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        // Fairness: a boulder never breaks loose in a row any snake occupies
+        // (head or body) or is about to enter this tick.
+        let row_blocked = |y: u16| {
+            self.snake.body.iter().any(|p| p.y == y)
+                || self
+                    .player2
+                    .as_ref()
+                    .is_some_and(|p2| p2.body.iter().any(|p| p.y == y))
+                || self.bots.iter().any(|b| b.body.iter().any(|p| p.y == y))
+                || p1_next.y == y
+                || p2_next.is_some_and(|p| p.y == y)
+                || bot_next.iter().any(|p| p.y == y)
+        };
+        let rows: Vec<u16> = (0..self.height).filter(|&y| !row_blocked(y)).collect();
+        if rows.is_empty() {
+            return;
+        }
+        let y = rows[self.rng.gen_range(0..rows.len())];
+        let entity_blocked = |p: Point| {
+            p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+                || self.mines.contains(&p)
+                || self.black_hole == Some(p)
+                || self.tornado == Some(p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == p)
+                || self.bosses.iter().any(|b| b.position == p)
+                || self.companion.as_ref().is_some_and(|c| c.position == p)
+                || self.turrets.iter().any(|t| t.position == p)
+                || self.xp_gems.contains(&p)
+                || self.painted_tiles.contains_key(&p)
+                || self.equipment_boxes.contains(&p)
+                || self.crops.iter().any(|c| c.position == p)
+                || self.eggs_on_board.contains_key(&p)
+                || self.koth_zone == Some(p)
+                || self.p1_flag == Some(p)
+                || self.p2_flag == Some(p)
+                || self.resources.contains_key(&p)
+                || self.lasers.iter().any(|l| l.position == p)
+                || self.meteors.iter().any(|m| m.position == p)
+                || self.boulders.iter().any(|b| b.position == p)
+        };
+        let mut candidates = vec![(0_u16, Direction::Right), (self.width - 1, Direction::Left)];
+        candidates.retain(|(x, _)| !entity_blocked(Point { x: *x, y }));
+        if candidates.is_empty() {
+            return;
+        }
+        let (x, dir) = candidates[self.rng.gen_range(0..candidates.len())];
+        let spawn = Point { x, y };
+        // The boulder crushes any obstacle it breaks loose on
+        self.remove_obstacle_and_hazards(spawn);
+        self.boulders.push(Boulder {
+            position: spawn,
+            dir,
+        });
+        self.spawn_floating_text(
+            f32::from(spawn.x),
+            f32::from(spawn.y),
+            "Rockfall!".to_string(),
+            crate::color::Color::DarkYellow,
+        );
+    }
+    fn roll_boulders(&mut self) {
+        let mut moves: Vec<(usize, Point)> = Vec::new();
+        let mut crashed = Vec::new();
+        for (i, b) in self.boulders.iter().enumerate() {
+            let np = Self::calculate_next_head_dir(b.position, b.dir);
+            if np.x >= self.width || np.y >= self.height {
+                crashed.push(i);
+            } else {
+                moves.push((i, np));
+            }
+        }
+        for (i, np) in moves {
+            self.boulders[i].position = np;
+            // The boulder crushes obstacles (and hazard tiles) in its path
+            if self.obstacles.contains(&np) {
+                self.remove_obstacle_and_hazards(np);
+                self.spawn_particles(
+                    f32::from(np.x),
+                    f32::from(np.y),
+                    5,
+                    crate::color::Color::DarkGrey,
+                    'x',
+                );
+            }
+        }
+        for i in crashed.into_iter().rev() {
+            let p = self.boulders[i].position;
+            self.boulders.remove(i);
+            self.spawn_particles(
+                f32::from(p.x),
+                f32::from(p.y),
+                8,
+                crate::color::Color::DarkYellow,
+                'O',
+            );
+        }
+    }
+    #[must_use]
+    pub fn boulder_position_after(&self, b: Boulder, steps: u16) -> Option<Point> {
+        let dx = i32::from(steps) * if b.dir == Direction::Right { 1 } else { -1 };
+        let nx = i32::from(b.position.x) + dx;
+        if nx < 0 || nx >= i32::from(self.width) {
+            return None;
+        }
+        Some(Point {
+            x: u16::try_from(nx).unwrap_or(0),
+            y: b.position.y,
+        })
+    }
+    fn boulder_would_hit(&self, b: Boulder, p: Point, steps: u16) -> bool {
+        if p.y != b.position.y {
+            return false;
+        }
+        if p == b.position {
+            return true;
+        }
+        match b.dir {
+            Direction::Right => {
+                p.x > b.position.x && p.x - b.position.x <= steps && p.x < self.width
+            },
+            Direction::Left => p.x < b.position.x && b.position.x - p.x <= steps,
+            _ => false,
+        }
+    }
+    fn boulder_lane_penalty(&self, p: Point) -> u32 {
+        let mut penalty = 0u32;
+        for b in &self.boulders {
+            if b.position.y != p.y {
+                continue;
+            }
+            for step in 1..=10_u16 {
+                if let Some(bp) = self.boulder_position_after(*b, step) {
+                    if bp == p {
+                        penalty = penalty.saturating_add(500_000);
+                    } else {
+                        let d = self.travel_dist(p, bp, false);
+                        if d < 3 {
+                            penalty =
+                                penalty.saturating_add(u32::from(3 - d).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
+        }
+        penalty
+    }
+    fn boulder_edge_cost(&self, p: Point) -> u16 {
+        let mut cost = 0u16;
+        for b in &self.boulders {
+            if b.position.y != p.y {
+                continue;
+            }
+            for step in 1..=10_u16 {
+                if let Some(bp) = self.boulder_position_after(*b, step) {
+                    if bp == p {
+                        cost = cost.saturating_add(60_000);
+                    } else {
+                        let d = p.x.abs_diff(bp.x);
+                        if d < 3 {
+                            cost = cost.saturating_add((3 - d).saturating_mul(10_000));
+                        }
+                    }
+                }
+            }
+        }
+        cost
     }
     fn manage_quake(&mut self) {
         if self.mode != GameMode::Quake {
@@ -6662,7 +6885,8 @@ impl Game {
             | GameMode::Fortress
             | GameMode::Geyser
             | GameMode::Thornfield
-            | GameMode::Mirage => {
+            | GameMode::Mirage
+            | GameMode::Avalanche => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6778,6 +7002,7 @@ impl Game {
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
+                || self.mode == GameMode::Avalanche
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -6860,6 +7085,7 @@ impl Game {
             || self.mode == GameMode::Geyser
             || self.mode == GameMode::Thornfield
             || self.mode == GameMode::Mirage
+            || self.mode == GameMode::Avalanche
         {
             &self.snake
         } else {
@@ -6980,6 +7206,8 @@ impl Game {
         self.thorn_blooms = 0;
         self.mirage_foods.clear();
         self.mirage_spawns = 0;
+        self.boulders.clear();
+        self.avalanche_rolls = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -7679,6 +7907,9 @@ impl Game {
         if self.mode == GameMode::Thornfield {
             self.weather = Weather::Clear;
         }
+        if self.mode == GameMode::Avalanche {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -8100,7 +8331,8 @@ impl Game {
             | GameMode::Fortress
             | GameMode::Geyser
             | GameMode::Thornfield
-            | GameMode::Mirage => {
+            | GameMode::Mirage
+            | GameMode::Avalanche => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8739,6 +8971,8 @@ impl Game {
             self.lightning_column = state.lightning_column;
             self.mines = state.mines;
             self.black_hole = state.black_hole;
+            self.boulders = state.boulders;
+            self.avalanche_rolls = state.avalanche_rolls;
             self.meteors = state.meteors;
             self.goblin = state.goblin;
             self.xp = state.xp;
@@ -8917,6 +9151,8 @@ impl Game {
             lightning_column: self.lightning_column,
             mines: self.mines.clone(),
             black_hole: self.black_hole,
+            boulders: self.boulders.clone(),
+            avalanche_rolls: self.avalanche_rolls,
             meteors: self.meteors.clone(),
             goblin: self.goblin,
             xp: self.xp,
@@ -9835,6 +10071,7 @@ impl Game {
                 }
             }
             penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
+            penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
             for m in &self.mines {
                 if *m == p {
                     penalty = penalty.saturating_add(50000);
@@ -10058,6 +10295,7 @@ impl Game {
                             }
                         }
                         edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
                         for m in &self.meteors {
                             if m.vx != 0 {
                                 continue;
@@ -10071,6 +10309,7 @@ impl Game {
                             }
                         }
                         edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
                         if let Some((pf, _)) = self.poison_food {
                             let d_dist = calc_dist(final_p, pf);
                             if d_dist < 4 {
@@ -11793,6 +12032,7 @@ impl Game {
             && self.mode != GameMode::TurretBattery
             && self.mode != GameMode::Firestorm
             && self.mode != GameMode::Thornfield
+            && self.mode != GameMode::Avalanche
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -12782,6 +13022,7 @@ impl Game {
         self.manage_tornado();
         self.manage_earthquake();
         self.manage_meteor_shower();
+        self.manage_avalanche();
         self.manage_eclipse();
         self.manage_seismic();
         self.manage_monsoon();
@@ -13209,6 +13450,40 @@ impl Game {
                 );
             }
         }
+        let hit_boulder1 = self.boulders.iter().any(|b| {
+            b.position == final_head1 || self.snake.body_map.contains_key(&b.position)
+        });
+        let hit_boulder2 = final_head2_opt.is_some_and(|fh2| {
+            self.boulders.iter().any(|b| {
+                b.position == fh2
+                    || self
+                        .player2
+                        .as_ref()
+                        .is_some_and(|p2| p2.body_map.contains_key(&b.position))
+            })
+        });
+        if hit_boulder1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                30,
+                crate::color::Color::DarkGrey,
+                'O',
+            );
+        }
+        if hit_boulder2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        }
         if hit_black_hole1 && !is_invincible {
             p1_dead = true;
             if let Some(bh) = self.black_hole {
@@ -13471,6 +13746,10 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.boulders.iter().any(|b| b.position == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             if self.lasers.iter().any(|l| l.position == *final_head) {
                 bots_to_remove.insert(*i);
                 continue;
@@ -13637,6 +13916,7 @@ impl Game {
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
+                || self.mode == GameMode::Avalanche
             {
                 self.handle_death("You Died!");
             } else {
@@ -14729,6 +15009,28 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Dispelled {n} mirage(s)!"),
                     crate::color::Color::Magenta,
+                );
+            }
+        }
+        if self.mode == GameMode::Avalanche {
+            let mut blasted = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                let before = self.boulders.len();
+                self.boulders.retain(|b| b.position != np);
+                blasted += u32::try_from(before - self.boulders.len()).unwrap_or(0);
+            }
+            if blasted > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Blasted {blasted} boulder!"),
+                    crate::color::Color::DarkYellow,
                 );
             }
         }
@@ -16692,6 +16994,11 @@ impl Game {
                     return false;
                 }
             }
+            for boulder in &self.boulders {
+                if self.boulder_would_hit(*boulder, final_p, steps) {
+                    return false;
+                }
+            }
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
@@ -17486,6 +17793,8 @@ impl Game {
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
     pub const BLAZE_BURN_TICKS: u32 = 12;
+    /// Maximum number of boulders rolling at once in `GameMode::Avalanche`.
+    pub const AVALANCHE_MAX_BOULDERS: usize = 6;
     /// Ticks a geyser steam jet stays lethal before it dissipates.
     pub const GEYSER_JET_TICKS: u32 = 6;
     /// How many cells a geyser jet reaches in each cardinal direction per eruption.
@@ -17687,6 +17996,25 @@ impl Game {
                             return false;
                         }
                         if let Some(i) = body.iter().position(|&b| b == mp) {
+                            let i = u32::try_from(i).unwrap_or(u32::MAX);
+                            if s32 <= l.saturating_sub(i) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            for b in &self.boulders {
+                for s in 1..=meteor_horizon {
+                    if let Some(bp) = self.boulder_position_after(*b, s) {
+                        let s32 = u32::from(s);
+                        if let Some(&j) = path_idx.get(&bp)
+                            && j < s32
+                            && s32 <= j + 1 + l
+                        {
+                            return false;
+                        }
+                        if let Some(i) = body.iter().position(|&bb| bb == bp) {
                             let i = u32::try_from(i).unwrap_or(u32::MAX);
                             if s32 <= l.saturating_sub(i) {
                                 return false;
@@ -18316,6 +18644,7 @@ impl Game {
                 }
             }
             penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
+            penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
             u32::from(targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0)).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
@@ -18396,6 +18725,7 @@ impl Game {
                     }
                 }
                 edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
+                edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
                 if let Some((pf, _)) = self.poison_food {
                     let d_dist = calc_dist(final_p, pf);
                     if d_dist < 4 {
@@ -18535,6 +18865,7 @@ impl Game {
                         }
                     }
                     edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
+                    edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
                     if let Some((pf, _)) = self.poison_food {
                         let d_dist = calc_dist(final_p, pf);
                         if d_dist < 4 {
@@ -18696,6 +19027,14 @@ impl Game {
                     if let Some(mp) = self.meteor_position_after(*m, step) {
                         blocked.insert(mp);
                     }
+                }
+            }
+        }
+        for b in &self.boulders {
+            blocked.insert(b.position);
+            for step in 1..10_u16 {
+                if let Some(bp) = self.boulder_position_after(*b, step) {
+                    blocked.insert(bp);
                 }
             }
         }

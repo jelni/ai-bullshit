@@ -89,4 +89,5 @@ pub enum GameMode {
     Geyser,
     Thornfield,
     Mirage,
+    Avalanche,
 }

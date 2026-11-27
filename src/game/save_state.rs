@@ -1,7 +1,7 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
-    Boss, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet, InGameUpgrade,
-    Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather,
+    Boss, Boulder, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
+    InGameUpgrade, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather,
     default_campaign_level, default_lives, default_skin, default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
@@ -66,6 +66,10 @@ pub struct SaveState {
     pub black_hole: Option<Point>,
     #[serde(default)]
     pub meteors: Vec<Meteor>,
+    #[serde(default)]
+    pub boulders: Vec<Boulder>,
+    #[serde(default)]
+    pub avalanche_rolls: u32,
     #[serde(default)]
     pub goblin: Option<Goblin>,
     #[serde(default)]

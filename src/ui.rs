@@ -696,6 +696,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Bank",
         "Auction House",
         "Gacha",
+        "Avalanche Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2008,6 +2009,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw rolling boulders (Avalanche mode)
+    if game.mode == crate::game::GameMode::Avalanche {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for boulder in &game.boulders {
+            if is_visible(boulder.position.x, boulder.position.y) {
+                stdout.queue(cursor::MoveTo(boulder.position.x, boulder.position.y))?;
+                write!(stdout, "O")?;
+            }
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         stdout.queue(SetForegroundColor(Color::White))?;
@@ -3184,6 +3196,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let avalanche_str = if game.mode == crate::game::GameMode::Avalanche {
+        format!(
+            " | Boulders: {} | Rolls: {}",
+            game.boulders.len(),
+            game.avalanche_rolls
+        )
+    } else {
+        String::new()
+    };
     let event_horizon_str = if game.mode == crate::game::GameMode::EventHorizon {
         format!(
             " | Drifts: {} | Surges: {}",
@@ -3306,7 +3327,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}"
     )?;
 
     if !game.bosses.is_empty() {
