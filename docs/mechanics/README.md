@@ -473,3 +473,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** thorn cells are ordinary obstacles, and their whole lash zone is an additional hard hazard in `is_safe_final_p` (verified-safe path checks), penalized in the `astar_search` heuristic, and blocked in `trap_blocked_cells` flood fills — so the bot routes around the briars natively and never gets pricked.
 - **Persistence:** `thorn_tiles` and `thorn_blooms` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale thorn records are pruned each tick if another effect cleared the obstacles.
 - **Tests:** see [tests/test_thornfield_mode.rs](../../tests/test_thornfield_mode.rs) plus the save/load unit test `test_save_and_load_thornfield_mode` in `src/game/tests.rs`.
+
+## Mirage Mode
+
+`GameMode::Mirage` (menu entry "Mirage Mode") is a deception mode: illusory food mirages try to lure the snake into wasted trips.
+
+- **Scheduled spawns:** on every 6th tick `manage_mirage` calls `spawn_mirage`, which places one mirage (`mirage_foods`, cell → remaining ticks, capped at 10% of the board, counted in `mirage_spawns`) on a random fair cell, with an "A mirage appears!" floating text. Mirages render as a magenta `?` (terminal) / orchid cell (web) and are shown as `Mirage: <count> | Spawns: <count>` in the status bar.
+- **Fairness:** `mirage_spawn_blocked` rejects any cell on a snake's body, on the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), on an obstacle, on another mirage, or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, tornado, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, and the belt/ice/geyser/thorn tiles).
+- **Shattering:** a mirage is not food — when any snake's head walks onto its cell, the mirage shatters ("Mirage shattered! (-N)") with no growth and no score.
+- **Fading:** each mirage burns down one tick at a time and vanishes after `MIRAGE_TICKS` (30) ticks; at tick 200 of every 250-tick cycle all mirages clear ("The heat shimmers away!").
+- **Dispelling:** eating real food clears every mirage on the board ("Dispelled N mirage(s)!").
+- **Autopilot:** mirages live in their own `mirage_foods` map and are never added to the bot's target list, so the autopilot only chases real food and is never lured.
+- **Persistence:** `mirage_foods` (serialized through `map_as_pairs` as `[point, ticks]` pairs) and `mirage_spawns` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_mirage_mode.rs](../../tests/test_mirage_mode.rs).

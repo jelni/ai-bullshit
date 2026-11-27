@@ -147,6 +147,10 @@ pub struct SaveState {
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub mirage_foods: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub mirage_spawns: u32,
     #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]

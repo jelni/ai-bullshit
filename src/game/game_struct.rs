@@ -203,6 +203,8 @@ pub struct Game {
     pub geyser_eruptions: u32,
     pub thorn_tiles: HashSet<Point>,
     pub thorn_blooms: u32,
+    pub mirage_foods: std::collections::HashMap<Point, u32>,
+    pub mirage_spawns: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -708,6 +710,8 @@ impl Game {
             geyser_eruptions: 0,
             thorn_tiles: HashSet::new(),
             thorn_blooms: 0,
+            mirage_foods: std::collections::HashMap::new(),
+            mirage_spawns: 0,
         }
     }
     #[must_use]
@@ -961,6 +965,8 @@ impl Game {
             geyser_eruptions: self.geyser_eruptions,
             thorn_tiles: self.thorn_tiles.clone(),
             thorn_blooms: self.thorn_blooms,
+            mirage_foods: self.mirage_foods.clone(),
+            mirage_spawns: self.mirage_spawns,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1172,6 +1178,8 @@ impl Game {
                 self.geyser_eruptions = state.geyser_eruptions;
                 self.thorn_tiles = state.thorn_tiles;
                 self.thorn_blooms = state.thorn_blooms;
+                self.mirage_foods = state.mirage_foods;
+                self.mirage_spawns = state.mirage_spawns;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -2710,6 +2718,157 @@ impl Game {
                 format!("The briars bloom! (+{spread})"),
                 crate::color::Color::Green,
             );
+        }
+    }
+    fn mirage_snake_next_cells(&self) -> (Point, Option<Point>, Vec<Point>) {
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        (p1_next, p2_next, bot_next)
+    }
+    fn mirage_spawn_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.geyser_vents.contains(&p)
+            || self.thorn_tiles.contains(&p)
+    }
+    fn spawn_mirage(&mut self) {
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+        if u32::try_from(self.mirage_foods.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        if self.width < 3 || self.height < 3 {
+            return;
+        }
+        let (p1_next, p2_next, bot_next) = self.mirage_snake_next_cells();
+        for _ in 0..50 {
+            let x = self.rng.gen_range(1..self.width - 1);
+            let y = self.rng.gen_range(1..self.height - 1);
+            let pos = Point { x, y };
+            if self.mirage_spawn_blocked(pos, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            self.mirage_foods.insert(pos, Self::MIRAGE_TICKS);
+            self.mirage_spawns += 1;
+            self.spawn_floating_text(
+                f32::from(pos.x),
+                f32::from(pos.y),
+                "A mirage appears!".to_string(),
+                crate::color::Color::Magenta,
+            );
+            return;
+        }
+    }
+    fn manage_mirage(&mut self) {
+        if self.mode != GameMode::Mirage {
+            return;
+        }
+        // A mirage shatters when any snake's head walks onto it (no food, no growth)
+        let mut heads = vec![self.snake.head()];
+        if let Some(p2) = &self.player2 {
+            heads.push(p2.head());
+        }
+        for b in &self.bots {
+            heads.push(b.head());
+        }
+        let mut shattered = 0u32;
+        for h in heads {
+            if self.mirage_foods.remove(&h).is_some() {
+                shattered += 1;
+            }
+        }
+        if shattered > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Mirage shattered! (-{shattered})"),
+                crate::color::Color::Magenta,
+            );
+        }
+        // Each mirage fades one tick at a time and then vanishes
+        let faded: Vec<Point> = self
+            .mirage_foods
+            .iter()
+            .filter(|(_, ticks)| **ticks <= 1)
+            .map(|(p, _)| *p)
+            .collect();
+        for p in faded {
+            self.mirage_foods.remove(&p);
+        }
+        for ticks in self.mirage_foods.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        // Periodic clear: at tick 200 of every 250-tick cycle the heat shimmers away
+        if self.tick_counter == 200 {
+            let n = self.mirage_foods.len();
+            self.mirage_foods.clear();
+            if n > 0 {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The heat shimmers away!".to_string(),
+                    crate::color::Color::Magenta,
+                );
+            }
+            return;
+        }
+        // Scheduled mirage every 6th tick
+        if self.tick_counter.is_multiple_of(6) {
+            self.spawn_mirage();
         }
     }
     fn manage_monsoon(&mut self) {
@@ -6502,7 +6661,8 @@ impl Game {
             | GameMode::Firestorm
             | GameMode::Fortress
             | GameMode::Geyser
-            | GameMode::Thornfield => {
+            | GameMode::Thornfield
+            | GameMode::Mirage => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6617,6 +6777,7 @@ impl Game {
                 || self.mode == GameMode::Fortress
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
+                || self.mode == GameMode::Mirage
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -6698,6 +6859,7 @@ impl Game {
             || self.mode == GameMode::Fortress
             || self.mode == GameMode::Geyser
             || self.mode == GameMode::Thornfield
+            || self.mode == GameMode::Mirage
         {
             &self.snake
         } else {
@@ -6816,6 +6978,8 @@ impl Game {
         self.geyser_eruptions = 0;
         self.thorn_tiles.clear();
         self.thorn_blooms = 0;
+        self.mirage_foods.clear();
+        self.mirage_spawns = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -7935,7 +8099,8 @@ impl Game {
             | GameMode::Firestorm
             | GameMode::Fortress
             | GameMode::Geyser
-            | GameMode::Thornfield => {
+            | GameMode::Thornfield
+            | GameMode::Mirage => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8616,6 +8781,8 @@ impl Game {
             self.geyser_eruptions = state.geyser_eruptions;
             self.thorn_tiles = state.thorn_tiles;
             self.thorn_blooms = state.thorn_blooms;
+            self.mirage_foods = state.mirage_foods;
+            self.mirage_spawns = state.mirage_spawns;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -8794,6 +8961,8 @@ impl Game {
             geyser_eruptions: self.geyser_eruptions,
             thorn_tiles: self.thorn_tiles.clone(),
             thorn_blooms: self.thorn_blooms,
+            mirage_foods: self.mirage_foods.clone(),
+            mirage_spawns: self.mirage_spawns,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -12603,6 +12772,7 @@ impl Game {
         self.manage_fortress();
         self.manage_geyser();
         self.manage_thornfield();
+        self.manage_mirage();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -13466,6 +13636,7 @@ impl Game {
                 || self.mode == GameMode::Fortress
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
+                || self.mode == GameMode::Mirage
             {
                 self.handle_death("You Died!");
             } else {
@@ -14546,6 +14717,18 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Pruned {pruned} thorns!"),
                     crate::color::Color::Green,
+                );
+            }
+        }
+        if self.mode == GameMode::Mirage {
+            let n = self.mirage_foods.len();
+            if n > 0 {
+                self.mirage_foods.clear();
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Dispelled {n} mirage(s)!"),
+                    crate::color::Color::Magenta,
                 );
             }
         }
@@ -17307,6 +17490,7 @@ impl Game {
     pub const GEYSER_JET_TICKS: u32 = 6;
     /// How many cells a geyser jet reaches in each cardinal direction per eruption.
     pub const GEYSER_JET_RANGE: u16 = 4;
+    pub const MIRAGE_TICKS: u32 = 30;
 
     pub const FIRE_TTL: u32 = 30;
     /// Ticks of gravity-pulse immunity granted by eating food in Singularity mode

@@ -284,6 +284,24 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_mirage_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Mirage;
+        game.reset();
+        game.mirage_foods.clear();
+        game.mirage_foods.insert(Point { x: 12, y: 9 }, 17);
+        game.mirage_spawns = 42;
+        let file_path = "savegame_test_mirage.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Mirage);
+        assert_eq!(loaded.mirage_foods.get(&Point { x: 12, y: 9 }), Some(&17));
+        assert_eq!(loaded.mirage_spawns, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_acid_rain_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::AcidRain;

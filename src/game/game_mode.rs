@@ -88,4 +88,5 @@ pub enum GameMode {
     Fortress,
     Geyser,
     Thornfield,
+    Mirage,
 }

@@ -70,6 +70,8 @@ pub struct HistoryState {
     pub fortress_rings: u32,
     pub thorn_tiles: HashSet<Point>,
     pub thorn_blooms: u32,
+    pub mirage_foods: std::collections::HashMap<Point, u32>,
+    pub mirage_spawns: u32,
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,
