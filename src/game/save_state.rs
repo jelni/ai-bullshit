@@ -1,8 +1,8 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Boulder, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
-    InGameUpgrade, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather,
-    default_campaign_level, default_lives, default_skin, default_wrap_mode,
+    InGameUpgrade, LandslideRock, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme,
+    Tournament, Weather, default_campaign_level, default_lives, default_skin, default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -177,6 +177,9 @@ pub struct SaveState {
     pub mirage_foods: std::collections::HashMap<Point, u32>,
     #[serde(default)]
     pub mirage_spawns: u32,
+    pub rocks: Vec<LandslideRock>,
+    #[serde(default)]
+    pub landslide_rolls: u32,
     #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]

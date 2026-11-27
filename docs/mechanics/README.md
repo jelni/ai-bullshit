@@ -540,3 +540,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Eating food:** retracts the spikes adjacent to the eaten cell ("Retracted N spikes!").
 - **Persistence:** `spike_tiles` (serialized through `map_as_pairs`), `spike_vents`, `spike_warnings`, and `spike_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); an end-of-tick self-heal drops stale spike records if something else cleared obstacles mid-tick. The status bar shows `Spikes: <count> | Eruptions: <count>`.
 - **Tests:** see [tests/test_spike_pit_mode.rs](../../tests/test_spike_pit_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+## Landslide Mode
+
+`GameMode::Landslide` (menu entry "Landslide Mode") is a survival mode wrapped in a permanent snowstorm (`Weather::Snow` forced every tick; ambient weather randomization is skipped for this mode):
+
+- **Scheduled rolls:** on every 6th tick `manage_landslide` spawns a `LandslideRock` at a random board edge (`x = 0` rolling `Right`, or `x = width - 1` rolling `Left`) on a fairness-checked row, counted in `landslide_rolls` with an "Landslide!" floating text. On top of the schedule, a 5% ambient rumble per tick may roll one in, capped at `MAX_ROCKS = 3` concurrent rocks (the cap never blocks the schedule).
+- **Rolling:** each tick every rock advances one cell in its direction; it smashes through obstacles and mines (`remove_obstacle_and_hazards`) and is removed when it rolls off the board.
+- **Fairness:** `rock_safe_rows` never returns a row any snake currently occupies (body cells), a row containing the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or a row that already has a rock.
+- **Lethality:** a rock landing on a snake's head or any body cell kills that snake — the player/player 2 via the `hit_rock` checks alongside the meteor checks in the post-move collision pass, bots via `bots_to_remove`.
+- **Autopilot:** `rock_position_after` predicts the exact cell a rock will occupy after `steps` ticks; `rock_would_hit` is a hard constraint in `is_safe_final_p`, the predicted rock lane is swept against the moving body in `path_is_safe`, rock cells join every hazard avoid-list next to the meteors, and the A* heuristic (`rock_lane_penalty` plus the row-ahead penalty in both heuristic sites) and edge costs (`rock_edge_cost`) keep the bot out of the rock's row — so the bot dodges landslides natively.
+- **Bracing:** eating food removes the rock nearest to the eaten cell ("Braced!").
+- **Rendering:** rocks draw as a white `>` / `<` arrow telegraphing the roll direction (terminal) and as white cells (web); the status bar shows `Rocks: <count> | Slides: <count>`.
+- **Persistence:** `rocks` and `landslide_rolls` are stored in `SaveState` and `HistoryState` (save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_landslide_mode.rs](../../tests/test_landslide_mode.rs).

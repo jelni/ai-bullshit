@@ -93,4 +93,5 @@ pub enum GameMode {
     Avalanche,
     Steamroller,
     SpikePit,
+    Landslide,
 }

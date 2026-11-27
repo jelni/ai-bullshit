@@ -23,6 +23,8 @@ In **Conveyor mode** (`GameMode::Conveyor`) the belt shove is applied inside `ca
 
 In **Meteor Shower mode** (`GameMode::MeteorShower`) the scheduled strikes always pick a fair column (`pick_safe_strike_column`: no snake head/body column and no column a snake is about to enter), and the meteor-column hazard checks above are what let the bot survive the bombardment natively.
 
+In **Landslide mode** (`GameMode::Landslide`) the horizontal analog of the meteor hazard is handled the same way: `rock_position_after` predicts each rolling rock's cell `steps` ticks ahead, `rock_would_hit` is a hard constraint in `is_safe_final_p`, `path_is_safe` rejects paths whose predicted rock lane sweeps a still-occupied body cell, and `rock_lane_penalty`/`rock_edge_cost` penalize the rock's row in the A* heuristic and edge costs (in both A* implementations), so the bot rides out the landslide natively.
+
 ## Persistence / Save Format
 
 `SaveState` (`src/game/save_state.rs`) is serialized to JSON by `save_game`/`save_game_to_file` and read back by `load_game_from_file`; `HistoryState` mirrors the same fields for time-rewind. Maps whose keys are not strings (e.g. `painted_tiles: HashMap<Point, u8>`, `eggs_on_board: HashMap<Point, EggType>`, `dungeon_grid: HashMap<(i32, i32), DungeonRoom>`, `blaze_tiles: HashMap<Point, u32>`, `blaze_tiles: HashMap<Point, u32>`) cannot be JSON objects, so they are serialized through the `map_as_pairs` helper (`src/game/map_as_pairs.rs`) as JSON arrays of `[key, value]` pairs. Deserialization accepts both that pair form and the legacy empty-object form written by older versions, so existing save files keep loading. Covered by [tests/test_save_integrity.rs](../../tests/test_save_integrity.rs).

@@ -1,6 +1,6 @@
 use super::{
-    Boss, Boulder, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor,
-    Point, PowerUp, Snake, Tournament, Weather,
+    Boss, Boulder, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, LandslideRock,
+    Laser, Meteor, Point, PowerUp, Snake, Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -81,6 +81,8 @@ pub struct HistoryState {
     pub thorn_blooms: u32,
     pub mirage_foods: std::collections::HashMap<Point, u32>,
     pub mirage_spawns: u32,
+    pub rocks: Vec<LandslideRock>,
+    pub landslide_rolls: u32,
     pub lava_tiles: HashSet<Point>,
     pub volcano_vents: Vec<Point>,
     pub volcano_eruptions: u32,

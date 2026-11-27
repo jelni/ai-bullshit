@@ -17,7 +17,8 @@
 use super::{
     AStarState, Achievement, Boss, BossType, Boulder, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
-    InGameUpgrade, Instant, Laser, MatchOutcome, Meteor, Particle, Planet, Point, PowerUp,
+    InGameUpgrade, Instant, LandslideRock, Laser, MatchOutcome, Meteor, Particle, Planet, Point,
+    PowerUp,
     PowerUpType, Read, Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Tournament,
     Turret, Weather, Write, beep, default_unlocked_themes, fs, io,
 };
@@ -218,6 +219,9 @@ pub struct Game {
     pub thorn_blooms: u32,
     pub mirage_foods: std::collections::HashMap<Point, u32>,
     pub mirage_spawns: u32,
+
+    pub rocks: Vec<LandslideRock>,
+    pub landslide_rolls: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -738,6 +742,9 @@ impl Game {
             thorn_blooms: 0,
             mirage_foods: std::collections::HashMap::new(),
             mirage_spawns: 0,
+
+            rocks: Vec::new(),
+            landslide_rolls: 0,
         }
     }
     #[must_use]
@@ -1006,6 +1013,9 @@ impl Game {
             thorn_blooms: self.thorn_blooms,
             mirage_foods: self.mirage_foods.clone(),
             mirage_spawns: self.mirage_spawns,
+
+            rocks: self.rocks.clone(),
+            landslide_rolls: self.landslide_rolls,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1232,6 +1242,9 @@ impl Game {
                 self.thorn_blooms = state.thorn_blooms;
                 self.mirage_foods = state.mirage_foods;
                 self.mirage_spawns = state.mirage_spawns;
+
+                self.rocks = state.rocks;
+                self.landslide_rolls = state.landslide_rolls;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -2135,6 +2148,195 @@ impl Game {
         }
         cost
     }
+    fn rock_safe_rows(&self, min_y: u16, max_y: u16) -> Vec<u16> {
+        // Fairness: never roll a rock down a row any snake currently
+        // occupies or is about to enter, and never down a row that already
+        // has a rock rolling through it
+        let mut forbidden: Vec<u16> = Vec::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in &snakes {
+            for seg in &s.body {
+                forbidden.push(seg.y);
+            }
+        }
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let mut next_cells = vec![p1_next];
+        if let Some(p2) = &self.player2 {
+            next_cells.push(Self::calculate_next_head_dir(p2.head(), p2.direction));
+        }
+        for b in &self.bots {
+            let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+            next_cells.push(Self::calculate_next_head_dir(b.head(), d));
+        }
+        for p in &next_cells {
+            forbidden.push(p.y);
+        }
+        for b in &self.rocks {
+            forbidden.push(b.position.y);
+        }
+        (min_y..max_y).filter(|y| !forbidden.contains(y)).collect()
+    }
+    fn spawn_rock(&mut self, y: u16) {
+        let direction = if self.rng.gen_bool(0.5) {
+            Direction::Right
+        } else {
+            Direction::Left
+        };
+        let x = if direction == Direction::Right {
+            0
+        } else {
+            self.width.saturating_sub(1)
+        };
+        self.rocks.push(LandslideRock {
+            position: Point { x, y },
+            direction,
+        });
+        self.landslide_rolls += 1;
+        let head = self.snake.head();
+        self.spawn_floating_text(
+            f32::from(head.x),
+            f32::from(head.y),
+            "Landslide!".to_string(),
+            crate::color::Color::White,
+        );
+    }
+    #[must_use]
+    pub fn rock_position_after(&self, b: LandslideRock, steps: u16) -> Option<Point> {
+        // A rock rolls one cell per tick in its direction until it leaves the board
+        let x = match b.direction {
+            Direction::Right => i32::from(b.position.x) + i32::from(steps),
+            Direction::Left => i32::from(b.position.x) - i32::from(steps),
+            Direction::Up | Direction::Down => i32::from(b.position.x),
+        };
+        if x < 0 || x >= i32::from(self.width) {
+            return None;
+        }
+        Some(Point {
+            x: u16::try_from(x).unwrap_or(0),
+            y: b.position.y,
+        })
+    }
+    fn rock_would_hit(b: LandslideRock, p: Point, steps: u16) -> bool {
+        if b.position == p {
+            return true;
+        }
+        if p.y != b.position.y {
+            return false;
+        }
+        let dx = u32::from(p.x.abs_diff(b.position.x));
+        let steps = u32::from(steps);
+        match b.direction {
+            Direction::Right => p.x >= b.position.x && dx <= steps,
+            Direction::Left => p.x <= b.position.x && dx <= steps,
+            Direction::Up | Direction::Down => false,
+        }
+    }
+    fn rock_lane_penalty(&self, p: Point) -> u32 {
+        let mut penalty = 0u32;
+        for b in &self.rocks {
+            for step in 1..=10_u16 {
+                if let Some(bp) = self.rock_position_after(*b, step) {
+                    if bp == p {
+                        penalty = penalty.saturating_add(500_000);
+                    } else {
+                        let d = self.travel_dist(p, bp, false);
+                        if d < 3 {
+                            penalty = penalty.saturating_add(u32::from(3 - d).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
+        }
+        penalty
+    }
+    fn rock_edge_cost(&self, p: Point) -> u16 {
+        let mut cost = 0u16;
+        for b in &self.rocks {
+            for step in 1..=10_u16 {
+                if let Some(bp) = self.rock_position_after(*b, step)
+                    && bp.y == p.y
+                {
+                    let dx = p.x.abs_diff(bp.x);
+                    if dx < 10 {
+                        cost = cost.saturating_add((10 - dx).saturating_mul(1_000));
+                    }
+                }
+            }
+        }
+        cost
+    }
+    fn manage_landslide(&mut self) {
+        if self.mode != GameMode::Landslide {
+            return;
+        }
+        // The snowstorm never breaks in Landslide mode
+        self.weather = Weather::Snow;
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min_y = margin + 1;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
+        // Ambient rumble: a rock occasionally rolls in on top of the schedule
+        if self.rocks.len() < Self::MAX_ROCKS && self.rng.gen_bool(0.05) && max_y > min_y {
+            let allowed = self.rock_safe_rows(min_y, max_y);
+            if !allowed.is_empty() {
+                let y = allowed[self.rng.gen_range(0..allowed.len())];
+                self.spawn_rock(y);
+            }
+        }
+        // Scheduled landslide: every 6th tick a rock is guaranteed to roll in
+        // (the rock cap only limits the ambient rumble, never the schedule)
+        if self.tick_counter.is_multiple_of(6) && max_y > min_y {
+            let allowed = self.rock_safe_rows(min_y, max_y);
+            if !allowed.is_empty() {
+                let y = allowed[self.rng.gen_range(0..allowed.len())];
+                self.spawn_rock(y);
+            }
+        }
+        // Roll every rock one cell; it smashes through obstacles and mines
+        let mut kept = Vec::new();
+        for mut rock in std::mem::take(&mut self.rocks) {
+            let next = Self::calculate_next_head_dir(rock.position, rock.direction);
+            if next.x >= self.width || next.y >= self.height {
+                continue; // rolled off the board
+            }
+            rock.position = next;
+            if self.obstacles.contains(&rock.position) {
+                self.remove_obstacle_and_hazards(rock.position);
+                self.spawn_particles(
+                    f32::from(rock.position.x),
+                    f32::from(rock.position.y),
+                    20,
+                    crate::color::Color::White,
+                    'O',
+                );
+                crate::game::beep();
+            }
+            if self.mines.contains(&rock.position) {
+                self.mines.remove(&rock.position);
+                self.spawn_particles(
+                    f32::from(rock.position.x),
+                    f32::from(rock.position.y),
+                    20,
+                    crate::color::Color::White,
+                    'O',
+                );
+                crate::game::beep();
+            }
+            kept.push(rock);
+        }
+        self.rocks = kept;
+    }
     fn manage_blizzard(&mut self) {
         if self.mode != GameMode::Blizzard {
             return;
@@ -2203,6 +2405,7 @@ impl Game {
                         || self.resources.contains_key(p)
                         || self.lasers.iter().any(|l| l.position == *p)
                         || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                 };
                 if let Some(pos) = Self::get_random_empty_point(
                     self.width,
@@ -2320,6 +2523,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                 || self.snow_tiles.contains(p)
                 || self.sand_tiles.contains(p)
                 || self.lava_tiles.contains(p)
@@ -3541,6 +3745,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
         };
         // A fresh puddle splashes down on a random fair empty cell
         let drop_pos = if puddle_count < cap {
@@ -3660,6 +3865,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                 || self.tornado == Some(*p)
         };
         let mut candidates = Vec::new();
@@ -3729,6 +3935,7 @@ impl Game {
                         || self.resources.contains_key(p)
                         || self.lasers.iter().any(|l| l.position == *p)
                         || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                         || self.tornado.is_some_and(|t| t == *p)
                         || self.lava_tiles.contains(p)
                         || self.fire_tiles.contains(p)
@@ -3823,6 +4030,7 @@ impl Game {
                     || self.resources.contains_key(p)
                     || self.lasers.iter().any(|l| l.position == *p)
                     || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                     || self.tornado == Some(*p)
                     || self.lava_tiles.contains(p)
                     || self.fire_tiles.contains(p)
@@ -3935,6 +4143,7 @@ impl Game {
                         || self.resources.contains_key(p)
                         || self.lasers.iter().any(|l| l.position == *p)
                         || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                         || self.lava_tiles.contains(p)
                         || self.fire_tiles.contains(p)
                         || self.blaze_tiles.contains_key(p)
@@ -4244,6 +4453,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
         };
         if let Some(pos) = Self::get_random_empty_point(
             self.width,
@@ -4368,6 +4578,7 @@ impl Game {
                     || self.resources.contains_key(p)
                     || self.lasers.iter().any(|l| l.position == *p)
                     || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
             };
             let mut dirs = [
                 Direction::Up,
@@ -4522,6 +4733,9 @@ impl Game {
         }
         for m in &self.meteors {
             forbidden.insert(m.position);
+        }
+        for b in &self.rocks {
+            forbidden.insert(b.position);
         }
         // The spin must not drop anything on or next to the roaming vortex (it would
         // immediately be sucked in again, and the vortex cell itself is lethal)
@@ -4744,6 +4958,7 @@ impl Game {
             || self.bosses.iter().any(|b| b.position == dest)
             || self.lasers.iter().any(|l| l.position == dest)
             || self.meteors.iter().any(|m| m.position == dest)
+            || self.rocks.iter().any(|b| b.position == dest)
             || self.turrets.iter().any(|t| t.position == dest)
             || self.tornado == Some(dest)
         {
@@ -4918,6 +5133,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
     }
 
     fn ignite_at(&mut self, p: Point) {
@@ -5028,6 +5244,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                 || self.tornado == Some(*p)
                 || self.lightning_column.is_some_and(|col| p.x == col)
                 || self.lava_tiles.contains(p)
@@ -5178,6 +5395,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
             || self.tornado.is_some_and(|t| t == p)
             || self.lava_tiles.contains(&p)
             || self.acid_puddles.contains(&p)
@@ -5354,6 +5572,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
             || self.tornado == Some(p)
     }
 
@@ -5558,6 +5777,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
             || self.lava_tiles.contains(&p)
             || self.fire_tiles.contains(&p)
             || self.acid_puddles.contains(&p)
@@ -5685,6 +5905,7 @@ impl Game {
                             || self.resources.contains_key(p)
                             || self.lasers.iter().any(|l| l.position == *p)
                             || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                     };
                     let mut candidates: Vec<Point> = (1..self.width.saturating_sub(1))
                         .map(|x| Point { x, y: quake_y })
@@ -5836,6 +6057,7 @@ impl Game {
                     || self.resources.contains_key(p)
                     || self.lasers.iter().any(|l| l.position == *p)
                     || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
             };
             for dir in dirs {
                 let next = Self::calculate_next_head_dir(bh, dir);
@@ -6099,6 +6321,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
             || self.tornado == Some(p)
         {
             return false;
@@ -6583,6 +6806,7 @@ impl Game {
                 || self.resources.contains_key(p)
                 || self.lasers.iter().any(|l| l.position == *p)
                 || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|b| b.position == *p)
                 || self.tornado == Some(*p)
         };
         let mut candidates = Vec::new();
@@ -6700,6 +6924,7 @@ impl Game {
             || self.resources.contains_key(&p)
             || self.lasers.iter().any(|l| l.position == p)
             || self.meteors.iter().any(|m| m.position == p)
+                || self.rocks.iter().any(|b| b.position == p)
     }
     fn event_horizon_consume_adjacent(&mut self, bh: Point) {
         let mut obstacles_to_remove: Vec<Point> = Vec::new();
@@ -7521,7 +7746,8 @@ impl Game {
             | GameMode::Mirage
             | GameMode::Avalanche
             | GameMode::Pinball
-            | GameMode::Steamroller => {
+            | GameMode::Steamroller
+            | GameMode::Landslide => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7641,6 +7867,8 @@ impl Game {
                 || self.mode == GameMode::Avalanche
                 || self.mode == GameMode::Pinball
             || self.mode == GameMode::Steamroller
+
+                || self.mode == GameMode::Landslide
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -7727,6 +7955,8 @@ impl Game {
             || self.mode == GameMode::Avalanche
             || self.mode == GameMode::Pinball
         || self.mode == GameMode::Steamroller
+
+            || self.mode == GameMode::Landslide
         {
             &self.snake
         } else {
@@ -7860,6 +8090,9 @@ impl Game {
         self.mirage_spawns = 0;
         self.boulders.clear();
         self.avalanche_rolls = 0;
+
+        self.rocks.clear();
+        self.landslide_rolls = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -8571,6 +8804,9 @@ impl Game {
         if self.mode == GameMode::Avalanche {
             self.weather = Weather::Clear;
         }
+        if self.mode == GameMode::Landslide {
+            self.weather = Weather::Snow;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -8610,6 +8846,7 @@ impl Game {
             self.spawn_black_hole_fair();
         }
         self.meteors.clear();
+        self.rocks.clear();
         self.tornado = None;
         self.tornado_gusts = 0;
         self.tornado_spins = 0;
@@ -8996,7 +9233,8 @@ impl Game {
             | GameMode::Mirage
             | GameMode::Avalanche
             | GameMode::Pinball
-            | GameMode::Steamroller => {
+            | GameMode::Steamroller
+            | GameMode::Landslide => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9693,6 +9931,9 @@ impl Game {
             self.thorn_blooms = state.thorn_blooms;
             self.mirage_foods = state.mirage_foods;
             self.mirage_spawns = state.mirage_spawns;
+
+            self.rocks = state.rocks;
+            self.landslide_rolls = state.landslide_rolls;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -9886,6 +10127,9 @@ impl Game {
             thorn_blooms: self.thorn_blooms,
             mirage_foods: self.mirage_foods.clone(),
             mirage_spawns: self.mirage_spawns,
+
+            rocks: self.rocks.clone(),
+            landslide_rolls: self.landslide_rolls,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -10757,8 +11001,28 @@ impl Game {
                     }
                 }
             }
+            for b in &self.rocks {
+                if b.position == p {
+                    penalty = penalty.saturating_add(500_000);
+                } else if b.position.y == p.y {
+                    let ahead = match b.direction {
+                        Direction::Right => p.x >= b.position.x,
+                        Direction::Left => p.x <= b.position.x,
+                        Direction::Up | Direction::Down => false,
+                    };
+                    if ahead {
+                        let dx = p.x.abs_diff(b.position.x);
+                        if dx < 10 {
+                            penalty =
+                                penalty.saturating_add(u32::from(10 - dx).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
             penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
             penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
+
+            penalty = penalty.saturating_add(self.rock_lane_penalty(p));
             for m in &self.mines {
                 if *m == p {
                     penalty = penalty.saturating_add(50000);
@@ -10909,6 +11173,8 @@ impl Game {
                         can_move = false;
                     } else if self.meteors.iter().any(|m| m.position == final_p) {
                         can_move = false;
+                    } else if self.rocks.iter().any(|b| b.position == final_p) {
+                        can_move = false;
                     } else if self.black_hole == Some(final_p) {
                         can_move = false;
                     } else if self.tornado == Some(final_p) {
@@ -10983,6 +11249,8 @@ impl Game {
                         }
                         edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                         edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
+
+                        edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
                         for m in &self.meteors {
                             if m.vx != 0 {
                                 continue;
@@ -10997,6 +11265,8 @@ impl Game {
                         }
                         edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                         edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
+
+                        edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
                         if let Some((pf, _)) = self.poison_food {
                             let d_dist = calc_dist(final_p, pf);
                             if d_dist < 4 {
@@ -12721,6 +12991,8 @@ impl Game {
             && self.mode != GameMode::Thornfield
             && self.mode != GameMode::Avalanche
             && self.mode != GameMode::SpikePit
+
+            && self.mode != GameMode::Landslide
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -13704,6 +13976,8 @@ impl Game {
         self.manage_geyser();
         self.manage_thornfield();
         self.manage_mirage();
+
+        self.manage_landslide();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -14194,6 +14468,45 @@ impl Game {
                 );
             }
         }
+        let mut hit_rock1 = false;
+        let mut hit_rock2 = false;
+        for rock in &self.rocks {
+            if rock.position == final_head1 || self.snake.body_map.contains_key(&rock.position)
+            {
+                hit_rock1 = true;
+            }
+            if let Some(fh2) = final_head2_opt
+                && (rock.position == fh2
+                    || self
+                        .player2
+                        .as_ref()
+                        .is_some_and(|p2| p2.body_map.contains_key(&rock.position)))
+            {
+                hit_rock2 = true;
+            }
+        }
+        if hit_rock1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                30,
+                crate::color::Color::White,
+                'O',
+            );
+        }
+        if hit_rock2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    30,
+                    crate::color::Color::White,
+                    'O',
+                );
+            }
+        }
         if hit_black_hole1 && !is_invincible {
             p1_dead = true;
             if let Some(bh) = self.black_hole {
@@ -14460,6 +14773,10 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.rocks.iter().any(|b| b.position == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             if self.lasers.iter().any(|l| l.position == *final_head) {
                 bots_to_remove.insert(*i);
                 continue;
@@ -14630,6 +14947,8 @@ impl Game {
                 || self.mode == GameMode::Avalanche
                 || self.mode == GameMode::Pinball
             || self.mode == GameMode::Steamroller
+
+                || self.mode == GameMode::Landslide
             {
                 self.handle_death("You Died!");
             } else {
@@ -15166,6 +15485,7 @@ impl Game {
                 self.bosses.clear();
                 self.resources.clear();
                 self.meteors.clear();
+        self.rocks.clear();
                 self.mines.clear();
                 self.lasers.clear();
                 self.obstacles.clear();
@@ -16138,6 +16458,35 @@ if self.mode == GameMode::Steamroller {
                 crate::color::Color::Yellow,
             );
         }
+        if self.mode == GameMode::Landslide && !self.rocks.is_empty() {
+            // Eating food braces against the landslide: the rock nearest to
+            // the eaten cell is stopped
+            let manhattan = |a: Point, b: Point| -> u32 {
+                u32::from(a.x.abs_diff(b.x)) + u32::from(a.y.abs_diff(b.y))
+            };
+            let mut nearest = 0;
+            for (i, b) in self.rocks.iter().enumerate() {
+                if manhattan(b.position, final_head)
+                    < manhattan(self.rocks[nearest].position, final_head)
+                {
+                    nearest = i;
+                }
+            }
+            let b = self.rocks.remove(nearest);
+            self.spawn_particles(
+                f32::from(b.position.x),
+                f32::from(b.position.y),
+                15,
+                crate::color::Color::White,
+                'O',
+            );
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Braced!".to_string(),
+                crate::color::Color::White,
+            );
+        }
         if self.mode == GameMode::Seismic {
             let mut braced = 0u32;
             for dir in [
@@ -16713,6 +17062,7 @@ if self.mode == GameMode::Steamroller {
             || self.mines.contains(&dest)
             || self.lasers.iter().any(|l| l.position == dest)
             || self.meteors.iter().any(|m| m.position == dest)
+            || self.rocks.iter().any(|b| b.position == dest)
             || self.turrets.iter().any(|t| t.position == dest)
             || self.bosses.iter().any(|b| b.position == dest)
             || self.portals.is_some_and(|(p1, p2)| dest == p1 || dest == p2)
@@ -17785,6 +18135,11 @@ if self.mode == GameMode::Steamroller {
                     return false;
                 }
             }
+            for rock in &self.rocks {
+                if Self::rock_would_hit(*rock, final_p, steps) {
+                    return false;
+                }
+            }
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
@@ -18667,6 +19022,7 @@ if self.mode == GameMode::Steamroller {
     }
 
     const ENEMY_PREDICTION_HORIZON: u16 = 24;
+    const MAX_ROCKS: usize = 3;
     fn enemy_head_path(&self, enemy: &Snake, horizon: u16) -> Vec<Point> {
         let mut path = Vec::with_capacity(usize::from(horizon) + 1);
         let mut head = enemy.head();
@@ -18774,6 +19130,25 @@ if self.mode == GameMode::Steamroller {
             let meteor_horizon = u16::try_from(path.len())
                 .unwrap_or(u16::MAX)
                 .min(64);
+            for b in &self.rocks {
+                for s in 1..=meteor_horizon {
+                    if let Some(bp) = self.rock_position_after(*b, s) {
+                        let s32 = u32::from(s);
+                        if let Some(&j) = path_idx.get(&bp)
+                            && j < s32
+                            && s32 <= j + 1 + l
+                        {
+                            return false;
+                        }
+                        if let Some(i) = body.iter().position(|&c| c == bp) {
+                            let i = u32::try_from(i).unwrap_or(u32::MAX);
+                            if s32 <= l.saturating_sub(i) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
             for m in &self.meteors {
                 if m.vx == 0 {
                     continue;
@@ -19435,8 +19810,28 @@ if self.mode == GameMode::Steamroller {
                     }
                 }
             }
+            for b in &self.rocks {
+                if b.position == p {
+                    penalty = penalty.saturating_add(500_000);
+                } else if b.position.y == p.y {
+                    let ahead = match b.direction {
+                        Direction::Right => p.x >= b.position.x,
+                        Direction::Left => p.x <= b.position.x,
+                        Direction::Up | Direction::Down => false,
+                    };
+                    if ahead {
+                        let dx = p.x.abs_diff(b.position.x);
+                        if dx < 10 {
+                            penalty =
+                                penalty.saturating_add(u32::from(10 - dx).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
             penalty = penalty.saturating_add(self.meteor_lane_penalty(p));
             penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
+
+            penalty = penalty.saturating_add(self.rock_lane_penalty(p));
             u32::from(targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0)).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
@@ -19518,6 +19913,8 @@ if self.mode == GameMode::Steamroller {
                 }
                 edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                 edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
+
+                        edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
                 if let Some((pf, _)) = self.poison_food {
                     let d_dist = calc_dist(final_p, pf);
                     if d_dist < 4 {
@@ -19658,6 +20055,8 @@ if self.mode == GameMode::Steamroller {
                     }
                     edge_cost = edge_cost.saturating_add(self.meteor_edge_cost(final_p));
                     edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
+
+                        edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
                     if let Some((pf, _)) = self.poison_food {
                         let d_dist = calc_dist(final_p, pf);
                         if d_dist < 4 {
@@ -20198,6 +20597,7 @@ if self.mode == GameMode::Steamroller {
         self.mines.clear();
         self.black_hole = None;
         self.meteors.clear();
+        self.rocks.clear();
         self.portals = None;
         self.warp_targets = None;
         self.warp_relocate_countdown = 0;

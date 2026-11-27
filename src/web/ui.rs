@@ -699,6 +699,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw rolling rocks (Landslide mode)
+    if game.mode == crate::game::GameMode::Landslide {
+        ctx.set_fill_style_str("#FFFFFF"); // White
+        for rock in &game.rocks {
+            if rock.position.x < game.width
+                && rock.position.y < game.height
+                && is_visible(f64::from(rock.position.x), f64::from(rock.position.y))
+            {
+                ctx.fill_rect(
+                    f64::from(rock.position.x) * cell_size,
+                    f64::from(rock.position.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Goblin
     if let Some(goblin) = game.goblin {
         ctx.set_fill_style_str("#FFD700"); // Gold

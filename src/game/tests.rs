@@ -741,6 +741,30 @@ mod tests {
         assert_eq!(loaded.avalanche_rolls, 42);
         let _ = std::fs::remove_file(file_path);
     }
+    #[test]
+    fn test_save_and_load_landslide_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Landslide;
+        game.reset();
+        game.rocks.clear();
+        game.rocks.push(LandslideRock {
+            position: Point { x: 12, y: 9 },
+            direction: Direction::Right,
+        });
+        game.landslide_rolls = 42;
+        let file_path = "savegame_test_landslide.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Landslide);
+        assert_eq!(loaded.weather, Weather::Snow);
+        assert_eq!(loaded.rocks.len(), 1);
+        assert_eq!(loaded.rocks[0].position, Point { x: 12, y: 9 });
+        assert_eq!(loaded.rocks[0].direction, Direction::Right);
+        assert_eq!(loaded.landslide_rolls, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;
