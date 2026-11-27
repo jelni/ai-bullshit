@@ -187,6 +187,7 @@ pub struct Game {
     pub warp_targets: Option<(Point, Point)>,
     pub warp_relocate_countdown: u32,
     pub warp_relocations: u32,
+    pub gravity_well_surges: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -649,6 +650,7 @@ impl Game {
             tsunami_warning: 0,
             tsunami_waves: 0,
             sand_blasts: 0,
+            gravity_well_surges: 0,
             acid_puddles: HashSet::new(),
             acid_drops: 0,
             puddle_tiles: HashSet::new(),
@@ -965,6 +967,7 @@ impl Game {
             tsunami_depth: self.tsunami_depth,
             tsunami_warning: self.tsunami_warning,
             tsunami_waves: self.tsunami_waves,
+            gravity_well_surges: self.gravity_well_surges,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1167,6 +1170,7 @@ impl Game {
                 self.tsunami_depth = state.tsunami_depth;
                 self.tsunami_warning = state.tsunami_warning;
                 self.tsunami_waves = state.tsunami_waves;
+                self.gravity_well_surges = state.gravity_well_surges;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -3792,6 +3796,30 @@ impl Game {
             }
             return;
         }
+        if self.mode == GameMode::GravityWell {
+            // In Gravity Well mode the hole is permanent (no random spawn or
+            // despawn); it devours adjacent obstacles/mines and tugs every item
+            // one cell towards itself at full strength every tick.
+            if let Some(bh) = self.black_hole {
+                self.singularity_consume_adjacent(bh);
+                let mut p = self.food;
+                self.pull_point_towards_black_hole(&mut p, bh);
+                self.food = p;
+                if let Some((mut bp, time)) = self.bonus_food {
+                    self.pull_point_towards_black_hole(&mut bp, bh);
+                    self.bonus_food = Some((bp, time));
+                }
+                if let Some((mut pp, time)) = self.poison_food {
+                    self.pull_point_towards_black_hole(&mut pp, bh);
+                    self.poison_food = Some((pp, time));
+                }
+                if let Some(mut pu) = self.power_up.clone() {
+                    self.pull_point_towards_black_hole(&mut pu.location, bh);
+                    self.power_up = Some(pu);
+                }
+            }
+            return;
+        }
         if self.black_hole.is_none() && self.rng.gen_bool(spawn_chance) {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
@@ -4281,6 +4309,194 @@ impl Game {
                 crate::color::Color::Yellow,
             );
         }
+    }
+    fn manage_gravity_well(&mut self) {
+        if self.mode != GameMode::GravityWell {
+            return;
+        }
+        // The skies stay clear in Gravity Well mode so the hole is always visible
+        self.weather = Weather::Clear;
+        // The gravity well is permanent: re-form it on a fair cell if it was lost
+        if self.black_hole.is_none() {
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+            };
+            if let Some(bh) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin + 2,
+            ) {
+                self.black_hole = Some(bh);
+                self.spawn_floating_text(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    "The gravity well reforms!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+            return;
+        }
+        // The gravity well devours anything pulled onto it: the food respawns on
+        // a fair empty cell, and the other items are swallowed whole.
+        if let Some(bh) = self.black_hole {
+            if self.food == bh {
+                let margin = if self.mode == GameMode::BattleRoyale {
+                    self.safe_zone_margin
+                } else {
+                    0
+                };
+                let avoid_food = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2
+                            .as_ref()
+                            .is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.mines.contains(p)
+                        || self.black_hole == Some(*p)
+                };
+                if let Some(new_food) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_food,
+                    &mut self.rng,
+                    margin,
+                ) {
+                    self.food = new_food;
+                }
+                self.spawn_floating_text(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    "Devoured!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            if self.bonus_food.is_some_and(|(bp, _)| bp == bh) {
+                self.bonus_food = None;
+            }
+            if self.poison_food.is_some_and(|(pp, _)| pp == bh) {
+                self.poison_food = None;
+            }
+            if self.power_up.as_ref().is_some_and(|pu| pu.location == bh) {
+                self.power_up = None;
+            }
+        }
+        // Scheduled surge: every 6th tick the hole lurches one cell in a random
+        // fair direction. A surge never lands on a snake's body, on any entity,
+        // or on the cell any snake is about to enter this tick; if every
+        // direction is blocked the surge simply fizzles.
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.gravity_well_surges += 1;
+        let Some(bh) = self.black_hole else {
+            return;
+        };
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.tornado == Some(*p)
+        };
+        let mut candidates = Vec::new();
+        for dir in [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            let np = Self::calculate_next_head_dir(bh, dir);
+            if np.x > 0
+                && np.x < self.width - 1
+                && np.y > 0
+                && np.y < self.height - 1
+                && !avoid(&np)
+            {
+                candidates.push(np);
+            }
+        }
+        if candidates.is_empty() {
+            return;
+        }
+        let np = candidates[self.rng.gen_range(0..candidates.len())];
+        // The hole devours obstacles and mines it lands on
+        self.obstacles.remove(&np);
+        self.mines.remove(&np);
+        self.black_hole = Some(np);
+        self.spawn_floating_text(
+            f32::from(np.x),
+            f32::from(np.y),
+            "Surge!".to_string(),
+            crate::color::Color::DarkGrey,
+        );
+        self.spawn_particles(
+            f32::from(np.x),
+            f32::from(np.y),
+            12,
+            crate::color::Color::DarkGrey,
+            'O',
+        );
     }
     fn pull_point_towards(&self, point: &mut Point, target: Point) {
         let dx = i32::from(target.x) - i32::from(point.x);
@@ -5167,7 +5383,8 @@ impl Game {
             | GameMode::LaserGrid
             | GameMode::Inferno
             | GameMode::Tsunami
-            | GameMode::Warp => {
+            | GameMode::Warp
+            | GameMode::GravityWell => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -5273,6 +5490,7 @@ impl Game {
                 || self.mode == GameMode::LaserGrid
                 || self.mode == GameMode::Tsunami
                 || self.mode == GameMode::Warp
+                || self.mode == GameMode::GravityWell
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5344,6 +5562,7 @@ impl Game {
             || self.mode == GameMode::LaserGrid
             || self.mode == GameMode::Tsunami
             || self.mode == GameMode::Warp
+            || self.mode == GameMode::GravityWell
         {
             &self.snake
         } else {
@@ -5475,6 +5694,7 @@ impl Game {
         self.bomb_carrier = None;
         self.bomb_timer = 0;
         self.bomb_tags = 0;
+        self.gravity_well_surges = 0;
         self.warp_targets = None;
         self.warp_relocate_countdown = 0;
 
@@ -6030,10 +6250,44 @@ impl Game {
         if self.mode == GameMode::Tsunami {
             self.weather = Weather::Rain;
         }
+        if self.mode == GameMode::GravityWell {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
         self.black_hole = None;
+        if self.mode == GameMode::GravityWell {
+            let avoid_hole = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+            };
+            if let Some(bh) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_hole,
+                &mut self.rng,
+                self.safe_zone_margin + 2,
+            ) {
+                self.black_hole = Some(bh);
+                self.spawn_particles(
+                    f32::from(bh.x),
+                    f32::from(bh.y),
+                    30,
+                    crate::color::Color::DarkGrey,
+                    'O',
+                );
+            }
+        }
         self.meteors.clear();
         self.tornado = None;
         self.tornado_gusts = 0;
@@ -6367,7 +6621,8 @@ impl Game {
             | GameMode::LaserGrid
             | GameMode::Inferno
             | GameMode::Tsunami
-            | GameMode::Warp => {
+            | GameMode::Warp
+            | GameMode::GravityWell => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -7046,6 +7301,7 @@ impl Game {
             self.tsunami_depth = state.tsunami_depth;
             self.tsunami_warning = state.tsunami_warning;
             self.tsunami_waves = state.tsunami_waves;
+            self.gravity_well_surges = state.gravity_well_surges;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -7202,6 +7458,7 @@ impl Game {
             tsunami_depth: self.tsunami_depth,
             tsunami_warning: self.tsunami_warning,
             tsunami_waves: self.tsunami_waves,
+            gravity_well_surges: self.gravity_well_surges,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -9958,6 +10215,7 @@ impl Game {
 
             && self.mode != GameMode::LaserGrid
             && self.mode != GameMode::Tsunami
+            && self.mode != GameMode::GravityWell
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -10910,6 +11168,7 @@ impl Game {
         self.manage_warp();
         self.manage_mines();
         self.manage_black_hole();
+        self.manage_gravity_well();
         self.manage_singularity();
         self.manage_event_horizon();
         self.manage_laser_grid();

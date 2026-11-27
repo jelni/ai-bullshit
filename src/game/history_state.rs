@@ -118,4 +118,5 @@ pub struct HistoryState {
     pub warp_targets: Option<(Point, Point)>,
     pub warp_relocate_countdown: u32,
     pub warp_relocations: u32,
+    pub gravity_well_surges: u32,
 }

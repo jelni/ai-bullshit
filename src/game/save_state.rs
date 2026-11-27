@@ -229,6 +229,8 @@ pub struct SaveState {
     pub warp_relocate_countdown: u32,
     #[serde(default)]
     pub warp_relocations: u32,
+    #[serde(default)]
+    pub gravity_well_surges: u32,
 }
 
 #[must_use]

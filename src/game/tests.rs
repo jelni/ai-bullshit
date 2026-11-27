@@ -330,8 +330,7 @@ mod tests {
         game.singularity_pulses = 7;
         game.singularity_drifts = 42;
         game.singularity_shield = 3;
-        let file_path = "savegame_test_singularity.json";
-        game.save_game_to_file(file_path);
+        let file_path = "savegame_test_singularity.json";        game.save_game_to_file(file_path);
         let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         let success = loaded.load_game_from_file(file_path);
         assert!(success);
@@ -462,15 +461,30 @@ mod tests {
         game.inferno_burn.insert(Point { x: 12, y: 9 }, 17);
         game.inferno_flares = 42;
         let file_path = "savegame_test_inferno_unit.json";
-        game.save_game_to_file(file_path);
-        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.save_game_to_file(file_path);        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         let success = loaded.load_game_from_file(file_path);
         assert!(success);
         assert_eq!(loaded.mode, GameMode::Inferno);
         assert!(loaded.inferno_tiles.contains(&Point { x: 12, y: 9 }));
         assert!(loaded.inferno_hotspots.contains(&Point { x: 3, y: 3 }));
         assert_eq!(loaded.inferno_burn.get(&Point { x: 12, y: 9 }), Some(&17));
-        assert_eq!(loaded.inferno_flares, 42);
+        assert_eq!(loaded.inferno_flares, 42);        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
+    fn test_save_and_load_gravity_well_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::GravityWell;
+        game.reset();
+        game.black_hole = Some(Point { x: 12, y: 9 });
+        game.gravity_well_surges = 42;
+        let file_path = "savegame_test_gravity_well.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::GravityWell);
+        assert_eq!(loaded.black_hole, Some(Point { x: 12, y: 9 }));
+        assert_eq!(loaded.gravity_well_surges, 42);
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
