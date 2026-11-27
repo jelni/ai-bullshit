@@ -514,3 +514,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Clearing:** eating food removes the bumpers adjacent to the eaten cell ("Cleared N bumper(s)!").
 - **Persistence:** `pinball_bumpers`, `pinball_bumps`, and `pinball_relocations` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_pinball_mode.rs](../../tests/test_pinball_mode.rs).
+
+## Steamroller Mode
+
+`GameMode::Steamroller` (menu entry "Steamroller Mode") is a survival mode where a one-cell-thick wall line — the roller — sweeps back and forth across the arena:
+
+- **Sweep:** `manage_steamroller` keeps the roller as a full line of cells (`press_cells`, mirrored into `obstacles`) at column `press_pos`. It starts at column 1 heading right (`press_dir = 1`) and advances one column per move, ping-ponging at the playable edges (`1..=width-2`; the border ring is already lethal). Moves are counted in `press_moves` and shown as `Roller: <pos><dir> | Moves: <count>` in the status bar, with a "The roller advances! (+N)" floating text. The line renders as a dark-red `=` (terminal) / dark-red cells (web).
+- **Schedule:** within each 250-tick cycle the roller moves every 4th tick below tick 60, every 3rd tick below 120, every 2nd tick below 160, and every tick from 160 on — it visibly speeds up as the cycle wears on.
+- **Reset:** at tick 200 of every 250-tick cycle the roller vacates all its cells and returns home (`press_pos = 1`, `press_dir = 1`, "The roller resets!").
+- **Fairness:** a roller cell is never placed on a snake's body, on the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, and all hazard tile sets). The column the roller just left is vacated, so the sweeping wall can never crush or seal a snake in.
+- **Autopilot:** roller cells are ordinary obstacles, so they are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance — the bot rides out the roller natively.
+- **Breaching:** eating food removes the roller cells adjacent to the eaten cell ("Breached N roller!").
+- **Persistence:** `press_cells`, `press_pos`, `press_dir`, and `press_moves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale roller records are pruned each tick if another effect cleared the obstacles.
+- **Tests:** see [tests/test_steamroller_mode.rs](../../tests/test_steamroller_mode.rs) and the save/load test in `src/game/tests.rs`.

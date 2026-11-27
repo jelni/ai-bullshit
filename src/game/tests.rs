@@ -650,6 +650,29 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_steamroller_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Steamroller;
+        game.reset();
+        game.press_cells.clear();
+        game.press_cells.insert(Point { x: 6, y: 9 });
+        game.obstacles.insert(Point { x: 6, y: 9 });
+        game.press_pos = 6;
+        game.press_dir = 1;
+        game.press_moves = 42;
+        let file_path = "savegame_test_steamroller.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Steamroller);
+        assert!(loaded.press_cells.contains(&Point { x: 6, y: 9 }));
+        assert_eq!(loaded.press_pos, 6);
+        assert_eq!(loaded.press_dir, 1);
+        assert_eq!(loaded.press_moves, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_thornfield_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Thornfield;

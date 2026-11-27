@@ -91,4 +91,5 @@ pub enum GameMode {
     Thornfield,
     Mirage,
     Avalanche,
+    Steamroller,
 }

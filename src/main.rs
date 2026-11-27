@@ -811,6 +811,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             116 => {
+                game.mode = game::GameMode::Steamroller;
+                game.reset();
+            },
+            117 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -820,11 +824,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 116;
+                game.menu_selection = 117;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 116 {
+            if game.menu_selection < 117 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 112;

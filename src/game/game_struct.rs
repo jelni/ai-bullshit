@@ -200,6 +200,10 @@ pub struct Game {
     pub fortress_walls: HashSet<Point>,
     pub fortress_depth: u16,
     pub fortress_rings: u32,
+    pub press_cells: HashSet<Point>,
+    pub press_pos: u16,
+    pub press_dir: i8,
+    pub press_moves: u32,
     pub pinball_bumpers: HashSet<Point>,
     pub pinball_bumps: u32,
     pub pinball_relocations: u32,
@@ -712,6 +716,10 @@ impl Game {
             fortress_walls: HashSet::new(),
             fortress_depth: 0,
             fortress_rings: 0,
+            press_cells: HashSet::new(),
+            press_pos: 1,
+            press_dir: 1,
+            press_moves: 0,
             pinball_bumpers: HashSet::new(),
             pinball_bumps: 0,
             pinball_relocations: 0,
@@ -972,6 +980,10 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            press_cells: self.press_cells.clone(),
+            press_pos: self.press_pos,
+            press_dir: self.press_dir,
+            press_moves: self.press_moves,
             pinball_bumpers: self.pinball_bumpers.clone(),
             pinball_bumps: self.pinball_bumps,
             pinball_relocations: self.pinball_relocations,
@@ -1190,6 +1202,10 @@ impl Game {
                 self.fortress_walls = state.fortress_walls;
                 self.fortress_depth = state.fortress_depth;
                 self.fortress_rings = state.fortress_rings;
+                self.press_cells = state.press_cells;
+                self.press_pos = state.press_pos;
+                self.press_dir = state.press_dir;
+                self.press_moves = state.press_moves;
                 self.pinball_bumpers = state.pinball_bumpers;
                 self.pinball_bumps = state.pinball_bumps;
                 self.pinball_relocations = state.pinball_relocations;
@@ -3076,6 +3092,158 @@ impl Game {
         }
         None
     }
+    fn manage_steamroller(&mut self) {
+        if self.mode != GameMode::Steamroller {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale roller records
+        self.press_cells.retain(|p| self.obstacles.contains(p));
+        // Periodic reset: at tick 200 of every 250-tick cycle the roller returns home
+        if self.tick_counter == 200 {
+            if !self.press_cells.is_empty() || self.press_pos != 1 || self.press_dir != 1 {
+                for p in self.press_cells.drain() {
+                    self.obstacles.remove(&p);
+                }
+                self.press_pos = 1;
+                self.press_dir = 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The roller resets!".to_string(),
+                    crate::color::Color::DarkRed,
+                );
+            }
+            return;
+        }
+        // The board's border ring is lethal already, so the roller only ever
+        // sweeps the playable columns 1..=width-2.
+        if self.width < 3 {
+            return;
+        }
+        // The roller speeds up over each 250-tick cycle: one column every 4
+        // ticks early on, every tick by the end of the cycle.
+        let interval = if self.tick_counter < 60 {
+            4_u32
+        } else if self.tick_counter < 120 {
+            3
+        } else if self.tick_counter < 160 {
+            2
+        } else {
+            1
+        };
+        if !self.tick_counter.is_multiple_of(interval) {
+            return;
+        }
+        let max_pos = self.width - 2;
+        let mut new_x = i32::from(self.press_pos) + i32::from(self.press_dir);
+        if new_x < 1 || new_x > i32::from(max_pos) {
+            // Ping-pong: bounce off the far edge and sweep back
+            self.press_dir = -self.press_dir;
+            new_x = i32::from(self.press_pos) + i32::from(self.press_dir);
+        }
+        if new_x < 1 || new_x > i32::from(max_pos) {
+            return;
+        }
+        let Some(new_x) = u16::try_from(new_x).ok() else {
+            return;
+        };
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next =
+            self.player2.as_ref().map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.snow_tiles.contains(p)
+                || self.sand_tiles.contains(p)
+                || self.lava_tiles.contains(p)
+                || self.rubble_tiles.contains(p)
+                || self.seismic_rubble.contains(p)
+                || self.acid_puddles.contains(p)
+                || self.puddle_tiles.contains(p)
+                || self.fire_tiles.contains(p)
+                || self.ash_tiles.contains(p)
+                || self.inferno_tiles.contains(p)
+                || self.belt_tiles.contains_key(p)
+                || self.ice_tiles.contains(p)
+                || self.blaze_tiles.contains_key(p)
+                || self.fortress_walls.contains(p)
+                || self.press_cells.contains(p)
+        };
+        // A roller cell is never placed on a snake's body, on the cell any snake
+        // is about to enter this tick, or on any entity, so the sweeping wall
+        // can never crush or seal anyone; the column it just left is vacated.
+        let mut line_cells = Vec::new();
+        for y in 1..self.height.saturating_sub(1) {
+            let p = Point {
+                x: new_x,
+                y,
+            };
+            if !avoid(&p) {
+                line_cells.push(p);
+            }
+        }
+        for p in self.press_cells.drain() {
+            self.obstacles.remove(&p);
+        }
+        let mut erected = 0u32;
+        for p in line_cells {
+            self.press_cells.insert(p);
+            self.obstacles.insert(p);
+            erected += 1;
+        }
+        self.press_pos = new_x;
+        self.press_moves += 1;
+        if erected > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The roller advances! (+{erected})"),
+                crate::color::Color::DarkRed,
+            );
+        }
+    }
+
     fn manage_monsoon(&mut self) {
         if self.mode != GameMode::Monsoon {
             return;
@@ -7084,7 +7252,8 @@ impl Game {
             | GameMode::Thornfield
             | GameMode::Mirage
             | GameMode::Avalanche
-            | GameMode::Pinball => {
+            | GameMode::Pinball
+            | GameMode::Steamroller => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7202,6 +7371,7 @@ impl Game {
                 || self.mode == GameMode::Mirage
                 || self.mode == GameMode::Avalanche
                 || self.mode == GameMode::Pinball
+            || self.mode == GameMode::Steamroller
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -7286,6 +7456,7 @@ impl Game {
             || self.mode == GameMode::Mirage
             || self.mode == GameMode::Avalanche
             || self.mode == GameMode::Pinball
+        || self.mode == GameMode::Steamroller
         {
             &self.snake
         } else {
@@ -7399,6 +7570,10 @@ impl Game {
         self.fortress_walls.clear();
         self.fortress_depth = 0;
         self.fortress_rings = 0;
+        self.press_cells.clear();
+        self.press_pos = 1;
+        self.press_dir = 1;
+        self.press_moves = 0;
         self.pinball_bumpers.clear();
         self.pinball_bumps = 0;
         self.pinball_relocations = 0;
@@ -8542,7 +8717,8 @@ impl Game {
             | GameMode::Thornfield
             | GameMode::Mirage
             | GameMode::Avalanche
-            | GameMode::Pinball => {
+            | GameMode::Pinball
+            | GameMode::Steamroller => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9220,6 +9396,10 @@ impl Game {
             self.fortress_walls = state.fortress_walls;
             self.fortress_depth = state.fortress_depth;
             self.fortress_rings = state.fortress_rings;
+            self.press_cells = state.press_cells;
+            self.press_pos = state.press_pos;
+            self.press_dir = state.press_dir;
+            self.press_moves = state.press_moves;
             self.pinball_bumpers = state.pinball_bumpers;
             self.pinball_bumps = state.pinball_bumps;
             self.pinball_relocations = state.pinball_relocations;
@@ -9405,6 +9585,10 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            press_cells: self.press_cells.clone(),
+            press_pos: self.press_pos,
+            press_dir: self.press_dir,
+            press_moves: self.press_moves,
             pinball_bumpers: self.pinball_bumpers.clone(),
             pinball_bumps: self.pinball_bumps,
             pinball_relocations: self.pinball_relocations,
@@ -13226,6 +13410,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_fortress();
+        self.manage_steamroller();
         self.manage_pinball();
         self.manage_geyser();
         self.manage_thornfield();
@@ -14154,6 +14339,7 @@ impl Game {
                 || self.mode == GameMode::Mirage
                 || self.mode == GameMode::Avalanche
                 || self.mode == GameMode::Pinball
+            || self.mode == GameMode::Steamroller
             {
                 self.handle_death("You Died!");
             } else {
@@ -15188,6 +15374,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Breached {breached} wall!"),
                     crate::color::Color::DarkGrey,
+                );
+            }
+        }
+if self.mode == GameMode::Steamroller {
+            let mut breached = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.press_cells.remove(&np) {
+                    self.obstacles.remove(&np);
+                    breached += 1;
+                }
+            }
+            if breached > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Breached {breached} roller!"),
+                    crate::color::Color::DarkRed,
                 );
             }
         }

@@ -171,6 +171,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw the steamroller wall line (Steamroller mode)
+    if game.mode == crate::game::GameMode::Steamroller {
+        ctx.set_fill_style_str("#8B0000");
+        for cell in &game.press_cells {
+            if cell.x < game.width
+                && cell.y < game.height
+                && is_visible(f64::from(cell.x), f64::from(cell.y))
+            {
+                ctx.fill_rect(
+                    f64::from(cell.x) * cell_size,
+                    f64::from(cell.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw geyser jets and vents (Geyser mode)
     if game.mode == crate::game::GameMode::Geyser {
         ctx.set_fill_style_str("#00FFFF"); // Cyan steam jets

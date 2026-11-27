@@ -698,6 +698,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Auction House",
         "Gacha",
         "Avalanche Mode",
+        "Steamroller Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2032,6 +2033,17 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw the steamroller wall line (Steamroller mode)
+    if game.mode == crate::game::GameMode::Steamroller {
+        stdout.queue(SetForegroundColor(Color::DarkRed))?;
+        for cell in &game.press_cells {
+            if is_visible(cell.x, cell.y) {
+                stdout.queue(cursor::MoveTo(cell.x, cell.y))?;
+                write!(stdout, "=")?;
+            }
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         stdout.queue(SetForegroundColor(Color::White))?;
@@ -3222,6 +3234,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
             " | Boulders: {} | Rolls: {}",
             game.boulders.len(),
             game.avalanche_rolls
+        )
+    } else {
+        String::new()
+    };
+    let roller_str = if game.mode == crate::game::GameMode::Steamroller {
+        let dir_arrow = if game.press_dir >= 0 { ">" } else { "<" };
+        format!(
+            " | Roller: {}{} | Moves: {}",
+            game.press_pos, dir_arrow, game.press_moves
         )
     } else {
         String::new()

@@ -148,6 +148,14 @@ pub struct SaveState {
     #[serde(default)]
     pub fortress_rings: u32,
     #[serde(default)]
+    pub press_cells: HashSet<Point>,
+    #[serde(default)]
+    pub press_pos: u16,
+    #[serde(default)]
+    pub press_dir: i8,
+    #[serde(default)]
+    pub press_moves: u32,
+    #[serde(default)]
     pub pinball_bumpers: HashSet<Point>,
     #[serde(default)]
     pub pinball_bumps: u32,
