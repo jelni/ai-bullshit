@@ -1,6 +1,6 @@
 use super::{
-    Boss, Companion, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point, PowerUp, Snake,
-    Tournament, Weather,
+    Boss, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, Laser, Meteor, Point,
+    PowerUp, Snake, Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -119,4 +119,6 @@ pub struct HistoryState {
     pub warp_relocate_countdown: u32,
     pub warp_relocations: u32,
     pub gravity_well_surges: u32,
+    pub belt_tiles: std::collections::HashMap<Point, Direction>,
+    pub belt_shifts: u32,
 }

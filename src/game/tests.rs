@@ -322,6 +322,24 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_conveyor_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Conveyor;
+        game.reset();
+        game.belt_tiles.clear();
+        game.belt_tiles.insert(Point { x: 12, y: 9 }, Direction::Down);
+        game.belt_shifts = 42;
+        let file_path = "savegame_test_conveyor.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Conveyor);
+        assert_eq!(loaded.belt_tiles.get(&Point { x: 12, y: 9 }), Some(&Direction::Down));
+        assert_eq!(loaded.belt_shifts, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_singularity_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Singularity;

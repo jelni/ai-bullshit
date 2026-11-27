@@ -18,6 +18,8 @@ The autopilot (`Game::calculate_autopilot_move`, `calculate_p2_autopilot_move`, 
 
 4. **Survival fallbacks:** tail-chasing (`astar_search_verified` toward the snake's own tail), then `flood_fill_fallback`, which picks the first step maximizing reachable open space.
 
+In **Conveyor mode** (`GameMode::Conveyor`) the belt shove is applied inside `calculate_final_heads` (and in the arena-bot head loop) right after portal/wrap resolution: `belt_shove` only returns a destination that is in bounds (or wrapped), free of obstacles, snake bodies, portals, mines, bosses, turrets, lasers, meteors, the black hole, the tornado vortex, the lightning column, wildfire, and the projected safe zone — so a shove always lands on a verified-safe cell and the autopilot survives natively by re-planning from its actual head each tick.
+
 In **Meteor Shower mode** (`GameMode::MeteorShower`) the scheduled strikes always pick a fair column (`pick_safe_strike_column`: no snake head/body column and no column a snake is about to enter), and the meteor-column hazard checks above are what let the bot survive the bombardment natively.
 
 ## Persistence / Save Format

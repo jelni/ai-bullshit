@@ -495,6 +495,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw conveyor belts (Conveyor mode)
+    if game.mode == crate::game::GameMode::Conveyor {
+        ctx.set_fill_style_str("#FFA500"); // Orange
+        for (p, _dir) in &game.belt_tiles {
+            if p.x < game.width
+                && p.y < game.height
+                && is_visible(f64::from(p.x), f64::from(p.y))
+            {
+                ctx.fill_rect(
+                    f64::from(p.x) * cell_size,
+                    f64::from(p.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw Tornado vortex (Tornado mode)
     if let Some(t) = game.tornado
         && t.x < game.width

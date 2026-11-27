@@ -654,6 +654,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Tsunami Mode",
         "Warp Mode",
         "Gravity Well",
+        "Conveyor Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2188,6 +2189,23 @@ fn draw_entities<W: Write>(
         write!(stdout, "@")?;
     }
 
+    // Draw conveyor belts (Conveyor mode)
+    if game.mode == crate::game::GameMode::Conveyor {
+        for (p, dir) in &game.belt_tiles {
+            if is_visible(p.x, p.y) {
+                let c = match dir {
+                    Direction::Up => '^',
+                    Direction::Down => 'v',
+                    Direction::Left => '<',
+                    Direction::Right => '>',
+                };
+                stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                stdout.queue(SetForegroundColor(Color::Yellow))?;
+                write!(stdout, "{c}")?;
+            }
+        }
+    }
+
     // Draw Portals
     if let Some((p1, p2)) = game.portals {
         if is_visible(p1.x, p1.y) {
@@ -3049,6 +3067,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let belt_str = if game.mode == crate::game::GameMode::Conveyor {
+        format!(
+            " | Belts: {} | Shifts: {}",
+            game.belt_tiles.len(),
+            game.belt_shifts
+        )
+    } else {
+        String::new()
+    };
 
     let inferno_str = if game.mode == crate::game::GameMode::Inferno {
         format!(
@@ -3085,7 +3112,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}"
     )?;
 
     if !game.bosses.is_empty() {

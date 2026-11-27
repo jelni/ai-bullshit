@@ -188,6 +188,8 @@ pub struct Game {
     pub warp_relocate_countdown: u32,
     pub warp_relocations: u32,
     pub gravity_well_surges: u32,
+    pub belt_tiles: std::collections::HashMap<Point, Direction>,
+    pub belt_shifts: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -649,6 +651,8 @@ impl Game {
             tsunami_depth: -1,
             tsunami_warning: 0,
             tsunami_waves: 0,
+            belt_tiles: std::collections::HashMap::new(),
+            belt_shifts: 0,
             sand_blasts: 0,
             gravity_well_surges: 0,
             acid_puddles: HashSet::new(),
@@ -968,6 +972,8 @@ impl Game {
             tsunami_warning: self.tsunami_warning,
             tsunami_waves: self.tsunami_waves,
             gravity_well_surges: self.gravity_well_surges,
+            belt_tiles: self.belt_tiles.clone(),
+            belt_shifts: self.belt_shifts,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1171,6 +1177,8 @@ impl Game {
                 self.tsunami_warning = state.tsunami_warning;
                 self.tsunami_waves = state.tsunami_waves;
                 self.gravity_well_surges = state.gravity_well_surges;
+                self.belt_tiles = state.belt_tiles;
+                self.belt_shifts = state.belt_shifts;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -5376,15 +5384,13 @@ impl Game {
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
-
             | GameMode::Inferno
             | GameMode::Minefield
-
             | GameMode::LaserGrid
-            | GameMode::Inferno
             | GameMode::Tsunami
             | GameMode::Warp
-            | GameMode::GravityWell => {
+            | GameMode::GravityWell
+            | GameMode::Conveyor => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -5491,6 +5497,7 @@ impl Game {
                 || self.mode == GameMode::Tsunami
                 || self.mode == GameMode::Warp
                 || self.mode == GameMode::GravityWell
+                || self.mode == GameMode::Conveyor
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5563,6 +5570,7 @@ impl Game {
             || self.mode == GameMode::Tsunami
             || self.mode == GameMode::Warp
             || self.mode == GameMode::GravityWell
+            || self.mode == GameMode::Conveyor
         {
             &self.snake
         } else {
@@ -5725,6 +5733,8 @@ impl Game {
         self.tsunami_depth = -1;
         self.tsunami_warning = 0;
         self.tsunami_waves = 0;
+        self.belt_tiles.clear();
+        self.belt_shifts = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -6092,6 +6102,43 @@ impl Game {
         if self.mode == GameMode::Inferno {
             self.spawn_inferno_hotspots();
         }
+        if self.mode == GameMode::Conveyor {
+            let belt_count = (u32::from(self.width) * u32::from(self.height) / 40).max(4);
+            for _ in 0..belt_count {
+                let avoid_belt = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.mines.contains(p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.belt_tiles.contains_key(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_belt,
+                    &mut self.rng,
+                    0,
+                ) {
+                    let dirs = [
+                        Direction::Up,
+                        Direction::Down,
+                        Direction::Left,
+                        Direction::Right,
+                    ];
+                    let dir = dirs[self.rng.gen_range(0..dirs.len())];
+                    self.belt_tiles.insert(p, dir);
+                }
+            }
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -6251,6 +6298,8 @@ impl Game {
             self.weather = Weather::Rain;
         }
         if self.mode == GameMode::GravityWell {
+        }
+        if self.mode == GameMode::Conveyor {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -6614,15 +6663,13 @@ impl Game {
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
-
             | GameMode::Inferno
             | GameMode::Minefield
-
             | GameMode::LaserGrid
-            | GameMode::Inferno
             | GameMode::Tsunami
             | GameMode::Warp
-            | GameMode::GravityWell => {
+            | GameMode::GravityWell
+            | GameMode::Conveyor => {
 
                 self.snake = Snake::new(Point {
                     x: start_x,
@@ -7184,6 +7231,18 @@ impl Game {
                 next_head2
             }
         });
+        let final_head1 = if hit_wall1 {
+            final_head1
+        } else {
+            self.belt_shove(final_head1).unwrap_or(final_head1)
+        };
+        let final_head2_opt = final_head2_opt.map(|fh| {
+            if hit_wall2 {
+                fh
+            } else {
+                self.belt_shove(fh).unwrap_or(fh)
+            }
+        });
         (final_head1, final_head2_opt, hit_wall1, hit_wall2)
     }
     pub fn rewind_time(&mut self) {
@@ -7302,6 +7361,8 @@ impl Game {
             self.tsunami_warning = state.tsunami_warning;
             self.tsunami_waves = state.tsunami_waves;
             self.gravity_well_surges = state.gravity_well_surges;
+            self.belt_tiles = state.belt_tiles;
+            self.belt_shifts = state.belt_shifts;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -7459,6 +7520,8 @@ impl Game {
             tsunami_warning: self.tsunami_warning,
             tsunami_waves: self.tsunami_waves,
             gravity_well_surges: self.gravity_well_surges,
+            belt_tiles: self.belt_tiles.clone(),
+            belt_shifts: self.belt_shifts,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -10216,6 +10279,7 @@ impl Game {
             && self.mode != GameMode::LaserGrid
             && self.mode != GameMode::Tsunami
             && self.mode != GameMode::GravityWell
+            && self.mode != GameMode::Conveyor
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -11243,6 +11307,11 @@ impl Game {
                 }
                 next_head
             };
+            let final_head = if hit_wall {
+                final_head
+            } else {
+                self.belt_shove(final_head).unwrap_or(final_head)
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -11964,6 +12033,7 @@ impl Game {
                 || self.mode == GameMode::Minefield
                 || self.mode == GameMode::Tsunami
                 || self.mode == GameMode::Warp
+                || self.mode == GameMode::Conveyor
             {
                 self.handle_death("You Died!");
             } else {
@@ -12259,6 +12329,7 @@ impl Game {
 
         self.manage_infection();
         self.manage_tsunami();
+        self.manage_conveyor();
 
         if self.mode == GameMode::TurfWar {
             for segment in &self.snake.body {
@@ -13129,6 +13200,20 @@ impl Game {
         if self.mode == GameMode::LaserGrid {
             self.zap_laser_grid();
         }
+        if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
+            // Eating food greases the belts: one random belt rotates 90 degrees
+            let keys: Vec<Point> = self.belt_tiles.keys().copied().collect();
+            let key = keys[self.rng.gen_range(0..keys.len())];
+            if let Some(dir) = self.belt_tiles.get_mut(&key) {
+                *dir = Self::rotate_belt(*dir);
+            }
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Greased the belts!".to_string(),
+                crate::color::Color::Yellow,
+            );
+        }
         if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
             self.spawn_floating_text(
                 f32::from(final_head.x),
@@ -13729,6 +13814,71 @@ impl Game {
             }
         }
         targets
+    }
+    fn manage_conveyor(&mut self) {
+        if self.mode != GameMode::Conveyor {
+            return;
+        }
+        // Belts under fresh obstacles are scrapped
+        self.belt_tiles.retain(|p, _| !self.obstacles.contains(p));
+        // Scheduled belt shuffle: every 6th tick every belt rotates 90 degrees clockwise
+        if self.tick_counter.is_multiple_of(6) && !self.belt_tiles.is_empty() {
+            for dir in self.belt_tiles.values_mut() {
+                *dir = Self::rotate_belt(*dir);
+            }
+            self.belt_shifts += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "The belts shift!".to_string(),
+                crate::color::Color::Yellow,
+            );
+        }
+    }
+    const fn rotate_belt(dir: Direction) -> Direction {
+        match dir {
+            Direction::Up => Direction::Right,
+            Direction::Right => Direction::Down,
+            Direction::Down => Direction::Left,
+            Direction::Left => Direction::Up,
+        }
+    }
+    // A belt shoves a snake whose head enters its cell one extra cell in the
+    // belt's direction — but only onto a cell that is fair right now
+    fn belt_shove(&self, head: Point) -> Option<Point> {
+        if self.mode != GameMode::Conveyor {
+            return None;
+        }
+        let dir = *self.belt_tiles.get(&head)?;
+        let raw = Self::calculate_next_head_dir(head, dir);
+        let dest = if self.wrap_mode {
+            self.calculate_wrapped_head(raw)
+        } else {
+            if raw.x == 0 || raw.x >= self.width - 1 || raw.y == 0 || raw.y >= self.height - 1 {
+                return None;
+            }
+            raw
+        };
+        if self.obstacles.contains(&dest)
+            || self.snake.body_map.contains_key(&dest)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&dest))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&dest))
+            || self.black_hole == Some(dest)
+            || self.tornado == Some(dest)
+            || self.lightning_column == Some(dest.x)
+            || self.mines.contains(&dest)
+            || self.lasers.iter().any(|l| l.position == dest)
+            || self.meteors.iter().any(|m| m.position == dest)
+            || self.turrets.iter().any(|t| t.position == dest)
+            || self.bosses.iter().any(|b| b.position == dest)
+            || self.portals.is_some_and(|(p1, p2)| dest == p1 || dest == p2)
+            || self.fire_tiles.contains(&dest)
+            || (self.mode == GameMode::BattleRoyale && !self.within_safe_zone(dest, 0))
+        {
+            return None;
+        }
+        Some(dest)
     }
     fn manage_infection(&mut self) {
         if self.mode != GameMode::Infection {

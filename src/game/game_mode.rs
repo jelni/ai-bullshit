@@ -79,4 +79,5 @@ pub enum GameMode {
     Tsunami,
     Warp,
     GravityWell,
+    Conveyor,
 }

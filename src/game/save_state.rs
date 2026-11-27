@@ -1,8 +1,8 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
-    Boss, Companion, Deserialize, Difficulty, GameMode, Goblin, HashSet, InGameUpgrade, Laser,
-    Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather, default_campaign_level,
-    default_lives, default_skin, default_wrap_mode,
+    Boss, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet, InGameUpgrade,
+    Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme, Tournament, Weather,
+    default_campaign_level, default_lives, default_skin, default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -231,6 +231,10 @@ pub struct SaveState {
     pub warp_relocations: u32,
     #[serde(default)]
     pub gravity_well_surges: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub belt_tiles: std::collections::HashMap<Point, Direction>,
+    #[serde(default)]
+    pub belt_shifts: u32,
 }
 
 #[must_use]

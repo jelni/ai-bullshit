@@ -362,3 +362,15 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Rendering:** the hole is drawn as a dark-grey `O` (terminal) / dark cell (web); surges spawn "Surge!" floating text and particles.
 - **Persistence:** `black_hole` and `gravity_well_surges` are stored in `SaveState` and `HistoryState` (save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_gravity_well_mode.rs](../../tests/test_gravity_well_mode.rs).
+
+## Conveyor Mode
+
+`GameMode::Conveyor` (menu entry "Conveyor Mode", 73) is a survival mode played on a factory floor: the weather is pinned to `Weather::Clear` (ambient weather re-rolls are skipped in this mode) and `belt_tiles: HashMap<Point, Direction>` is seeded at reset with `max(board/40, 4)` directional belts on fair empty cells (never on a snake, an entity, an obstacle, or another belt):
+
+- **Shove:** when a snake's head (player, Player 2, or any arena bot) enters a belt cell, `belt_shove` (applied in `calculate_final_heads` and in the bot-head loop, right after portal/wrap resolution) shoves the head one extra cell in the belt's direction. Fairness: the destination must be in bounds (or wrapped when `wrap_mode`), and free of obstacles, all snake bodies, portals, mines, bosses, turrets, lasers, meteors, the black hole, the tornado vortex, the active lightning column, wildfire tiles, and the Battle Royale safe zone — otherwise the shove fizzles and the snake stays on the belt cell. A shove never grows the snake, and a belt never shoves onto another belt's cell twice in one tick (single-step semantics).
+- **Scheduled shuffle:** every 6th tick `manage_conveyor` rotates every belt 90° clockwise (`rotate_belt`), counted in `belt_shifts` (status bar `Belts: <count> | Shifts: <count>`), with a "The belts shift!" floating text. Belts that end up under a fresh obstacle are scrapped.
+- **Greasing by food:** eating food rotates one random belt 90° ("Greased the belts!").
+- **Autopilot:** belts are not obstacles, so the A* search and `is_safe_final_p` are unaffected; the autopilot survives natively because every shove lands on a verified-safe cell and the bot re-plans from its actual head each tick.
+- **Persistence:** `belt_tiles` (serialized as `[key, value]` pairs via `map_as_pairs`) and `belt_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Rendering:** belts are drawn as yellow `^`/`v`/`<`/`>` glyphs (terminal) / orange cells (web).
+- **Tests:** see [tests/test_conveyor_mode.rs](../../tests/test_conveyor_mode.rs) plus a save/load unit test in `src/game/tests.rs` (`test_save_and_load_conveyor_mode`).
