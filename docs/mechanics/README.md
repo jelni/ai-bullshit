@@ -301,3 +301,15 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Fairness:** a flare-up never spreads fire out of bounds, on a snake (head or body of any participant), on the cell any snake is about to enter this tick, or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors, the tornado vortex) or obstacle (`is_inferno_spread_blocked`).
 - **Persistence:** `inferno_tiles`, `inferno_hotspots`, `inferno_burn` (via `map_as_pairs`), `inferno_flares`, and `inferno_burned` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Fire: <count> | Flares: <count>`, and flames are rendered as a dark-yellow `&` with hotspots overdrawn in red `&` (terminal) / orange and red cells (web).
 - **Tests:** see [tests/test_inferno_mode.rs](../../tests/test_inferno_mode.rs).
+
+## Minefield Mode
+
+`GameMode::Minefield` (menu entry "Minefield Mode") is a survival mode built around a **buried minefield** (`weather` is forced to `Weather::Clear` every tick and ambient weather re-rolls are skipped, so the mines stay visible on both UIs — they were already rendered as `M` terminal / dark cell web and persisted):
+
+- **Initial mines:** on reset a few mines (1/80 of the board) are buried on fair empty cells (never on the snake, on the food, or on an obstacle). The ambient `manage_mines` random spawn is disabled in this mode, so mines only appear via the scheduled drops.
+- **Scheduled mine drops:** on every 6th tick a drop is guaranteed (`mine_drops` counter, shown as `Drops: <count>`): one new mine is buried on a random fair empty cell, capped at 10% of the board. Mines remain lethal on entry (`hit_mine` checks) and are hard hazards in the A* search and the `is_safe_final_p` verified-safe path checks, so the autopilot weaves through the field natively.
+- **Fairness:** a mine never drops on a snake's body, on the cell any snake is about to move into this tick, on any entity (food, bonus/poison food, power-ups, portals, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors, the tornado vortex, the lightning column, or any other hazard tile — lava, fire, ash, rubble, snow, sand, acid, puddles), on another mine, or on an obstacle.
+- **Sweep cycle:** at tick 200 of every 250-tick cycle a mine sweep clears the whole field ("The minefield is swept!").
+- **Defusing by food:** eating food defuses all mines adjacent to the eaten cell ("Defused N mines!").
+- **Persistence:** `mines` (already) and `mine_drops` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Mines: <count> | Drops: <count>`.
+- **Tests:** see [tests/test_minefield_mode.rs](../../tests/test_minefield_mode.rs) plus a save/load unit test in `src/game/tests.rs`.

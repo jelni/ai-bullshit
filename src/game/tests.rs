@@ -387,6 +387,24 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_minefield_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Minefield;
+        game.reset();
+        game.mines.clear();
+        game.mines.insert(Point { x: 12, y: 9 });
+        game.mine_drops = 42;
+        let file_path = "savegame_test_minefield.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Minefield);
+        assert!(loaded.mines.contains(&Point { x: 12, y: 9 }));
+        assert_eq!(loaded.mine_drops, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_event_horizon_recoil_moves_hole_away_from_food() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::EventHorizon;

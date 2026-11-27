@@ -172,6 +172,7 @@ pub struct Game {
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+    pub mine_drops: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -637,6 +638,7 @@ impl Game {
             wildfire_ignitions: 0,
             event_horizon_drifts: 0,
             event_horizon_surges: 0,
+            mine_drops: 0,
         }
     }
     #[must_use]
@@ -922,6 +924,7 @@ impl Game {
             inferno_burn: self.inferno_burn.clone(),
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
+            mine_drops: self.mine_drops,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1109,6 +1112,7 @@ impl Game {
                 self.inferno_burn = state.inferno_burn;
                 self.inferno_flares = state.inferno_flares;
                 self.inferno_burned = state.inferno_burned;
+                self.mine_drops = state.mine_drops;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -3139,6 +3143,105 @@ impl Game {
             }
         }
     }
+    fn manage_minefield(&mut self) {
+        if self.mode != GameMode::Minefield {
+            return;
+        }
+        // The skies stay clear in Minefield mode so the mines are always visible
+        self.weather = Weather::Clear;
+        // Periodic sweep: at tick 200 of every 250-tick cycle all mines are cleared
+        if self.tick_counter == 200 {
+            if !self.mines.is_empty() {
+                self.mines.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The minefield is swept!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        // Scheduled mine drop: every 6th tick a new mine is guaranteed to be
+        // buried on a fair empty cell
+        self.mine_drops += 1;
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+        if u32::try_from(self.mines.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.mines.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.tornado == Some(*p)
+                || self.lightning_column.is_some_and(|col| p.x == col)
+                || self.lava_tiles.contains(p)
+                || self.fire_tiles.contains(p)
+                || self.ash_tiles.contains(p)
+                || self.seismic_rubble.contains(p)
+                || self.rubble_tiles.contains(p)
+                || self.snow_tiles.contains(p)
+                || self.sand_tiles.contains(p)
+                || self.acid_puddles.contains(p)
+                || self.puddle_tiles.contains(p)
+        };
+        if let Some(pos) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            self.safe_zone_margin,
+        ) {
+            self.mines.insert(pos);
+            self.spawn_floating_text(
+                f32::from(pos.x),
+                f32::from(pos.y),
+                "Mine buried!".to_string(),
+                crate::color::Color::DarkGrey,
+            );
+        }
+    }
     fn manage_wildfire(&mut self) {
         if self.mode != GameMode::Wildfire {
             return;
@@ -4297,7 +4400,12 @@ impl Game {
         );
     }
     fn manage_mines(&mut self) {
-        let spawn_chance = 0.005;
+        // In Minefield mode mines are only dropped by the scheduled mine drops
+        let spawn_chance = if self.mode == GameMode::Minefield {
+            0.0
+        } else {
+            0.005
+        };
         if self.rng.gen_bool(spawn_chance) && self.mines.len() < 5 {
             let avoid = |p: &Point| {
                 self.obstacles.contains(p)
@@ -4844,7 +4952,8 @@ impl Game {
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
-            | GameMode::Inferno => {
+            | GameMode::Inferno
+            | GameMode::Minefield => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4941,6 +5050,7 @@ impl Game {
                 || self.mode == GameMode::EventHorizon
                 || self.mode == GameMode::Infection
                 || self.mode == GameMode::Inferno
+                || self.mode == GameMode::Minefield
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -5004,6 +5114,7 @@ impl Game {
             || self.mode == GameMode::Wildfire
             || self.mode == GameMode::EventHorizon
             || self.mode == GameMode::Inferno
+            || self.mode == GameMode::Minefield
         {
             &self.snake
         } else {
@@ -5670,6 +5781,7 @@ impl Game {
         self.tornado_spins = 0;
         self.event_horizon_drifts = 0;
         self.event_horizon_surges = 0;
+        self.mine_drops = 0;
         if self.mode == GameMode::Tornado {
             let avoid_tornado = |p: &Point| {
                 self.obstacles.contains(p)
@@ -5750,6 +5862,35 @@ impl Game {
                 self.safe_zone_margin + 2,
             ) {
                 self.black_hole = Some(bh);
+            }
+        }
+        if self.mode == GameMode::Minefield {
+            // A few mines are already buried when the match starts
+            let initial_mines = (u32::from(self.width) * u32::from(self.height)) / 80;
+            let mut new_mines = HashSet::new();
+            for _ in 0..initial_mines {
+                let mine_avoid = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || new_mines.contains(p)
+                        || self.mines.contains(p)
+                        || *p == self.food
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    mine_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    new_mines.insert(p);
+                }
+            }
+            for p in new_mines {
+                self.mines.insert(p);
             }
         }
         self.goblin = None;
@@ -5959,7 +6100,8 @@ impl Game {
             | GameMode::Wildfire
             | GameMode::EventHorizon
             | GameMode::Infection
-            | GameMode::Inferno => {
+            | GameMode::Inferno
+            | GameMode::Minefield => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6622,6 +6764,7 @@ impl Game {
             self.inferno_burn = state.inferno_burn;
             self.inferno_flares = state.inferno_flares;
             self.inferno_burned = state.inferno_burned;
+            self.mine_drops = state.mine_drops;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -6763,6 +6906,7 @@ impl Game {
             inferno_burn: self.inferno_burn.clone(),
             inferno_flares: self.inferno_flares,
             inferno_burned: self.inferno_burned,
+            mine_drops: self.mine_drops,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -9512,6 +9656,7 @@ impl Game {
             && self.mode != GameMode::Wildfire
             && self.mode != GameMode::EventHorizon
             && self.mode != GameMode::Inferno
+            && self.mode != GameMode::Minefield
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -10480,6 +10625,7 @@ impl Game {
         self.manage_seismic();
         self.manage_monsoon();
         self.manage_wildfire();
+        self.manage_minefield();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -11251,6 +11397,7 @@ impl Game {
                 || self.mode == GameMode::BombTag
                 || self.mode == GameMode::Singularity
                 || self.mode == GameMode::Infection
+                || self.mode == GameMode::Minefield
             {
                 self.handle_death("You Died!");
             } else {
@@ -12388,6 +12535,28 @@ impl Game {
         }
         if self.mode == GameMode::EventHorizon {
             self.event_horizon_recoil(final_head);
+        }
+        if self.mode == GameMode::Minefield {
+            let mut defused = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.mines.remove(&np) {
+                    defused += 1;
+                }
+            }
+            if defused > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Defused {defused} mines!"),
+                    crate::color::Color::DarkGrey,
+                );
+            }
         }
         if self.mode == GameMode::Storm && self.lightning_column.take().is_some() {
             self.spawn_floating_text(

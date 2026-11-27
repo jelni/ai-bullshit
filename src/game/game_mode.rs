@@ -70,4 +70,5 @@ pub enum GameMode {
     EventHorizon,
     Infection,
     Inferno,
+    Minefield,
 }

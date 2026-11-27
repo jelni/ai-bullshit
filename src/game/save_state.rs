@@ -205,6 +205,8 @@ pub struct SaveState {
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+    #[serde(default)]
+    pub mine_drops: u32,
 }
 
 #[must_use]

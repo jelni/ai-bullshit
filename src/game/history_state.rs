@@ -104,4 +104,5 @@ pub struct HistoryState {
     pub inferno_burn: std::collections::HashMap<Point, u32>,
     pub inferno_flares: u32,
     pub inferno_burned: u32,
+    pub mine_drops: u32,
 }
