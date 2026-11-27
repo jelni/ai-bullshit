@@ -117,6 +117,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw fortress walls (Fortress mode)
+    if game.mode == crate::game::GameMode::Fortress {
+        ctx.set_fill_style_str("#555555");
+        for wall in &game.fortress_walls {
+            if wall.x < game.width
+                && wall.y < game.height
+                && is_visible(f64::from(wall.x), f64::from(wall.y))
+            {
+                ctx.fill_rect(
+                    f64::from(wall.x) * cell_size,
+                    f64::from(wall.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw sand drifts (Sandstorm mode)
     if game.mode == crate::game::GameMode::Sandstorm {
         ctx.set_fill_style_str("#D2B48C"); // Tan

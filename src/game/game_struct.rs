@@ -195,6 +195,9 @@ pub struct Game {
     pub ice_slips: u32,
     pub singularity_wanders: u32,
     pub singularity_feeds: u32,
+    pub fortress_walls: HashSet<Point>,
+    pub fortress_depth: u16,
+    pub fortress_rings: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -692,6 +695,9 @@ impl Game {
             ice_slips: 0,
             singularity_wanders: 0,
             singularity_feeds: 0,
+            fortress_walls: HashSet::new(),
+            fortress_depth: 0,
+            fortress_rings: 0,
         }
     }
     #[must_use]
@@ -937,6 +943,9 @@ impl Game {
             sand_drifts: self.sand_drifts,
             storm_strikes: self.storm_strikes,
             quake_count: self.quake_count,
+            fortress_walls: self.fortress_walls.clone(),
+            fortress_depth: self.fortress_depth,
+            fortress_rings: self.fortress_rings,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1140,6 +1149,9 @@ impl Game {
                 self.sand_drifts = state.sand_drifts;
                 self.storm_strikes = state.storm_strikes;
                 self.quake_count = state.quake_count;
+                self.fortress_walls = state.fortress_walls;
+                self.fortress_depth = state.fortress_depth;
+                self.fortress_rings = state.fortress_rings;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -2124,6 +2136,148 @@ impl Game {
                     self.obstacles.insert(pos);
                 }
             }
+        }
+    }
+    fn manage_fortress(&mut self) {
+        if self.mode != GameMode::Fortress {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale wall records
+        self.fortress_walls.retain(|p| self.obstacles.contains(p));
+        // Periodic retraction: at tick 200 of every 250-tick cycle the walls pull back
+        if self.tick_counter == 200 {
+            if !self.fortress_walls.is_empty() {
+                for p in self.fortress_walls.drain() {
+                    self.obstacles.remove(&p);
+                }
+                self.fortress_depth = 0;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The walls retract!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // Every 6th tick the fortress closes in one ring deeper
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        // Cap the depth at a quarter of the short side so the inner keep always
+        // stays roomy enough to play in.
+        let max_depth = u16::min(self.width, self.height) / 4;
+        if self.fortress_depth >= max_depth {
+            return;
+        }
+        let depth = self.fortress_depth + 1;
+        // Never erect a ring while any snake is outside it (in the outer band),
+        // so the closing walls can never seal a snake in.
+        let ring_dist = |p: &Point| {
+            u16::min(p.x, p.y)
+                .min(self.width - 1 - p.x)
+                .min(self.height - 1 - p.y)
+        };
+        let snake_outside = self.snake.body.iter().any(|p| ring_dist(p) < depth)
+            || self
+                .player2
+                .as_ref()
+                .is_some_and(|p2| p2.body.iter().any(|p| ring_dist(p) < depth))
+            || self
+                .bots
+                .iter()
+                .any(|b| b.body.iter().any(|p| ring_dist(p) < depth));
+        if snake_outside {
+            return;
+        }
+        self.fortress_depth += 1;
+        self.fortress_rings += 1;
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.snow_tiles.contains(p)
+                || self.sand_tiles.contains(p)
+                || self.lava_tiles.contains(p)
+                || self.rubble_tiles.contains(p)
+                || self.seismic_rubble.contains(p)
+                || self.acid_puddles.contains(p)
+                || self.puddle_tiles.contains(p)
+                || self.fire_tiles.contains(p)
+                || self.ash_tiles.contains(p)
+                || self.inferno_tiles.contains(p)
+                || self.belt_tiles.contains_key(p)
+                || self.ice_tiles.contains(p)
+                || self.blaze_tiles.contains_key(p)
+                || self.fortress_walls.contains(p)
+        };
+        let mut ring_cells = Vec::new();
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let p = Point { x, y };
+                if ring_dist(&p) == depth && !avoid(&p) {
+                    ring_cells.push(p);
+                }
+            }
+        }
+        let mut erected = 0u32;
+        for p in ring_cells {
+            self.fortress_walls.insert(p);
+            self.obstacles.insert(p);
+            erected += 1;
+        }
+        if erected > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The walls close in! (+{erected})"),
+                crate::color::Color::DarkGrey,
+            );
         }
     }
     fn manage_monsoon(&mut self) {
@@ -5913,7 +6067,8 @@ impl Game {
             | GameMode::BlackHole
             | GameMode::Ricochet
             | GameMode::TurretBattery
-            | GameMode::Firestorm => {
+            | GameMode::Firestorm
+            | GameMode::Fortress => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -6025,6 +6180,7 @@ impl Game {
                 || self.mode == GameMode::Ricochet
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
+                || self.mode == GameMode::Fortress
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -6103,6 +6259,7 @@ impl Game {
             || self.mode == GameMode::Ricochet
             || self.mode == GameMode::TurretBattery
             || self.mode == GameMode::Firestorm
+            || self.mode == GameMode::Fortress
         {
             &self.snake
         } else {
@@ -6213,6 +6370,9 @@ impl Game {
         self.sand_drifts = 0;
         self.storm_strikes = 0;
         self.quake_count = 0;
+        self.fortress_walls.clear();
+        self.fortress_depth = 0;
+        self.fortress_rings = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -7317,7 +7477,8 @@ impl Game {
             | GameMode::BlackHole
             | GameMode::Ricochet
             | GameMode::TurretBattery
-            | GameMode::Firestorm => {
+            | GameMode::Firestorm
+            | GameMode::Fortress => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -7989,6 +8150,9 @@ impl Game {
             self.sand_drifts = state.sand_drifts;
             self.storm_strikes = state.storm_strikes;
             self.quake_count = state.quake_count;
+            self.fortress_walls = state.fortress_walls;
+            self.fortress_depth = state.fortress_depth;
+            self.fortress_rings = state.fortress_rings;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -8159,6 +8323,9 @@ impl Game {
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
             quake_count: self.quake_count,
+            fortress_walls: self.fortress_walls.clone(),
+            fortress_depth: self.fortress_depth,
+            fortress_rings: self.fortress_rings,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -11964,6 +12131,7 @@ impl Game {
         self.manage_laser_grid();
         self.manage_meteors();
         self.manage_blizzard();
+        self.manage_fortress();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -12795,6 +12963,7 @@ impl Game {
                 || self.mode == GameMode::Ricochet
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
+                || self.mode == GameMode::Fortress
             {
                 self.handle_death("You Died!");
             } else {
@@ -13806,6 +13975,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Melted {melted} snow!"),
                     crate::color::Color::Cyan,
+                );
+            }
+        }
+        if self.mode == GameMode::Fortress {
+            let mut breached = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.fortress_walls.remove(&np) {
+                    self.obstacles.remove(&np);
+                    breached += 1;
+                }
+            }
+            if breached > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Breached {breached} wall!"),
+                    crate::color::Color::DarkGrey,
                 );
             }
         }

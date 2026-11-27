@@ -85,4 +85,5 @@ pub enum GameMode {
     Ricochet,
     TurretBattery,
     Firestorm,
+    Fortress,
 }

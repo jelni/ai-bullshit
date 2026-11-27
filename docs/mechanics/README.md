@@ -432,3 +432,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** blazes are mirrored into `obstacles`, so they are a hard obstacle in the A* heuristic/edge costs, the `is_safe_final_p` verified-safe path checks, and the trap-avoidance flood fills, and the bot routes around the flames natively. An end-of-tick self-heal drops stale blaze records if something else (e.g. a meteor crash or a Bomb) cleared obstacles mid-tick.
 - **Persistence:** `blaze_tiles` (serialized through `map_as_pairs` as `[point, ticks]` pairs), `blaze_sources`, and `firestorm_blazes` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Blaze: <count> | Blazes: <count>`, and blazes are rendered as a red `*` (terminal) / orange cell (web).
 - **Tests:** see [tests/test_firestorm_mode.rs](../../tests/test_firestorm_mode.rs).
+
+## Fortress Mode
+
+`GameMode::Fortress` (menu entry "Fortress Mode") is a survival mode where the arena walls breathe inward:
+
+- **Ring closure:** on every 6th tick `manage_fortress` erects the next ring of fortress walls (`fortress_walls`, mirrored into `obstacles`) on every fair cell whose ring distance (`min(x, y, width-1-x, height-1-y)`) equals the new depth. Rings are counted in `fortress_rings` and shown as `Walls: <count> | Rings: <count>` in the status bar, with a "The walls close in! (+N)" floating text. Walls render as dark-grey `#` (terminal) / grey cells (web).
+- **Retraction:** at tick 200 of every 250-tick cycle all fortress walls are removed from `obstacles` and the depth resets to 0 ("The walls retract!").
+- **Depth cap:** the depth is capped at `min(width, height) / 4`, so the inner keep always stays playable.
+- **Fairness:** a ring cell is never placed on a snake's body, on the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, and all hazard tile sets). Additionally, a ring is not erected at all while any snake still has a body cell outside it (`ring_dist(p) < depth`), so the closing walls can never seal a snake in the outer band.
+- **Autopilot:** walls are ordinary obstacles, so they are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance — the bot rides out the fortress natively.
+- **Breaching:** eating food removes the fortress walls adjacent to the eaten cell ("Breached N wall!").
+- **Persistence:** `fortress_walls`, `fortress_depth`, and `fortress_rings` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale wall records are pruned each tick if another effect cleared the obstacles.
+- **Tests:** see [tests/test_fortress_mode.rs](../../tests/test_fortress_mode.rs).

@@ -138,6 +138,12 @@ pub struct SaveState {
     #[serde(default)]
     pub quake_count: u32,
     #[serde(default)]
+    pub fortress_walls: HashSet<Point>,
+    #[serde(default)]
+    pub fortress_depth: u16,
+    #[serde(default)]
+    pub fortress_rings: u32,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,
