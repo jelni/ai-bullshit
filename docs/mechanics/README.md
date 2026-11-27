@@ -207,3 +207,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** arena bots and the player bot run the usual verified-safe pipeline; additionally, a carrier prepends up to 4 targets — the in-bounds cells adjacent to the nearest rival's head (`bomb_rival_adjacent_targets`) — so it actively chases, while non-carriers flee the carrier via the predicted-enemy-occupancy hard constraints in `path_is_safe`. Passing then happens through normal movement.
 - **Persistence:** `bomb_carrier`, `bomb_timer`, and `bomb_tags` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_bomb_tag.rs](../../tests/test_bomb_tag.rs).
+
+## Monsoon Mode
+
+`GameMode::Monsoon` (menu entry "Monsoon Mode") is a permanent rainstorm mode:
+
+- **Weather lock:** the mode forces `Weather::Rain` on reset and on every tick; the ambient weather re-roll is skipped in this mode (rain streaks are drawn on both UIs by the existing `Weather::Rain` renderer).
+- **Downpours:** on every 6th tick a scheduled downpour fires (`manage_monsoon`): a fresh puddle splashes down on a random fair empty cell via `get_random_empty_point`, and one random existing puddle swells onto an adjacent fair cell. Puddles are capped at 10% of the board.
+- **Fairness:** a puddle never lands off the board, on a snake's body, on any entity (food, bonus/poison food, power-ups, portals, mines, black hole, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, KotH zone, flags, resources, lasers, meteors), on an obstacle, or on the cell any snake is about to move into this tick.
+- **Puddles as obstacles:** puddle tiles are stored in `puddle_tiles` and mirrored into `obstacles`, so they block movement for the player, the autopilot, and all bots like any other obstacle (hard hazard in the A* search, `is_safe_final_p` verified-safe checks, and trap-avoidance flood fills).
+- **Drain cycle:** at tick 200 of every 250-tick cycle the rain pauses and all accumulated puddles dry up ("The rain drains away!"), keeping the board playable.
+- **Clearing by food:** eating food drains all puddles adjacent to the eaten cell ("Drained N puddles!").
+- **Persistence:** `puddle_tiles` and `monsoon_downpours` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Puddles: <count> | Downpours: <count>`, and puddles are rendered as a blue `≈` (terminal) / blue cell (web).
+- **Tests:** see [tests/test_monsoon_mode.rs](../../tests/test_monsoon_mode.rs).

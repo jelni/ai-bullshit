@@ -135,6 +135,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw puddles (Monsoon mode)
+    if game.mode == crate::game::GameMode::Monsoon {
+        ctx.set_fill_style_str("#0066FF"); // Blue
+        for puddle in &game.puddle_tiles {
+            if puddle.x < game.width
+                && puddle.y < game.height
+                && is_visible(f64::from(puddle.x), f64::from(puddle.y))
+            {
+                ctx.fill_rect(
+                    f64::from(puddle.x) * cell_size,
+                    f64::from(puddle.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw the bomb on the carrier's head (Bomb Tag mode)
     if game.mode == crate::game::GameMode::BombTag
         && let Some(carrier) = game.bomb_carrier

@@ -171,6 +171,10 @@ pub struct SaveState {
     pub bomb_timer: u32,
     #[serde(default)]
     pub bomb_tags: u32,
+    #[serde(default)]
+    pub puddle_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub monsoon_downpours: u32,
 }
 
 #[must_use]

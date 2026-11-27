@@ -152,6 +152,8 @@ pub struct Game {
     pub bomb_carrier: Option<u8>,
     pub bomb_timer: u32,
     pub bomb_tags: u32,
+    pub puddle_tiles: HashSet<Point>,
+    pub monsoon_downpours: u32,
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -597,6 +599,8 @@ impl Game {
             bomb_timer: 0,
             bomb_tags: 0,
             sand_blasts: 0,
+            puddle_tiles: HashSet::new(),
+            monsoon_downpours: 0,
         }
     }
     #[must_use]
@@ -862,6 +866,8 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            puddle_tiles: self.puddle_tiles.clone(),
+            monsoon_downpours: self.monsoon_downpours,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1028,6 +1034,8 @@ impl Game {
                 self.bomb_carrier = state.bomb_carrier;
                 self.bomb_timer = state.bomb_timer;
                 self.bomb_tags = state.bomb_tags;
+                self.puddle_tiles = state.puddle_tiles;
+                self.monsoon_downpours = state.monsoon_downpours;
                 self.flow_field = None;
                 self.flow_field_targets = Vec::new();
                 self.ghost_moves = std::collections::VecDeque::new();
@@ -1788,6 +1796,117 @@ impl Game {
                     self.obstacles.insert(pos);
                 }
             }
+        }
+    }
+    fn manage_monsoon(&mut self) {
+        if self.mode != GameMode::Monsoon {
+            return;
+        }
+        // The monsoon never breaks in Monsoon mode
+        self.weather = Weather::Rain;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale puddle records
+        self.puddle_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic drain: the rain pauses and all accumulated puddles dry up
+        if self.tick_counter == 200 {
+            if !self.puddle_tiles.is_empty() {
+                for p in self.puddle_tiles.drain() {
+                    self.obstacles.remove(&p);
+                }
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The rain drains away!".to_string(),
+                    crate::color::Color::Blue,
+                );
+            }
+            return;
+        }
+        // Scheduled downpour: every 6th tick the rain is guaranteed to fall hard
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.monsoon_downpours += 1;
+        let cap = (u32::from(self.width) * u32::from(self.height)) / 10;
+        let puddle_count = u32::try_from(self.puddle_tiles.len()).unwrap_or(u32::MAX);
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next =
+            self.player2.as_ref().map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+            .collect();
+        let avoid = |p: &Point| {
+            *p == p1_next
+                || p2_next == Some(*p)
+                || bot_next.contains(p)
+                || self.obstacles.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.xp_gems.contains(p)
+                || self.painted_tiles.contains_key(p)
+                || self.equipment_boxes.contains(p)
+                || self.crops.iter().any(|c| c.position == *p)
+                || self.eggs_on_board.contains_key(p)
+                || self.koth_zone == Some(*p)
+                || self.p1_flag == Some(*p)
+                || self.p2_flag == Some(*p)
+                || self.resources.contains_key(p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+        };
+        // A fresh puddle splashes down on a random fair empty cell
+        let drop_pos = if puddle_count < cap {
+            Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            )
+        } else {
+            None
+        };
+        // The downpour also swells one existing puddle onto an adjacent fair cell
+        let puddles: Vec<Point> = self.puddle_tiles.iter().copied().collect();
+        let swell_pos = if !puddles.is_empty() && puddle_count + u32::from(drop_pos.is_some()) < cap
+        {
+            let base = puddles[self.rng.gen_range(0..puddles.len())];
+            let options: Vec<Point> =
+                [Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+                    .iter()
+                    .map(|dir| Self::calculate_next_head_dir(base, *dir))
+                    .filter(|np| np.x < self.width && np.y < self.height && !avoid(np))
+                    .collect();
+            if options.is_empty() {
+                None
+            } else {
+                Some(options[self.rng.gen_range(0..options.len())])
+            }
+        } else {
+            None
+        };
+        if let Some(pos) = drop_pos {
+            self.puddle_tiles.insert(pos);
+            self.obstacles.insert(pos);
+        }
+        if let Some(np) = swell_pos {
+            self.puddle_tiles.insert(np);
+            self.obstacles.insert(np);
         }
     }
     fn manage_sandstorm(&mut self) {
@@ -3632,7 +3751,8 @@ impl Game {
             | GameMode::Seismic
             | GameMode::Eclipse
             | GameMode::Sandstorm
-            | GameMode::BombTag => {
+            | GameMode::BombTag
+            | GameMode::Monsoon => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -3722,6 +3842,7 @@ impl Game {
                 || self.mode == GameMode::Eclipse
                 || self.mode == GameMode::Sandstorm
                 || self.mode == GameMode::BombTag
+                || self.mode == GameMode::Monsoon
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -3779,6 +3900,7 @@ impl Game {
             || self.mode == GameMode::Seismic
             || self.mode == GameMode::Eclipse
             || self.mode == GameMode::Sandstorm
+            || self.mode == GameMode::Monsoon
         {
             &self.snake
         } else {
@@ -3910,6 +4032,8 @@ impl Game {
         self.bomb_carrier = None;
         self.bomb_timer = 0;
         self.bomb_tags = 0;
+        self.puddle_tiles.clear();
+        self.monsoon_downpours = 0;
         if self.mode == GameMode::CustomLevel {
             self.obstacles = Self::load_custom_level();
             let body_map = self.snake.body_map.clone();
@@ -4065,6 +4189,47 @@ impl Game {
                     0,
                 ) {
                     self.sand_tiles.insert(p);
+                    self.obstacles.insert(p);
+                }
+            }
+        } else if self.mode == GameMode::Monsoon {
+            let mut obstacles = HashSet::new();
+            for _ in 0..obs_count {
+                let current_avoid = |p: &Point| {
+                    avoid(p)
+                        || obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    current_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    obstacles.insert(p);
+                }
+            }
+            self.obstacles = obstacles;
+            let initial_puddles = (u32::from(self.width) * u32::from(self.height)) / 80;
+            for _ in 0..initial_puddles {
+                let puddle_avoid = |p: &Point| {
+                    avoid(p)
+                        || self.obstacles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    ref_snake,
+                    puddle_avoid,
+                    &mut self.rng,
+                    0,
+                ) {
+                    self.puddle_tiles.insert(p);
                     self.obstacles.insert(p);
                 }
             }
@@ -4314,6 +4479,9 @@ impl Game {
         if self.mode == GameMode::Sandstorm {
             self.weather = Weather::Sandstorm;
         }
+        if self.mode == GameMode::Monsoon {
+            self.weather = Weather::Rain;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -4530,7 +4698,8 @@ impl Game {
             | GameMode::Seismic
             | GameMode::Eclipse
             | GameMode::Sandstorm
-            | GameMode::BombTag => {
+            | GameMode::BombTag
+            | GameMode::Monsoon => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -4583,6 +4752,7 @@ impl Game {
         }
         self.snow_tiles.retain(|p| self.obstacles.contains(p));
         self.sand_tiles.retain(|p| self.obstacles.contains(p));
+        self.puddle_tiles.retain(|p| self.obstacles.contains(p));
         self.lava_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
@@ -5156,6 +5326,8 @@ impl Game {
             self.bomb_carrier = state.bomb_carrier;
             self.bomb_timer = state.bomb_timer;
             self.bomb_tags = state.bomb_tags;
+            self.puddle_tiles = state.puddle_tiles;
+            self.monsoon_downpours = state.monsoon_downpours;
         }
     }
     pub fn gain_xp(&mut self, amount: u32) {
@@ -5277,6 +5449,8 @@ impl Game {
             bomb_carrier: self.bomb_carrier,
             bomb_timer: self.bomb_timer,
             bomb_tags: self.bomb_tags,
+            puddle_tiles: self.puddle_tiles.clone(),
+            monsoon_downpours: self.monsoon_downpours,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -8021,6 +8195,7 @@ impl Game {
             && self.mode != GameMode::Seismic
             && self.mode != GameMode::Eclipse
             && self.mode != GameMode::Sandstorm
+            && self.mode != GameMode::Monsoon
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -8983,6 +9158,7 @@ impl Game {
         self.manage_meteor_shower();
         self.manage_eclipse();
         self.manage_seismic();
+        self.manage_monsoon();
         self.manage_goblin();
         self.manage_turrets();
         self.manage_companion();
@@ -10777,6 +10953,29 @@ impl Game {
                     f32::from(final_head.y),
                     format!("Cleared {cleared} sand!"),
                     crate::color::Color::Yellow,
+                );
+            }
+        }
+        if self.mode == GameMode::Monsoon {
+            let mut drained = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.puddle_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    drained += 1;
+                }
+            }
+            if drained > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Drained {drained} puddles!"),
+                    crate::color::Color::Blue,
                 );
             }
         }
@@ -14174,6 +14373,7 @@ impl Game {
         self.bosses.clear();
         self.snow_tiles.clear();
         self.sand_tiles.clear();
+        self.puddle_tiles.clear();
         self.lightning_column = None;
         self.flow_field = None;
         self.flow_field_targets.clear();
