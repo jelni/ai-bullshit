@@ -150,4 +150,8 @@ pub struct HistoryState {
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
+    pub spike_tiles: std::collections::HashMap<Point, u32>,
+    pub spike_vents: Vec<Point>,
+    pub spike_warnings: HashSet<Point>,
+    pub spike_eruptions: u32,
 }

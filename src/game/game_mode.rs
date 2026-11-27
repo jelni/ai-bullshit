@@ -92,4 +92,5 @@ pub enum GameMode {
     Mirage,
     Avalanche,
     Steamroller,
+    SpikePit,
 }

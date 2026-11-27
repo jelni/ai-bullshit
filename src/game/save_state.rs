@@ -147,6 +147,14 @@ pub struct SaveState {
     pub fortress_depth: u16,
     #[serde(default)]
     pub fortress_rings: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub spike_tiles: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub spike_vents: Vec<Point>,
+    #[serde(default)]
+    pub spike_warnings: HashSet<Point>,
+    #[serde(default)]
+    pub spike_eruptions: u32,
     #[serde(default)]
     pub press_cells: HashSet<Point>,
     #[serde(default)]

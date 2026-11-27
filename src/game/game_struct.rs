@@ -200,6 +200,10 @@ pub struct Game {
     pub fortress_walls: HashSet<Point>,
     pub fortress_depth: u16,
     pub fortress_rings: u32,
+    pub spike_tiles: std::collections::HashMap<Point, u32>,
+    pub spike_vents: Vec<Point>,
+    pub spike_warnings: HashSet<Point>,
+    pub spike_eruptions: u32,
     pub press_cells: HashSet<Point>,
     pub press_pos: u16,
     pub press_dir: i8,
@@ -716,6 +720,10 @@ impl Game {
             fortress_walls: HashSet::new(),
             fortress_depth: 0,
             fortress_rings: 0,
+            spike_tiles: std::collections::HashMap::new(),
+            spike_vents: Vec::new(),
+            spike_warnings: HashSet::new(),
+            spike_eruptions: 0,
             press_cells: HashSet::new(),
             press_pos: 1,
             press_dir: 1,
@@ -980,6 +988,10 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            spike_tiles: self.spike_tiles.clone(),
+            spike_vents: self.spike_vents.clone(),
+            spike_warnings: self.spike_warnings.clone(),
+            spike_eruptions: self.spike_eruptions,
             press_cells: self.press_cells.clone(),
             press_pos: self.press_pos,
             press_dir: self.press_dir,
@@ -1202,6 +1214,10 @@ impl Game {
                 self.fortress_walls = state.fortress_walls;
                 self.fortress_depth = state.fortress_depth;
                 self.fortress_rings = state.fortress_rings;
+                self.spike_tiles = state.spike_tiles;
+                self.spike_vents = state.spike_vents;
+                self.spike_warnings = state.spike_warnings;
+                self.spike_eruptions = state.spike_eruptions;
                 self.press_cells = state.press_cells;
                 self.press_pos = state.press_pos;
                 self.press_dir = state.press_dir;
@@ -3244,6 +3260,218 @@ impl Game {
         }
     }
 
+    fn manage_spike_pit(&mut self) {
+        if self.mode != GameMode::SpikePit {
+            return;
+        }
+        // The skies stay clear so the vents, cracks, and spikes are always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale spike records
+        self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
+        // Keep the pit armed: re-seed missing vents on fair cells
+        if self.spike_vents.len() < Self::SPIKE_PIT_VENTS {
+            let missing = Self::SPIKE_PIT_VENTS - self.spike_vents.len();
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            for _ in 0..missing {
+                let avoid_vent = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.mines.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.spike_vents.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                match Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_vent,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    Some(pos) => self.spike_vents.push(pos),
+                    None => break,
+                }
+            }
+        }
+        // Each spike stays up one tick less and then retracts, leaving open ground
+        let retracted: Vec<Point> = self
+            .spike_tiles
+            .iter()
+            .filter(|(_, ticks)| **ticks <= 1)
+            .map(|(p, _)| *p)
+            .collect();
+        for p in retracted {
+            self.spike_tiles.remove(&p);
+            self.obstacles.remove(&p);
+        }
+        for ticks in self.spike_tiles.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        // Periodic retraction: at tick 200 of every 250-tick cycle all spikes pull back
+        if self.tick_counter == 200 {
+            let doomed: Vec<Point> = self.spike_tiles.keys().copied().collect();
+            if !doomed.is_empty() {
+                for p in doomed {
+                    self.spike_tiles.remove(&p);
+                    self.obstacles.remove(&p);
+                }
+                self.spike_warnings.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The spikes retract!".to_string(),
+                    crate::color::Color::Red,
+                );
+            }
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the manage_* calls,
+        // so their current direction is the one they will move in this tick; the bots are
+        // popped afterwards, so for them the queued direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        // Telegraph: SPIKE_TELEGRAPH_TICKS before an eruption the threatened cells crack
+        if self.tick_counter % 6 == Self::SPIKE_TELEGRAPH_TICKS % 6 {
+            self.spike_warnings.clear();
+            let vents = self.spike_vents.clone();
+            for vent in vents {
+                let mut cells = vec![vent];
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    let np = Self::calculate_next_head_dir(vent, dir);
+                    if np.x < self.width && np.y < self.height {
+                        cells.push(np);
+                    }
+                }
+                for cell in cells {
+                    if !self.is_spike_eruption_blocked(cell, p1_next, p2_next, &bot_next) {
+                        self.spike_warnings.insert(cell);
+                    }
+                }
+            }
+            return;
+        }
+        // Scheduled eruption: every 6th tick each vent pops spikes on its plus-shaped area
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.spike_eruptions += 1;
+        self.spike_warnings.clear();
+        let vents = self.spike_vents.clone();
+        let mut erupted = 0u32;
+        for vent in vents {
+            let mut cells = vec![vent];
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(vent, dir);
+                if np.x < self.width && np.y < self.height {
+                    cells.push(np);
+                }
+            }
+            for cell in cells {
+                if self.is_spike_eruption_blocked(cell, p1_next, p2_next, &bot_next) {
+                    continue;
+                }
+                // Re-erupting on an already-spiked cell just refreshes its timer
+                self.spike_tiles.insert(cell, Self::SPIKE_UP_TICKS);
+                self.obstacles.insert(cell);
+                erupted += 1;
+            }
+        }
+        if erupted > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Spikes erupt! (+{erupted})"),
+                crate::color::Color::Red,
+            );
+        }
+    }
+    fn is_spike_eruption_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.mines.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.thorn_tiles.contains(&p)
+    }
     fn manage_monsoon(&mut self) {
         if self.mode != GameMode::Monsoon {
             return;
@@ -5150,6 +5378,45 @@ impl Game {
                 self.blaze_sources.push(pos);
                 self.blaze_tiles.insert(pos, u32::MAX);
                 self.obstacles.insert(pos);
+            }
+        }
+    }
+    fn spawn_spike_vents(&mut self) {
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        for _ in 0..Self::SPIKE_PIT_VENTS {
+            let avoid_vent = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.spike_vents.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_vent,
+                &mut self.rng,
+                0,
+            ) {
+                self.spike_vents.push(pos);
+                self.spawn_particles(
+                    f32::from(pos.x),
+                    f32::from(pos.y),
+                    10,
+                    crate::color::Color::DarkRed,
+                    'V',
+                );
             }
         }
     }
@@ -7248,6 +7515,7 @@ impl Game {
             | GameMode::TurretBattery
             | GameMode::Firestorm
             | GameMode::Fortress
+            | GameMode::SpikePit
             | GameMode::Geyser
             | GameMode::Thornfield
             | GameMode::Mirage
@@ -7366,6 +7634,7 @@ impl Game {
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
+                || self.mode == GameMode::SpikePit
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
@@ -7451,6 +7720,7 @@ impl Game {
             || self.mode == GameMode::TurretBattery
             || self.mode == GameMode::Firestorm
             || self.mode == GameMode::Fortress
+            || self.mode == GameMode::SpikePit
             || self.mode == GameMode::Geyser
             || self.mode == GameMode::Thornfield
             || self.mode == GameMode::Mirage
@@ -7570,6 +7840,10 @@ impl Game {
         self.fortress_walls.clear();
         self.fortress_depth = 0;
         self.fortress_rings = 0;
+        self.spike_tiles.clear();
+        self.spike_vents.clear();
+        self.spike_warnings.clear();
+        self.spike_eruptions = 0;
         self.press_cells.clear();
         self.press_pos = 1;
         self.press_dir = 1;
@@ -8061,6 +8335,9 @@ impl Game {
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
+        }
+        if self.mode == GameMode::SpikePit {
+            self.spawn_spike_vents();
         }
         if self.mode == GameMode::Wildfire {
             self.ignite_initial_wildfire();
@@ -8713,6 +8990,7 @@ impl Game {
             | GameMode::TurretBattery
             | GameMode::Firestorm
             | GameMode::Fortress
+            | GameMode::SpikePit
             | GameMode::Geyser
             | GameMode::Thornfield
             | GameMode::Mirage
@@ -8787,6 +9065,7 @@ impl Game {
         self.thorn_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
+        self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
         self.last_obstacle_spawn_time = web_time::Instant::now();
@@ -9396,6 +9675,10 @@ impl Game {
             self.fortress_walls = state.fortress_walls;
             self.fortress_depth = state.fortress_depth;
             self.fortress_rings = state.fortress_rings;
+            self.spike_tiles = state.spike_tiles;
+            self.spike_vents = state.spike_vents;
+            self.spike_warnings = state.spike_warnings;
+            self.spike_eruptions = state.spike_eruptions;
             self.press_cells = state.press_cells;
             self.press_pos = state.press_pos;
             self.press_dir = state.press_dir;
@@ -9585,6 +9868,10 @@ impl Game {
             fortress_walls: self.fortress_walls.clone(),
             fortress_depth: self.fortress_depth,
             fortress_rings: self.fortress_rings,
+            spike_tiles: self.spike_tiles.clone(),
+            spike_vents: self.spike_vents.clone(),
+            spike_warnings: self.spike_warnings.clone(),
+            spike_eruptions: self.spike_eruptions,
             press_cells: self.press_cells.clone(),
             press_pos: self.press_pos,
             press_dir: self.press_dir,
@@ -12433,6 +12720,7 @@ impl Game {
             && self.mode != GameMode::Firestorm
             && self.mode != GameMode::Thornfield
             && self.mode != GameMode::Avalanche
+            && self.mode != GameMode::SpikePit
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -13410,6 +13698,7 @@ impl Game {
         self.manage_meteors();
         self.manage_blizzard();
         self.manage_fortress();
+        self.manage_spike_pit();
         self.manage_steamroller();
         self.manage_pinball();
         self.manage_geyser();
@@ -14334,6 +14623,7 @@ impl Game {
                 || self.mode == GameMode::TurretBattery
                 || self.mode == GameMode::Firestorm
                 || self.mode == GameMode::Fortress
+                || self.mode == GameMode::SpikePit
                 || self.mode == GameMode::Geyser
                 || self.mode == GameMode::Thornfield
                 || self.mode == GameMode::Mirage
@@ -14734,6 +15024,10 @@ impl Game {
         // Keep the blaze/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::Firestorm {
             self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
+        }
+        // Keep the spike/obstacle mirror exact even if something else cleared obstacles mid-tick
+        if self.mode == GameMode::SpikePit {
+            self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
         }
     }
     fn check_body_collisions(
@@ -15500,6 +15794,29 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Blasted {blasted} boulder!"),
                     crate::color::Color::DarkYellow,
+                );
+            }
+        }
+        if self.mode == GameMode::SpikePit {
+            let mut retracted = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.spike_tiles.remove(&np).is_some() {
+                    self.obstacles.remove(&np);
+                    retracted += 1;
+                }
+            }
+            if retracted > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Retracted {retracted} spikes!"),
+                    crate::color::Color::Red,
                 );
             }
         }
@@ -18262,6 +18579,12 @@ if self.mode == GameMode::Steamroller {
     /// along their current direction during verified-safe path checking.
     pub const BOMB_TIMER_MAX: u32 = 30;
     pub const BLAZE_BURN_TICKS: u32 = 12;
+    /// Number of spike vents kept on the board in `GameMode::SpikePit`.
+    pub const SPIKE_PIT_VENTS: usize = 4;
+    /// Ticks an erupted spike stays up (and lethal) in `GameMode::SpikePit`.
+    pub const SPIKE_UP_TICKS: u32 = 6;
+    /// Ticks a spike pit telegraphs its next eruption (cracked cells) beforehand.
+    pub const SPIKE_TELEGRAPH_TICKS: u32 = 3;
     /// Maximum number of boulders rolling at once in `GameMode::Avalanche`.
     pub const AVALANCHE_MAX_BOULDERS: usize = 6;
     /// Ticks a geyser steam jet stays lethal before it dissipates.

@@ -661,6 +661,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Ricochet Mode",
         "Turret Battery Mode",
         "Fortress Mode",
+        "Spike Pit Mode",
         "Geyser Mode",
         "Thornfield Mode",
         "Mirage Mode",
@@ -2044,6 +2045,31 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw spike pit warnings, spikes, and vents (Spike Pit mode)
+    if game.mode == crate::game::GameMode::SpikePit {
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        for crack in &game.spike_warnings {
+            if is_visible(crack.x, crack.y) {
+                stdout.queue(cursor::MoveTo(crack.x, crack.y))?;
+                write!(stdout, "'")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::Red))?;
+        for spike in game.spike_tiles.keys() {
+            if is_visible(spike.x, spike.y) {
+                stdout.queue(cursor::MoveTo(spike.x, spike.y))?;
+                write!(stdout, "^")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::DarkRed))?;
+        for vent in &game.spike_vents {
+            if is_visible(vent.x, vent.y) {
+                stdout.queue(cursor::MoveTo(vent.x, vent.y))?;
+                write!(stdout, "V")?;
+            }
+        }
+    }
+
     // Draw snow drifts (Blizzard mode)
     if game.mode == crate::game::GameMode::Blizzard {
         stdout.queue(SetForegroundColor(Color::White))?;
@@ -3192,6 +3218,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let spike_str = if game.mode == crate::game::GameMode::SpikePit {
+        format!(
+            " | Spikes: {} | Eruptions: {}",
+            game.spike_tiles.len(),
+            game.spike_eruptions
+        )
+    } else {
+        String::new()
+    };
     let pinball_str = if game.mode == crate::game::GameMode::Pinball {
         format!(
             " | Bumpers: {} | Bumps: {}",
@@ -3369,7 +3404,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}"
     )?;
 
     if !game.bosses.is_empty() {

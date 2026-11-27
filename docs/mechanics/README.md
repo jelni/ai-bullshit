@@ -527,3 +527,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Breaching:** eating food removes the roller cells adjacent to the eaten cell ("Breached N roller!").
 - **Persistence:** `press_cells`, `press_pos`, `press_dir`, and `press_moves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); stale roller records are pruned each tick if another effect cleared the obstacles.
 - **Tests:** see [tests/test_steamroller_mode.rs](../../tests/test_steamroller_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+## Spike Pit Mode
+
+`GameMode::SpikePit` (menu entry "Spike Pit Mode") is a survival mode with permanent spike vents and telegraphed, scheduled eruptions:
+
+- **Vents:** `SPIKE_PIT_VENTS` (4) spike vents (`spike_vents`) are seeded on random fair cells at reset (`spawn_spike_vents`), at least 5 cells (Manhattan) from the spawn point, never on an obstacle, mine, food, or snake. `manage_spike_pit` re-seeds missing vents every tick so the pit stays armed, and the weather is pinned to `Weather::Clear` (ambient weather randomization is skipped in this mode).
+- **Telegraph:** on every tick where `tick_counter % 6 == SPIKE_TELEGRAPH_TICKS (3)`, the cells that will erupt on the next multiple of 6 are recorded in `spike_warnings` (rendered as yellow `'` cracks terminal / yellow cells web) if they pass the fairness check.
+- **Eruption:** on every 6th tick each vent pops spikes on itself and its four orthogonal neighbors (`spike_tiles`: cell → remaining up ticks, counted in `spike_eruptions`, "Spikes erupt! (+N)" floating text). Spikes are mirrored into `obstacles`, so they are lethal on entry and hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and trap avoidance — the bot rides out the pit natively. Re-erupting on an already-spiked cell just refreshes its timer.
+- **Retraction:** each spike counts down one tick at a time and retracts after `SPIKE_UP_TICKS` (6) ticks, leaving the cell open (removed from both `spike_tiles` and `obstacles`); at tick 200 of every 250-tick cycle all spikes and warnings retract at once ("The spikes retract!").
+- **Fairness:** an eruption never targets off-board cells, a snake's body, the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or any entity/obstacle (`is_spike_eruption_blocked`).
+- **Eating food:** retracts the spikes adjacent to the eaten cell ("Retracted N spikes!").
+- **Persistence:** `spike_tiles` (serialized through `map_as_pairs`), `spike_vents`, `spike_warnings`, and `spike_eruptions` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent); an end-of-tick self-heal drops stale spike records if something else cleared obstacles mid-tick. The status bar shows `Spikes: <count> | Eruptions: <count>`.
+- **Tests:** see [tests/test_spike_pit_mode.rs](../../tests/test_spike_pit_mode.rs) and the save/load test in `src/game/tests.rs`.

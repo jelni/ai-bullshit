@@ -258,6 +258,52 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw spike pit warnings, spikes, and vents (Spike Pit mode)
+    if game.mode == crate::game::GameMode::SpikePit {
+        ctx.set_fill_style_str("#FFFF00"); // Yellow cracked warnings
+        for crack in &game.spike_warnings {
+            if crack.x < game.width
+                && crack.y < game.height
+                && is_visible(f64::from(crack.x), f64::from(crack.y))
+            {
+                ctx.fill_rect(
+                    f64::from(crack.x) * cell_size,
+                    f64::from(crack.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#FF0000"); // Red spikes
+        for spike in game.spike_tiles.keys() {
+            if spike.x < game.width
+                && spike.y < game.height
+                && is_visible(f64::from(spike.x), f64::from(spike.y))
+            {
+                ctx.fill_rect(
+                    f64::from(spike.x) * cell_size,
+                    f64::from(spike.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#8B0000"); // DarkRed vents
+        for vent in &game.spike_vents {
+            if vent.x < game.width
+                && vent.y < game.height
+                && is_visible(f64::from(vent.x), f64::from(vent.y))
+            {
+                ctx.fill_rect(
+                    f64::from(vent.x) * cell_size,
+                    f64::from(vent.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw sand drifts (Sandstorm mode)
     if game.mode == crate::game::GameMode::Sandstorm {
         ctx.set_fill_style_str("#D2B48C"); // Tan
