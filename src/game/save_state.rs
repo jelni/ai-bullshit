@@ -347,6 +347,13 @@ pub struct SaveState {
     pub tornado: Option<Point>,
     #[serde(default)]
     pub tornado_gusts: u32,
+    pub maelstrom: Option<Point>,
+    #[serde(default)]
+    pub maelstrom_swirls: u32,
+    #[serde(default)]
+    pub maelstrom_drifts: u32,
+    #[serde(default)]
+    pub maelstrom_calm: u32,
     #[serde(default)]
     pub rubble_tiles: HashSet<Point>,
     #[serde(default)]

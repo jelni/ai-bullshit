@@ -144,6 +144,10 @@ pub struct Game {
     pub tornado: Option<Point>,
     pub tornado_gusts: u32,
     pub tornado_spins: u32,
+    pub maelstrom: Option<Point>,
+    pub maelstrom_swirls: u32,
+    pub maelstrom_drifts: u32,
+    pub maelstrom_calm: u32,
     pub rubble_tiles: HashSet<Point>,
     pub tremor_count: u32,
     pub meteor_strikes: u32,
@@ -746,6 +750,10 @@ impl Game {
             tornado: None,
             tornado_gusts: 0,
             tornado_spins: 0,
+            maelstrom: None,
+            maelstrom_swirls: 0,
+            maelstrom_drifts: 0,
+            maelstrom_calm: 0,
             rubble_tiles: HashSet::new(),
             tremor_count: 0,
             meteor_strikes: 0,
@@ -1261,6 +1269,10 @@ impl Game {
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
             tornado_spins: self.tornado_spins,
+            maelstrom: self.maelstrom,
+            maelstrom_swirls: self.maelstrom_swirls,
+            maelstrom_drifts: self.maelstrom_drifts,
+            maelstrom_calm: self.maelstrom_calm,
             rubble_tiles: self.rubble_tiles.clone(),
             tremor_count: self.tremor_count,
             meteor_strikes: self.meteor_strikes,
@@ -1576,6 +1588,10 @@ impl Game {
                 self.tornado = state.tornado;
                 self.tornado_gusts = state.tornado_gusts;
                 self.tornado_spins = state.tornado_spins;
+                self.maelstrom = state.maelstrom;
+                self.maelstrom_swirls = state.maelstrom_swirls;
+                self.maelstrom_drifts = state.maelstrom_drifts;
+                self.maelstrom_calm = state.maelstrom_calm;
                 self.rubble_tiles = state.rubble_tiles;
                 self.tremor_count = state.tremor_count;
                 self.meteor_strikes = state.meteor_strikes;
@@ -8788,6 +8804,299 @@ impl Game {
         Some(dest)
     }
 
+    fn spawn_maelstrom(&mut self) {
+        if self.mode != GameMode::Maelstrom {
+            return;
+        }
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.mines.contains(p)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.black_hole == Some(*p)
+                || self.tornado == Some(*p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 6
+        };
+        if let Some(m) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            self.safe_zone_margin + 2,
+        ) {
+            // The vortex cell is mirrored into `obstacles`, so it is lethal on
+            // entry and a hard constraint in the A* search and the verified-safe
+            // path checks, exactly like any other wall
+            self.obstacles.insert(m);
+            self.maelstrom = Some(m);
+            self.spawn_particles(
+                f32::from(m.x),
+                f32::from(m.y),
+                30,
+                crate::color::Color::Blue,
+                '@',
+            );
+        }
+    }
+    // A cell is fair for the maelstrom to drift onto, to swirl a snake onto, or
+    // to drag an item onto only if it is in bounds within the safe-zone margin
+    // and free of snakes (bodies and the cells they are about to enter), the
+    // vortex itself (mirrored into `obstacles`), and every entity or hazard.
+    fn maelstrom_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // One tangential swirl step around the vortex: perpendicular to the radial
+    // direction, rotating consistently (the radial vector rotated 90 degrees).
+    fn maelstrom_swirl_steps(head: Point, vortex: Point) -> Option<(Direction, Direction)> {
+        let dx = i32::from(head.x) - i32::from(vortex.x);
+        let dy = i32::from(head.y) - i32::from(vortex.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let (rx, ry) = (-dy, dx);
+        let primary = if rx.abs() >= ry.abs() {
+            if rx > 0 {
+                Direction::Right
+            } else {
+                Direction::Left
+            }
+        } else if ry > 0 {
+            Direction::Down
+        } else {
+            Direction::Up
+        };
+        let opposite = match primary {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
+        };
+        Some((primary, opposite))
+    }
+    fn maelstrom_swirl_destination(&self, head: Point, vortex: Point) -> Option<Point> {
+        // Fairness: a swirl only happens when the destination is fair (never out
+        // of bounds, onto the vortex, onto a snake or the cell a snake is about
+        // to enter, or onto any hazard), so a swirl can never directly kill.
+        let (primary, opposite) = Self::maelstrom_swirl_steps(head, vortex)?;
+        let wraps =
+            (self.wrap_mode || self.mode == GameMode::Zen) && self.mode != GameMode::BattleRoyale;
+        for dir in <[Direction; 2]>::from((primary, opposite)) {
+            let raw = Self::calculate_next_head_dir(head, dir);
+            let dest = if wraps {
+                self.calculate_wrapped_head(raw)
+            } else {
+                raw
+            };
+            if self.maelstrom_cell_free(dest) {
+                return Some(dest);
+            }
+        }
+        None
+    }
+    fn manage_maelstrom(&mut self) {
+        if self.mode != GameMode::Maelstrom {
+            return;
+        }
+        // The storm at sea never breaks: pin the weather every tick
+        self.weather = Weather::Rain;
+        // The whirlpool is permanent: (re)spawn it on a fair cell if it is missing
+        if self.maelstrom.is_none() {
+            self.spawn_maelstrom();
+        }
+        // Keep the lethal mirror into `obstacles` exact even if something else
+        // cleared obstacles mid-tick
+        if let Some(m) = self.maelstrom {
+            self.obstacles.insert(m);
+        }
+        // Calm counts down once per tick
+        if self.maelstrom_calm > 0 {
+            self.maelstrom_calm = self.maelstrom_calm.saturating_sub(1);
+        }
+        let Some(m) = self.maelstrom else {
+            return;
+        };
+        // Scheduled drift: every 8th tick the vortex slides one cell in a random
+        // direction, but only onto a fair cell (never onto a snake, the cell any
+        // snake is about to enter, or any entity)
+        if self.tick_counter.is_multiple_of(Self::MAELSTROM_DRIFT_PERIOD) {
+            let mut dirs = [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ];
+            for i in (1..dirs.len()).rev() {
+                let j = self.rng.gen_range(0..=i);
+                dirs.swap(i, j);
+            }
+            for dir in dirs {
+                let raw = Self::calculate_next_head_dir(m, dir);
+                let wraps = (self.wrap_mode || self.mode == GameMode::Zen)
+                    && self.mode != GameMode::BattleRoyale;
+                let cand = if wraps {
+                    self.calculate_wrapped_head(raw)
+                } else {
+                    raw
+                };
+                if self.maelstrom_cell_free(cand) {
+                    self.obstacles.remove(&m);
+                    self.obstacles.insert(cand);
+                    self.maelstrom = Some(cand);
+                    self.maelstrom_drifts += 1;
+                    self.spawn_particles(
+                        f32::from(cand.x),
+                        f32::from(cand.y),
+                        15,
+                        crate::color::Color::Blue,
+                        '@',
+                    );
+                    break;
+                }
+            }
+        }
+    }
+    fn manage_maelstrom_swirl(&mut self) {
+        if self.mode != GameMode::Maelstrom {
+            return;
+        }
+        // A swirl sweeps the vortex's surroundings on every 6th tick
+        if !self.tick_counter.is_multiple_of(Self::MAELSTROM_PERIOD)
+            || self.state != GameState::Playing
+        {
+            return;
+        }
+        let Some(vortex) = self.maelstrom else {
+            return;
+        };
+        // Eating food calms the waters: while calm, no swirl fires at all
+        if self.maelstrom_calm > 0 {
+            return;
+        }
+        self.maelstrom_swirls += 1;
+        let radius = Self::MAELSTROM_RADIUS;
+        // Every snake within the radius is shoved one cell tangentially around
+        // the vortex. Snakes are swirled sequentially so earlier shoves are
+        // respected by later checks. A shove uses `move_to(dest, false)`, so it
+        // never grows the snake, and the destination is always verified-fair.
+        let head1 = self.snake.head();
+        let dist1 = head1
+            .x
+            .abs_diff(vortex.x)
+            .saturating_add(head1.y.abs_diff(vortex.y));
+        if dist1 > 0
+            && dist1 <= radius
+            && let Some(dest) = self.maelstrom_swirl_destination(head1, vortex)
+        {
+            self.snake.move_to(dest, false);
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Swirl!".to_string(),
+                crate::color::Color::Blue,
+            );
+        }
+        let p2_dest = self.player2.as_ref().and_then(|p2| {
+            let head2 = p2.head();
+            let dist2 = head2
+                .x
+                .abs_diff(vortex.x)
+                .saturating_add(head2.y.abs_diff(vortex.y));
+            if dist2 > 0 && dist2 <= radius {
+                self.maelstrom_swirl_destination(head2, vortex)
+            } else {
+                None
+            }
+        });
+        if let Some(dest) = p2_dest {
+            if let Some(p2) = &mut self.player2 {
+                p2.move_to(dest, false);
+            }
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Swirl!".to_string(),
+                crate::color::Color::Blue,
+            );
+        }
+        for i in 0..self.bots.len() {
+            let bot_dest = {
+                let b = &self.bots[i];
+                let head = b.head();
+                let dist = head
+                    .x
+                    .abs_diff(vortex.x)
+                    .saturating_add(head.y.abs_diff(vortex.y));
+                if dist > 0 && dist <= radius {
+                    self.maelstrom_swirl_destination(head, vortex)
+                } else {
+                    None
+                }
+            };
+            if let Some(dest) = bot_dest {
+                self.bots[i].move_to(dest, false);
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    "Swirl!".to_string(),
+                    crate::color::Color::Blue,
+                );
+            }
+        }
+        // The swirl also drags loose items one cell towards the vortex
+        let mut p = self.food;
+        self.pull_point_towards(&mut p, vortex);
+        if p != self.food && self.maelstrom_cell_free(p) {
+            self.food = p;
+        }
+        if let Some((mut bp, time)) = self.bonus_food {
+            let old = bp;
+            self.pull_point_towards(&mut bp, vortex);
+            if bp != old && self.maelstrom_cell_free(bp) {
+                self.bonus_food = Some((bp, time));
+            }
+        }
+        if let Some((mut pp, time)) = self.poison_food {
+            let old = pp;
+            self.pull_point_towards(&mut pp, vortex);
+            if pp != old && self.maelstrom_cell_free(pp) {
+                self.poison_food = Some((pp, time));
+            }
+        }
+        if let Some(mut pu) = self.power_up.clone() {
+            let old = pu.location;
+            self.pull_point_towards(&mut pu.location, vortex);
+            if pu.location != old && self.maelstrom_cell_free(pu.location) {
+                self.power_up = Some(pu);
+            }
+        }
+    }
+
     fn pick_safe_strike_column(&mut self, min_x: u16, max_x: u16) -> Option<u16> {
         // Fairness: never strike a column any snake currently occupies (a falling meteor
         // sweeps its whole column, so body segments count too) or is about to enter
@@ -11630,7 +11939,8 @@ impl Game {
             | GameMode::TarPit
             | GameMode::Faultline
             | GameMode::Electro
-            | GameMode::Sludge | GameMode::Flux => {
+            | GameMode::Sludge | GameMode::Flux
+            | GameMode::Maelstrom => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11770,6 +12080,7 @@ impl Game {
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
+            || self.mode == GameMode::Maelstrom
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -11876,6 +12187,7 @@ impl Game {
         || self.mode == GameMode::Electro
         || self.mode == GameMode::Sludge
         || self.mode == GameMode::Flux
+        || self.mode == GameMode::Maelstrom
         {
             &self.snake
         } else {
@@ -12099,6 +12411,12 @@ impl Game {
             self.tornado_gusts = 0;
             self.tornado_spins = 0;
         }
+        if let Some(m) = self.maelstrom.take() {
+            self.obstacles.remove(&m);
+        }
+        self.maelstrom_swirls = 0;
+        self.maelstrom_drifts = 0;
+        self.maelstrom_calm = 0;
         self.rubble_tiles.clear();
         self.tremor_count = 0;
         self.meteor_strikes = 0;
@@ -12732,6 +13050,9 @@ impl Game {
         if self.mode == GameMode::Sludge {
             self.spawn_initial_sludge();
         }
+        if self.mode == GameMode::Maelstrom {
+            self.spawn_maelstrom();
+        }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
@@ -12915,6 +13236,9 @@ impl Game {
         }
         if self.mode == GameMode::Tornado {
             self.weather = Weather::Tornado;
+        }
+        if self.mode == GameMode::Maelstrom {
+            self.weather = Weather::Rain;
         }
         if self.mode == GameMode::Earthquake {
             self.weather = Weather::Earthquake;
@@ -13447,7 +13771,8 @@ impl Game {
             | GameMode::TarPit
             | GameMode::Faultline
             | GameMode::Electro
-            | GameMode::Sludge | GameMode::Flux => {
+            | GameMode::Sludge | GameMode::Flux
+            | GameMode::Maelstrom => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -14235,6 +14560,10 @@ impl Game {
             self.tornado = state.tornado;
             self.tornado_gusts = state.tornado_gusts;
             self.tornado_spins = state.tornado_spins;
+            self.maelstrom = state.maelstrom;
+            self.maelstrom_swirls = state.maelstrom_swirls;
+            self.maelstrom_drifts = state.maelstrom_drifts;
+            self.maelstrom_calm = state.maelstrom_calm;
             self.rubble_tiles = state.rubble_tiles;
             self.tremor_count = state.tremor_count;
             self.meteor_strikes = state.meteor_strikes;
@@ -14508,6 +14837,10 @@ impl Game {
             tornado: self.tornado,
             tornado_gusts: self.tornado_gusts,
             tornado_spins: self.tornado_spins,
+            maelstrom: self.maelstrom,
+            maelstrom_swirls: self.maelstrom_swirls,
+            maelstrom_drifts: self.maelstrom_drifts,
+            maelstrom_calm: self.maelstrom_calm,
             meteor_strikes: self.meteor_strikes,
             seismic_rubble: self.seismic_rubble.clone(),
             seismic_quakes: self.seismic_quakes,
@@ -17383,6 +17716,7 @@ impl Game {
             && self.mode != GameMode::Mire
             && self.mode != GameMode::TarPit
             && self.mode != GameMode::Electro
+            && self.mode != GameMode::Maelstrom
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -18393,6 +18727,7 @@ impl Game {
         self.manage_volcano();
         self.manage_inferno();
         self.manage_tornado();
+        self.manage_maelstrom();
         self.manage_earthquake();
         self.manage_meteor_shower();
         self.manage_avalanche();
@@ -19758,6 +20093,7 @@ impl Game {
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
+            || self.mode == GameMode::Maelstrom
             {
                 self.handle_death("You Died!");
             } else {
@@ -20150,6 +20486,7 @@ impl Game {
 
         self.manage_tornado_gust();
         self.manage_magnet_pulse();
+        self.manage_maelstrom_swirl();
         self.manage_event_horizon_surge();
         // Keep the blaze/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::Firestorm {
@@ -21401,6 +21738,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Grounded!".to_string(),
                 crate::color::Color::DarkGrey,
+            );
+        }
+        if self.mode == GameMode::Maelstrom {
+            // Eating food calms the waters: swirls are suppressed for a while
+            self.maelstrom_calm = Self::MAELSTROM_CALM_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Calmed!".to_string(),
+                crate::color::Color::Blue,
             );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
@@ -24291,6 +24638,14 @@ if self.mode == GameMode::Sludge {
     pub const ELECTRO_SHUFFLE_PERIOD: u32 = 24;
     /// Ticks an electromagnet stays grounded after the snake eats food
     pub const ELECTRO_GROUND_TICKS: u32 = 30;
+    /// Ticks between scheduled maelstrom swirls in `GameMode::Maelstrom`.
+    pub const MAELSTROM_PERIOD: u32 = 6;
+    /// Ticks between scheduled maelstrom vortex drifts in `GameMode::Maelstrom`.
+    pub const MAELSTROM_DRIFT_PERIOD: u32 = 8;
+    /// Manhattan radius around the vortex in which swirls shove snakes.
+    pub const MAELSTROM_RADIUS: u16 = 4;
+    /// Ticks of swirl immunity granted by eating food in Maelstrom mode.
+    pub const MAELSTROM_CALM_TICKS: u32 = 6;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

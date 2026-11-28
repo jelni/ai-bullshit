@@ -1172,6 +1172,21 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         );
     }
 
+    // Draw Maelstrom vortex (Maelstrom mode)
+    if let Some(m) = game.maelstrom
+        && m.x < game.width
+        && m.y < game.height
+        && is_visible(f64::from(m.x), f64::from(m.y))
+    {
+        ctx.set_fill_style_str("#0000FF"); // Blue
+        ctx.fill_rect(
+            f64::from(m.x) * cell_size,
+            f64::from(m.y) * cell_size,
+            cell_size,
+            cell_size,
+        );
+    }
+
     // Draw poison food
     if let Some((poison_p, _)) = game.poison_food {
         ctx.set_fill_style_str("#800080"); // DarkMagenta

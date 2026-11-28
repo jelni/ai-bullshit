@@ -895,6 +895,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
 137 => {
+                game.mode = game::GameMode::Maelstrom;
+                game.reset();
+            },
+            137 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },

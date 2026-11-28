@@ -112,4 +112,5 @@ pub enum GameMode {
     Electro,
     Sludge,
     Flux,
+    Maelstrom,
 }
