@@ -890,7 +890,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Sludge;
                 game.reset();
             },
-            136 => {
+                        136 => {
+                game.mode = game::GameMode::Flux;
+                game.reset();
+            },
+137 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -904,7 +908,7 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 136 {
+            if game.menu_selection < 137 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 121;

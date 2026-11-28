@@ -153,6 +153,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw flux coils (Flux mode): magenta while attracting, cyan while repelling
+    if game.mode == crate::game::GameMode::Flux {
+        ctx.set_fill_style_str(if game.flux_attract {
+            "#FF00FF"
+        } else {
+            "#00FFFF"
+        });
+        for coil in &game.flux_coils {
+            if coil.x < game.width
+                && coil.y < game.height
+                && is_visible(f64::from(coil.x), f64::from(coil.y))
+            {
+                ctx.fill_rect(
+                    f64::from(coil.x) * cell_size,
+                    f64::from(coil.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw launch pads (Trampoline mode)
     if game.mode == crate::game::GameMode::Trampoline {
         ctx.set_fill_style_str(if game.tramp_overcharge > 0 {

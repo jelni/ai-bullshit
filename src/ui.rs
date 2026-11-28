@@ -718,6 +718,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Faultline Mode",
         "Electro Mode",
         "Sludge Mode",
+        "Flux Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2025,6 +2026,22 @@ fn draw_entities<W: Write>(
             if is_visible(bumper.x, bumper.y) {
                 stdout.queue(cursor::MoveTo(bumper.x, bumper.y))?;
                 write!(stdout, "O")?;
+            }
+        }
+    }
+
+    // Draw flux coils (Flux mode): magenta while attracting, cyan while repelling
+    if game.mode == crate::game::GameMode::Flux {
+        let coil_color = if game.flux_attract {
+            Color::Magenta
+        } else {
+            Color::Cyan
+        };
+        stdout.queue(SetForegroundColor(coil_color))?;
+        for coil in &game.flux_coils {
+            if is_visible(coil.x, coil.y) {
+                stdout.queue(cursor::MoveTo(coil.x, coil.y))?;
+                write!(stdout, "F")?;
             }
         }
     }
@@ -3566,6 +3583,23 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let flux_str = if game.mode == crate::game::GameMode::Flux {
+        let polarity = if game.flux_attract {
+            "Attract"
+        } else {
+            "Repel"
+        };
+        format!(
+            " | Coils: {} | Polarity: {} | Pulls: {} | Shuffles: {} | Flips: {}",
+            game.flux_coils.len(),
+            polarity,
+            game.flux_pulls,
+            game.flux_shuffles,
+            game.flux_flips
+        )
+    } else {
+        String::new()
+    };
     let polarity_str = if game.mode == crate::game::GameMode::Polarity {
         let shield = if game.polarity_shield > 0 {
             format!(" | Shielded: {}", game.polarity_shield)
@@ -3955,7 +3989,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}"
     )?;
 
     if !game.bosses.is_empty() {

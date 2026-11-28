@@ -111,4 +111,5 @@ pub enum GameMode {
     Faultline,
     Electro,
     Sludge,
+    Flux,
 }

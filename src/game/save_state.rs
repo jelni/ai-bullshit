@@ -179,6 +179,16 @@ pub struct SaveState {
     #[serde(default)]
     pub tramp_overcharge: u32,
     #[serde(default)]
+    pub flux_coils: HashSet<Point>,
+    #[serde(default)]
+    pub flux_attract: bool,
+    #[serde(default)]
+    pub flux_pulls: u32,
+    #[serde(default)]
+    pub flux_shuffles: u32,
+    #[serde(default)]
+    pub flux_flips: u32,
+    #[serde(default)]
     pub elev_shafts: Vec<(Point, Point)>,
     #[serde(default)]
     pub elev_cooldowns: Vec<u32>,

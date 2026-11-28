@@ -216,6 +216,11 @@ pub struct Game {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub flux_coils: HashSet<Point>,
+    pub flux_attract: bool,
+    pub flux_pulls: u32,
+    pub flux_shuffles: u32,
+    pub flux_flips: u32,
     pub elev_shafts: Vec<(Point, Point)>,
     pub elev_cooldowns: Vec<u32>,
     pub elev_rides: u32,
@@ -816,6 +821,11 @@ impl Game {
             tramp_flings: 0,
             tramp_shuffles: 0,
             tramp_overcharge: 0,
+            flux_coils: HashSet::new(),
+            flux_attract: true,
+            flux_pulls: 0,
+            flux_shuffles: 0,
+            flux_flips: 0,
             elev_shafts: Vec::new(),
             elev_cooldowns: Vec::new(),
             elev_rides: 0,
@@ -1159,6 +1169,11 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            flux_coils: self.flux_coils.clone(),
+            flux_attract: self.flux_attract,
+            flux_pulls: self.flux_pulls,
+            flux_shuffles: self.flux_shuffles,
+            flux_flips: self.flux_flips,
             elev_shafts: self.elev_shafts.clone(),
             elev_cooldowns: self.elev_cooldowns.clone(),
             elev_rides: self.elev_rides,
@@ -1460,6 +1475,11 @@ impl Game {
                 self.tramp_flings = state.tramp_flings;
                 self.tramp_shuffles = state.tramp_shuffles;
                 self.tramp_overcharge = state.tramp_overcharge;
+                self.flux_coils = state.flux_coils;
+                self.flux_attract = state.flux_attract;
+                self.flux_pulls = state.flux_pulls;
+                self.flux_shuffles = state.flux_shuffles;
+                self.flux_flips = state.flux_flips;
                 self.elev_shafts = state.elev_shafts;
                 self.elev_cooldowns = state.elev_cooldowns;
                 self.elev_rides = state.elev_rides;
@@ -7282,6 +7302,166 @@ impl Game {
             }
         }
     }
+    fn flux_coil_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 80).clamp(3, 6)
+    }
+    // A cell a flux coil may drag a snake onto must be fair right now: in bounds,
+    // free of snakes (bodies and the cells they are about to enter) and of every
+    // entity or lethal tile, so a pull can never directly kill.
+    fn flux_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // The nearest coil within FLUX_RADIUS of `head` drags the head one cell
+    // towards itself (attract) or away from itself (repel) along the dominant
+    // axis. The drag is accepted only when the destination is fair, so a coil
+    // can never pull a snake into a kill; otherwise the head keeps its normal
+    // move. Ties break deterministically by (distance, x, y).
+    fn flux_pull(&self, head: Point) -> Option<Point> {
+        if self.mode != GameMode::Flux {
+            return None;
+        }
+        let mut best: Option<(u16, Point)> = None;
+        for c in &self.flux_coils {
+            let dist = head.x.abs_diff(c.x).saturating_add(head.y.abs_diff(c.y));
+            if dist == 0 || dist > Self::FLUX_RADIUS {
+                continue;
+            }
+            let better = match best {
+                Some((bd, bp)) => {
+                    dist < bd || (dist == bd && (c.x < bp.x || (c.x == bp.x && c.y < bp.y)))
+                },
+                None => true,
+            };
+            if better {
+                best = Some((dist, *c));
+            }
+        }
+        let (_, c) = best?;
+        let dx = i32::from(c.x) - i32::from(head.x);
+        let dy = i32::from(c.y) - i32::from(head.y);
+        let sign: i32 = if self.flux_attract { 1 } else { -1 };
+        let step = if dx.abs() >= dy.abs() {
+            Point {
+                x: (i32::from(head.x) + sign * dx.signum()).clamp(0, i32::from(u16::MAX)) as u16,
+                y: head.y,
+            }
+        } else {
+            Point {
+                x: head.x,
+                y: (i32::from(head.y) + sign * dy.signum()).clamp(0, i32::from(u16::MAX)) as u16,
+            }
+        };
+        if step == head || !self.flux_cell_free(step) {
+            return None;
+        }
+        Some(step)
+    }
+    fn manage_flux(&mut self) {
+        if self.mode != GameMode::Flux {
+            return;
+        }
+        // Coils under fresh obstacles are scrapped
+        self.flux_coils.retain(|p| !self.obstacles.contains(p));
+        // Scheduled shuffle: every FLUX_PERIOD-th tick the whole layout
+        // rearranges and every coil relocates to a fresh fair cell. Fairness:
+        // a new coil never lands on a snake, on the cell any snake is about to
+        // enter, on any entity or hazard, or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::FLUX_PERIOD) {
+            let count = self.flux_coil_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_coils = std::mem::take(&mut self.flux_coils);
+            let avoid_coil = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_coils.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || self.polarity_poles.contains(p)
+                    || self.blink_pads.contains(p)
+                    || self.magnet_poles.contains_key(p)
+                    || self.quicksand.contains(p)
+                    || self.domino_tiles.contains(p)
+                    || self.elev_shafts.iter().any(|(a, b)| *p == *a || *p == *b)
+                    || self.mire_cells.contains_key(p)
+                    || self.fault_tiles.contains_key(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_coil,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.flux_coils.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.flux_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The coils rearrange! ({placed})"),
+                    crate::color::Color::Magenta,
+                );
+            }
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -11450,7 +11630,7 @@ impl Game {
             | GameMode::TarPit
             | GameMode::Faultline
             | GameMode::Electro
-            | GameMode::Sludge => {
+            | GameMode::Sludge | GameMode::Flux => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11589,6 +11769,7 @@ impl Game {
             || self.mode == GameMode::Faultline
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
+            || self.mode == GameMode::Flux
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -11694,6 +11875,7 @@ impl Game {
         || self.mode == GameMode::Faultline
         || self.mode == GameMode::Electro
         || self.mode == GameMode::Sludge
+        || self.mode == GameMode::Flux
         {
             &self.snake
         } else {
@@ -11822,6 +12004,11 @@ impl Game {
         self.tramp_flings = 0;
         self.tramp_shuffles = 0;
         self.tramp_overcharge = 0;
+        self.flux_coils.clear();
+        self.flux_attract = true;
+        self.flux_pulls = 0;
+        self.flux_shuffles = 0;
+        self.flux_flips = 0;
         self.elev_shafts.clear();
         self.elev_cooldowns.clear();
         self.elev_rides = 0;
@@ -12408,6 +12595,48 @@ impl Game {
                     self.safe_zone_margin,
                 ) {
                     self.tramp_pads.insert(p);
+                }
+            }
+        }
+        if self.mode == GameMode::Flux {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            for _ in 0..self.flux_coil_count() {
+                let avoid_coil = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.mines.contains(p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.pinball_bumpers.contains(p)
+                        || self.tramp_pads.contains(p)
+                        || self.polarity_poles.contains(p)
+                        || self.blink_pads.contains(p)
+                        || self.magnet_poles.contains_key(p)
+                        || self.quicksand.contains(p)
+                        || self.domino_tiles.contains(p)
+                        || self.elev_shafts.iter().any(|(a, b)| *p == *a || *p == *b)
+                        || self.mire_cells.contains_key(p)
+                        || self.fault_tiles.contains_key(p)
+                        || self.flux_coils.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_coil,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.flux_coils.insert(p);
                 }
             }
         }
@@ -13218,7 +13447,7 @@ impl Game {
             | GameMode::TarPit
             | GameMode::Faultline
             | GameMode::Electro
-            | GameMode::Sludge => {
+            | GameMode::Sludge | GameMode::Flux => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13914,6 +14143,11 @@ impl Game {
             self.tramp_flings = state.tramp_flings;
             self.tramp_shuffles = state.tramp_shuffles;
             self.tramp_overcharge = state.tramp_overcharge;
+            self.flux_coils = state.flux_coils;
+            self.flux_attract = state.flux_attract;
+            self.flux_pulls = state.flux_pulls;
+            self.flux_shuffles = state.flux_shuffles;
+            self.flux_flips = state.flux_flips;
             self.elev_shafts = state.elev_shafts;
             self.elev_cooldowns = state.elev_cooldowns;
             self.elev_rides = state.elev_rides;
@@ -14182,6 +14416,11 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            flux_coils: self.flux_coils.clone(),
+            flux_attract: self.flux_attract,
+            flux_pulls: self.flux_pulls,
+            flux_shuffles: self.flux_shuffles,
+            flux_flips: self.flux_flips,
             elev_shafts: self.elev_shafts.clone(),
             elev_cooldowns: self.elev_cooldowns.clone(),
             elev_rides: self.elev_rides,
@@ -18133,6 +18372,7 @@ impl Game {
         self.manage_blink();
         self.manage_crossfire();
         self.manage_magnet();
+        self.manage_flux();
         self.manage_gale();
         self.manage_faultline();
         self.manage_electro();
@@ -18252,6 +18492,14 @@ impl Game {
             };
             let final_head = if hit_wall {
                 final_head
+            } else if let Some(dragged) = self.flux_pull(final_head) {
+                self.flux_pulls += 1;
+                dragged
+            } else {
+                final_head
+            };
+            let final_head = if hit_wall {
+                final_head
             } else if let Some(shoved) = self.polarity_shove(final_head, false) {
                 self.polarity_shoves += 1;
                 shoved
@@ -18331,6 +18579,35 @@ impl Game {
             {
                 final_head2_opt = Some(flung);
                 self.tramp_flings += 1;
+            }
+        }
+        // In Flux mode the nearest coil in range drags the head one extra cell
+        // towards (attract) or away from (repel) itself; the drag only ever
+        // lands on a fair cell, so it can never kill
+        if self.mode == GameMode::Flux {
+            if !hit_wall1
+                && let Some(dragged) = self.flux_pull(final_head1)
+            {
+                final_head1 = dragged;
+                self.flux_pulls += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    if self.flux_attract {
+                        "Yanked!".to_string()
+                    } else {
+                        "Shoved!".to_string()
+                    },
+                    crate::color::Color::Magenta,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(dragged) = self.flux_pull(fh2)
+            {
+                final_head2_opt = Some(dragged);
+                self.flux_pulls += 1;
             }
         }
         // In Polarity mode a flip tick shoves the head one cell toward the
@@ -19480,6 +19757,7 @@ impl Game {
             || self.mode == GameMode::Faultline
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
+            || self.mode == GameMode::Flux
             {
                 self.handle_death("You Died!");
             } else {
@@ -21018,6 +21296,21 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Overcharged!".to_string(),
                 crate::color::Color::Cyan,
+            );
+        }
+        if self.mode == GameMode::Flux {
+            // Eating food flips every coil's polarity
+            self.flux_attract = !self.flux_attract;
+            self.flux_flips += 1;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                if self.flux_attract {
+                    "Polarity flip! (Attract)".to_string()
+                } else {
+                    "Polarity flip! (Repel)".to_string()
+                },
+                crate::color::Color::Magenta,
             );
         }
         if self.mode == GameMode::Magnet {
@@ -23901,6 +24194,10 @@ if self.mode == GameMode::Sludge {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Manhattan radius within which a flux coil drags a snake in Flux mode
+    pub const FLUX_RADIUS: u16 = 4;
+    /// Ticks between whole-layout coil shuffles in Flux mode
+    pub const FLUX_PERIOD: u32 = 24;
     /// Ticks between scheduled mire waves in `GameMode::Mire`.
     pub const MIRE_PERIOD: u32 = 6;
     /// Ticks before a wave that threatened cells are telegraphed as cracks.
