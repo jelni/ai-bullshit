@@ -831,3 +831,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Holes: <count> | Crumbles: <count> | Tremors: <count>` (`erode_str`). Holes render as a dark-grey `x` and cells with at most `ERODE_WARN` (6) ticks left as a dark-yellow `.` on the terminal, dark-grey / dark-yellow cells on the web.
 - **Persistence:** `erode_timers`, `erode_holes`, `erode_crumbles`, and `erode_tremors` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_erosion_mode.rs](../../tests/test_erosion_mode.rs).
+
+## Induction Mode
+
+`GameMode::Induction` (menu entry "Induction Mode", entry 140 in the main menu) is a survival mode played among two permanent magnet poles:
+
+- **Magnet poles:** on reset `spawn_induction_poles` seeds exactly two poles (`induction_poles`) on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, a launch pad, a bumper, or the food. Poles are walkable fixtures (they are *not* mirrored into `obstacles`) and render as a red `N` / cyan `S` (terminal) and red / cyan cells (web), white while the shield is up.
+- **Tug:** when a snake's final head cell is orthogonally aligned with a pole (same row or same column) within `INDUCTION_RANGE` (6) cells, `induction_tug` moves the head one extra cell along the alignment axis — toward the pole while `induction_attract` is true, away from it while false — and counts it in `induction_tugs` ("Tug!"). The tug is applied to the player, player 2, and every bot right after the other movement modifiers in `update`.
+- **Fairness:** the tug destination must pass `induction_cell_free` — in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter (`singularity_cell_free`), plus the lightning column, every lethal tile set (fire, acid, puddles, lava, inferno, blaze, seismic rubble), and the Battle Royale safe zone. If the destination is not fair the tug fizzles, so **a pole can never directly kill**.
+- **Scheduled polarity flip:** every `INDUCTION_PERIOD` (12) ticks `manage_induction` flips `induction_attract` and counts it in `induction_flips` ("Polarity flips! (Attract/Repel)").
+- **Scheduled relocation:** every `INDUCTION_RELOC_PERIOD` (30) ticks both poles relocate to fresh fair cells (`induction_relocs += 1`, "The poles relocate! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, or within 4 cells (Manhattan) of any snake head. Poles that end up under a fresh obstacle (e.g. a meteor crash) are scrapped and topped back up at the start of each tick.
+- **Shield:** eating food sets `induction_shield = INDUCTION_SHIELD_TICKS` (12) ("Shielded!"); while the timer is positive it counts down once per tick and no tugs happen at all.
+- **Autopilot:** tug landings are always fair, so a tugged bot is never killed by the tug itself; the bot replans from its actual head every tick and rides the poles natively.
+- **Status bar:** `Poles: <count> | Pull: <Attract/Repel> | Tugs: <count> | Flips: <count> | Relocs: <count>` plus `Shielded: <ticks>` while shielded (`induction_str`).
+- **Persistence:** `induction_poles`, `induction_attract`, `induction_tugs`, `induction_flips`, `induction_relocs`, and `induction_shield` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_induction_mode.rs](../../tests/test_induction_mode.rs).

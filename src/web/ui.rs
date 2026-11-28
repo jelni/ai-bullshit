@@ -509,6 +509,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 ctx.fill_rect(
                     f64::from(t.x) * cell_size,
                     f64::from(t.y) * cell_size,
+    // Draw magnet poles (Induction mode): north pole red, south pole cyan,
+    // both white while the shield is up
+    if game.mode == crate::game::GameMode::Induction {
+        for (i, pole) in game.induction_poles.iter().enumerate() {
+            ctx.set_fill_style_str(if game.induction_shield > 0 {
+                "#FFFFFF"
+            } else if i % 2 == 0 {
+                "#FF0000"
+            } else {
+                "#00FFFF"
+            });
+            if pole.x < game.width
+                && pole.y < game.height
+                && is_visible(f64::from(pole.x), f64::from(pole.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pole.x) * cell_size,
+                    f64::from(pole.y) * cell_size,
                     cell_size,
                     cell_size,
                 );

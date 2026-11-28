@@ -229,6 +229,12 @@ pub struct Game {
     pub flux_pulls: u32,
     pub flux_shuffles: u32,
     pub flux_flips: u32,
+    pub induction_poles: Vec<Point>,
+    pub induction_attract: bool,
+    pub induction_tugs: u32,
+    pub induction_flips: u32,
+    pub induction_relocs: u32,
+    pub induction_shield: u32,
     pub elev_shafts: Vec<(Point, Point)>,
     pub elev_cooldowns: Vec<u32>,
     pub elev_rides: u32,
@@ -847,6 +853,12 @@ impl Game {
             erode_holes: HashSet::new(),
             erode_crumbles: 0,
             erode_tremors: 0,
+            induction_poles: Vec::new(),
+            induction_attract: true,
+            induction_tugs: 0,
+            induction_flips: 0,
+            induction_relocs: 0,
+            induction_shield: 0,
             flux_coils: HashSet::new(),
             flux_attract: true,
             flux_pulls: 0,
@@ -1199,6 +1211,12 @@ impl Game {
             erode_holes: self.erode_holes.clone(),
             erode_crumbles: self.erode_crumbles,
             erode_tremors: self.erode_tremors,
+            induction_poles: self.induction_poles.clone(),
+            induction_attract: self.induction_attract,
+            induction_tugs: self.induction_tugs,
+            induction_flips: self.induction_flips,
+            induction_relocs: self.induction_relocs,
+            induction_shield: self.induction_shield,
             flux_coils: self.flux_coils.clone(),
             flux_attract: self.flux_attract,
             flux_pulls: self.flux_pulls,
@@ -1518,6 +1536,12 @@ impl Game {
                 self.erode_holes = state.erode_holes;
                 self.erode_crumbles = state.erode_crumbles;
                 self.erode_tremors = state.erode_tremors;
+                self.induction_poles = state.induction_poles;
+                self.induction_attract = state.induction_attract;
+                self.induction_tugs = state.induction_tugs;
+                self.induction_flips = state.induction_flips;
+                self.induction_relocs = state.induction_relocs;
+                self.induction_shield = state.induction_shield;
                 self.flux_coils = state.flux_coils;
                 self.flux_attract = state.flux_attract;
                 self.flux_pulls = state.flux_pulls;
@@ -7831,6 +7855,224 @@ impl Game {
             self.decay_collapses += 1;
         }
     }
+    const fn induction_pole_count() -> usize {
+        2
+    }
+    // A cell a magnet tug may move a head onto must be fair right now: in
+    // bounds, free of snakes (bodies and the cells they are about to enter)
+    // and of every entity or lethal tile, so a tug can never directly kill.
+    fn induction_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // A magnet pole tugs a head that ends up orthogonally aligned with it
+    // (same row or same column) within INDUCTION_RANGE cells one extra cell
+    // along the alignment axis - toward the pole while attracting, away from
+    // it while repelling. The tug only lands on a fair cell, so it can never
+    // kill; if no aligned pole yields a fair destination the tug fizzles.
+    fn induction_tug(&self, head: Point) -> Option<Point> {
+        if self.mode != GameMode::Induction || self.induction_shield > 0 {
+            return None;
+        }
+        for pole in &self.induction_poles {
+            let dx = i32::from(pole.x) - i32::from(head.x);
+            let dy = i32::from(pole.y) - i32::from(head.y);
+            let dest = if dx == 0
+                && dy != 0
+                && dy.unsigned_abs() <= u32::from(Self::INDUCTION_RANGE)
+            {
+                let step = if self.induction_attract {
+                    dy.signum()
+                } else {
+                    -dy.signum()
+                };
+                let ny = i32::from(head.y) + step;
+                if ny < 0 || ny > i32::from(self.height) {
+                    continue;
+                }
+                Point {
+                    x: head.x,
+                    y: ny as u16,
+                }
+            } else if dy == 0
+                && dx != 0
+                && dx.unsigned_abs() <= u32::from(Self::INDUCTION_RANGE)
+            {
+                let step = if self.induction_attract {
+                    dx.signum()
+                } else {
+                    -dx.signum()
+                };
+                let nx = i32::from(head.x) + step;
+                if nx < 0 || nx > i32::from(self.width) {
+                    continue;
+                }
+                Point {
+                    x: nx as u16,
+                    y: head.y,
+                }
+            } else {
+                continue;
+            };
+            if self.induction_cell_free(dest) {
+                return Some(dest);
+            }
+        }
+        None
+    }
+    // Pick a fresh fair cell for a magnet pole: never on a snake, on the cell
+    // any snake is about to enter, on any entity or hazard tile, on another
+    // pole, within `min_head_dist` of any snake head, or within 5 cells of the
+    // spawn point (when `spawn` is given).
+    fn induction_spawn_one(&mut self, min_head_dist: u16, spawn: Option<Point>) -> Option<Point> {
+        let next_heads = self.singularity_next_heads();
+        let heads: Vec<Point> = std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect();
+        let avoid_pole = |p: &Point| {
+            self.obstacles.contains(p)
+                || self.mines.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.black_hole == Some(*p)
+                || self.tornado == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.comets.iter().any(|c| c.position == *p)
+                || self.xp_gems.contains(p)
+                || self.induction_poles.contains(p)
+                || self.tramp_pads.contains(p)
+                || self.pinball_bumpers.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || next_heads.contains(p)
+                || self.fire_tiles.contains(p)
+                || self.acid_puddles.contains(p)
+                || self.puddle_tiles.contains(p)
+                || self.lava_tiles.contains(p)
+                || self.inferno_tiles.contains(p)
+                || self.blaze_tiles.contains_key(p)
+                || self.seismic_rubble.contains(p)
+                || self.ice_tiles.contains(p)
+                || self.belt_tiles.contains_key(p)
+                || heads
+                    .iter()
+                    .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < min_head_dist)
+                || spawn.is_some_and(|s| {
+                    p.x.abs_diff(s.x).saturating_add(p.y.abs_diff(s.y)) < 5
+                })
+        };
+        Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid_pole,
+            &mut self.rng,
+            self.safe_zone_margin,
+        )
+    }
+    fn spawn_induction_poles(&mut self) {
+        self.induction_poles.clear();
+        self.induction_attract = true;
+        self.induction_tugs = 0;
+        self.induction_flips = 0;
+        self.induction_relocs = 0;
+        self.induction_shield = 0;
+        let spawn = Some(Point {
+            x: self.width / 2,
+            y: self.height / 2,
+        });
+        for _ in 0..Self::induction_pole_count() {
+            if let Some(p) = self.induction_spawn_one(5, spawn) {
+                self.induction_poles.push(p);
+            }
+        }
+    }
+    fn manage_induction(&mut self) {
+        if self.mode != GameMode::Induction {
+            return;
+        }
+        // Poles under fresh obstacles are scrapped and topped back up
+        self.induction_poles.retain(|p| !self.obstacles.contains(p));
+        while self.induction_poles.len() < Self::induction_pole_count() {
+            if let Some(p) = self.induction_spawn_one(4, None) {
+                self.induction_poles.push(p);
+            } else {
+                break;
+            }
+        }
+        // The magnet shield counts down once per tick
+        if self.induction_shield > 0 {
+            self.induction_shield = self.induction_shield.saturating_sub(1);
+        }
+        // Scheduled polarity flip: every INDUCTION_PERIOD ticks the poles
+        // switch between attracting and repelling aligned snakes
+        if self.tick_counter.is_multiple_of(Self::INDUCTION_PERIOD) {
+            self.induction_attract = !self.induction_attract;
+            self.induction_flips += 1;
+            let head = self.snake.head();
+            let pull = if self.induction_attract {
+                "Attract"
+            } else {
+                "Repel"
+            };
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Polarity flips! ({pull})"),
+                crate::color::Color::Cyan,
+            );
+        }
+        // Scheduled relocation: every INDUCTION_RELOC_PERIOD ticks every pole
+        // moves to a fresh fair cell at least 4 cells from any snake head.
+        // Fairness: a new pole never lands on a snake, on the cell any snake
+        // is about to enter, on any entity or hazard, or near a snake head.
+        if self.tick_counter.is_multiple_of(Self::INDUCTION_RELOC_PERIOD) {
+            self.induction_poles.clear();
+            let mut placed = 0usize;
+            for _ in 0..Self::induction_pole_count() {
+                if let Some(p) = self.induction_spawn_one(4, None) {
+                    self.induction_poles.push(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.induction_relocs += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The poles relocate! ({placed})"),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -12295,7 +12537,8 @@ impl Game {
             | GameMode::Sludge | GameMode::Flux
             | GameMode::Maelstrom
             | GameMode::Decay 
-            | GameMode::Erosion => {
+            | GameMode::Erosion
+            | GameMode::Induction => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12437,6 +12680,7 @@ impl Game {
             || self.mode == GameMode::Flux
             || self.mode == GameMode::Maelstrom
             || self.mode == GameMode::Decay
+            || self.mode == GameMode::Induction
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -12545,6 +12789,7 @@ impl Game {
         || self.mode == GameMode::Flux
         || self.mode == GameMode::Maelstrom
         || self.mode == GameMode::Decay
+        || self.mode == GameMode::Induction
         {
             &self.snake
         } else {
@@ -12681,6 +12926,12 @@ impl Game {
         self.flux_attract = true;
         self.flux_pulls = 0;
         self.flux_shuffles = 0;
+        self.induction_poles.clear();
+        self.induction_attract = true;
+        self.induction_tugs = 0;
+        self.induction_flips = 0;
+        self.induction_relocs = 0;
+        self.induction_shield = 0;
         self.flux_flips = 0;
         self.elev_shafts.clear();
         self.elev_cooldowns.clear();
@@ -13422,6 +13673,9 @@ impl Game {
         if self.mode == GameMode::Decay {
             self.seed_initial_decay_cracks();
         }
+        if self.mode == GameMode::Induction {
+            self.spawn_induction_poles();
+        }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
@@ -14146,7 +14400,8 @@ impl Game {
             | GameMode::Sludge | GameMode::Flux
             | GameMode::Maelstrom
             | GameMode::Decay 
-            | GameMode::Erosion => {
+            | GameMode::Erosion
+            | GameMode::Induction => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -14852,6 +15107,12 @@ impl Game {
             self.flux_pulls = state.flux_pulls;
             self.flux_shuffles = state.flux_shuffles;
             self.flux_flips = state.flux_flips;
+            self.induction_poles = state.induction_poles;
+            self.induction_attract = state.induction_attract;
+            self.induction_tugs = state.induction_tugs;
+            self.induction_flips = state.induction_flips;
+            self.induction_relocs = state.induction_relocs;
+            self.induction_shield = state.induction_shield;
             self.elev_shafts = state.elev_shafts;
             self.elev_cooldowns = state.elev_cooldowns;
             self.elev_rides = state.elev_rides;
@@ -15133,6 +15394,12 @@ impl Game {
             erode_holes: self.erode_holes.clone(),
             erode_crumbles: self.erode_crumbles,
             erode_tremors: self.erode_tremors,
+            induction_poles: self.induction_poles.clone(),
+            induction_attract: self.induction_attract,
+            induction_tugs: self.induction_tugs,
+            induction_flips: self.induction_flips,
+            induction_relocs: self.induction_relocs,
+            induction_shield: self.induction_shield,
             flux_coils: self.flux_coils.clone(),
             flux_attract: self.flux_attract,
             flux_pulls: self.flux_pulls,
@@ -19095,6 +19362,7 @@ impl Game {
         self.manage_phase_shift();
         self.manage_trampoline();
         self.manage_erosion();
+        self.manage_induction();
         self.manage_decay();
         self.manage_mire();
         self.manage_elevator();
@@ -19279,6 +19547,14 @@ impl Game {
             {
                 self.electro_pulses += 1;
                 dragged
+            } else {
+                final_head
+            };
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(tugged) = self.induction_tug(final_head) {
+                self.induction_tugs += 1;
+                tugged
             } else {
                 final_head
             };
@@ -19488,6 +19764,31 @@ impl Game {
             {
                 final_head2_opt = Some(dragged);
                 self.electro_pulses += 1;
+            }
+        }
+        // In Induction mode a magnet pole tugs an aligned head one extra cell
+        // toward/away from the pole (only ever onto a fair cell, so the tug
+        // itself can never kill)
+        if self.mode == GameMode::Induction {
+            if !hit_wall1
+                && let Some(tugged) = self.induction_tug(final_head1)
+            {
+                final_head1 = tugged;
+                self.induction_tugs += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Tug!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(tugged) = self.induction_tug(fh2)
+            {
+                final_head2_opt = Some(tugged);
+                self.induction_tugs += 1;
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -20491,6 +20792,7 @@ impl Game {
             || self.mode == GameMode::Flux
             || self.mode == GameMode::Maelstrom
             || self.mode == GameMode::Decay
+            || self.mode == GameMode::Induction
             {
                 self.handle_death("You Died!");
             } else {
@@ -21996,6 +22298,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
+            );
+        }
+        if self.mode == GameMode::Induction {
+            // Eating food shields the snakes: no magnet tugs for a while
+            self.induction_shield = Self::INDUCTION_SHIELD_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Shielded!".to_string(),
+                crate::color::Color::Cyan,
             );
         }
         if self.mode == GameMode::Erosion {
@@ -25141,6 +25453,14 @@ if self.mode == GameMode::Sludge {
     pub const MAELSTROM_RADIUS: u16 = 4;
     /// Ticks of swirl immunity granted by eating food in Maelstrom mode.
     pub const MAELSTROM_CALM_TICKS: u32 = 6;
+    /// How far along a shared row/column a magnet pole tugs a head in Induction mode
+    pub const INDUCTION_RANGE: u16 = 6;
+    /// Ticks between scheduled polarity flips in Induction mode
+    pub const INDUCTION_PERIOD: u32 = 12;
+    /// Ticks between scheduled pole relocations in Induction mode
+    pub const INDUCTION_RELOC_PERIOD: u32 = 30;
+    /// Ticks of magnet shield granted by eating food in Induction mode
+    pub const INDUCTION_SHIELD_TICKS: u32 = 12;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

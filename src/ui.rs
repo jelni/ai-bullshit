@@ -2082,6 +2082,26 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw magnet poles (Induction mode): the north pole is a red 'N', the
+    // south pole a cyan 'S', both white while the shield is up
+    if game.mode == crate::game::GameMode::Induction {
+        for (i, pole) in game.induction_poles.iter().enumerate() {
+            if is_visible(pole.x, pole.y) {
+                let pole_color = if game.induction_shield > 0 {
+                    Color::White
+                } else if i % 2 == 0 {
+                    Color::Red
+                } else {
+                    Color::Cyan
+                };
+                stdout.queue(SetForegroundColor(pole_color))?;
+                stdout.queue(cursor::MoveTo(pole.x, pole.y))?;
+                let glyph = if i % 2 == 0 { "N" } else { "S" };
+                write!(stdout, "{glyph}")?;
+            }
+        }
+    }
+
     // Draw the crumbling floor (Erosion mode): cells about to crumble are
     // telegraphed as dark-yellow dots, open holes as dark-grey x
     if game.mode == crate::game::GameMode::Erosion {
@@ -4069,10 +4089,32 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let induction_str = if game.mode == crate::game::GameMode::Induction {
+        let pull = if game.induction_attract {
+            "Attract"
+        } else {
+            "Repel"
+        };
+        let shield = if game.induction_shield > 0 {
+            format!(" | Shielded: {}", game.induction_shield)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Poles: {} | Pull: {} | Tugs: {} | Flips: {} | Relocs: {}{shield}",
+            game.induction_poles.len(),
+            pull,
+            game.induction_tugs,
+            game.induction_flips,
+            game.induction_relocs
+        )
+    } else {
+        String::new()
+    };
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}"
     )?;
 
     if !game.bosses.is_empty() {

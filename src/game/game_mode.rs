@@ -115,4 +115,5 @@ pub enum GameMode {
     Maelstrom,
     Decay,
     Erosion,
+    Induction,
 }

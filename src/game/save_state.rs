@@ -291,6 +291,17 @@ pub struct SaveState {
     pub electro_shuffles: u32,
     #[serde(default, with = "super::map_as_pairs")]
     pub electro_grounded: std::collections::HashMap<Point, u32>,
+    pub induction_poles: Vec<Point>,
+    #[serde(default = "default_induction_attract")]
+    pub induction_attract: bool,
+    #[serde(default)]
+    pub induction_tugs: u32,
+    #[serde(default)]
+    pub induction_flips: u32,
+    #[serde(default)]
+    pub induction_relocs: u32,
+    #[serde(default)]
+    pub induction_shield: u32,
     #[serde(default)]
     pub sludge_tiles: HashSet<Point>,
     #[serde(default)]
@@ -490,4 +501,9 @@ pub const fn default_player_level() -> u32 {
 #[must_use]
 pub const fn default_xp_to_next_level() -> u32 {
     5
+}
+
+#[must_use]
+pub const fn default_induction_attract() -> bool {
+    true
 }
