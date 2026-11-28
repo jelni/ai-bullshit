@@ -262,6 +262,18 @@ pub struct SaveState {
     #[serde(default)]
     pub comet_deflections: u32,
     #[serde(default)]
+    pub electro_magnets: HashSet<Point>,
+    #[serde(default)]
+    pub electro_attract: bool,
+    #[serde(default)]
+    pub electro_pulses: u32,
+    #[serde(default)]
+    pub electro_flips: u32,
+    #[serde(default)]
+    pub electro_shuffles: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub electro_grounded: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

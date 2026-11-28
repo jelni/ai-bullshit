@@ -109,4 +109,5 @@ pub enum GameMode {
     Mire,
     TarPit,
     Faultline,
+    Electro,
 }

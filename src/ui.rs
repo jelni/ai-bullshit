@@ -716,6 +716,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Mire Mode",
         "Tar Pit Mode",
         "Faultline Mode",
+        "Electro Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2203,6 +2204,25 @@ fn draw_entities<W: Write>(
                     stdout.queue(cursor::MoveTo(end.x, end.y))?;
                     write!(stdout, "|")?;
                 }
+            }
+        }
+    }
+
+    // Draw electromagnets (Electro mode): cyan while attracting, red while
+    // repelling, dark grey while grounded
+    if game.mode == crate::game::GameMode::Electro {
+        for magnet in &game.electro_magnets {
+            if is_visible(magnet.x, magnet.y) {
+                let color = if game.electro_grounded.contains_key(magnet) {
+                    Color::DarkGrey
+                } else if game.electro_attract {
+                    Color::Cyan
+                } else {
+                    Color::Red
+                };
+                stdout.queue(SetForegroundColor(color))?;
+                stdout.queue(cursor::MoveTo(magnet.x, magnet.y))?;
+                write!(stdout, "M")?;
             }
         }
     }
@@ -3888,10 +3908,32 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     };
     draw_base_status(game, stdout, bot_str, &combo_str)?;
 
+    let electro_str = if game.mode == crate::game::GameMode::Electro {
+        let electro = if game.electro_attract {
+            "Attract"
+        } else {
+            "Repel"
+        };
+        let grounded = if game.electro_grounded.is_empty() {
+            String::new()
+        } else {
+            format!(" | Grounded: {}", game.electro_grounded.len())
+        };
+        format!(
+            " | Magnets: {} | {} | Pulses: {} | Flips: {} | Shuffles: {}{grounded}",
+            game.electro_magnets.len(),
+            electro,
+            game.electro_pulses,
+            game.electro_flips,
+            game.electro_shuffles
+        )
+    } else {
+        String::new()
+    };
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}"
     )?;
 
     if !game.bosses.is_empty() {

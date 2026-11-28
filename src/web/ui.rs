@@ -450,6 +450,31 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw electromagnets (Electro mode): cyan while attracting, red while
+    // repelling, grey while grounded
+    if game.mode == crate::game::GameMode::Electro {
+        for magnet in &game.electro_magnets {
+            if magnet.x < game.width
+                && magnet.y < game.height
+                && is_visible(f64::from(magnet.x), f64::from(magnet.y))
+            {
+                ctx.set_fill_style_str(if game.electro_grounded.contains_key(magnet) {
+                    "#555555"
+                } else if game.electro_attract {
+                    "#00FFFF"
+                } else {
+                    "#FF0000"
+                });
+                ctx.fill_rect(
+                    f64::from(magnet.x) * cell_size,
+                    f64::from(magnet.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw geyser jets and vents (Geyser mode)
     if game.mode == crate::game::GameMode::Geyser {
         ctx.set_fill_style_str("#00FFFF"); // Cyan steam jets

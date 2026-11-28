@@ -249,6 +249,12 @@ pub struct Game {
     pub fault_collapses: u32,
     pub fault_heals: u32,
     pub fault_repairs: u32,
+    pub electro_magnets: HashSet<Point>,
+    pub electro_attract: bool,
+    pub electro_pulses: u32,
+    pub electro_flips: u32,
+    pub electro_shuffles: u32,
+    pub electro_grounded: std::collections::HashMap<Point, u32>,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -840,6 +846,12 @@ impl Game {
             fault_collapses: 0,
             fault_heals: 0,
             fault_repairs: 0,
+            electro_magnets: HashSet::new(),
+            electro_attract: true,
+            electro_pulses: 0,
+            electro_flips: 0,
+            electro_shuffles: 0,
+            electro_grounded: std::collections::HashMap::new(),
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1174,6 +1186,12 @@ impl Game {
             fault_collapses: self.fault_collapses,
             fault_heals: self.fault_heals,
             fault_repairs: self.fault_repairs,
+            electro_magnets: self.electro_magnets.clone(),
+            electro_attract: self.electro_attract,
+            electro_pulses: self.electro_pulses,
+            electro_flips: self.electro_flips,
+            electro_shuffles: self.electro_shuffles,
+            electro_grounded: self.electro_grounded.clone(),
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1466,6 +1484,12 @@ impl Game {
                 self.fault_collapses = state.fault_collapses;
                 self.fault_heals = state.fault_heals;
                 self.fault_repairs = state.fault_repairs;
+                self.electro_magnets = state.electro_magnets;
+                self.electro_attract = state.electro_attract;
+                self.electro_pulses = state.electro_pulses;
+                self.electro_flips = state.electro_flips;
+                self.electro_shuffles = state.electro_shuffles;
+                self.electro_grounded = state.electro_grounded;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -6595,6 +6619,205 @@ impl Game {
             self.mire_warnings.insert(p);
         }
     }
+    fn electro_magnet_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 60).clamp(3, 8)
+    }
+    // Active electromagnets: a grounded magnet is inert until its timer expires
+    fn electro_active_magnets(&self) -> impl Iterator<Item = Point> + '_ {
+        self.electro_magnets.iter().copied().filter(|p| !self.electro_grounded.contains_key(p))
+    }
+    // Nearest active magnet to `from`, ties broken deterministically by (x, y)
+    fn electro_nearest_magnet(&self, from: Point) -> Option<Point> {
+        self.electro_active_magnets()
+            .min_by_key(|m| (m.x.abs_diff(from.x).saturating_add(m.y.abs_diff(from.y)), m.x, m.y))
+    }
+    // One electromagnetism step from `head` along the dominant axis toward the
+    // nearest active magnet (attract electro) or away from it (repel
+    // electro), accepted only when the destination is fair right now, so a
+    // pulse can never directly kill: in bounds, free of snakes (bodies and the
+    // cells they are about to enter), obstacles, and every entity or lethal
+    // tile. If no step is fair the pulse simply fizzles.
+    fn electro_drag(&self, head: Point) -> Option<Point> {
+        if self.mode != GameMode::Electro {
+            return None;
+        }
+        let magnet = self.electro_nearest_magnet(head)?;
+        let dx = i32::from(magnet.x) - i32::from(head.x);
+        let dy = i32::from(magnet.y) - i32::from(head.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let mut step_x = if dx.abs() >= dy.abs() {
+            dx.signum()
+        } else {
+            0
+        };
+        let mut step_y = if dy.abs() > dx.abs() {
+            dy.signum()
+        } else {
+            0
+        };
+        if !self.electro_attract {
+            step_x = -step_x;
+            step_y = -step_y;
+        }
+        let nx = i32::from(head.x).checked_add(step_x)?;
+        let ny = i32::from(head.y).checked_add(step_y)?;
+        let dest = Point {
+            x: u16::try_from(nx).ok()?,
+            y: u16::try_from(ny).ok()?,
+        };
+        if dest.x >= self.width || dest.y >= self.height {
+            return None;
+        }
+        if self.tramp_cell_free(dest) {
+            Some(dest)
+        } else {
+            None
+        }
+    }
+    fn manage_electro(&mut self) {
+        if self.mode != GameMode::Electro {
+            return;
+        }
+        // Magnets under fresh obstacles are scrapped
+        self.electro_magnets.retain(|p| !self.obstacles.contains(p));
+        // Grounded magnets count down once per tick and reactivate at zero
+        let expired: Vec<Point> =
+            self.electro_grounded.iter().filter(|(_, t)| **t <= 1).map(|(p, _)| *p).collect();
+        for p in expired {
+            self.electro_grounded.remove(&p);
+        }
+        for t in self.electro_grounded.values_mut() {
+            *t = t.saturating_sub(1);
+        }
+        // Scheduled electro flip: attract becomes repel and back
+        if self.tick_counter.is_multiple_of(Self::ELECTRO_FLIP_PERIOD) {
+            self.electro_attract = !self.electro_attract;
+            self.electro_flips += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                if self.electro_attract {
+                    "Electro: attract!".to_string()
+                } else {
+                    "Electro: repel!".to_string()
+                },
+                crate::color::Color::Cyan,
+            );
+        }
+        // Scheduled shuffle: every 24th tick the whole layout rearranges and
+        // every magnet relocates to a fresh fair cell. Fairness: a new magnet
+        // never lands on a snake, on the cell any snake is about to enter, on
+        // any entity or hazard, or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::ELECTRO_SHUFFLE_PERIOD) {
+            let count = self.electro_magnet_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_magnets = std::mem::take(&mut self.electro_magnets);
+            self.electro_grounded.clear();
+            let avoid_magnet = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_magnets.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || heads.iter().any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_magnet,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.electro_magnets.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.electro_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The magnets rearrange! ({placed})"),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+    }
+    fn spawn_electro_magnets(&mut self) {
+        self.electro_magnets.clear();
+        self.electro_grounded.clear();
+        self.electro_attract = true;
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        for _ in 0..self.electro_magnet_count() {
+            let avoid_magnet = |p: &Point| {
+                self.obstacles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.mines.contains(p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || self.electro_magnets.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_magnet,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.electro_magnets.insert(p);
+            }
+        }
+    }
     fn fault_wave_size(&self) -> usize {
         (usize::from(self.width) * usize::from(self.height) / 60).clamp(4, 10)
     }
@@ -10944,7 +11167,8 @@ impl Game {
             | GameMode::Elevator
             | GameMode::Mire
             | GameMode::TarPit
-            | GameMode::Faultline => {
+            | GameMode::Faultline
+            | GameMode::Electro => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11081,6 +11305,7 @@ impl Game {
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
+            || self.mode == GameMode::Electro
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -11184,6 +11409,7 @@ impl Game {
         || self.mode == GameMode::Mire
         || self.mode == GameMode::TarPit
         || self.mode == GameMode::Faultline
+        || self.mode == GameMode::Electro
         {
             &self.snake
         } else {
@@ -11345,6 +11571,12 @@ impl Game {
         self.fault_collapses = 0;
         self.fault_heals = 0;
         self.fault_repairs = 0;
+        self.electro_magnets.clear();
+        self.electro_attract = true;
+        self.electro_pulses = 0;
+        self.electro_flips = 0;
+        self.electro_shuffles = 0;
+        self.electro_grounded.clear();
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -11978,6 +12210,9 @@ impl Game {
         if self.mode == GameMode::Faultline {
             self.spawn_fault_wave(5);
         }
+        if self.mode == GameMode::Electro {
+            self.spawn_electro_magnets();
+        }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
@@ -12244,6 +12479,9 @@ impl Game {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Elevator {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Electro {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -12688,7 +12926,8 @@ impl Game {
             | GameMode::Elevator
             | GameMode::Mire
             | GameMode::TarPit
-            | GameMode::Faultline => {
+            | GameMode::Faultline
+            | GameMode::Electro => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13416,6 +13655,12 @@ impl Game {
             self.fault_collapses = state.fault_collapses;
             self.fault_heals = state.fault_heals;
             self.fault_repairs = state.fault_repairs;
+            self.electro_magnets = state.electro_magnets;
+            self.electro_attract = state.electro_attract;
+            self.electro_pulses = state.electro_pulses;
+            self.electro_flips = state.electro_flips;
+            self.electro_shuffles = state.electro_shuffles;
+            self.electro_grounded = state.electro_grounded;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -13675,6 +13920,12 @@ impl Game {
             fault_collapses: self.fault_collapses,
             fault_heals: self.fault_heals,
             fault_repairs: self.fault_repairs,
+            electro_magnets: self.electro_magnets.clone(),
+            electro_attract: self.electro_attract,
+            electro_pulses: self.electro_pulses,
+            electro_flips: self.electro_flips,
+            electro_shuffles: self.electro_shuffles,
+            electro_grounded: self.electro_grounded.clone(),
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -16594,6 +16845,7 @@ impl Game {
             && self.mode != GameMode::Elevator
             && self.mode != GameMode::Mire
             && self.mode != GameMode::TarPit
+            && self.mode != GameMode::Electro
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -17585,6 +17837,7 @@ impl Game {
         self.manage_magnet();
         self.manage_gale();
         self.manage_faultline();
+        self.manage_electro();
         self.manage_thornfield();
         self.manage_domino();
         self.manage_mirage();
@@ -17737,6 +17990,20 @@ impl Game {
             } else {
                 final_head
             };
+            // In Electro mode a magnet pulse drags the head one cell toward
+            // (or away from) the nearest active magnet; the destination is
+            // always fair, so a pulse can never kill
+            let final_head = if hit_wall {
+                final_head
+            } else if self.mode == GameMode::Electro
+                && self.tick_counter.is_multiple_of(Self::ELECTRO_PULSE_PERIOD)
+                && let Some(dragged) = self.electro_drag(final_head)
+            {
+                self.electro_pulses += 1;
+                dragged
+            } else {
+                final_head
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -17885,6 +18152,35 @@ impl Game {
                     self.elev_cooldowns[idx] = Self::ELEV_COOLDOWN;
                 }
                 self.elev_rides += 1;
+            }
+        }
+        // In Electro mode a magnet pulse drags the head one cell toward (or
+        // away from) the nearest active magnet; the destination is always
+        // fair, so a pulse can never kill
+        if self.mode == GameMode::Electro
+            && self.tick_counter.is_multiple_of(Self::ELECTRO_PULSE_PERIOD)
+        {
+            if !hit_wall1 && let Some(dragged) = self.electro_drag(final_head1) {
+                final_head1 = dragged;
+                self.electro_pulses += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    if self.electro_attract {
+                        "Zap! Pulled!".to_string()
+                    } else {
+                        "Zap! Pushed!".to_string()
+                    },
+                    crate::color::Color::Cyan,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(dragged) = self.electro_drag(fh2)
+            {
+                final_head2_opt = Some(dragged);
+                self.electro_pulses += 1;
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -18883,6 +19179,7 @@ impl Game {
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
+            || self.mode == GameMode::Electro
             {
                 self.handle_death("You Died!");
             } else {
@@ -20500,6 +20797,18 @@ if self.mode == GameMode::Steamroller {
                     crate::color::Color::Green,
                 );
             }
+        }
+        if self.mode == GameMode::Electro
+            && let Some(m) = self.electro_nearest_magnet(final_head)
+        {
+            // Eating food grounds the nearest electromagnet for a while
+            self.electro_grounded.insert(m, Self::ELECTRO_GROUND_TICKS);
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Grounded!".to_string(),
+                crate::color::Color::DarkGrey,
+            );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
             // Eating food greases the belts: one random belt rotates 90 degrees
@@ -23346,6 +23655,14 @@ if self.mode == GameMode::Steamroller {
     pub const FAULT_TICKS: u32 = 12;
     /// Ticks between full floor heals in Faultline mode (all pits fill in, all cracks clear)
     pub const FAULT_HEAL_PERIOD: u32 = 200;
+    /// Ticks between scheduled magnet pulses in Electro mode
+    pub const ELECTRO_PULSE_PERIOD: u32 = 6;
+    /// Ticks between scheduled electro flips in Electro mode
+    pub const ELECTRO_FLIP_PERIOD: u32 = 12;
+    /// Ticks between scheduled magnet relocations in Electro mode
+    pub const ELECTRO_SHUFFLE_PERIOD: u32 = 24;
+    /// Ticks an electromagnet stays grounded after the snake eats food
+    pub const ELECTRO_GROUND_TICKS: u32 = 30;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
