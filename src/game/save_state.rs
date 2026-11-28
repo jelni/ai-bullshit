@@ -1,7 +1,7 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Boulder, Comet, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
-    InGameUpgrade, LandslideRock, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme,
+    InGameUpgrade, LandslideRock, Laser, Meteor, Point, DipolePol, PowerUp, Serialize, Snake, Theme,
     Tournament, Weather, default_campaign_level, default_gale_dir, default_lives, default_skin,
     default_wrap_mode,
 };
@@ -178,6 +178,14 @@ pub struct SaveState {
     pub tramp_shuffles: u32,
     #[serde(default)]
     pub tramp_overcharge: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub dipole_poles: std::collections::HashMap<Point, DipolePol>,
+    #[serde(default)]
+    pub dipole_shoves: u32,
+    #[serde(default)]
+    pub dipole_flips: u32,
+    #[serde(default)]
+    pub dipole_shifts: u32,
     #[serde(default, with = "super::map_as_pairs")]
     pub erode_timers: std::collections::HashMap<Point, u32>,
     #[serde(default)]

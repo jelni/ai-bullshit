@@ -871,6 +871,37 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_dipole_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Dipole;
+        game.reset();
+        game.dipole_poles.clear();
+        game.dipole_poles.insert(Point { x: 6, y: 9 }, DipolePol::Attract);
+        game.dipole_poles.insert(Point { x: 18, y: 9 }, DipolePol::Repel);
+        game.dipole_shoves = 11;
+        game.dipole_flips = 3;
+        game.dipole_shifts = 2;
+        let file_path = "savegame_test_dipole.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Dipole);
+        assert_eq!(loaded.weather, Weather::Clear);
+        assert_eq!(
+            loaded.dipole_poles.get(&Point { x: 6, y: 9 }),
+            Some(&DipolePol::Attract)
+        );
+        assert_eq!(
+            loaded.dipole_poles.get(&Point { x: 18, y: 9 }),
+            Some(&DipolePol::Repel)
+        );
+        assert_eq!(loaded.dipole_shoves, 11);
+        assert_eq!(loaded.dipole_flips, 3);
+        assert_eq!(loaded.dipole_shifts, 2);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_avalanche_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Avalanche;

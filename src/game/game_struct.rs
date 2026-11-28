@@ -22,6 +22,16 @@ use super::{
     PowerUpType, Read, Resource, Rng, SaveState, SeedableRng, Snake, Statistics, Theme, Tournament,
     Turret, Weather, Write, beep, default_unlocked_themes, fs, io,
 };
+use serde::{Deserialize, Serialize};
+
+/// Magnetic dipole polarity of a Dipole-mode tile: `Attract` pulls an adjacent
+/// snake's head onto the dipole cell, `Repel` pushes it one cell away.
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum DipolePol {
+    Attract,
+    Repel,
+}
+
 #[expect(clippy::struct_excessive_bools, reason = "Game struct naturally has many bools")]
 pub struct Game {
     pub width: u16,
@@ -220,6 +230,10 @@ pub struct Game {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub dipole_poles: std::collections::HashMap<Point, DipolePol>,
+    pub dipole_shoves: u32,
+    pub dipole_flips: u32,
+    pub dipole_shifts: u32,
     pub erode_timers: std::collections::HashMap<Point, u32>,
     pub erode_holes: HashSet<Point>,
     pub erode_crumbles: u32,
@@ -852,6 +866,10 @@ impl Game {
             tramp_flings: 0,
             tramp_shuffles: 0,
             tramp_overcharge: 0,
+            dipole_poles: std::collections::HashMap::new(),
+            dipole_shoves: 0,
+            dipole_flips: 0,
+            dipole_shifts: 0,
             erode_timers: std::collections::HashMap::new(),
             erode_holes: HashSet::new(),
             erode_crumbles: 0,
@@ -1213,6 +1231,10 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            dipole_poles: self.dipole_poles.clone(),
+            dipole_shoves: self.dipole_shoves,
+            dipole_flips: self.dipole_flips,
+            dipole_shifts: self.dipole_shifts,
             erode_timers: self.erode_timers.clone(),
             erode_holes: self.erode_holes.clone(),
             erode_crumbles: self.erode_crumbles,
@@ -1541,6 +1563,10 @@ impl Game {
                 self.tramp_flings = state.tramp_flings;
                 self.tramp_shuffles = state.tramp_shuffles;
                 self.tramp_overcharge = state.tramp_overcharge;
+                self.dipole_poles = state.dipole_poles;
+                self.dipole_shoves = state.dipole_shoves;
+                self.dipole_flips = state.dipole_flips;
+                self.dipole_shifts = state.dipole_shifts;
                 self.erode_timers = state.erode_timers;
                 self.erode_holes = state.erode_holes;
                 self.erode_crumbles = state.erode_crumbles;
@@ -8298,6 +8324,264 @@ impl Game {
             }
         }
     }
+    fn dipole_pole_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 80).clamp(3, 6)
+    }
+    // A cell a dipole may shove a snake onto must be fair right now: in bounds,
+    // free of snakes (bodies and the cells they are about to enter) and of every
+    // entity or lethal tile, so a shove can never directly kill.
+    fn dipole_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    const fn dir_from_to(from: Point, to: Point) -> Direction {
+        if to.x > from.x {
+            Direction::Right
+        } else if to.x < from.x {
+            Direction::Left
+        } else if to.y > from.y {
+            Direction::Down
+        } else {
+            Direction::Up
+        }
+    }
+    // When a snake's final head ends a tick orthogonally adjacent to a magnetic
+    // dipole, the dipole shoves the head one cell toward itself (Attract, onto the
+    // walkable dipole cell) or away from itself (Repel). The destination must pass
+    // dipole_cell_free, otherwise the shove fizzles, so a dipole can never
+    // shove a snake into a kill. With several adjacent dipoles the first in
+    // reading order whose shove is fair wins.
+    fn dipole_shove(&self, head: Point) -> Option<Point> {
+        if self.mode != GameMode::Dipole {
+            return None;
+        }
+        let mut adjacent: Vec<(Point, DipolePol)> = self
+            .dipole_poles
+            .iter()
+            .filter(|(p, _)| {
+                (p.x.abs_diff(head.x) + p.y.abs_diff(head.y)) == 1
+            })
+            .map(|(p, pol)| (*p, *pol))
+            .collect();
+        adjacent.sort_by_key(|(p, _)| (p.x, p.y));
+        for (dipole, pol) in adjacent {
+            let dir = match pol {
+                DipolePol::Attract => Self::dir_from_to(head, dipole),
+                DipolePol::Repel => Self::dir_from_to(dipole, head),
+            };
+            let dest = Self::calculate_next_head_dir(head, dir);
+            if self.dipole_cell_free(dest) {
+                return Some(dest);
+            }
+        }
+        None
+    }
+    fn dipole_heads(&self) -> Vec<Point> {
+        std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect()
+    }
+    fn spawn_dipole_poles(&mut self) {
+        self.dipole_poles.clear();
+        let count = self.dipole_pole_count();
+        for _ in 0..count {
+            // Fairness: a dipole never seeds on a snake, on the cell any snake is
+            // about to enter, on any entity or hazard tile, on another dipole, or
+            // within 5 cells (Manhattan) of any snake head. The avoid-closure
+            // only touches individual fields, so it can be passed alongside
+            // &mut self.rng.
+            let next_heads = self.singularity_next_heads();
+            let heads = self.dipole_heads();
+            let avoid_poles: std::collections::HashSet<Point> =
+                self.dipole_poles.keys().copied().collect();
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|r| r.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || avoid_poles.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 5)
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let pol = if self.rng.gen_bool(0.5) {
+                    DipolePol::Attract
+                } else {
+                    DipolePol::Repel
+                };
+                self.dipole_poles.insert(p, pol);
+            }
+        }
+    }
+    fn manage_dipole(&mut self) {
+        if self.mode != GameMode::Dipole {
+            return;
+        }
+        // Dipoles under fresh obstacles are scrapped
+        self.dipole_poles.retain(|p, _| !self.obstacles.contains(p));
+        // Scheduled flip: every DIPOLE_FLIP_PERIOD ticks every dipole flips
+        // between Attract and Repel
+        if self.tick_counter.is_multiple_of(Self::DIPOLE_FLIP_PERIOD) {
+            for pol in self.dipole_poles.values_mut() {
+                *pol = match *pol {
+                    DipolePol::Attract => DipolePol::Repel,
+                    DipolePol::Repel => DipolePol::Attract,
+                };
+            }
+            self.dipole_flips += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "Dipole flip!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
+        // Scheduled relocation: every DIPOLE_RELOC_PERIOD ticks one dipole
+        // relocates to a fresh fair cell at least 4 cells from any snake head
+        if self.tick_counter.is_multiple_of(Self::DIPOLE_RELOC_PERIOD)
+            && !self.dipole_poles.is_empty()
+        {
+            let keys: Vec<Point> = self.dipole_poles.keys().copied().collect();
+            let key = keys[self.rng.gen_range(0..keys.len())];
+            let old_pol = self.dipole_poles.remove(&key).unwrap_or(DipolePol::Attract);
+            let remaining: std::collections::HashSet<Point> =
+                self.dipole_poles.keys().copied().collect();
+            // Fairness: the relocated dipole never lands on a snake, on the cell
+            // any snake is about to enter, on any entity or hazard, on another
+            // dipole, or within 4 cells (Manhattan) of any snake head.
+            let next_heads = self.singularity_next_heads();
+            let heads = self.dipole_heads();
+            let avoid = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|r| r.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || remaining.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            match Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                Some(p) => {
+                    self.dipole_poles.insert(p, old_pol);
+                    self.dipole_shifts += 1;
+                    let head = self.snake.head();
+                    self.spawn_floating_text(
+                        f32::from(head.x),
+                        f32::from(head.y),
+                        "A dipole shifts!".to_string(),
+                        crate::color::Color::Cyan,
+                    );
+                }
+                None => {
+                    self.dipole_poles.insert(key, old_pol);
+                }
+            }
+        }
+        // Cycle reset: at tick 200 of every 250-tick cycle the dipoles discharge
+        // and a fresh fair layout reseeds
+        if self.tick_counter == Self::DIPOLE_RESET_TICK {
+            self.dipole_poles.clear();
+            self.spawn_dipole_poles();
+            self.dipole_shifts += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "The dipoles discharge!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -12764,7 +13048,7 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-            | GameMode::Sinkhole => {
+            | GameMode::Sinkhole | GameMode::Dipole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12888,6 +13172,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Dipole
             || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
@@ -12998,6 +13283,7 @@ impl Game {
             || self.mode == GameMode::Landslide
         || self.mode == GameMode::PhaseShift
         || self.mode == GameMode::Trampoline
+        || self.mode == GameMode::Dipole
         || self.mode == GameMode::Crumble
         || self.mode == GameMode::Polarity
         || self.mode == GameMode::Blink
@@ -13146,6 +13432,10 @@ impl Game {
         self.tramp_flings = 0;
         self.tramp_shuffles = 0;
         self.tramp_overcharge = 0;
+        self.dipole_poles.clear();
+        self.dipole_shoves = 0;
+        self.dipole_flips = 0;
+        self.dipole_shifts = 0;
         self.erode_timers.clear();
         self.erode_holes.clear();
         self.erode_crumbles = 0;
@@ -13910,6 +14200,9 @@ impl Game {
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
+        if self.mode == GameMode::Dipole {
+            self.spawn_dipole_poles();
+        }
         if self.mode == GameMode::SpikePit {
             self.spawn_spike_vents();
         }
@@ -14175,7 +14468,10 @@ impl Game {
         if self.mode == GameMode::PhaseShift {
             self.weather = Weather::Clear;
         }
-        if self.mode == GameMode::Domino {
+        if self.mode == GameMode::Domino {        if self.mode == GameMode::Dipole {
+            self.weather = Weather::Clear;
+        }
+
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Comet {
@@ -14639,7 +14935,7 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-            | GameMode::Sinkhole => {
+            | GameMode::Sinkhole | GameMode::Dipole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -15337,6 +15633,10 @@ impl Game {
             self.tramp_flings = state.tramp_flings;
             self.tramp_shuffles = state.tramp_shuffles;
             self.tramp_overcharge = state.tramp_overcharge;
+            self.dipole_poles = state.dipole_poles;
+            self.dipole_shoves = state.dipole_shoves;
+            self.dipole_flips = state.dipole_flips;
+            self.dipole_shifts = state.dipole_shifts;
             self.erode_timers = state.erode_timers;
             self.erode_holes = state.erode_holes;
             self.erode_crumbles = state.erode_crumbles;
@@ -15632,6 +15932,10 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            dipole_poles: self.dipole_poles.clone(),
+            dipole_shoves: self.dipole_shoves,
+            dipole_flips: self.dipole_flips,
+            dipole_shifts: self.dipole_shifts,
             erode_timers: self.erode_timers.clone(),
             erode_holes: self.erode_holes.clone(),
             erode_crumbles: self.erode_crumbles,
@@ -19607,6 +19911,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_dipole();
         self.manage_erosion();
         self.manage_induction();
         self.manage_decay();
@@ -19736,6 +20041,17 @@ impl Game {
             } else {
                 final_head
             };
+            // In Dipole mode an adjacent magnetic dipole shoves the head one
+            // cell (the shove fizzles unless the destination is fair, so this
+            // can never kill)
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(shoved) = self.dipole_shove(final_head) {
+                self.dipole_shoves += 1;
+                shoved
+            } else {
+                final_head
+            };
             let final_head = if hit_wall {
                 final_head
             } else if let Some(dragged) = self.flux_pull(final_head) {
@@ -19833,6 +20149,31 @@ impl Game {
             {
                 final_head2_opt = Some(flung);
                 self.tramp_flings += 1;
+            }
+        }
+        // In Dipole mode an adjacent magnetic dipole shoves the head one cell
+        // toward (Attract) or away from (Repel) the dipole; the shove only happens
+        // onto a fair cell, so it can never kill
+        if self.mode == GameMode::Dipole {
+            if !hit_wall1
+                && let Some(shoved) = self.dipole_shove(final_head1)
+            {
+                final_head1 = shoved;
+                self.dipole_shoves += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Shove!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(shoved) = self.dipole_shove(fh2)
+            {
+                final_head2_opt = Some(shoved);
+                self.dipole_shoves += 1;
             }
         }
         // In Flux mode the nearest coil in range drags the head one extra cell
@@ -21021,6 +21362,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Dipole
             || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
@@ -22575,6 +22917,42 @@ if self.mode == GameMode::Steamroller {
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
             );
+        }
+        if self.mode == GameMode::Dipole {
+            // Eating food degausses the dipoles adjacent to the eaten cell
+            let adjacent = [
+                Point {
+                    x: final_head.x.saturating_sub(1),
+                    y: final_head.y,
+                },
+                Point {
+                    x: final_head.x.saturating_add(1),
+                    y: final_head.y,
+                },
+                Point {
+                    x: final_head.x,
+                    y: final_head.y.saturating_sub(1),
+                },
+                Point {
+                    x: final_head.x,
+                    y: final_head.y.saturating_add(1),
+                },
+            ];
+            let mut degaussed = 0u32;
+            for p in adjacent {
+                if self.dipole_poles.remove(&p).is_some() {
+                    degaussed += 1;
+                }
+            }
+            if degaussed > 0 {
+                self.dipole_shifts += degaussed;
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Degaussed {degaussed} dipole(s)!"),
+                    crate::color::Color::Cyan,
+                );
+            }
         }
         if self.mode == GameMode::Induction {
             // Eating food shields the snakes: no magnet tugs for a while
@@ -25612,6 +25990,12 @@ if self.mode == GameMode::Sludge {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Ticks between scheduled dipole flips in Dipole mode
+    pub const DIPOLE_FLIP_PERIOD: u32 = 6;
+    /// Ticks between scheduled single-dipole relocations in Dipole mode
+    pub const DIPOLE_RELOC_PERIOD: u32 = 12;
+    /// Tick of the 250-tick cycle at which the dipoles discharge and reseed
+    pub const DIPOLE_RESET_TICK: u32 = 200;
     /// Ticks a stepped-on cell survives before it crumbles into a hole in Erosion mode
     pub const ERODE_TICKS: u32 = 24;
     /// A tremor opens a fresh hole every this many ticks in Erosion mode

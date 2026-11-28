@@ -723,6 +723,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Decay Mode",
         "Erosion Mode",
         "Sinkhole Mode",
+        "Dipole Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2079,6 +2080,21 @@ fn draw_entities<W: Write>(
             if is_visible(pad.x, pad.y) {
                 stdout.queue(cursor::MoveTo(pad.x, pad.y))?;
                 write!(stdout, "+")?;
+            }
+        }
+    }
+
+    // Draw magnetic dipoles (Dipole mode)
+    if game.mode == crate::game::GameMode::Dipole {
+        for (dipole, pol) in &game.dipole_poles {
+            if is_visible(dipole.x, dipole.y) {
+                let (color, glyph) = match pol {
+                    crate::game::DipolePol::Attract => (Color::Green, "A"),
+                    crate::game::DipolePol::Repel => (Color::Red, "R"),
+                };
+                stdout.queue(SetForegroundColor(color))?;
+                stdout.queue(cursor::MoveTo(dipole.x, dipole.y))?;
+                write!(stdout, "{glyph}")?;
             }
         }
     }
@@ -3871,6 +3887,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let dipole_str = if game.mode == crate::game::GameMode::Dipole {
+        format!(
+            " | Poles: {} | Shoves: {} | Flips: {} | Shifts: {}",
+            game.dipole_poles.len(),
+            game.dipole_shoves,
+            game.dipole_flips,
+            game.dipole_shifts
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -4142,7 +4169,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}{dipole_str}"
     )?;
 
     if !game.bosses.is_empty() {

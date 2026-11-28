@@ -225,6 +225,27 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw magnetic dipoles (Dipole mode)
+    if game.mode == crate::game::GameMode::Dipole {
+        for (dipole, pol) in &game.dipole_poles {
+            if dipole.x < game.width
+                && dipole.y < game.height
+                && is_visible(f64::from(dipole.x), f64::from(dipole.y))
+            {
+                ctx.set_fill_style_str(match pol {
+                    crate::game::DipolePol::Attract => "#00FF00",
+                    crate::game::DipolePol::Repel => "#FF0000",
+                });
+                ctx.fill_rect(
+                    f64::from(dipole.x) * cell_size,
+                    f64::from(dipole.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw the crumbling floor (Erosion mode): imminent cells telegraphed in
     // dark yellow, open holes in dark grey (over the red obstacle cells)
     if game.mode == crate::game::GameMode::Erosion {

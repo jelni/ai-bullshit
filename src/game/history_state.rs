@@ -1,7 +1,7 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
     Boss, Boulder, Comet, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant,
-    LandslideRock, Laser, Meteor, Point, PowerUp, Snake, Tournament, Weather,
+    LandslideRock, Laser, Meteor, Point, DipolePol, PowerUp, Snake, Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -82,6 +82,10 @@ pub struct HistoryState {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub dipole_poles: std::collections::HashMap<Point, DipolePol>,
+    pub dipole_shoves: u32,
+    pub dipole_flips: u32,
+    pub dipole_shifts: u32,
     pub erode_timers: std::collections::HashMap<Point, u32>,
     pub erode_holes: HashSet<Point>,
     pub erode_crumbles: u32,

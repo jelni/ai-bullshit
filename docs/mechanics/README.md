@@ -862,3 +862,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Persistence:** `sinkholes`, `sinkhole_warnings`, and `sinkhole_collapses` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_sinkhole_mode.rs](../../tests/test_sinkhole_mode.rs).
 
+
+## Dipole Mode
+
+`GameMode::Dipole` (menu entry "Dipole Mode", entry 142 in the main menu) is a survival mode played among a permanent set of magnetic dipoles:
+
+- **Magnetic dipoles:** on reset `dipole_pole_count()` = `clamp(width*height/80, 3, 6)` dipoles (`dipole_poles: HashMap<Point, DipolePol>`) are seeded with a random dipole (`DipolePol::Attract` / `DipolePol::Repel`) on fair cells at least 5 cells (Manhattan) from every snake head — never on a snake, on the cell any snake is about to enter, on any entity, on an obstacle, on a hazard tile, on another dipole, or on the food. Poles are walkable (they are *not* mirrored into `obstacles`) and render as a green `A` (Attract) / red `R` (Repel) on the terminal and green / red cells on the web. Weather is pinned to `Weather::Clear` so the dipoles stay visible.
+- **Shove:** when a snake's final head ends a tick orthogonally adjacent to a dipole, `dipole_shove` shoves the head one cell — toward the dipole for `Attract` (landing on the walkable dipole cell) or away from it for `Repel` — and counts it in `dipole_shoves` ("Shove!"). The shove is applied to the player, player 2, and every bot at the same points where `tramp_launch` is applied in `update`. With several adjacent dipoles the first in reading order whose shove is fair wins.
+- **Fairness:** the shove destination must pass `dipole_cell_free` — in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter (`singularity_cell_free`), plus the lightning column and every lethal tile set (fire, acid, puddles, lava, inferno, blaze, seismic rubble) and the Battle Royale safe zone. If no adjacent dipole has a fair shove the head simply stays put, so **a dipole can never directly kill**.
+- **Scheduled flip:** every `DIPOLE_FLIP_PERIOD` (6) ticks `manage_dipole` flips every dipole between Attract and Repel (`dipole_flips += 1`, "Dipole flip!").
+- **Scheduled relocation:** every `DIPOLE_RELOC_PERIOD` (12) ticks one random dipole relocates to a fresh fair cell (`dipole_shifts += 1`, "A dipole shifts!") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, on another dipole, or within 4 cells (Manhattan) of any snake head. At `DIPOLE_RESET_TICK` (200) of every 250-tick cycle the dipoles discharge and a fresh layout reseeds via `spawn_dipole_poles` ("The dipoles discharge!"). Dipoles that end up under a fresh obstacle (e.g. a meteor crash) are scrapped at the start of each tick.
+- **Degauss:** eating food removes the dipoles orthogonally adjacent to the eaten cell ("Degaussed N dipole(s)!"), counted in `dipole_shifts`.
+- **Autopilot:** shove destinations are always fair, so a shoved bot is never killed by the shove itself; the bot replans from its actual head every tick and rides the dipoles natively.
+- **Status bar:** `Poles: <count> | Shoves: <count> | Flips: <count> | Shifts: <count>` (`dipole_str`).
+- **Persistence:** `dipole_poles`, `dipole_shoves`, `dipole_flips`, and `dipole_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_dipole_mode.rs](../../tests/test_dipole_mode.rs) and the save/load unit test `test_save_and_load_dipole_mode` in `src/game/tests.rs`.
