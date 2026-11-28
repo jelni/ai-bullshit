@@ -98,4 +98,5 @@ pub enum GameMode {
     Trampoline,
     Polarity,
     Blink,
+    Crossfire,
 }

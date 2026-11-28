@@ -608,3 +608,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Pads: <count> | Blinks: <count> | Shuffles: <count>` plus `Overcharged: <ticks>` while overcharged (`blink_str`).
 - **Persistence:** `blink_pads`, `blink_teleports`, `blink_shuffles`, and `blink_overcharge` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_blink_mode.rs](../../tests/test_blink_mode.rs).
+## Crossfire Mode
+
+`GameMode::Crossfire` (menu entry "Crossfire Mode", entry 123 in the main menu) is a survival mode built around scheduled **cross beams**:
+
+- **Scheduling:** every `CROSSFIRE_PERIOD` (6) ticks `manage_crossfire` picks a cross — one column and one row (`crossfire_target: Option<(u16, u16)>`, column first) — via `pick_safe_cross`.
+- **Fairness:** `pick_safe_cross` never picks a column or row any snake currently occupies (head *or* body, since a beam sweeps the whole line) or is about to enter this tick (the player's and player 2's current direction is the one they will move in this tick; bots use their queued direction), so a cross can never be scheduled on top of a snake. Lines are drawn from the playable area `1..width-1` / `1..height-1` (honoring the Battle Royale safe-zone margin).
+- **Telegraph:** the cross is telegraphed for `CROSSFIRE_TELEGRAPH_TICKS` (3) ticks (`crossfire_warn_ticks`), rendered as a yellow `-` (row) / `|` (column) / `+` (intersection) on the terminal and yellow lines on the web UI.
+- **Beam:** when the telegraph hits zero the beam fires for `CROSSFIRE_BEAM_TICKS` (2) ticks (`crossfire_beam_ticks`, counted in `crossfire_strikes`, "Crossfire!"), rendered red (`=` / `|` / `X`). `crossfire_beam_cell` marks beam cells lethal: the player, player 2, and every bot whose final head lands on the beam column or row dies.
+- **Reset:** at tick 200 of every 250-tick cycle the crossfire dies down ("The crossfire dies down!"). Eating food **dampens** it ("Dampened!"), instantly clearing the telegraph and any active beam. The weather is pinned to `Weather::Clear` so the cross is always visible.
+- **Autopilot:** `crossfire_danger_cell` (telegraphed or active) is a hard hazard in `is_safe_final_p` and `trap_blocked_cells`, a heavy penalty in the `astar_search` and `get_boss_path` heuristics/edge costs, and a hard reject in the gust/belt/singularity/minefield destination checks and `tramp_cell_free`, so the bot never routes onto a cross line.
+- **Status bar:** `Cross: C<col>/R<row> (Warn <ticks>/Beam <ticks>) | Strikes: <count>` (`crossfire_str`).
+- **Persistence:** `crossfire_target`, `crossfire_warn_ticks`, `crossfire_beam_ticks`, and `crossfire_strikes` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_crossfire_mode.rs](../../tests/test_crossfire_mode.rs).

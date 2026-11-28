@@ -197,6 +197,13 @@ pub struct SaveState {
     pub blink_shuffles: u32,
     #[serde(default)]
     pub blink_overcharge: u32,
+    pub crossfire_target: Option<(u16, u16)>,
+    #[serde(default)]
+    pub crossfire_warn_ticks: u32,
+    #[serde(default)]
+    pub crossfire_beam_ticks: u32,
+    #[serde(default)]
+    pub crossfire_strikes: u32,
     #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]

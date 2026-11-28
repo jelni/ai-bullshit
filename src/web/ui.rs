@@ -1284,6 +1284,46 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw the Crossfire telegraph / beam (Crossfire mode)
+    if game.mode == crate::game::GameMode::Crossfire
+        && let Some((col, row)) = game.crossfire_target
+    {
+        let color = if game.crossfire_beam_ticks > 0 {
+            "#FF0000" // Red: active beam
+        } else {
+            "#FFFF00" // Yellow: telegraph
+        };
+        ctx.set_fill_style_str(color);
+        for x in margin + 1..game.width.saturating_sub(margin).saturating_sub(1) {
+            if is_visible(f64::from(x), f64::from(row)) {
+                ctx.fill_rect(
+                    f64::from(x) * cell_size,
+                    f64::from(row).mul_add(cell_size, cell_size * 0.4),
+                    cell_size,
+                    cell_size * 0.2,
+                );
+            }
+        }
+        for y in margin + 1..game.height.saturating_sub(margin).saturating_sub(1) {
+            if is_visible(f64::from(col), f64::from(y)) {
+                ctx.fill_rect(
+                    f64::from(col).mul_add(cell_size, cell_size * 0.4),
+                    f64::from(y) * cell_size,
+                    cell_size * 0.2,
+                    cell_size,
+                );
+            }
+        }
+        if is_visible(f64::from(col), f64::from(row)) {
+            ctx.fill_rect(
+                f64::from(col) * cell_size,
+                f64::from(row) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
     // Draw particles
     for p in &game.particles {
         #[expect(

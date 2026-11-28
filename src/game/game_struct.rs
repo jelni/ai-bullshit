@@ -226,6 +226,10 @@ pub struct Game {
     pub blink_teleports: u32,
     pub blink_shuffles: u32,
     pub blink_overcharge: u32,
+    pub crossfire_target: Option<(u16, u16)>,
+    pub crossfire_warn_ticks: u32,
+    pub crossfire_beam_ticks: u32,
+    pub crossfire_strikes: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -766,6 +770,10 @@ impl Game {
             blink_teleports: 0,
             blink_shuffles: 0,
             blink_overcharge: 0,
+            crossfire_target: None,
+            crossfire_warn_ticks: 0,
+            crossfire_beam_ticks: 0,
+            crossfire_strikes: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1054,6 +1062,10 @@ impl Game {
             blink_teleports: self.blink_teleports,
             blink_shuffles: self.blink_shuffles,
             blink_overcharge: self.blink_overcharge,
+            crossfire_target: self.crossfire_target,
+            crossfire_warn_ticks: self.crossfire_warn_ticks,
+            crossfire_beam_ticks: self.crossfire_beam_ticks,
+            crossfire_strikes: self.crossfire_strikes,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1300,6 +1312,10 @@ impl Game {
                 self.blink_teleports = state.blink_teleports;
                 self.blink_shuffles = state.blink_shuffles;
                 self.blink_overcharge = state.blink_overcharge;
+                self.crossfire_target = state.crossfire_target;
+                self.crossfire_warn_ticks = state.crossfire_warn_ticks;
+                self.crossfire_beam_ticks = state.crossfire_beam_ticks;
+                self.crossfire_strikes = state.crossfire_strikes;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -3878,6 +3894,7 @@ impl Game {
             return false;
         }
         if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.crossfire_beam_cell(p)
             || self.fire_tiles.contains(&p)
             || self.acid_puddles.contains(&p)
             || self.puddle_tiles.contains(&p)
@@ -4336,6 +4353,140 @@ impl Game {
                     crate::color::Color::Magenta,
                 );
             }
+        }
+    }
+    // A cell on the active crossfire beam (lethal right now)
+    #[must_use]
+    pub fn crossfire_beam_cell(&self, p: Point) -> bool {
+        self.crossfire_beam_ticks > 0
+            && self
+                .crossfire_target
+                .is_some_and(|(col, row)| p.x == col || p.y == row)
+    }
+    // A cell on the crossfire cross that is lethal now or telegraphed to fire soon
+    #[must_use]
+    pub fn crossfire_danger_cell(&self, p: Point) -> bool {
+        (self.crossfire_beam_ticks > 0 || self.crossfire_warn_ticks > 0)
+            && self
+                .crossfire_target
+                .is_some_and(|(col, row)| p.x == col || p.y == row)
+    }
+    // Fairness: never schedule a cross whose column or row any snake currently
+    // occupies (a beam sweeps the whole line, so body segments count too) or is
+    // about to enter this tick. The player's and player 2's direction queues are
+    // popped before the manage_* calls, so their current direction is the one they
+    // will move in this tick; the bots are popped afterwards, so for them the queued
+    // direction is the cell they are about to enter.
+    fn pick_safe_cross(&mut self) -> Option<(u16, u16)> {
+        let mut forbidden_cols: Vec<u16> = Vec::new();
+        let mut forbidden_rows: Vec<u16> = Vec::new();
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        forbidden_cols.push(self.snake.head().x);
+        forbidden_rows.push(self.snake.head().y);
+        forbidden_cols.push(p1_next.x);
+        forbidden_rows.push(p1_next.y);
+        for p in self.snake.body_map.keys() {
+            forbidden_cols.push(p.x);
+            forbidden_rows.push(p.y);
+        }
+        if let Some(p2) = &self.player2 {
+            let p2_next = Self::calculate_next_head_dir(p2.head(), p2.direction);
+            forbidden_cols.push(p2.head().x);
+            forbidden_rows.push(p2.head().y);
+            forbidden_cols.push(p2_next.x);
+            forbidden_rows.push(p2_next.y);
+            for p in p2.body_map.keys() {
+                forbidden_cols.push(p.x);
+                forbidden_rows.push(p.y);
+            }
+        }
+        for b in &self.bots {
+            let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+            let next = Self::calculate_next_head_dir(b.head(), d);
+            forbidden_cols.push(b.head().x);
+            forbidden_rows.push(b.head().y);
+            forbidden_cols.push(next.x);
+            forbidden_rows.push(next.y);
+            for p in b.body_map.keys() {
+                forbidden_cols.push(p.x);
+                forbidden_rows.push(p.y);
+            }
+        }
+        let margin = if self.mode == GameMode::BattleRoyale {
+            self.safe_zone_margin
+        } else {
+            0
+        };
+        let min_x = margin + 1;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x);
+        let min_y = margin + 1;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y);
+        let cols: Vec<u16> = (min_x..max_x)
+            .filter(|x| !forbidden_cols.contains(x))
+            .collect();
+        let rows: Vec<u16> = (min_y..max_y)
+            .filter(|y| !forbidden_rows.contains(y))
+            .collect();
+        if cols.is_empty() || rows.is_empty() {
+            return None;
+        }
+        let col = cols[self.rng.gen_range(0..cols.len())];
+        let row = rows[self.rng.gen_range(0..rows.len())];
+        Some((col, row))
+    }
+    fn manage_crossfire(&mut self) {
+        if self.mode != GameMode::Crossfire {
+            return;
+        }
+        // The skies stay clear so the telegraph and the beam are always visible
+        self.weather = Weather::Clear;
+        // Periodic reset: at tick 200 of every 250-tick cycle the crossfire dies down
+        if self.tick_counter == 200 {
+            if self.crossfire_target.is_some() || self.crossfire_beam_ticks > 0 {
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The crossfire dies down!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+            }
+            self.crossfire_target = None;
+            self.crossfire_warn_ticks = 0;
+            self.crossfire_beam_ticks = 0;
+            return;
+        }
+        // An active beam counts down; when it expires the cross is over
+        if self.crossfire_beam_ticks > 0 {
+            self.crossfire_beam_ticks -= 1;
+            if self.crossfire_beam_ticks == 0 {
+                self.crossfire_target = None;
+            }
+            return;
+        }
+        // The telegraph counts down; at zero the beam fires
+        if self.crossfire_warn_ticks > 0 {
+            self.crossfire_warn_ticks -= 1;
+            if self.crossfire_warn_ticks == 0 {
+                self.crossfire_beam_ticks = Self::CROSSFIRE_BEAM_TICKS;
+                self.crossfire_strikes += 1;
+                crate::game::beep();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Crossfire!".to_string(),
+                    crate::color::Color::Red,
+                );
+            }
+            return;
+        }
+        // Schedule a new cross on every CROSSFIRE_PERIOD-th tick, on fair lines only
+        if self.tick_counter.is_multiple_of(Self::CROSSFIRE_PERIOD)
+            && let Some((col, row)) = self.pick_safe_cross()
+        {
+            self.crossfire_target = Some((col, row));
+            self.crossfire_warn_ticks = Self::CROSSFIRE_TELEGRAPH_TICKS;
         }
     }
     fn spawn_phase_gates(&mut self) {
@@ -5651,6 +5802,7 @@ impl Game {
             || self.mines.contains(&dest)
             || self.black_hole == Some(dest)
             || self.lightning_column.is_some_and(|col| dest.x == col)
+            || self.crossfire_danger_cell(dest)
             || self.bosses.iter().any(|b| b.position == dest)
             || self.lasers.iter().any(|l| l.position == dest)
             || self.meteors.iter().any(|m| m.position == dest)
@@ -5943,6 +6095,10 @@ impl Game {
                 || self.rocks.iter().any(|b| b.position == *p)
                 || self.tornado == Some(*p)
                 || self.lightning_column.is_some_and(|col| p.x == col)
+                || ((self.crossfire_beam_ticks > 0 || self.crossfire_warn_ticks > 0)
+                    && self
+                        .crossfire_target
+                        .is_some_and(|(col, row)| p.x == col || p.y == row))
                 || self.lava_tiles.contains(p)
                 || self.fire_tiles.contains(p)
                 || self.ash_tiles.contains(p)
@@ -7059,6 +7215,9 @@ impl Game {
             return None;
         }
         if self.lightning_column.is_some_and(|col| dest.x == col) {
+            return None;
+        }
+        if self.crossfire_danger_cell(dest) {
             return None;
         }
         Some(dest)
@@ -8445,7 +8604,8 @@ impl Game {
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
-            | GameMode::Polarity | GameMode::Blink => {
+            | GameMode::Polarity | GameMode::Blink
+            | GameMode::Crossfire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8571,6 +8731,7 @@ impl Game {
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
+            || self.mode == GameMode::Crossfire
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -8663,6 +8824,7 @@ impl Game {
         || self.mode == GameMode::Trampoline
         || self.mode == GameMode::Polarity
         || self.mode == GameMode::Blink
+        || self.mode == GameMode::Crossfire
         {
             &self.snake
         } else {
@@ -8801,6 +8963,10 @@ impl Game {
         self.blink_teleports = 0;
         self.blink_shuffles = 0;
         self.blink_overcharge = 0;
+        self.crossfire_target = None;
+        self.crossfire_warn_ticks = 0;
+        self.crossfire_beam_ticks = 0;
+        self.crossfire_strikes = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -10067,7 +10233,8 @@ impl Game {
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
-            | GameMode::Polarity | GameMode::Blink => {
+            | GameMode::Polarity | GameMode::Blink
+            | GameMode::Crossfire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10771,6 +10938,10 @@ impl Game {
             self.blink_teleports = state.blink_teleports;
             self.blink_shuffles = state.blink_shuffles;
             self.blink_overcharge = state.blink_overcharge;
+            self.crossfire_target = state.crossfire_target;
+            self.crossfire_warn_ticks = state.crossfire_warn_ticks;
+            self.crossfire_beam_ticks = state.crossfire_beam_ticks;
+            self.crossfire_strikes = state.crossfire_strikes;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -10984,6 +11155,10 @@ impl Game {
             blink_teleports: self.blink_teleports,
             blink_shuffles: self.blink_shuffles,
             blink_overcharge: self.blink_overcharge,
+            crossfire_target: self.crossfire_target,
+            crossfire_warn_ticks: self.crossfire_warn_ticks,
+            crossfire_beam_ticks: self.crossfire_beam_ticks,
+            crossfire_strikes: self.crossfire_strikes,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -11855,6 +12030,9 @@ impl Game {
                     }
                 }
             }
+            if self.crossfire_danger_cell(p) {
+                penalty = penalty.saturating_add(500_000);
+            }
             for m in &self.meteors {
                 if m.position == p {
                     penalty = penalty.saturating_add(500_000);
@@ -12038,6 +12216,8 @@ impl Game {
                         can_move = false;
                     } else if self.lightning_column == Some(final_p.x) {
                         can_move = false;
+                    } else if self.crossfire_danger_cell(final_p) {
+                        can_move = false;
                     } else if self.meteors.iter().any(|m| m.position == final_p) {
                         can_move = false;
                     } else if self.rocks.iter().any(|b| b.position == final_p) {
@@ -12101,6 +12281,9 @@ impl Game {
                             if dx < 3 {
                                 edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
                             }
+                        }
+                        if self.crossfire_danger_cell(final_p) {
+                            edge_cost = edge_cost.saturating_add(30_000);
                         }
                         for m in &self.meteors {
                             if m.vx != 0 {
@@ -14846,6 +15029,7 @@ impl Game {
         self.manage_trampoline();
         self.manage_polarity();
         self.manage_blink();
+        self.manage_crossfire();
         self.manage_thornfield();
         self.manage_mirage();
 
@@ -15237,6 +15421,9 @@ impl Game {
         if self.lightning_column.is_some_and(|col| final_head1.x == col) && !is_invincible {
             p1_dead = true;
         }
+        if self.crossfire_beam_cell(final_head1) && !is_invincible {
+            p1_dead = true;
+        }
         if hit_wall2 || out_of_bounds2 {
             p2_dead = true;
         }
@@ -15286,6 +15473,9 @@ impl Game {
             .is_some_and(|head| self.lightning_column.is_some_and(|col| head.x == col))
             && !is_invincible
         {
+            p2_dead = true;
+        }
+        if final_head2_opt.is_some_and(|head| self.crossfire_beam_cell(head)) && !is_invincible {
             p2_dead = true;
         }
         if let Some(final_head2) = final_head2_opt
@@ -15760,6 +15950,10 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.crossfire_beam_cell(*final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             // Check body collisions for bot
             if self.snake.body_map.contains_key(final_head) {
                 bots_to_remove.insert(*i);
@@ -15932,6 +16126,7 @@ impl Game {
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
+            || self.mode == GameMode::Crossfire
             {
                 self.handle_death("You Died!");
             } else {
@@ -17364,6 +17559,22 @@ if self.mode == GameMode::Steamroller {
                 crate::color::Color::Yellow,
             );
         }
+        if self.mode == GameMode::Crossfire
+            && (self.crossfire_target.is_some()
+                || self.crossfire_warn_ticks > 0
+                || self.crossfire_beam_ticks > 0)
+        {
+            // Eating food dampens the crossfire: the telegraph and any active beam fizzle
+            self.crossfire_target = None;
+            self.crossfire_warn_ticks = 0;
+            self.crossfire_beam_ticks = 0;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Dampened!".to_string(),
+                crate::color::Color::Yellow,
+            );
+        }
         if self.mode == GameMode::Quake
             && let Some(obs) = self.obstacles.iter().next().copied()
         {
@@ -18095,6 +18306,7 @@ if self.mode == GameMode::Steamroller {
             || self.black_hole == Some(dest)
             || self.tornado == Some(dest)
             || self.lightning_column == Some(dest.x)
+            || self.crossfire_danger_cell(dest)
             || self.mines.contains(&dest)
             || self.lasers.iter().any(|l| l.position == dest)
             || self.meteors.iter().any(|m| m.position == dest)
@@ -19187,6 +19399,9 @@ if self.mode == GameMode::Steamroller {
             {
                 return false;
             }
+            if self.crossfire_danger_cell(final_p) {
+                return false;
+            }
             if self.tsunami_threatens(final_p) {
                 return false;
             }
@@ -19679,6 +19894,9 @@ if self.mode == GameMode::Steamroller {
             {
                 return false;
             }
+            if self.crossfire_danger_cell(final_p) {
+                return false;
+            }
             if let Some(pos) = self.snake.body.iter().position(|&p| p == final_p) {
                 let steps_to_clear =
                     u16::try_from(self.snake.body.len().saturating_sub(pos)).unwrap_or(u16::MAX);
@@ -20024,6 +20242,12 @@ if self.mode == GameMode::Steamroller {
     pub const BLINK_PERIOD: u32 = 24;
     /// Ticks of overcharge granted by eating food in Blink mode
     pub const BLINK_OVERCHARGE_TICKS: u32 = 12;
+    /// Crossfire mode: a new cross (one column + one row) is scheduled every this many ticks
+    pub const CROSSFIRE_PERIOD: u32 = 6;
+    /// Crossfire mode: telegraph ticks before the cross beam fires
+    pub const CROSSFIRE_TELEGRAPH_TICKS: u32 = 3;
+    /// Crossfire mode: ticks the lethal cross beam stays active once fired
+    pub const CROSSFIRE_BEAM_TICKS: u32 = 2;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
@@ -20855,6 +21079,9 @@ if self.mode == GameMode::Steamroller {
                     }
                 }
             }
+            if self.crossfire_danger_cell(p) {
+                penalty = penalty.saturating_add(500_000);
+            }
             for m in &self.meteors {
                 if m.position == p {
                     penalty = penalty.saturating_add(500_000);
@@ -20956,6 +21183,9 @@ if self.mode == GameMode::Steamroller {
                     if dx < 3 {
                         edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
                     }
+                }
+                if self.crossfire_danger_cell(final_p) {
+                    edge_cost = edge_cost.saturating_add(30_000);
                 }
                 for m in &self.meteors {
                     if m.vx != 0 {
@@ -21099,6 +21329,9 @@ if self.mode == GameMode::Steamroller {
                             edge_cost = edge_cost.saturating_add((3 - dx).saturating_mul(10000));
                         }
                     }
+                    if self.crossfire_danger_cell(final_p) {
+                        edge_cost = edge_cost.saturating_add(30_000);
+                    }
                     for m in &self.meteors {
                         if m.vx != 0 {
                             continue;
@@ -21219,6 +21452,16 @@ if self.mode == GameMode::Steamroller {
             }
         }
         if let Some(col) = self.lightning_column {
+            for y in 1..self.height.saturating_sub(1) {
+                blocked.insert(Point { x: col, y });
+            }
+        }
+        if let Some((col, row)) = self.crossfire_target
+            && (self.crossfire_beam_ticks > 0 || self.crossfire_warn_ticks > 0)
+        {
+            for x in 1..self.width.saturating_sub(1) {
+                blocked.insert(Point { x, y: row });
+            }
             for y in 1..self.height.saturating_sub(1) {
                 blocked.insert(Point { x: col, y });
             }
