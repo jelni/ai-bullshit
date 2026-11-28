@@ -334,6 +334,9 @@ pub struct Game {
     pub comets: Vec<Comet>,
     pub comet_launches: u32,
     pub comet_deflections: u32,
+    pub lodestone: Option<Point>,
+    pub lodestone_pulses: u32,
+    pub lodestone_cooldown: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -969,6 +972,9 @@ impl Game {
             domino_falls: 0,
             domino_drops: 0,
             domino_reshuffles: 0,
+            lodestone: None,
+            lodestone_pulses: 0,
+            lodestone_cooldown: 0,
             sinkholes: HashSet::new(),
             sinkhole_warnings: HashSet::new(),
             sinkhole_collapses: 0,
@@ -1340,6 +1346,9 @@ impl Game {
             crumble_tiles: self.crumble_tiles.clone(),
             crumble_collapses: self.crumble_collapses,
             crumble_cracks: self.crumble_cracks,
+            lodestone: self.lodestone,
+            lodestone_pulses: self.lodestone_pulses,
+            lodestone_cooldown: self.lodestone_cooldown,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1675,6 +1684,9 @@ impl Game {
                 self.crumble_tiles = state.crumble_tiles;
                 self.crumble_collapses = state.crumble_collapses;
                 self.crumble_cracks = state.crumble_cracks;
+                self.lodestone = state.lodestone;
+                self.lodestone_pulses = state.lodestone_pulses;
+                self.lodestone_cooldown = state.lodestone_cooldown;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -10161,6 +10173,288 @@ impl Game {
         Some(dest)
     }
 
+    fn spawn_lodestone_fair(&mut self) {
+        // Fairness: the lodestone never spawns on a snake, on any entity, or on an obstacle
+        let avoid = |p: &Point| {
+            self.obstacles.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.mines.contains(p)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.black_hole == Some(*p)
+                || self.tornado == Some(*p)
+                || self.lodestone == Some(*p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+        };
+        if let Some(m) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid,
+            &mut self.rng,
+            self.safe_zone_margin + 2,
+        ) {
+            self.lodestone = Some(m);
+            self.spawn_particles(
+                f32::from(m.x),
+                f32::from(m.y),
+                20,
+                crate::color::Color::Red,
+                'U',
+            );
+        }
+    }
+
+    fn manage_lodestone(&mut self) {
+        if self.mode != GameMode::Lodestone {
+            return;
+        }
+        // The lodestone reforms if it was lost (e.g. after a respawn)
+        if self.lodestone.is_none() {
+            self.spawn_lodestone_fair();
+        }
+        // Eating food shorts the lodestone out: the cooldown ticks down every tick
+        self.lodestone_cooldown = self.lodestone_cooldown.saturating_sub(1);
+        let Some(m) = self.lodestone else {
+            return;
+        };
+        // Scheduled wander: every 6th tick the lodestone drifts one cell, unless shorted
+        if self.tick_counter.is_multiple_of(6) && self.lodestone_cooldown == 0 {
+            // Fairness: the lodestone never drifts onto a snake (its body or the cell a
+            // snake is about to enter) or onto any entity or obstacle on the board
+            let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+            let p2_next = self
+                .player2
+                .as_ref()
+                .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+            let bot_next: Vec<Point> = self
+                .bots
+                .iter()
+                .map(|b| Self::calculate_next_head_dir(b.head(), b.direction))
+                .collect();
+            let forbidden = |p: &Point| {
+                *p == p1_next
+                    || p2_next == Some(*p)
+                    || bot_next.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|tr| tr.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.equipment_boxes.contains(p)
+                    || self.crops.iter().any(|c| c.position == *p)
+                    || self.eggs_on_board.contains_key(p)
+                    || self.koth_zone == Some(*p)
+                    || self.p1_flag == Some(*p)
+                    || self.p2_flag == Some(*p)
+                    || self.resources.contains_key(p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|b| b.position == *p)
+                    || self.obstacles.contains(p)
+            };
+            let mut dirs = [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ];
+            for i in (1..dirs.len()).rev() {
+                let j = self.rng.gen_range(0..=i);
+                dirs.swap(i, j);
+            }
+            for dir in dirs {
+                let next = Self::calculate_next_head_dir(m, dir);
+                if next.x == 0
+                    || next.x >= self.width - 1
+                    || next.y == 0
+                    || next.y >= self.height - 1
+                    || forbidden(&next)
+                {
+                    continue;
+                }
+                self.lodestone = Some(next);
+                self.spawn_particles(
+                    f32::from(next.x),
+                    f32::from(next.y),
+                    10,
+                    crate::color::Color::Red,
+                    'U',
+                );
+                break;
+            }
+        }
+    }
+
+    fn manage_lodestone_pulse(&mut self) {
+        if self.mode != GameMode::Lodestone {
+            return;
+        }
+        // A pulse fires on every 6th tick, unless the lodestone is shorted out
+        if !self.tick_counter.is_multiple_of(6)
+            || self.state != GameState::Playing
+            || self.lodestone_cooldown > 0
+        {
+            return;
+        }
+        self.lodestone_pulses += 1;
+        let Some(m) = self.lodestone else {
+            return;
+        };
+        // One shared pulse drags every snake one cell towards the lodestone. Snakes
+        // are pulled sequentially so earlier pulls are respected by later checks.
+        if let Some(dest) = self.lodestone_pull_destination(self.snake.head(), m) {
+            self.snake.move_to(dest, false);
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Pull!".to_string(),
+                crate::color::Color::Red,
+            );
+        }
+        let p2_dest = self
+            .player2
+            .as_ref()
+            .and_then(|p2| self.lodestone_pull_destination(p2.head(), m));
+        if let Some(dest) = p2_dest {
+            if let Some(p2) = &mut self.player2 {
+                p2.move_to(dest, false);
+            }
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                "Pull!".to_string(),
+                crate::color::Color::Red,
+            );
+        }
+        for i in 0..self.bots.len() {
+            let dest = self.lodestone_pull_destination(self.bots[i].head(), m);
+            if let Some(dest) = dest {
+                self.bots[i].move_to(dest, false);
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    "Pull!".to_string(),
+                    crate::color::Color::Red,
+                );
+            }
+        }
+        // The pulse also drags the loose items one cell towards the lodestone
+        if let Some(dest) = self.lodestone_pull_destination(self.food, m)
+            && !(dest == m
+                || self.bonus_food.is_some_and(|(bp, _)| bp == dest)
+                || self.poison_food.is_some_and(|(pp, _)| pp == dest)
+                || self.power_up.as_ref().is_some_and(|pu| pu.location == dest)
+                || self.portals.is_some_and(|(p1, p2)| p1 == dest || p2 == dest)
+                || self.goblin.as_ref().is_some_and(|g| g.position == dest)
+                || self.companion.as_ref().is_some_and(|c| c.position == dest)
+                || self.xp_gems.contains(&dest)
+                || self.equipment_boxes.contains(&dest)
+                || self.koth_zone == Some(dest)
+                || self.p1_flag == Some(dest)
+                || self.p2_flag == Some(dest)
+                || self.resources.contains_key(&dest))
+        {
+            self.food = dest;
+        }
+        if let Some((bp, time)) = self.bonus_food
+            && let Some(dest) = self.lodestone_pull_destination(bp, m)
+            && !(dest == m || dest == self.food
+                || self.poison_food.is_some_and(|(pp, _)| pp == dest)
+                || self.power_up.as_ref().is_some_and(|pu| pu.location == dest))
+        {
+            self.bonus_food = Some((dest, time));
+        }
+        if let Some((pp, time)) = self.poison_food
+            && let Some(dest) = self.lodestone_pull_destination(pp, m)
+            && !(dest == m || dest == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| bp == dest)
+                || self.power_up.as_ref().is_some_and(|pu| pu.location == dest))
+        {
+            self.poison_food = Some((dest, time));
+        }
+        if let Some(pu) = self.power_up.clone()
+            && let Some(dest) = self.lodestone_pull_destination(pu.location, m)
+            && !(dest == m || dest == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| bp == dest)
+                || self.poison_food.is_some_and(|(pp, _)| pp == dest))
+        {
+            self.power_up = Some(PowerUp {
+                location: dest,
+                ..pu
+            });
+        }
+    }
+
+    fn lodestone_pull_destination(&self, from: Point, lodestone: Point) -> Option<Point> {
+        // Fairness: a pulse never drags a snake out of bounds (unless the board
+        // wraps), into an obstacle, or into anything lethal or occupied.
+        let dx = i32::from(lodestone.x) - i32::from(from.x);
+        let dy = i32::from(lodestone.y) - i32::from(from.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let mut step = from;
+        if dx.abs() > dy.abs() {
+            if dx > 0 {
+                step.x += 1;
+            } else {
+                step.x = step.x.saturating_sub(1);
+            }
+        } else if dy > 0 {
+            step.y += 1;
+        } else {
+            step.y = step.y.saturating_sub(1);
+        }
+        let wraps = (self.wrap_mode || self.mode == GameMode::Zen)
+            && self.mode != GameMode::BattleRoyale;
+        let dest = if wraps {
+            self.calculate_wrapped_head(step)
+        } else {
+            step
+        };
+        let margin = self.safe_zone_margin;
+        if dest.x <= margin
+            || dest.x >= self.width - 1 - margin
+            || dest.y <= margin
+            || dest.y >= self.height - 1 - margin
+        {
+            return None;
+        }
+        if self.obstacles.contains(&dest)
+            || self.lava_tiles.contains(&dest)
+            || self.snake.body_map.contains_key(&dest)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&dest))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&dest))
+            || self.mines.contains(&dest)
+            || self.black_hole == Some(dest)
+            || self.lightning_column.is_some_and(|col| dest.x == col)
+            || self.bosses.iter().any(|b| b.position == dest)
+            || self.lasers.iter().any(|l| l.position == dest)
+            || self.meteors.iter().any(|m| m.position == dest)
+            || self.rocks.iter().any(|b| b.position == dest)
+            || self.turrets.iter().any(|t| t.position == dest)
+            || self.tornado == Some(dest)
+        {
+            return None;
+        }
+        Some(dest)
+    }
+
     fn spawn_maelstrom(&mut self) {
         if self.mode != GameMode::Maelstrom {
             return;
@@ -13301,7 +13595,8 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight => {
+| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight
+            | GameMode::Lodestone => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13440,6 +13735,7 @@ impl Game {
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
+            || self.mode == GameMode::Lodestone
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
@@ -13552,6 +13848,7 @@ impl Game {
         || self.mode == GameMode::Mire
         || self.mode == GameMode::TarPit
         || self.mode == GameMode::Faultline
+        || self.mode == GameMode::Lodestone
         || self.mode == GameMode::Electro
         || self.mode == GameMode::Sludge
         || self.mode == GameMode::Flux
@@ -13801,6 +14098,11 @@ impl Game {
             self.tornado = None;
             self.tornado_gusts = 0;
             self.tornado_spins = 0;
+        }
+        if self.mode == GameMode::Lodestone {
+            self.lodestone = None;
+            self.lodestone_pulses = 0;
+            self.lodestone_cooldown = 0;
         }
         if let Some(m) = self.maelstrom.take() {
             self.obstacles.remove(&m);
@@ -14796,6 +15098,9 @@ impl Game {
         self.tornado = None;
         self.tornado_gusts = 0;
         self.tornado_spins = 0;
+        self.lodestone = None;
+        self.lodestone_pulses = 0;
+        self.lodestone_cooldown = 0;
         self.event_horizon_drifts = 0;
         self.event_horizon_surges = 0;
         self.mine_drops = 0;
@@ -14822,6 +15127,9 @@ impl Game {
             ) {
                 self.tornado = Some(t);
             }
+        }
+        if self.mode == GameMode::Lodestone {
+            self.spawn_lodestone_fair();
         }
         if self.mode == GameMode::Singularity {
             let spawn_x = self.width / 2;
@@ -15199,7 +15507,8 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight => {
+| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight
+            | GameMode::Lodestone => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -15997,6 +16306,9 @@ impl Game {
             self.domino_falls = state.domino_falls;
             self.domino_drops = state.domino_drops;
             self.domino_reshuffles = state.domino_reshuffles;
+            self.lodestone = state.lodestone;
+            self.lodestone_pulses = state.lodestone_pulses;
+            self.lodestone_cooldown = state.lodestone_cooldown;
             self.sinkholes = state.sinkholes;
             self.sinkhole_warnings = state.sinkhole_warnings;
             self.sinkhole_collapses = state.sinkhole_collapses;
@@ -16302,6 +16614,9 @@ impl Game {
             crumble_tiles: self.crumble_tiles.clone(),
             crumble_collapses: self.crumble_collapses,
             crumble_cracks: self.crumble_cracks,
+            lodestone: self.lodestone,
+            lodestone_pulses: self.lodestone_pulses,
+            lodestone_cooldown: self.lodestone_cooldown,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -20214,6 +20529,7 @@ impl Game {
         self.manage_volcano();
         self.manage_inferno();
         self.manage_tornado();
+        self.manage_lodestone();
         self.manage_maelstrom();
         self.manage_earthquake();
         self.manage_meteor_shower();
@@ -21648,6 +21964,7 @@ impl Game {
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
+            || self.mode == GameMode::Lodestone
             || self.mode == GameMode::Electro
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
@@ -22047,6 +22364,7 @@ impl Game {
 
         self.manage_tornado_gust();
         self.manage_magnet_pulse();
+        self.manage_lodestone_pulse();
         self.manage_maelstrom_swirl();
         self.manage_event_horizon_surge();
         self.manage_blight();
@@ -23445,6 +23763,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Calmed!".to_string(),
                 crate::color::Color::Blue,
+            );
+        }
+        if self.mode == GameMode::Lodestone {
+            // Eating food shorts out the lodestone: no drift or pulse for a while
+            self.lodestone_cooldown = Self::LODESTONE_SHORT_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Shorted!".to_string(),
+                crate::color::Color::DarkCyan,
             );
         }
         if self.mode == GameMode::Blight {
@@ -26374,6 +26702,8 @@ if self.mode == GameMode::Sludge {
     pub const FAULT_TICKS: u32 = 12;
     /// Ticks between full floor heals in Faultline mode (all pits fill in, all cracks clear)
     pub const FAULT_HEAL_PERIOD: u32 = 200;
+    /// Ticks the lodestone stays shorted out after eating food in Lodestone mode
+    pub const LODESTONE_SHORT_TICKS: u32 = 6;
     /// Ticks between scheduled magnet pulses in Electro mode
     pub const ELECTRO_PULSE_PERIOD: u32 = 6;
     /// Ticks between scheduled electro flips in Electro mode

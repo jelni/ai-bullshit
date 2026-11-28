@@ -358,6 +358,11 @@ pub struct SaveState {
     pub domino_drops: u32,
     #[serde(default)]
     pub domino_reshuffles: u32,
+    pub lodestone: Option<Point>,
+    #[serde(default)]
+    pub lodestone_pulses: u32,
+    #[serde(default)]
+    pub lodestone_cooldown: u32,
     #[serde(default)]
     pub tar_pits: HashSet<Point>,
     #[serde(default)]

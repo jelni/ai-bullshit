@@ -1323,6 +1323,27 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         );
     }
 
+    // Draw the lodestone (Lodestone mode); dark red while shorted out by food
+    if game.mode == crate::game::GameMode::Lodestone
+        && let Some(m) = game.lodestone
+        && m.x < game.width
+        && m.y < game.height
+        && is_visible(f64::from(m.x), f64::from(m.y))
+    {
+        ctx.set_fill_style_str(if game.lodestone_cooldown > 0 {
+            "#8B0000" // DarkRed
+        } else {
+            "#FF0000" // Red
+        });
+        ctx.fill_rect(
+            f64::from(m.x) * cell_size,
+            f64::from(m.y) * cell_size,
+            cell_size,
+            cell_size,
+        );
+    }
+
+
     // Draw Maelstrom vortex (Maelstrom mode)
     if let Some(m) = game.maelstrom
         && m.x < game.width

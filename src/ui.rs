@@ -671,6 +671,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Polarity Mode",
         "Blink Mode",
         "Crumble Mode",
+        "Lodestone Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2789,6 +2790,22 @@ fn draw_entities<W: Write>(
         write!(stdout, "@")?;
     }
 
+    // Draw the lodestone (Lodestone mode); dark red while shorted out by food
+    if game.mode == crate::game::GameMode::Lodestone
+        && let Some(m) = game.lodestone
+        && is_visible(m.x, m.y)
+    {
+        let lodestone_color = if game.lodestone_cooldown > 0 {
+            Color::DarkRed
+        } else {
+            Color::Red
+        };
+        stdout.queue(cursor::MoveTo(m.x, m.y))?;
+        stdout.queue(SetForegroundColor(lodestone_color))?;
+        write!(stdout, "U")?;
+    }
+
+
     // Draw Maelstrom vortex (Maelstrom mode)
     if let Some(m) = game.maelstrom
         && is_visible(m.x, m.y)
@@ -3708,6 +3725,16 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let lodestone_str = if game.mode == crate::game::GameMode::Lodestone {
+        let shorted = if game.lodestone_cooldown > 0 {
+            format!(" | Shorted: {}", game.lodestone_cooldown)
+        } else {
+            String::new()
+        };
+        format!(" | Pulses: {}{shorted}", game.lodestone_pulses)
+    } else {
+        String::new()
+    };
     let tramp_str = if game.mode == crate::game::GameMode::Trampoline {
         let overcharge = if game.tramp_overcharge > 0 {
             format!(" | Overcharged: {}", game.tramp_overcharge)
@@ -4191,7 +4218,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}{dipole_str}{blight_hud}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}{dipole_str}{blight_hud}{lodestone_str}"
     )?;
 
     if !game.bosses.is_empty() {

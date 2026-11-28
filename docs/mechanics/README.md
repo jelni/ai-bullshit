@@ -877,6 +877,19 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Poles: <count> | Shoves: <count> | Flips: <count> | Shifts: <count>` (`dipole_str`).
 - **Persistence:** `dipole_poles`, `dipole_shoves`, `dipole_flips`, and `dipole_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_dipole_mode.rs](../../tests/test_dipole_mode.rs) and the save/load unit test `test_save_and_load_dipole_mode` in `src/game/tests.rs`.
+## Lodestone Mode
+
+`GameMode::Lodestone` (menu entry "Lodestone Mode", entry 89 in the main menu) is a survival mode built around a single roaming lodestone:
+
+- **Lodestone:** `spawn_lodestone_fair` seeds `lodestone` on a random fair cell at reset (`safe_zone_margin + 2`), never on a snake, an entity (food, bonus/poison food, power-ups, portals, mines, black hole, tornado), or an obstacle. `manage_lodestone` re-seeds it every tick if it was lost, and it renders as a red `M` (terminal) / red cell (web), dark red while shorted out.
+- **Drift:** on every 6th tick (unless shorted out) `manage_lodestone` drifts the lodestone one cell in a shuffled random direction. Fairness: the destination is never off the playable ring, on a snake's body, on the cell any snake is about to enter this tick (the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on any entity or obstacle.
+- **Pulse:** on every 6th tick (unless shorted out) `manage_lodestone_pulse` fires a pulse counted in `lodestone_pulses` ("Pull!" floating text). Every snake (player, player 2, then bots sequentially) is dragged one cell towards the lodestone with `move_to(dest, false)` — a pull never grows the snake. The pulse also drags the food, bonus food, poison food, and power-up one cell towards the lodestone, never onto a snake, another item, or the lodestone cell itself.
+- **Fairness:** `lodestone_pull_destination` computes the single Manhattan-reducing step towards the lodestone (wrapping if the board wraps, never in Battle Royale) and rejects any destination that is outside the safe-zone margin, on an obstacle or lava, occupied by any snake's body, or on anything lethal (mines, black hole, lightning column, bosses, lasers, meteors, rocks, turrets, tornado). If the destination is blocked the pull fizzles for that snake, so **a pulse can never directly kill**.
+- **Short-out:** eating food sets `lodestone_cooldown = LODESTONE_SHORT_TICKS` (6) ("Shorted!"); the cooldown counts down once per tick in `manage_lodestone` and suppresses both the drift and the pulse while positive.
+- **Autopilot:** every pull lands on a verified-safe cell, so a pulled bot is never killed by the pulse itself; the bot re-plans from its actual head every tick and rides out the lodestone natively.
+- **Status bar:** `Pulses: <count>` plus `Shorted: <ticks>` while shorted out (`lodestone_str`).
+- **Persistence:** `lodestone`, `lodestone_pulses`, and `lodestone_cooldown` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_lodestone_mode.rs](../../tests/test_lodestone_mode.rs).
 
 ## Blight Mode
 
