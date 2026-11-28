@@ -775,3 +775,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Magnets: <count> | <Attract/Repel> | Pulses: <count> | Flips: <count> | Shuffles: <count>` plus `Grounded: <count>` while any magnet is grounded (`electro_str`).
 - **Persistence:** `electro_magnets`, `electro_attract`, `electro_pulses`, `electro_flips`, `electro_shuffles`, and `electro_grounded` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_electro_mode.rs](../../tests/test_electro_mode.rs).
+
+## Sludge Mode
+
+`GameMode::Sludge` (menu entry "Sludge Mode", entry 135 in the main menu) is a survival mode where pools of lethal sludge keep appearing and creeping across the board:
+
+- **Seeds:** on reset `spawn_initial_sludge` places `max(2, width*height/100)` sludge pools (`sludge_tiles`) on fair cells at least 5 cells (Manhattan) from the spawn point — never on a snake, an entity, an obstacle, or the food. Sludge is mirrored into `obstacles`, so it is lethal on entry and renders as a dark-grey `;` (terminal) / dark-slate cell (web).
+- **Scheduled spills:** every `SLUDGE_SPILL_PERIOD` (6) ticks `manage_sludge` fires a spill (counted in `sludge_spills`, "Sludge spills! (+N)"): `spill_sludge` opens `SLUDGE_BURST` (3) fresh pools on random fair cells via `get_random_empty_point` and creeps the field up to `SLUDGE_SPREAD` (2) cells outward from a random frontier cell, capped at `SLUDGE_CAP_PERCENT` (12)% of the board.
+- **Fairness:** `is_sludge_spill_blocked` never spills onto a cell that any snake currently occupies (head or body) or is about to enter this tick (player/p2 use their current direction, bots their queued direction), nor any entity (food, bonus/poison food, power-ups, portals, mines, black hole, tornado, goblin, bosses, companion, turrets, XP gems, painted tiles, equipment boxes, crops, eggs, the KoTH zone, flags, resources, lasers, meteors, rocks, the lightning column) or any other hazard tile set, so a spill can never kill anyone cheaply.
+- **Settling:** at tick 200 of every 250-tick cycle the whole field settles (`sludge_settles += 1`, "The sludge settles! (N)"): every cell is removed from both `sludge_tiles` and `obstacles`. An end-of-tick self-heal drops stale sludge records if something else cleared obstacles mid-tick (e.g. a Bomb).
+- **Autopilot:** because sludge lives in `obstacles`, the bot treats it as a hard obstacle in the A* search, the verified-safe `is_safe_final_p` checks, and the trap-avoidance flood fill natively, so it routes around the pool.
+- **Counterplay:** eating food stirs the sludge adjacent to the eaten cell loose ("Stirred N sludge!"), removing those cells from both `sludge_tiles` and `obstacles`.
+- **Status bar:** `Sludge: <count> | Spills: <count> | Settles: <count>` (`sludge_str`).
+- **Persistence:** `sludge_tiles`, `sludge_spills`, and `sludge_settles` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_sludge_mode.rs](../../tests/test_sludge_mode.rs).

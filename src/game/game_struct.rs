@@ -255,6 +255,9 @@ pub struct Game {
     pub electro_flips: u32,
     pub electro_shuffles: u32,
     pub electro_grounded: std::collections::HashMap<Point, u32>,
+    pub sludge_tiles: HashSet<Point>,
+    pub sludge_spills: u32,
+    pub sludge_settles: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -852,6 +855,9 @@ impl Game {
             electro_flips: 0,
             electro_shuffles: 0,
             electro_grounded: std::collections::HashMap::new(),
+            sludge_tiles: HashSet::new(),
+            sludge_spills: 0,
+            sludge_settles: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1192,6 +1198,9 @@ impl Game {
             electro_flips: self.electro_flips,
             electro_shuffles: self.electro_shuffles,
             electro_grounded: self.electro_grounded.clone(),
+            sludge_tiles: self.sludge_tiles.clone(),
+            sludge_spills: self.sludge_spills,
+            sludge_settles: self.sludge_settles,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1490,6 +1499,9 @@ impl Game {
                 self.electro_flips = state.electro_flips;
                 self.electro_shuffles = state.electro_shuffles;
                 self.electro_grounded = state.electro_grounded;
+                self.sludge_tiles = state.sludge_tiles;
+                self.sludge_spills = state.sludge_spills;
+                self.sludge_settles = state.sludge_settles;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -7001,6 +7013,275 @@ impl Game {
             }
         }
     }
+    fn manage_sludge(&mut self) {
+        if self.mode != GameMode::Sludge {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale sludge records
+        self.sludge_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic dry-up: at tick 200 of every 250-tick cycle all sludge firms up
+        if self.tick_counter == 200 {
+            if !self.sludge_tiles.is_empty() {
+                let n = self.sludge_tiles.len();
+                let doomed: Vec<Point> = self.sludge_tiles.drain().collect();
+                for p in doomed {
+                    self.obstacles.remove(&p);
+                }
+                self.sludge_settles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The sludge settles! ({n})"),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // Scheduled sink: every 6th tick fresh sludge swallows fair cells
+        if self.tick_counter.is_multiple_of(Self::SLUDGE_SPILL_PERIOD) {
+            self.sludge_spills += 1;
+            self.spill_sludge();
+        }
+    }
+    fn spill_sludge(&mut self) {
+        let cap =
+            (u32::from(self.width) * u32::from(self.height)) * Self::SLUDGE_CAP_PERCENT / 100;
+        if u32::try_from(self.sludge_tiles.len()).unwrap_or(u32::MAX) >= cap {
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        let mut sank = 0u32;
+        // Fresh sinkholes open on random fair cells. The avoid closure touches
+        // individual fields (not a &self method) so `&mut self.rng` can be
+        // passed alongside it.
+        for _ in 0..Self::SLUDGE_BURST {
+            if u32::try_from(self.sludge_tiles.len()).unwrap_or(u32::MAX) >= cap {
+                break;
+            }
+            let avoid = |p: &Point| {
+                *p == p1_next
+                    || p2_next == Some(*p)
+                    || bot_next.contains(p)
+                    || self.obstacles.contains(p)
+                    || self.sludge_tiles.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| pu.location == *p)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.painted_tiles.contains_key(p)
+                    || self.equipment_boxes.contains(p)
+                    || self.crops.iter().any(|c| c.position == *p)
+                    || self.eggs_on_board.contains_key(p)
+                    || self.koth_zone == Some(*p)
+                    || self.p1_flag == Some(*p)
+                    || self.p2_flag == Some(*p)
+                    || self.resources.contains_key(p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|b| b.position == *p)
+                    || self.lightning_column.is_some_and(|col| p.x == col)
+                    || self.snow_tiles.contains(p)
+                    || self.sand_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.rubble_tiles.contains(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.ash_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.ice_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.fortress_walls.contains(p)
+                    || self.thorn_tiles.contains(p)
+                    || self.geyser_jets.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.sludge_tiles.insert(p);
+                self.obstacles.insert(p);
+                sank += 1;
+            }
+        }
+        // The field creeps outward from its existing frontier
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        for _ in 0..Self::SLUDGE_SPREAD {
+            if u32::try_from(self.sludge_tiles.len()).unwrap_or(u32::MAX) >= cap {
+                break;
+            }
+            if self.sludge_tiles.is_empty() {
+                break;
+            }
+            let frontier: Vec<Point> = self.sludge_tiles.iter().copied().collect();
+            let base = frontier[self.rng.gen_range(0..frontier.len())];
+            let dir = dirs[self.rng.gen_range(0..dirs.len())];
+            let np = Self::calculate_next_head_dir(base, dir);
+            if np.x >= self.width || np.y >= self.height {
+                continue;
+            }
+            if self.is_sludge_spill_blocked(np, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            if self.sludge_tiles.insert(np) {
+                self.obstacles.insert(np);
+                sank += 1;
+            }
+        }
+        if sank > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Sludge spills! (+{sank})"),
+                crate::color::Color::DarkGrey,
+            );
+        }
+    }
+    fn is_sludge_spill_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.sludge_tiles.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.rocks.iter().any(|b| b.position == p)
+            || self.lightning_column.is_some_and(|col| p.x == col)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || (self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0))
+    }
+    fn spawn_initial_sludge(&mut self) {
+        let count = (u32::from(self.width) * u32::from(self.height) / 100).max(2);
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let next_heads = self.singularity_next_heads();
+        let mut placed = 0u32;
+        for _ in 0..count * 20 {
+            if placed >= count {
+                break;
+            }
+            let avoid_sludge = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.sludge_tiles.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.mines.contains(p)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.geyser_vents.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_sludge,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.sludge_tiles.insert(pos);
+                self.obstacles.insert(pos);
+                placed += 1;
+            }
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -11168,7 +11449,8 @@ impl Game {
             | GameMode::Mire
             | GameMode::TarPit
             | GameMode::Faultline
-            | GameMode::Electro => {
+            | GameMode::Electro
+            | GameMode::Sludge => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11306,6 +11588,7 @@ impl Game {
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
             || self.mode == GameMode::Electro
+            || self.mode == GameMode::Sludge
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -11410,6 +11693,7 @@ impl Game {
         || self.mode == GameMode::TarPit
         || self.mode == GameMode::Faultline
         || self.mode == GameMode::Electro
+        || self.mode == GameMode::Sludge
         {
             &self.snake
         } else {
@@ -11577,6 +11861,9 @@ impl Game {
         self.electro_flips = 0;
         self.electro_shuffles = 0;
         self.electro_grounded.clear();
+        self.sludge_tiles.clear();
+        self.sludge_spills = 0;
+        self.sludge_settles = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -12212,6 +12499,9 @@ impl Game {
         }
         if self.mode == GameMode::Electro {
             self.spawn_electro_magnets();
+        }
+        if self.mode == GameMode::Sludge {
+            self.spawn_initial_sludge();
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -12927,7 +13217,8 @@ impl Game {
             | GameMode::Mire
             | GameMode::TarPit
             | GameMode::Faultline
-            | GameMode::Electro => {
+            | GameMode::Electro
+            | GameMode::Sludge => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12995,6 +13286,7 @@ impl Game {
         self.inferno_burn.retain(|p, _| self.inferno_tiles.contains(p));
         self.thorn_tiles.retain(|p| self.obstacles.contains(p));
         self.domino_tiles.retain(|p| self.obstacles.contains(p));
+        self.sludge_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
@@ -13661,6 +13953,9 @@ impl Game {
             self.electro_flips = state.electro_flips;
             self.electro_shuffles = state.electro_shuffles;
             self.electro_grounded = state.electro_grounded;
+            self.sludge_tiles = state.sludge_tiles;
+            self.sludge_spills = state.sludge_spills;
+            self.sludge_settles = state.sludge_settles;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -13926,6 +14221,9 @@ impl Game {
             electro_flips: self.electro_flips,
             electro_shuffles: self.electro_shuffles,
             electro_grounded: self.electro_grounded.clone(),
+            sludge_tiles: self.sludge_tiles.clone(),
+            sludge_spills: self.sludge_spills,
+            sludge_settles: self.sludge_settles,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -17847,6 +18145,7 @@ impl Game {
 
         self.manage_landslide();
         self.manage_comet();
+        self.manage_sludge();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -19180,6 +19479,7 @@ impl Game {
             || self.mode == GameMode::TarPit
             || self.mode == GameMode::Faultline
             || self.mode == GameMode::Electro
+            || self.mode == GameMode::Sludge
             {
                 self.handle_death("You Died!");
             } else {
@@ -20930,7 +21230,30 @@ if self.mode == GameMode::Steamroller {
                 );
             }
         }
-        if self.mode == GameMode::Inferno {
+if self.mode == GameMode::Sludge {
+            let mut shook = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.sludge_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    shook += 1;
+                }
+            }
+            if shook > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Stirred {shook} sludge!"),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+        }
+                if self.mode == GameMode::Inferno {
             let hotspots = self.inferno_hotspots.clone();
             let mut cleared = 0u32;
             for dir in [
@@ -23565,6 +23888,14 @@ if self.mode == GameMode::Steamroller {
     pub const MAX_COMETS: usize = 2;
     /// Ticks a comet's burning trail cell stays lethal in Comet mode
     pub const COMET_TAIL_TICKS: u32 = 12;
+    /// Ticks between scheduled sludge spill events in `GameMode::Sludge`.
+    pub const SLUDGE_SPILL_PERIOD: u32 = 6;
+    /// Fresh sludge pools opened per scheduled spill in `GameMode::Sludge`.
+    pub const SLUDGE_BURST: usize = 3;
+    /// Frontier cells the sludge field creeps onto per scheduled spill.
+    pub const SLUDGE_SPREAD: usize = 2;
+    /// Sludge is capped at this percentage of the board in `GameMode::Sludge`.
+    pub const SLUDGE_CAP_PERCENT: u32 = 12;
     /// Cells a launch pad flings a snake in Trampoline mode (5 while overcharged)
     pub const TRAMP_LAUNCH: u16 = 3;
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;

@@ -414,6 +414,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw tar pools (Tar Pit mode)
+    if game.mode == crate::game::GameMode::Sludge {
+        ctx.set_fill_style_str("#2F4F4F"); // Dark slate gray sludge
+        for t in &game.sludge_tiles {
+            if t.x < game.width
+                && t.y < game.height
+                && is_visible(f64::from(t.x), f64::from(t.y))
+            {
+                ctx.fill_rect(
+                    f64::from(t.x) * cell_size,
+                    f64::from(t.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

@@ -274,6 +274,12 @@ pub struct SaveState {
     #[serde(default, with = "super::map_as_pairs")]
     pub electro_grounded: std::collections::HashMap<Point, u32>,
     #[serde(default)]
+    pub sludge_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub sludge_spills: u32,
+    #[serde(default)]
+    pub sludge_settles: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

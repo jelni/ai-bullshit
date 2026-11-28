@@ -110,4 +110,5 @@ pub enum GameMode {
     TarPit,
     Faultline,
     Electro,
+    Sludge,
 }
