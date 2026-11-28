@@ -708,6 +708,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Crossfire Mode",
         "Quicksand Mode",
         "Domino Mode",
+        "Magnet Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2074,6 +2075,21 @@ fn draw_entities<W: Write>(
             if is_visible(cell.x, cell.y) {
                 stdout.queue(cursor::MoveTo(cell.x, cell.y))?;
                 write!(stdout, "~")?;
+            }
+        }
+    }
+
+    // Draw magnet poles (Magnet mode): attract poles as a cyan '+', repel poles as a red '-'
+    if game.mode == crate::game::GameMode::Magnet {
+        for (pole, attract) in &game.magnet_poles {
+            if is_visible(pole.x, pole.y) {
+                stdout.queue(SetForegroundColor(if *attract {
+                    Color::Cyan
+                } else {
+                    Color::Red
+                }))?;
+                stdout.queue(cursor::MoveTo(pole.x, pole.y))?;
+                write!(stdout, "{}", if *attract { "+" } else { "-" })?;
             }
         }
     }
@@ -3456,6 +3472,17 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let magnet_str = if game.mode == crate::game::GameMode::Magnet {
+        format!(
+            " | Poles: {} | Pulses: {} | Relocations: {} | Flips: {}",
+            game.magnet_poles.len(),
+            game.magnet_pulses,
+            game.magnet_relocations,
+            game.magnet_flips
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -3654,7 +3681,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}"
     )?;
 
     if !game.bosses.is_empty() {

@@ -101,4 +101,5 @@ pub enum GameMode {
     Crossfire,
     Quicksand,
     Domino,
+    Magnet,
 }

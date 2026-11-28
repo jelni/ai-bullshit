@@ -230,6 +230,10 @@ pub struct Game {
     pub crossfire_warn_ticks: u32,
     pub crossfire_beam_ticks: u32,
     pub crossfire_strikes: u32,
+    pub magnet_poles: std::collections::HashMap<Point, bool>,
+    pub magnet_pulses: u32,
+    pub magnet_relocations: u32,
+    pub magnet_flips: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -784,6 +788,10 @@ impl Game {
             crossfire_warn_ticks: 0,
             crossfire_beam_ticks: 0,
             crossfire_strikes: 0,
+            magnet_poles: std::collections::HashMap::new(),
+            magnet_pulses: 0,
+            magnet_relocations: 0,
+            magnet_flips: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1086,6 +1094,10 @@ impl Game {
             crossfire_warn_ticks: self.crossfire_warn_ticks,
             crossfire_beam_ticks: self.crossfire_beam_ticks,
             crossfire_strikes: self.crossfire_strikes,
+            magnet_poles: self.magnet_poles.clone(),
+            magnet_pulses: self.magnet_pulses,
+            magnet_relocations: self.magnet_relocations,
+            magnet_flips: self.magnet_flips,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1346,6 +1358,10 @@ impl Game {
                 self.crossfire_warn_ticks = state.crossfire_warn_ticks;
                 self.crossfire_beam_ticks = state.crossfire_beam_ticks;
                 self.crossfire_strikes = state.crossfire_strikes;
+                self.magnet_poles = state.magnet_poles;
+                self.magnet_pulses = state.magnet_pulses;
+                self.magnet_relocations = state.magnet_relocations;
+                self.magnet_flips = state.magnet_flips;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -4983,6 +4999,284 @@ impl Game {
         {
             self.crossfire_target = Some((col, row));
             self.crossfire_warn_ticks = Self::CROSSFIRE_TELEGRAPH_TICKS;
+        }
+    }
+    fn magnet_pole_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 150).clamp(2, 6)
+    }
+    fn spawn_magnet_poles(&mut self) {
+        self.magnet_poles.clear();
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let heads: Vec<Point> = std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect();
+        let next_heads = self.singularity_next_heads();
+        for _ in 0..self.magnet_pole_count() {
+            // Fairness: a pole never spawns on a snake, on the cell any snake is
+            // about to enter, on any entity or hazard, on another pole, or within
+            // 5 cells of the spawn point.
+            let avoid_pole = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|r| r.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.magnet_poles.contains_key(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_pole,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let attract = self.rng.gen_bool(0.5);
+                self.magnet_poles.insert(p, attract);
+            }
+        }
+    }
+    fn manage_magnet(&mut self) {
+        if self.mode != GameMode::Magnet {
+            return;
+        }
+        // Poles under fresh obstacles are demagnetized
+        self.magnet_poles.retain(|p, _| !self.obstacles.contains(p));
+        // Scheduled relocation: every MAGNET_RELOCATE_PERIOD-th tick the whole
+        // field rearranges and every pole moves to a fresh fair cell with a
+        // re-rolled polarity. Fairness: a relocated pole never lands on a snake,
+        // on the cell any snake is about to enter, on any entity or hazard, or
+        // within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::MAGNET_RELOCATE_PERIOD) {
+            let count = self.magnet_pole_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            self.magnet_poles.clear();
+            let mut placed = 0usize;
+            for _ in 0..count {
+                let avoid_pole = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || self.mines.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                        || self.bosses.iter().any(|b| b.position == *p)
+                        || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                        || self.turrets.iter().any(|t| t.position == *p)
+                        || self.lasers.iter().any(|l| l.position == *p)
+                        || self.meteors.iter().any(|m| m.position == *p)
+                        || self.rocks.iter().any(|r| r.position == *p)
+                        || self.xp_gems.contains(p)
+                        || self.tramp_pads.contains(p)
+                        || self.pinball_bumpers.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || next_heads.contains(p)
+                        || self.fire_tiles.contains(p)
+                        || self.acid_puddles.contains(p)
+                        || self.puddle_tiles.contains(p)
+                        || self.lava_tiles.contains(p)
+                        || self.inferno_tiles.contains(p)
+                        || self.blaze_tiles.contains_key(p)
+                        || self.seismic_rubble.contains(p)
+                        || heads
+                            .iter()
+                            .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pole,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    let attract = self.rng.gen_bool(0.5);
+                    self.magnet_poles.insert(p, attract);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.magnet_relocations += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The poles shift! ({placed})"),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+    }
+    // The pulse destination for a head shoved one cell in `dir`. Fairness: a
+    // pulse never shoves a snake out of bounds (unless the board wraps), into
+    // an obstacle, or into anything lethal or occupied, so a pulse can never
+    // directly kill.
+    fn magnet_destination(&self, head: Point, dir: Direction) -> Option<Point> {
+        let dest = self.gust_destination(head, dir)?;
+        // The cells the *other* snakes are about to enter are off limits (the
+        // pulsed snake's own next cell is fine - it is simply where it goes next)
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        let other_next_head_blocked = snakes
+            .iter()
+            .filter(|s| s.head() != head)
+            .map(|s| Self::calculate_next_head_dir(s.head(), s.direction))
+            .any(|next_head| next_head == dest);
+        if self.fire_tiles.contains(&dest)
+            || self.acid_puddles.contains(&dest)
+            || self.puddle_tiles.contains(&dest)
+            || self.inferno_tiles.contains(&dest)
+            || self.blaze_tiles.contains_key(&dest)
+            || self.seismic_rubble.contains(&dest)
+            || self.portals.is_some_and(|(p1, p2)| dest == p1 || dest == p2)
+            || other_next_head_blocked
+            || self.meteors.iter().any(|m| self.meteor_would_hit(*m, dest, 1))
+        {
+            return None;
+        }
+        Some(dest)
+    }
+    // The pulse step for a head: one cell toward (attract pole) or away from
+    // (repel pole) the nearest pole along the dominant axis. Returns None when
+    // the head sits on a pole or no fair destination exists.
+    fn magnet_pulse_step(&self, head: Point) -> Option<(Point, bool)> {
+        let (pole, attract) = self
+            .magnet_poles
+            .iter()
+            .min_by_key(|(p, _)| p.x.abs_diff(head.x).saturating_add(p.y.abs_diff(head.y)))?;
+        let dx = i32::from(pole.x) - i32::from(head.x);
+        let dy = i32::from(pole.y) - i32::from(head.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let toward = if dx.abs() >= dy.abs() {
+            if dx > 0 {
+                Direction::Right
+            } else {
+                Direction::Left
+            }
+        } else if dy > 0 {
+            Direction::Down
+        } else {
+            Direction::Up
+        };
+        let dir = if *attract {
+            toward
+        } else {
+            match toward {
+                Direction::Up => Direction::Down,
+                Direction::Down => Direction::Up,
+                Direction::Left => Direction::Right,
+                Direction::Right => Direction::Left,
+            }
+        };
+        self.magnet_destination(head, dir).map(|dest| (dest, *attract))
+    }
+    fn manage_magnet_pulse(&mut self) {
+        if self.mode != GameMode::Magnet {
+            return;
+        }
+        // A magnetic pulse sweeps the whole board on every MAGNET_PULSE_PERIOD-th tick
+        if !self.tick_counter.is_multiple_of(Self::MAGNET_PULSE_PERIOD)
+            || self.state != GameState::Playing
+            || self.magnet_poles.is_empty()
+        {
+            return;
+        }
+        self.magnet_pulses += 1;
+        // One shared pulse shoves every snake one cell toward or away from its
+        // nearest pole. Snakes are pulsed sequentially so earlier pulses are
+        // respected by later checks.
+        if let Some((dest, attract)) = self.magnet_pulse_step(self.snake.head()) {
+            self.snake.move_to(dest, false);
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                if attract { "Pulled!" } else { "Pushed!" }.to_string(),
+                if attract {
+                    crate::color::Color::Cyan
+                } else {
+                    crate::color::Color::Red
+                },
+            );
+        }
+        let p2_step = self
+            .player2
+            .as_ref()
+            .and_then(|p2| self.magnet_pulse_step(p2.head()));
+        if let Some((dest, attract)) = p2_step {
+            if let Some(p2) = &mut self.player2 {
+                p2.move_to(dest, false);
+            }
+            self.spawn_floating_text(
+                f32::from(dest.x),
+                f32::from(dest.y),
+                if attract { "Pulled!" } else { "Pushed!" }.to_string(),
+                if attract {
+                    crate::color::Color::Cyan
+                } else {
+                    crate::color::Color::Red
+                },
+            );
+        }
+        for i in 0..self.bots.len() {
+            if let Some((dest, attract)) = self.magnet_pulse_step(self.bots[i].head()) {
+                self.bots[i].move_to(dest, false);
+                self.spawn_floating_text(
+                    f32::from(dest.x),
+                    f32::from(dest.y),
+                    if attract { "Pulled!" } else { "Pushed!" }.to_string(),
+                    if attract {
+                        crate::color::Color::Cyan
+                    } else {
+                        crate::color::Color::Red
+                    },
+                );
+            }
         }
     }
     fn spawn_phase_gates(&mut self) {
@@ -9143,8 +9437,9 @@ impl Game {
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
-            | GameMode::Quicksand 
-            | GameMode::Domino => {
+            | GameMode::Quicksand
+            | GameMode::Domino
+            | GameMode::Magnet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9273,6 +9568,7 @@ impl Game {
             || self.mode == GameMode::Crossfire
             || self.mode == GameMode::Quicksand
             || self.mode == GameMode::Domino
+            || self.mode == GameMode::Magnet
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -9368,6 +9664,7 @@ impl Game {
         || self.mode == GameMode::Crossfire
         || self.mode == GameMode::Quicksand
         || self.mode == GameMode::Domino
+        || self.mode == GameMode::Magnet
         {
             &self.snake
         } else {
@@ -9510,6 +9807,10 @@ impl Game {
         self.crossfire_warn_ticks = 0;
         self.crossfire_beam_ticks = 0;
         self.crossfire_strikes = 0;
+        self.magnet_poles.clear();
+        self.magnet_pulses = 0;
+        self.magnet_relocations = 0;
+        self.magnet_flips = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -10112,6 +10413,9 @@ impl Game {
                     self.blink_pads.insert(p);
                 }
             }
+        }
+        if self.mode == GameMode::Magnet {
+            self.spawn_magnet_poles();
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -10797,8 +11101,9 @@ impl Game {
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
-            | GameMode::Quicksand 
-            | GameMode::Domino => {
+            | GameMode::Quicksand
+            | GameMode::Domino
+            | GameMode::Magnet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11507,6 +11812,10 @@ impl Game {
             self.crossfire_warn_ticks = state.crossfire_warn_ticks;
             self.crossfire_beam_ticks = state.crossfire_beam_ticks;
             self.crossfire_strikes = state.crossfire_strikes;
+            self.magnet_poles = state.magnet_poles;
+            self.magnet_pulses = state.magnet_pulses;
+            self.magnet_relocations = state.magnet_relocations;
+            self.magnet_flips = state.magnet_flips;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -11734,6 +12043,10 @@ impl Game {
             crossfire_warn_ticks: self.crossfire_warn_ticks,
             crossfire_beam_ticks: self.crossfire_beam_ticks,
             crossfire_strikes: self.crossfire_strikes,
+            magnet_poles: self.magnet_poles.clone(),
+            magnet_pulses: self.magnet_pulses,
+            magnet_relocations: self.magnet_relocations,
+            magnet_flips: self.magnet_flips,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -15617,6 +15930,7 @@ impl Game {
         self.manage_polarity();
         self.manage_blink();
         self.manage_crossfire();
+        self.manage_magnet();
         self.manage_thornfield();
         self.manage_domino();
         self.manage_mirage();
@@ -16772,6 +17086,7 @@ impl Game {
             || self.mode == GameMode::Crossfire
             || self.mode == GameMode::Quicksand
             || self.mode == GameMode::Domino
+            || self.mode == GameMode::Magnet
             {
                 self.handle_death("You Died!");
             } else {
@@ -17163,6 +17478,7 @@ impl Game {
         }
 
         self.manage_tornado_gust();
+        self.manage_magnet_pulse();
         self.manage_event_horizon_surge();
         // Keep the blaze/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::Firestorm {
@@ -18216,6 +18532,29 @@ if self.mode == GameMode::Steamroller {
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
             );
+        }
+        if self.mode == GameMode::Magnet {
+            // Eating food reverses the polarity of the nearest pole
+            let nearest = self
+                .magnet_poles
+                .keys()
+                .min_by_key(|p| {
+                    p.x.abs_diff(final_head.x)
+                        .saturating_add(p.y.abs_diff(final_head.y))
+                })
+                .copied();
+            if let Some(pole) = nearest
+                && let Some(polarity) = self.magnet_poles.get_mut(&pole)
+            {
+                *polarity = !*polarity;
+                self.magnet_flips += 1;
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    "Reversed!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
         }
         if self.mode == GameMode::Polarity {
             // Eating food charges a shield: the player is not shoved for a while
@@ -20937,6 +21276,10 @@ if self.mode == GameMode::Steamroller {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// A magnetic pulse fires on every MAGNET_PULSE_PERIOD-th tick in Magnet mode
+    pub const MAGNET_PULSE_PERIOD: u32 = 6;
+    /// Every MAGNET_RELOCATE_PERIOD-th tick the poles relocate in Magnet mode
+    pub const MAGNET_RELOCATE_PERIOD: u32 = 24;
     /// Ticks between polarity flips in Polarity mode
     pub const POLARITY_FLIP_PERIOD: u32 = 16;
     /// Ticks between pole relocations in Polarity mode

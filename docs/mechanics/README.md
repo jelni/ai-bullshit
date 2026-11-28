@@ -638,7 +638,7 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 
 ## Domino Mode
 
-`GameMode::Domino` (menu entry "Domino Mode", entry 125 in the main menu) is a survival mode played among standing domino obstacles that periodically topple in chains:
+`GameMode::Domino` (menu entry "Domino Mode", entry 126 in the main menu) is a survival mode played among standing domino obstacles that periodically topple in chains:
 
 - **Dominoes:** on reset `domino_count()` = `clamp(width*height/80, 4, 10)` dominoes (`domino_tiles`) are seeded on fair cells at least 4 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, another domino, or the food. Dominoes are mirrored into `obstacles`, so entering one kills the snake, and they render as a dark-yellow `D` (terminal) / goldenrod cell (web).
 - **Topple wave:** every `DOMINO_PERIOD` (8) ticks `manage_domino` fires a wave (`domino_waves += 1`): a random standing domino is picked and knocked in a random direction. The whole chain of dominoes along that line (up to `DOMINO_CHAIN_MAX` = 6) is shoved one cell forward — the first cell is vacated and the last domino lands on the first non-domino cell ("The dominoes topple! (N)", counted in `domino_falls`). A wave shoves dominoes; it never adds new ones.
@@ -651,3 +651,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Dominoes: <count> | Waves: <count> | Falls: <count> | Reshuffles: <count>` (`domino_str`).
 - **Persistence:** `domino_tiles`, `domino_waves`, `domino_falls`, `domino_drops`, and `domino_reshuffles` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_domino_mode.rs](../../tests/test_domino_mode.rs).
+## Magnet Mode
+
+`GameMode::Magnet` (menu entry "Magnet Mode", entry 126 in the main menu) is a survival mode played among a permanent set of magnetic poles:
+
+- **Magnetic poles:** on reset `magnet_pole_count()` = `clamp(width*height/150, 2, 6)` poles (`magnet_poles: HashMap<Point, bool>`, `true` = attract, `false` = repel) are seeded by `spawn_magnet_poles` on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, on another pole, or on an obstacle. Poles are walkable markers (they are *not* mirrored into `obstacles`) and render as a cyan `+` (attract) / red `-` (repel) on the terminal and cyan / red cells on the web.
+- **Pulse:** every `MAGNET_PULSE_PERIOD` (6) ticks `manage_magnet_pulse` (called at the end of `update`, right after `manage_tornado_gust`) fires a board-wide pulse counted in `magnet_pulses`. Each snake — the player, player 2, and every bot, sequentially so earlier pulses are respected by later checks — is shoved one cell toward (attract) or away from (repel) its nearest pole along the dominant axis (`magnet_pulse_step`) with `move_to(dest, false)`, so a pulse never grows the snake ("Pulled!"/"Pushed!").
+- **Fairness:** `magnet_destination` wraps `gust_destination` (in bounds within the safe-zone margin unless the board wraps; no obstacles, lava, mines, black hole, lightning column, bosses, lasers, meteors, rocks, turrets, tornado, or any snake body) and additionally rejects the remaining lethal tile sets (fire, acid, puddles, inferno, blaze, seismic rubble), portals, the cells the *other* snakes are about to enter, and any cell a falling meteor will hit on the next tick (`meteor_would_hit(m, dest, 1)`). If no fair destination exists the pulse fizzles for that snake, so **a pulse can never directly kill**.
+- **Scheduled relocation:** every `MAGNET_RELOCATE_PERIOD` (24) ticks `manage_magnet` relocates every pole to a fresh fair cell with a re-rolled polarity (`magnet_relocations += 1`, "The poles shift! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, or within 4 cells (Manhattan) of any snake head. Poles that end up under a fresh obstacle (e.g. a meteor crash) are demagnetized at the start of each tick.
+- **Polarity reversal:** eating food flips the polarity of the pole nearest the eaten cell (`magnet_flips += 1`, "Reversed!").
+- **Autopilot:** pulse destinations are always fair, so a shoved bot is never killed by the pulse itself; the bot replans from its actual head every tick and rides the pulses natively.
+- **Status bar:** `Poles: <count> | Pulses: <count> | Relocations: <count> | Flips: <count>` (`magnet_str`).
+- **Persistence:** `magnet_poles`, `magnet_pulses`, `magnet_relocations`, and `magnet_flips` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_magnet_mode.rs](../../tests/test_magnet_mode.rs).

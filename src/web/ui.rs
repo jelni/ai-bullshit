@@ -237,6 +237,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw magnet poles (Magnet mode): attract poles cyan, repel poles red
+    if game.mode == crate::game::GameMode::Magnet {
+        for (pole, attract) in &game.magnet_poles {
+            if pole.x < game.width
+                && pole.y < game.height
+                && is_visible(f64::from(pole.x), f64::from(pole.y))
+            {
+                ctx.set_fill_style_str(if *attract { "#00FFFF" } else { "#FF0000" });
+                ctx.fill_rect(
+                    f64::from(pole.x) * cell_size,
+                    f64::from(pole.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

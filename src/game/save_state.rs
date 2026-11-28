@@ -177,6 +177,14 @@ pub struct SaveState {
     pub tramp_shuffles: u32,
     #[serde(default)]
     pub tramp_overcharge: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub magnet_poles: std::collections::HashMap<Point, bool>,
+    #[serde(default)]
+    pub magnet_pulses: u32,
+    #[serde(default)]
+    pub magnet_relocations: u32,
+    #[serde(default)]
+    pub magnet_flips: u32,
     #[serde(default)]
     pub polarity_poles: HashSet<Point>,
     #[serde(default)]
