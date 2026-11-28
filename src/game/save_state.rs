@@ -190,6 +190,14 @@ pub struct SaveState {
     #[serde(default)]
     pub polarity_shield: u32,
     #[serde(default)]
+    pub blink_pads: HashSet<Point>,
+    #[serde(default)]
+    pub blink_teleports: u32,
+    #[serde(default)]
+    pub blink_shuffles: u32,
+    #[serde(default)]
+    pub blink_overcharge: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

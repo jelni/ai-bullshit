@@ -97,4 +97,5 @@ pub enum GameMode {
     PhaseShift,
     Trampoline,
     Polarity,
+    Blink,
 }

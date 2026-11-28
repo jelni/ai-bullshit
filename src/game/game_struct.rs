@@ -222,6 +222,10 @@ pub struct Game {
     pub polarity_shuffles: u32,
     pub polarity_shoves: u32,
     pub polarity_shield: u32,
+    pub blink_pads: HashSet<Point>,
+    pub blink_teleports: u32,
+    pub blink_shuffles: u32,
+    pub blink_overcharge: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -758,6 +762,10 @@ impl Game {
             polarity_shuffles: 0,
             polarity_shoves: 0,
             polarity_shield: 0,
+            blink_pads: HashSet::new(),
+            blink_teleports: 0,
+            blink_shuffles: 0,
+            blink_overcharge: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1042,6 +1050,10 @@ impl Game {
             polarity_shuffles: self.polarity_shuffles,
             polarity_shoves: self.polarity_shoves,
             polarity_shield: self.polarity_shield,
+            blink_pads: self.blink_pads.clone(),
+            blink_teleports: self.blink_teleports,
+            blink_shuffles: self.blink_shuffles,
+            blink_overcharge: self.blink_overcharge,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1284,6 +1296,10 @@ impl Game {
                 self.polarity_shuffles = state.polarity_shuffles;
                 self.polarity_shoves = state.polarity_shoves;
                 self.polarity_shield = state.polarity_shield;
+                self.blink_pads = state.blink_pads;
+                self.blink_teleports = state.blink_teleports;
+                self.blink_shuffles = state.blink_shuffles;
+                self.blink_overcharge = state.blink_overcharge;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -3990,6 +4006,152 @@ impl Game {
                     f32::from(head.y),
                     format!("The pads rearrange! ({placed})"),
                     crate::color::Color::Yellow,
+                );
+            }
+        }
+    }
+    fn blink_pad_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 60).clamp(3, 8)
+    }
+    // A cell a blink may land on must be fair right now: in bounds within the
+    // safe-zone margin, free of snakes (bodies and the cells they are about to
+    // enter) and of every entity or lethal tile, and not another pad, so a
+    // blink can never directly kill or chain into a second pad.
+    fn blink_cell_free(&self, p: Point) -> bool {
+        self.tramp_cell_free(p) && !self.blink_pads.contains(&p)
+    }
+    // When a snake's next cell is a blink pad, teleport its head to a random
+    // fair cell ("Blink!"). While overcharged the destination is biased to a
+    // fair cell adjacent to the food. The pad cell itself stays walkable, so
+    // if no destination is fair the snake simply rests on the pad and can
+    // never be blinked into a kill.
+    fn blink_teleport(&mut self, pad: Point) -> Option<Point> {
+        if self.mode != GameMode::Blink || !self.blink_pads.contains(&pad) {
+            return None;
+        }
+        if self.blink_overcharge > 0 {
+            let mut targets = vec![self.food];
+            if let Some((bp, _)) = self.bonus_food {
+                targets.push(bp);
+            }
+            let mut near_food: Vec<Point> = Vec::new();
+            for target in targets {
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    let cell = Self::calculate_next_head_dir(target, dir);
+                    if self.blink_cell_free(cell) {
+                        near_food.push(cell);
+                    }
+                }
+            }
+            if !near_food.is_empty() {
+                let idx = self.rng.gen_range(0..near_food.len());
+                return Some(near_food[idx]);
+            }
+        }
+        // Fall back to any fair cell: collect the fair cells first so the rng
+        // is not borrowed while self is read
+        let mut fair: Vec<Point> = Vec::new();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let p = Point { x, y };
+                if self.blink_cell_free(p) {
+                    fair.push(p);
+                }
+            }
+        }
+        if fair.is_empty() {
+            return None;
+        }
+        let idx = self.rng.gen_range(0..fair.len());
+        Some(fair[idx])
+    }
+    fn manage_blink(&mut self) {
+        if self.mode != GameMode::Blink {
+            return;
+        }
+        // Pads under fresh obstacles are scrapped
+        self.blink_pads.retain(|p| !self.obstacles.contains(p));
+        // Overcharge counts down once per tick
+        if self.blink_overcharge > 0 {
+            self.blink_overcharge = self.blink_overcharge.saturating_sub(1);
+        }
+        // Scheduled scatter: every BLINK_PERIOD-th tick the whole layout
+        // rearranges and every pad relocates to a fresh fair cell. Fairness: a
+        // new pad never lands on a snake, on the cell any snake is about to
+        // enter, on any entity or hazard, or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::BLINK_PERIOD) {
+            let count = self.blink_pad_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_pads = std::mem::take(&mut self.blink_pads);
+            let avoid_pad = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_pads.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || self.polarity_poles.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pad,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.blink_pads.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.blink_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The pads scatter! ({placed})"),
+                    crate::color::Color::Cyan,
                 );
             }
         }
@@ -8283,7 +8445,7 @@ impl Game {
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
-            | GameMode::Polarity => {
+            | GameMode::Polarity | GameMode::Blink => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8408,6 +8570,7 @@ impl Game {
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Polarity
+            || self.mode == GameMode::Blink
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -8499,6 +8662,7 @@ impl Game {
         || self.mode == GameMode::PhaseShift
         || self.mode == GameMode::Trampoline
         || self.mode == GameMode::Polarity
+        || self.mode == GameMode::Blink
         {
             &self.snake
         } else {
@@ -8633,6 +8797,10 @@ impl Game {
         self.polarity_shuffles = 0;
         self.polarity_shoves = 0;
         self.polarity_shield = 0;
+        self.blink_pads.clear();
+        self.blink_teleports = 0;
+        self.blink_shuffles = 0;
+        self.blink_overcharge = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -9188,6 +9356,41 @@ impl Game {
                     self.safe_zone_margin,
                 ) {
                     self.polarity_poles.insert(p);
+                }
+            }
+        }
+        if self.mode == GameMode::Blink {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            for _ in 0..self.blink_pad_count() {
+                let avoid_pad = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.mines.contains(p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.pinball_bumpers.contains(p)
+                        || self.tramp_pads.contains(p)
+                        || self.polarity_poles.contains(p)
+                        || self.blink_pads.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pad,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.blink_pads.insert(p);
                 }
             }
         }
@@ -9864,7 +10067,7 @@ impl Game {
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
-            | GameMode::Polarity => {
+            | GameMode::Polarity | GameMode::Blink => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10564,6 +10767,10 @@ impl Game {
             self.polarity_shuffles = state.polarity_shuffles;
             self.polarity_shoves = state.polarity_shoves;
             self.polarity_shield = state.polarity_shield;
+            self.blink_pads = state.blink_pads;
+            self.blink_teleports = state.blink_teleports;
+            self.blink_shuffles = state.blink_shuffles;
+            self.blink_overcharge = state.blink_overcharge;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -10773,6 +10980,10 @@ impl Game {
             polarity_shuffles: self.polarity_shuffles,
             polarity_shoves: self.polarity_shoves,
             polarity_shield: self.polarity_shield,
+            blink_pads: self.blink_pads.clone(),
+            blink_teleports: self.blink_teleports,
+            blink_shuffles: self.blink_shuffles,
+            blink_overcharge: self.blink_overcharge,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -14634,6 +14845,7 @@ impl Game {
         self.manage_phase_shift();
         self.manage_trampoline();
         self.manage_polarity();
+        self.manage_blink();
         self.manage_thornfield();
         self.manage_mirage();
 
@@ -14742,6 +14954,14 @@ impl Game {
             } else {
                 final_head
             };
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(dest) = self.blink_teleport(final_head) {
+                self.blink_teleports += 1;
+                dest
+            } else {
+                final_head
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -14803,6 +15023,30 @@ impl Game {
             {
                 final_head2_opt = Some(shoved);
                 self.polarity_shoves += 1;
+            }
+        }
+        // In Blink mode a blink pad teleports the head to a random fair cell
+        // (the pad cell itself stays walkable, so this can never kill)
+        if self.mode == GameMode::Blink {
+            if !hit_wall1
+                && let Some(dest) = self.blink_teleport(final_head1)
+            {
+                final_head1 = dest;
+                self.blink_teleports += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Blink!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(dest) = self.blink_teleport(fh2)
+            {
+                final_head2_opt = Some(dest);
+                self.blink_teleports += 1;
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -15687,6 +15931,7 @@ impl Game {
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Polarity
+            || self.mode == GameMode::Blink
             {
                 self.handle_death("You Died!");
             } else {
@@ -17085,6 +17330,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Shielded!".to_string(),
                 crate::color::Color::Magenta,
+            );
+        }
+        if self.mode == GameMode::Blink {
+            // Eating food overcharges the pads: blinks home in on the food for a while
+            self.blink_overcharge = Self::BLINK_OVERCHARGE_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Overcharged!".to_string(),
+                crate::color::Color::Cyan,
             );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
@@ -19765,6 +20020,10 @@ if self.mode == GameMode::Steamroller {
     pub const POLARITY_SHUFFLE_PERIOD: u32 = 24;
     /// Ticks of shove immunity granted by eating food in Polarity mode
     pub const POLARITY_SHIELD_TICKS: u32 = 10;
+    /// Ticks between blink-pad layout scatters in Blink mode
+    pub const BLINK_PERIOD: u32 = 24;
+    /// Ticks of overcharge granted by eating food in Blink mode
+    pub const BLINK_OVERCHARGE_TICKS: u32 = 12;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

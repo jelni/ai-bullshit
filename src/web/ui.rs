@@ -197,6 +197,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw blink pads (Blink mode)
+    if game.mode == crate::game::GameMode::Blink {
+        ctx.set_fill_style_str(if game.blink_overcharge > 0 {
+            "#FFFFFF"
+        } else {
+            "#00FFFF"
+        });
+        for pad in &game.blink_pads {
+            if pad.x < game.width
+                && pad.y < game.height
+                && is_visible(f64::from(pad.x), f64::from(pad.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pad.x) * cell_size,
+                    f64::from(pad.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders
