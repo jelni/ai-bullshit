@@ -100,4 +100,5 @@ pub enum GameMode {
     Blink,
     Crossfire,
     Quicksand,
+    Domino,
 }

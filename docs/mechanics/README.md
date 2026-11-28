@@ -635,3 +635,19 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Autopilot:** bog cells are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and the `trap_blocked_cells` flood fill (the bot never plans a route through quicksand), so it rides out the bog natively.
 - **Persistence:** `quicksand`, `quicksand_spreads`, `quicksand_sink`, `quicksand_sink2`, and `quicksand_bot_sinks` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_quicksand_mode.rs](../../tests/test_quicksand_mode.rs) and the save/load test in `src/game/tests.rs`.
+
+## Domino Mode
+
+`GameMode::Domino` (menu entry "Domino Mode", entry 125 in the main menu) is a survival mode played among standing domino obstacles that periodically topple in chains:
+
+- **Dominoes:** on reset `domino_count()` = `clamp(width*height/80, 4, 10)` dominoes (`domino_tiles`) are seeded on fair cells at least 4 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, another domino, or the food. Dominoes are mirrored into `obstacles`, so entering one kills the snake, and they render as a dark-yellow `D` (terminal) / goldenrod cell (web).
+- **Topple wave:** every `DOMINO_PERIOD` (8) ticks `manage_domino` fires a wave (`domino_waves += 1`): a random standing domino is picked and knocked in a random direction. The whole chain of dominoes along that line (up to `DOMINO_CHAIN_MAX` = 6) is shoved one cell forward — the first cell is vacated and the last domino lands on the first non-domino cell ("The dominoes topple! (N)", counted in `domino_falls`). A wave shoves dominoes; it never adds new ones.
+- **Fairness:** the landing cell must pass `is_domino_landing_blocked` — in bounds within the safe-zone margin and free of snake bodies, the cells snakes are about to enter this tick (player/player 2 use their current direction, bots their queued direction), every entity, and every hazard tile set. Intermediate chain cells were already obstacles and remain obstacles, so only the landing cell can create new danger. If no fair landing exists the wave fizzles and nothing moves, so **a wave can never crush a snake**.
+- **Scheduled drops:** every `DOMINO_DROP_PERIOD` (24) ticks a fresh domino drops on a fair cell while the field is under the cap of 15% of the board (`domino_drops += 1`, "A domino drops!"); if the field is ever empty, the next wave stands one fresh domino up instead of toppling.
+- **Stand-again:** at tick 200 of every 250-tick cycle all dominoes are gathered up (removed from `domino_tiles` and `obstacles`) and re-seeded on fresh fair cells at least 4 cells (Manhattan) from any snake head (`domino_reshuffles += 1`, "The dominoes stand again! (N)").
+- **Bracing:** eating food removes the dominoes orthogonally adjacent to the eaten cell from `domino_tiles` and `obstacles` ("Braced N domino(es)!").
+- **Autopilot:** because dominoes live in `obstacles`, the bot treats them as hard walls in the A* search, the verified-safe `is_safe_final_p` checks, and the trap-avoidance flood fill — it routes around them natively, and wave landings are always fair, so a toppled field can never kill the bot cheaply.
+- **Weather:** pinned to `Weather::Clear` (and excluded from the random-weather roll) so the dominoes always stay visible.
+- **Status bar:** `Dominoes: <count> | Waves: <count> | Falls: <count> | Reshuffles: <count>` (`domino_str`).
+- **Persistence:** `domino_tiles`, `domino_waves`, `domino_falls`, `domino_drops`, and `domino_reshuffles` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_domino_mode.rs](../../tests/test_domino_mode.rs).

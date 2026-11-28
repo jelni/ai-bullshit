@@ -245,6 +245,11 @@ pub struct Game {
     pub quicksand_sink: u32,
     pub quicksand_sink2: u32,
     pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    pub domino_tiles: HashSet<Point>,
+    pub domino_waves: u32,
+    pub domino_falls: u32,
+    pub domino_drops: u32,
+    pub domino_reshuffles: u32,
 
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
@@ -797,6 +802,11 @@ impl Game {
             quicksand_sink: 0,
             quicksand_sink2: 0,
             quicksand_bot_sinks: std::collections::HashMap::new(),
+            domino_tiles: HashSet::new(),
+            domino_waves: 0,
+            domino_falls: 0,
+            domino_drops: 0,
+            domino_reshuffles: 0,
         }
     }
     #[must_use]
@@ -1083,6 +1093,11 @@ impl Game {
             thorn_blooms: self.thorn_blooms,
             mirage_foods: self.mirage_foods.clone(),
             mirage_spawns: self.mirage_spawns,
+            domino_tiles: self.domino_tiles.clone(),
+            domino_waves: self.domino_waves,
+            domino_falls: self.domino_falls,
+            domino_drops: self.domino_drops,
+            domino_reshuffles: self.domino_reshuffles,
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
@@ -1338,6 +1353,11 @@ impl Game {
                 self.thorn_blooms = state.thorn_blooms;
                 self.mirage_foods = state.mirage_foods;
                 self.mirage_spawns = state.mirage_spawns;
+                self.domino_tiles = state.domino_tiles;
+                self.domino_waves = state.domino_waves;
+                self.domino_falls = state.domino_falls;
+                self.domino_drops = state.domino_drops;
+                self.domino_reshuffles = state.domino_reshuffles;
 
                 self.rocks = state.rocks;
                 self.landslide_rolls = state.landslide_rolls;
@@ -3079,6 +3099,267 @@ impl Game {
                 crate::color::Color::Green,
             );
         }
+    }
+    fn domino_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 80).clamp(4, 10)
+    }
+    fn domino_cap(&self) -> usize {
+        usize::from(self.width) * usize::from(self.height) * 15 / 100
+    }
+    // A cell a domino may fall onto must be fair right now: inside the playable
+    // border and free of snakes (bodies and the cells they are about to enter)
+    // and of every entity or hazard, so a topple can never crush anyone.
+    fn is_domino_landing_blocked(&self, p: Point, next_heads: &[Point]) -> bool {
+        let margin = self.safe_zone_margin;
+        if p.x <= margin
+            || p.x >= self.width.saturating_sub(1).saturating_sub(margin)
+            || p.y <= margin
+            || p.y >= self.height.saturating_sub(1).saturating_sub(margin)
+            || self.obstacles.contains(&p)
+            || self.domino_tiles.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.rocks.iter().any(|b| b.position == p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.spike_tiles.contains_key(&p)
+            || self.press_cells.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.geyser_vents.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.phase_gates.contains(&p)
+        {
+            return true;
+        }
+        self.snake.body_map.contains_key(&p)
+            || self
+                .player2
+                .as_ref()
+                .is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || next_heads.contains(&p)
+    }
+    // A fresh domino may stand up on any fair cell; the spawn seed keeps a
+    // Manhattan distance from the spawn point so the opening is never boxed in.
+    fn domino_spawn_avoid(&self, p: Point, next_heads: &[Point], min_spawn_dist: u16) -> bool {
+        if self.is_domino_landing_blocked(p, next_heads) {
+            return true;
+        }
+        let spawn = Point {
+            x: self.width / 2,
+            y: self.height / 2,
+        };
+        p.x.abs_diff(spawn.x).saturating_add(p.y.abs_diff(spawn.y)) < min_spawn_dist
+    }
+    fn random_interior_point(&mut self) -> Point {
+        Point {
+            x: self.rng.gen_range(1..self.width.saturating_sub(1).max(2)),
+            y: self.rng.gen_range(1..self.height.saturating_sub(1).max(2)),
+        }
+    }
+    fn drop_fresh_domino(&mut self, next_heads: &[Point]) -> bool {
+        for _ in 0..100 {
+            let p = self.random_interior_point();
+            if !self.snake.body_map.contains_key(&p) && !self.domino_spawn_avoid(p, next_heads, 0) {
+                self.domino_tiles.insert(p);
+                self.obstacles.insert(p);
+                self.domino_drops += 1;
+                return true;
+            }
+        }
+        false
+    }
+    fn spawn_initial_dominoes(&mut self) {
+        let next_heads = self.next_head_cells();
+        let count = self.domino_count();
+        for _ in 0..count * 20 {
+            if self.domino_tiles.len() >= count {
+                break;
+            }
+            let p = self.random_interior_point();
+            if !self.snake.body_map.contains_key(&p) && !self.domino_spawn_avoid(p, &next_heads, 4)
+            {
+                self.domino_tiles.insert(p);
+                self.obstacles.insert(p);
+            }
+        }
+    }
+    fn manage_domino(&mut self) {
+        if self.mode != GameMode::Domino {
+            return;
+        }
+        // The skies stay clear in Domino mode so the dominoes always stay visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale domino records
+        self.domino_tiles.retain(|p| self.obstacles.contains(p));
+        // The player's and player 2's direction queues are popped before the
+        // manage_* calls, so their current direction is the one they will move
+        // in this tick; the bots are popped afterwards, so for them the queued
+        // direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let mut next_heads = vec![p1_next];
+        if let Some(p2n) = p2_next {
+            next_heads.push(p2n);
+        }
+        for b in &self.bots {
+            let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+            next_heads.push(Self::calculate_next_head_dir(b.head(), d));
+        }
+        // Periodic stand-again: at tick 200 of every 250-tick cycle every domino is
+        // gathered up and re-seeded on fresh fair cells, never on a snake, on the
+        // cell any snake is about to enter, on any entity, or within 4 cells of a head
+        if self.tick_counter == 200 {
+            let old: Vec<Point> = self.domino_tiles.drain().collect();
+            for p in old {
+                self.obstacles.remove(&p);
+            }
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let mut placed = 0usize;
+            for _ in 0..self.domino_count() * 20 {
+                if placed >= self.domino_count() {
+                    break;
+                }
+                let p = self.random_interior_point();
+                let near_head = heads
+                    .iter()
+                    .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4);
+                if !near_head
+                    && !self.snake.body_map.contains_key(&p)
+                    && !self.is_domino_landing_blocked(p, &next_heads)
+                {
+                    self.domino_tiles.insert(p);
+                    self.obstacles.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.domino_reshuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The dominoes stand again! ({placed})"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        if !self.tick_counter.is_multiple_of(Self::DOMINO_PERIOD) {
+            return;
+        }
+        self.domino_waves += 1;
+        // Scheduled drop: keep the field stocked while under the cap
+        if self.tick_counter.is_multiple_of(Self::DOMINO_DROP_PERIOD)
+            && self.domino_tiles.len() < self.domino_cap()
+            && self.drop_fresh_domino(&next_heads)
+        {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "A domino drops!".to_string(),
+                crate::color::Color::DarkYellow,
+            );
+        }
+        if self.domino_tiles.is_empty() {
+            // Nothing left to topple: stand one fresh domino up instead
+            self.drop_fresh_domino(&next_heads);
+            return;
+        }
+        // Topple wave: pick a random standing domino and knock it in a random
+        // direction. Every domino in the chain is shoved one cell along; the
+        // last domino lands on the first non-domino cell, which must be fully
+        // fair, so a wave can never crush a snake.
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        let frontier: Vec<Point> = self.domino_tiles.iter().copied().collect();
+        let from = frontier[self.rng.gen_range(0..frontier.len())];
+        let d = dirs[self.rng.gen_range(0..dirs.len())];
+        let mut chain = vec![from];
+        let mut landing = None;
+        for _ in 0..Self::DOMINO_CHAIN_MAX {
+            let cur = *chain.last().expect("chain is never empty");
+            let next = Self::calculate_next_head_dir(cur, d);
+            if self.domino_tiles.contains(&next) {
+                chain.push(next);
+                continue;
+            }
+            if !self.is_domino_landing_blocked(next, &next_heads) {
+                landing = Some(next);
+            }
+            break;
+        }
+        let Some(landing) = landing else {
+            // No fair landing: the wave fizzles and nothing moves
+            return;
+        };
+        let fallen = chain.len();
+        // The chain shoves one cell along d: the first cell is vacated and every
+        // following cell (chain tail plus the landing cell) holds a domino.
+        let first = chain[0];
+        self.domino_tiles.remove(&first);
+        self.obstacles.remove(&first);
+        for &c in &chain[1..] {
+            self.domino_tiles.insert(c);
+            self.obstacles.insert(c);
+        }
+        self.domino_tiles.insert(landing);
+        self.obstacles.insert(landing);
+        self.domino_falls += u32::try_from(fallen).unwrap_or(u32::MAX);
+        let head = self.snake.head();
+        self.spawn_floating_text(
+            f32::from(head.x),
+            f32::from(head.y),
+            format!("The dominoes topple! ({fallen})"),
+            crate::color::Color::DarkYellow,
+        );
     }
     fn mirage_snake_next_cells(&self) -> (Point, Option<Point>, Vec<Point>) {
         // The player's and player 2's direction queues are popped before the
@@ -8862,7 +9143,8 @@ impl Game {
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
-            | GameMode::Quicksand => {
+            | GameMode::Quicksand 
+            | GameMode::Domino => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8990,6 +9272,7 @@ impl Game {
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
             || self.mode == GameMode::Quicksand
+            || self.mode == GameMode::Domino
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -9084,6 +9367,7 @@ impl Game {
         || self.mode == GameMode::Blink
         || self.mode == GameMode::Crossfire
         || self.mode == GameMode::Quicksand
+        || self.mode == GameMode::Domino
         {
             &self.snake
         } else {
@@ -9241,6 +9525,11 @@ impl Game {
         self.quicksand_sink = 0;
         self.quicksand_sink2 = 0;
         self.quicksand_bot_sinks.clear();
+        self.domino_tiles.clear();
+        self.domino_waves = 0;
+        self.domino_falls = 0;
+        self.domino_drops = 0;
+        self.domino_reshuffles = 0;
         self.boulders.clear();
         self.avalanche_rolls = 0;
 
@@ -9879,6 +10168,9 @@ impl Game {
         if self.mode == GameMode::Thornfield {
             self.spawn_initial_thorns();
         }
+        if self.mode == GameMode::Domino {
+            self.spawn_initial_dominoes();
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -10069,6 +10361,9 @@ impl Game {
             self.weather = Weather::Snow;
         }
         if self.mode == GameMode::PhaseShift {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Domino {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -10502,7 +10797,8 @@ impl Game {
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
-            | GameMode::Quicksand => {
+            | GameMode::Quicksand 
+            | GameMode::Domino => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10569,6 +10865,7 @@ impl Game {
         self.inferno_tiles.retain(|p| self.obstacles.contains(p));
         self.inferno_burn.retain(|p, _| self.inferno_tiles.contains(p));
         self.thorn_tiles.retain(|p| self.obstacles.contains(p));
+        self.domino_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
@@ -11228,6 +11525,11 @@ impl Game {
             self.quicksand_sink = state.quicksand_sink;
             self.quicksand_sink2 = state.quicksand_sink2;
             self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+            self.domino_tiles = state.domino_tiles;
+            self.domino_waves = state.domino_waves;
+            self.domino_falls = state.domino_falls;
+            self.domino_drops = state.domino_drops;
+            self.domino_reshuffles = state.domino_reshuffles;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -11439,6 +11741,11 @@ impl Game {
             thorn_blooms: self.thorn_blooms,
             mirage_foods: self.mirage_foods.clone(),
             mirage_spawns: self.mirage_spawns,
+            domino_tiles: self.domino_tiles.clone(),
+            domino_waves: self.domino_waves,
+            domino_falls: self.domino_falls,
+            domino_drops: self.domino_drops,
+            domino_reshuffles: self.domino_reshuffles,
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
@@ -14323,6 +14630,7 @@ impl Game {
             && self.mode != GameMode::Landslide
             && self.mode != GameMode::PhaseShift
             && self.mode != GameMode::Quicksand
+            && self.mode != GameMode::Domino
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -15310,6 +15618,7 @@ impl Game {
         self.manage_blink();
         self.manage_crossfire();
         self.manage_thornfield();
+        self.manage_domino();
         self.manage_mirage();
         self.manage_quicksand();
 
@@ -16462,6 +16771,7 @@ impl Game {
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
             || self.mode == GameMode::Quicksand
+            || self.mode == GameMode::Domino
             {
                 self.handle_death("You Died!");
             } else {
@@ -17617,6 +17927,29 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Pruned {pruned} thorns!"),
                     crate::color::Color::Green,
+                );
+            }
+        }
+        if self.mode == GameMode::Domino {
+            let mut braced = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.domino_tiles.remove(&np) {
+                    self.obstacles.remove(&np);
+                    braced += 1;
+                }
+            }
+            if braced > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Braced {braced} domino(es)!"),
+                    crate::color::Color::DarkYellow,
                 );
             }
         }
@@ -20632,6 +20965,12 @@ if self.mode == GameMode::Steamroller {
     pub const QUICKSAND_SINK_TICKS: u32 = 12;
     /// Minimum Manhattan distance of initial quicksand patches from the spawn point
     pub const QUICKSAND_MIN_SPAWN_DIST: u16 = 5;
+    /// Ticks between scheduled domino topple waves in Domino mode
+    pub const DOMINO_PERIOD: u32 = 8;
+    /// Most dominoes a single topple wave can shove along one chain
+    pub const DOMINO_CHAIN_MAX: usize = 6;
+    /// Fresh dominoes dropped every `DOMINO_DROP_PERIOD` ticks while under the cap
+    pub const DOMINO_DROP_PERIOD: u32 = 24;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

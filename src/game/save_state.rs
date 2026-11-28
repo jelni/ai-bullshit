@@ -231,6 +231,15 @@ pub struct SaveState {
     pub quicksand_sink2: u32,
     #[serde(default, with = "super::map_as_pairs")]
     pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    pub domino_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub domino_waves: u32,
+    #[serde(default)]
+    pub domino_falls: u32,
+    #[serde(default)]
+    pub domino_drops: u32,
+    #[serde(default)]
+    pub domino_reshuffles: u32,
     #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]

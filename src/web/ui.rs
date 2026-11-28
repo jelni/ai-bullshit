@@ -324,6 +324,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw standing dominoes (Domino mode)
+    if game.mode == crate::game::GameMode::Domino {
+        ctx.set_fill_style_str("#DAA520"); // Goldenrod
+        for domino in &game.domino_tiles {
+            if domino.x < game.width
+                && domino.y < game.height
+                && is_visible(f64::from(domino.x), f64::from(domino.y))
+            {
+                ctx.fill_rect(
+                    f64::from(domino.x) * cell_size,
+                    f64::from(domino.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw illusory mirage food (Mirage mode)
     if game.mode == crate::game::GameMode::Mirage {
         ctx.set_fill_style_str("#DA70D6"); // Orchid mirages
