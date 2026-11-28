@@ -219,6 +219,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw quicksand patches (Quicksand mode)
+    if game.mode == crate::game::GameMode::Quicksand {
+        ctx.set_fill_style_str("#8B5A2B"); // Brown bog
+        for cell in &game.quicksand {
+            if cell.x < game.width
+                && cell.y < game.height
+                && is_visible(f64::from(cell.x), f64::from(cell.y))
+            {
+                ctx.fill_rect(
+                    f64::from(cell.x) * cell_size,
+                    f64::from(cell.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

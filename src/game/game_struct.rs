@@ -240,6 +240,11 @@ pub struct Game {
     pub phase_gates: HashSet<Point>,
     pub phase_solid: bool,
     pub phase_shifts: u32,
+    pub quicksand: HashSet<Point>,
+    pub quicksand_spreads: u32,
+    pub quicksand_sink: u32,
+    pub quicksand_sink2: u32,
+    pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
 
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
@@ -787,6 +792,11 @@ impl Game {
             phase_gates: HashSet::new(),
             phase_solid: false,
             phase_shifts: 0,
+            quicksand: HashSet::new(),
+            quicksand_spreads: 0,
+            quicksand_sink: 0,
+            quicksand_sink2: 0,
+            quicksand_bot_sinks: std::collections::HashMap::new(),
         }
     }
     #[must_use]
@@ -1079,6 +1089,11 @@ impl Game {
             phase_gates: self.phase_gates.clone(),
             phase_solid: self.phase_solid,
             phase_shifts: self.phase_shifts,
+            quicksand: self.quicksand.clone(),
+            quicksand_spreads: self.quicksand_spreads,
+            quicksand_sink: self.quicksand_sink,
+            quicksand_sink2: self.quicksand_sink2,
+            quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1329,6 +1344,11 @@ impl Game {
                 self.phase_gates = state.phase_gates;
                 self.phase_solid = state.phase_solid;
                 self.phase_shifts = state.phase_shifts;
+                self.quicksand = state.quicksand;
+                self.quicksand_spreads = state.quicksand_spreads;
+                self.quicksand_sink = state.quicksand_sink;
+                self.quicksand_sink2 = state.quicksand_sink2;
+                self.quicksand_bot_sinks = state.quicksand_bot_sinks;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -3759,6 +3779,201 @@ impl Game {
             || self.fortress_walls.contains(&p)
             || self.geyser_jets.contains_key(&p)
             || self.thorn_tiles.contains(&p)
+    }
+    fn manage_quicksand(&mut self) {
+        if self.mode != GameMode::Quicksand {
+            return;
+        }
+        // A permanent drizzle keeps the bog wet; ambient weather randomization is skipped in this mode
+        self.weather = Weather::Rain;
+        // Periodic drain: at tick 200 of every 250-tick cycle the whole bog dries up
+        if self.tick_counter == 200 {
+            if !self.quicksand.is_empty() {
+                self.quicksand.clear();
+                self.quicksand_sink = 0;
+                self.quicksand_sink2 = 0;
+                self.quicksand_bot_sinks.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The bog drains!".to_string(),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        // Scheduled spread: every QUICKSAND_PERIOD ticks the bog claims new cells
+        if !self.tick_counter.is_multiple_of(Self::QUICKSAND_PERIOD) {
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the manage_* calls,
+        // so their current direction is the one they will move in this tick; the bots are
+        // popped afterwards, so for them the queued direction is the cell they are about to enter.
+        let mut next_heads = vec![Self::calculate_next_head_dir(
+            self.snake.head(),
+            self.snake.direction,
+        )];
+        if let Some(p2) = &self.player2 {
+            next_heads.push(Self::calculate_next_head_dir(p2.head(), p2.direction));
+        }
+        for b in &self.bots {
+            let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+            next_heads.push(Self::calculate_next_head_dir(b.head(), d));
+        }
+        self.quicksand_spreads += 1;
+        let mut claimed = 0u32;
+        if self.quicksand.len() < Self::QUICKSAND_MAX_CELLS {
+            if self.quicksand.is_empty() || self.rng.gen_bool(0.5) {
+                // Seed a fresh patch: a fair center plus up to QUICKSAND_PATCH_CELLS
+                // orthogonal cells, kept a little away from every snake head
+                let heads: Vec<Point> = std::iter::once(self.snake.head())
+                    .chain(self.player2.iter().map(Snake::head))
+                    .chain(self.bots.iter().map(Snake::head))
+                    .collect();
+                let mut center = None;
+                let min_x = 1 + self.safe_zone_margin;
+                let max_x = (self.width - 1)
+                    .saturating_sub(self.safe_zone_margin)
+                    .max(min_x + 1);
+                let min_y = 1 + self.safe_zone_margin;
+                let max_y = (self.height - 1)
+                    .saturating_sub(self.safe_zone_margin)
+                    .max(min_y + 1);
+                if min_x < max_x && min_y < max_y {
+                    for _ in 0..100 {
+                        let p = Point {
+                            x: self.rng.gen_range(min_x..max_x),
+                            y: self.rng.gen_range(min_y..max_y),
+                        };
+                        if self.snake.body_map.contains_key(&p)
+                            || self.is_quicksand_cell_blocked(p, &next_heads)
+                            || heads
+                                .iter()
+                                .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 3)
+                        {
+                            continue;
+                        }
+                        center = Some(p);
+                        break;
+                    }
+                }
+                if let Some(center) = center {
+                    self.quicksand.insert(center);
+                    claimed += 1;
+                    let mut arms = 0;
+                    for dir in [
+                        Direction::Up,
+                        Direction::Down,
+                        Direction::Left,
+                        Direction::Right,
+                    ] {
+                        if arms >= Self::QUICKSAND_PATCH_CELLS
+                            || self.quicksand.len() >= Self::QUICKSAND_MAX_CELLS
+                        {
+                            break;
+                        }
+                        let np = Self::calculate_next_head_dir(center, dir);
+                        if !self.is_quicksand_cell_blocked(np, &next_heads) {
+                            self.quicksand.insert(np);
+                            claimed += 1;
+                            arms += 1;
+                        }
+                    }
+                }
+            } else {
+                // Grow an existing patch by up to two fair neighboring cells
+                let frontier: Vec<Point> = self.quicksand.iter().copied().collect();
+                let from = frontier[self.rng.gen_range(0..frontier.len())];
+                let mut arms = 0;
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    if arms >= 2 || self.quicksand.len() >= Self::QUICKSAND_MAX_CELLS {
+                        break;
+                    }
+                    let np = Self::calculate_next_head_dir(from, dir);
+                    if !self.is_quicksand_cell_blocked(np, &next_heads) {
+                        self.quicksand.insert(np);
+                        claimed += 1;
+                        arms += 1;
+                    }
+                }
+            }
+        }
+        if claimed > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The bog spreads! (+{claimed})"),
+                crate::color::Color::DarkYellow,
+            );
+        }
+    }
+    // Whether a cell is fair for quicksand to claim: inside the playable area, never
+    // on a snake's body, on the cell any snake is about to enter this tick, on any
+    // entity or hazard tile, or already bog.
+    fn is_quicksand_cell_blocked(&self, p: Point, next_heads: &[Point]) -> bool {
+        p.x == 0
+            || p.y == 0
+            || p.x >= self.width.saturating_sub(1)
+            || p.y >= self.height.saturating_sub(1)
+            || next_heads.contains(&p)
+            || self.quicksand.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.mines.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.rocks.iter().any(|r| r.position == p)
+            || self.boulders.iter().any(|b| b.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.spike_tiles.contains_key(&p)
+            || self.press_cells.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || (self.phase_solid && self.phase_gates.contains(&p))
     }
     // Whether a phase-gate cell is fair to solidify on: never on a snake's
     // body, on the cell any snake is about to enter this tick, or on any entity.
@@ -6491,6 +6706,47 @@ impl Game {
             }
         }
     }
+    fn spawn_initial_quicksand(&mut self) {
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        for _ in 0..Self::QUICKSAND_INITIAL_PATCHES {
+            let mut center = None;
+            for _ in 0..100 {
+                let p = Point {
+                    x: self.rng.gen_range(1..self.width.saturating_sub(1)),
+                    y: self.rng.gen_range(1..self.height.saturating_sub(1)),
+                };
+                if self.snake.body_map.contains_key(&p)
+                    || self.is_quicksand_cell_blocked(p, &[])
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y))
+                        < Self::QUICKSAND_MIN_SPAWN_DIST
+                {
+                    continue;
+                }
+                center = Some(p);
+                break;
+            }
+            if let Some(center) = center {
+                self.quicksand.insert(center);
+                let mut arms = 0;
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    if arms >= Self::QUICKSAND_PATCH_CELLS {
+                        break;
+                    }
+                    let np = Self::calculate_next_head_dir(center, dir);
+                    if !self.is_quicksand_cell_blocked(np, &[]) {
+                        self.quicksand.insert(np);
+                        arms += 1;
+                    }
+                }
+            }
+        }
+    }
     fn manage_firestorm(&mut self) {
         if self.mode != GameMode::Firestorm {
             return;
@@ -8605,7 +8861,8 @@ impl Game {
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
-            | GameMode::Crossfire => {
+            | GameMode::Crossfire
+            | GameMode::Quicksand => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8732,6 +8989,7 @@ impl Game {
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
+            || self.mode == GameMode::Quicksand
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -8825,6 +9083,7 @@ impl Game {
         || self.mode == GameMode::Polarity
         || self.mode == GameMode::Blink
         || self.mode == GameMode::Crossfire
+        || self.mode == GameMode::Quicksand
         {
             &self.snake
         } else {
@@ -8977,6 +9236,11 @@ impl Game {
         self.phase_gates.clear();
         self.phase_solid = false;
         self.phase_shifts = 0;
+        self.quicksand.clear();
+        self.quicksand_spreads = 0;
+        self.quicksand_sink = 0;
+        self.quicksand_sink2 = 0;
+        self.quicksand_bot_sinks.clear();
         self.boulders.clear();
         self.avalanche_rolls = 0;
 
@@ -9565,6 +9829,9 @@ impl Game {
         }
         if self.mode == GameMode::SpikePit {
             self.spawn_spike_vents();
+        }
+        if self.mode == GameMode::Quicksand {
+            self.spawn_initial_quicksand();
         }
         if self.mode == GameMode::Wildfire {
             self.ignite_initial_wildfire();
@@ -10234,7 +10501,8 @@ impl Game {
             | GameMode::Landslide | GameMode::PhaseShift
             | GameMode::Trampoline
             | GameMode::Polarity | GameMode::Blink
-            | GameMode::Crossfire => {
+            | GameMode::Crossfire
+            | GameMode::Quicksand => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10955,6 +11223,11 @@ impl Game {
             self.phase_gates = state.phase_gates;
             self.phase_solid = state.phase_solid;
             self.phase_shifts = state.phase_shifts;
+            self.quicksand = state.quicksand;
+            self.quicksand_spreads = state.quicksand_spreads;
+            self.quicksand_sink = state.quicksand_sink;
+            self.quicksand_sink2 = state.quicksand_sink2;
+            self.quicksand_bot_sinks = state.quicksand_bot_sinks;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -11172,6 +11445,11 @@ impl Game {
             phase_gates: self.phase_gates.clone(),
             phase_solid: self.phase_solid,
             phase_shifts: self.phase_shifts,
+            quicksand: self.quicksand.clone(),
+            quicksand_spreads: self.quicksand_spreads,
+            quicksand_sink: self.quicksand_sink,
+            quicksand_sink2: self.quicksand_sink2,
+            quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -14044,6 +14322,7 @@ impl Game {
 
             && self.mode != GameMode::Landslide
             && self.mode != GameMode::PhaseShift
+            && self.mode != GameMode::Quicksand
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -15032,6 +15311,7 @@ impl Game {
         self.manage_crossfire();
         self.manage_thornfield();
         self.manage_mirage();
+        self.manage_quicksand();
 
         self.manage_landslide();
         self.manage_sandstorm();
@@ -15558,6 +15838,47 @@ impl Game {
                 );
             }
         }
+        if self.mode == GameMode::Quicksand {
+            // A head standing in quicksand sinks one tick at a time; leaving the bog resets the count
+            if self.quicksand.contains(&final_head1) {
+                self.quicksand_sink = self.quicksand_sink.saturating_add(1);
+            } else {
+                self.quicksand_sink = 0;
+            }
+            if let Some(fh2) = final_head2_opt {
+                if self.quicksand.contains(&fh2) {
+                    self.quicksand_sink2 = self.quicksand_sink2.saturating_add(1);
+                } else {
+                    self.quicksand_sink2 = 0;
+                }
+            }
+        }
+        let swallowed1 =
+            self.mode == GameMode::Quicksand && self.quicksand_sink >= Self::QUICKSAND_SINK_TICKS;
+        let swallowed2 =
+            self.mode == GameMode::Quicksand && self.quicksand_sink2 >= Self::QUICKSAND_SINK_TICKS;
+        if swallowed1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                20,
+                crate::color::Color::DarkYellow,
+                '~',
+            );
+        }
+        if swallowed2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    20,
+                    crate::color::Color::DarkYellow,
+                    '~',
+                );
+            }
+        }
         let hit_black_hole1 = self.black_hole.is_some_and(|bh| final_head1 == bh);
         let hit_black_hole2 =
             final_head2_opt.is_some_and(|fh2| self.black_hole.is_some_and(|bh| fh2 == bh));
@@ -15938,6 +16259,19 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.mode == GameMode::Quicksand {
+                let in_bog = self.quicksand.contains(final_head);
+                let sink = self.quicksand_bot_sinks.entry(*i).or_insert(0);
+                *sink = if in_bog {
+                    (*sink).saturating_add(1)
+                } else {
+                    0
+                };
+                if *sink >= Self::QUICKSAND_SINK_TICKS {
+                    bots_to_remove.insert(*i);
+                    continue;
+                }
+            }
             if self.boulders.iter().any(|b| b.position == *final_head) {
                 bots_to_remove.insert(*i);
                 continue;
@@ -16127,6 +16461,7 @@ impl Game {
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
+            || self.mode == GameMode::Quicksand
             {
                 self.handle_death("You Died!");
             } else {
@@ -16418,6 +16753,7 @@ impl Game {
         }
         self.bots = alive_bots;
         self.bots_autopilot_paths = alive_paths;
+        self.quicksand_bot_sinks.retain(|k, _| *k < self.bots.len());
         self.manage_bomb_tag();
 
         self.manage_infection();
@@ -17338,6 +17674,37 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Retracted {retracted} spikes!"),
                     crate::color::Color::Red,
+                );
+            }
+        }
+        if self.mode == GameMode::Quicksand {
+            // Eating food stomps the bog around the eaten cell and shakes the eater loose
+            let mut stomped = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.quicksand.remove(&np) {
+                    stomped += 1;
+                }
+            }
+            if Self::calculate_next_head_dir(self.snake.head(), self.snake.direction) == final_head {
+                self.quicksand_sink = 0;
+            }
+            if let Some(p2) = &self.player2
+                && Self::calculate_next_head_dir(p2.head(), p2.direction) == final_head
+            {
+                self.quicksand_sink2 = 0;
+            }
+            if stomped > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Stomped {stomped} bog!"),
+                    crate::color::Color::DarkYellow,
                 );
             }
         }
@@ -19354,6 +19721,11 @@ if self.mode == GameMode::Steamroller {
             if self.mode == GameMode::Thornfield && self.thorn_lashes(final_p) {
                 return false;
             }
+            // Quicksand is a hard constraint for the autopilot: a head standing in it
+            // sinks every tick, so the bot never plans a route through the bog.
+            if self.mode == GameMode::Quicksand && self.quicksand.contains(&final_p) {
+                return false;
+            }
             if self.black_hole.is_some_and(|bh| bh == final_p) {
                 return false;
             }
@@ -20248,6 +20620,18 @@ if self.mode == GameMode::Steamroller {
     pub const CROSSFIRE_TELEGRAPH_TICKS: u32 = 3;
     /// Crossfire mode: ticks the lethal cross beam stays active once fired
     pub const CROSSFIRE_BEAM_TICKS: u32 = 2;
+    /// Ticks between scheduled quicksand spreads in Quicksand mode
+    pub const QUICKSAND_PERIOD: u32 = 8;
+    /// Quicksand patches seeded at reset in Quicksand mode
+    pub const QUICKSAND_INITIAL_PATCHES: usize = 3;
+    /// Orthogonal cells each new quicksand patch claims around its center
+    pub const QUICKSAND_PATCH_CELLS: usize = 4;
+    /// Cap on total quicksand cells on the board in Quicksand mode
+    pub const QUICKSAND_MAX_CELLS: usize = 36;
+    /// Ticks a snake's head can stand in quicksand before it is swallowed
+    pub const QUICKSAND_SINK_TICKS: u32 = 12;
+    /// Minimum Manhattan distance of initial quicksand patches from the spawn point
+    pub const QUICKSAND_MIN_SPAWN_DIST: u16 = 5;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
@@ -21449,6 +21833,11 @@ if self.mode == GameMode::Steamroller {
                 ] {
                     blocked.insert(Self::calculate_next_head_dir(*thorn, d));
                 }
+            }
+        }
+        if self.mode == GameMode::Quicksand {
+            for cell in &self.quicksand {
+                blocked.insert(*cell);
             }
         }
         if let Some(col) = self.lightning_column {

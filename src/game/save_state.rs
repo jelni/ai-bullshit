@@ -222,6 +222,16 @@ pub struct SaveState {
     #[serde(default)]
     pub phase_shifts: u32,
     #[serde(default)]
+    pub quicksand: HashSet<Point>,
+    #[serde(default)]
+    pub quicksand_spreads: u32,
+    #[serde(default)]
+    pub quicksand_sink: u32,
+    #[serde(default)]
+    pub quicksand_sink2: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,

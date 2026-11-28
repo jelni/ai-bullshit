@@ -99,4 +99,5 @@ pub enum GameMode {
     Polarity,
     Blink,
     Crossfire,
+    Quicksand,
 }

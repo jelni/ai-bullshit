@@ -621,3 +621,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Cross: C<col>/R<row> (Warn <ticks>/Beam <ticks>) | Strikes: <count>` (`crossfire_str`).
 - **Persistence:** `crossfire_target`, `crossfire_warn_ticks`, `crossfire_beam_ticks`, and `crossfire_strikes` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_crossfire_mode.rs](../../tests/test_crossfire_mode.rs).
+
+## Quicksand Mode
+
+`GameMode::Quicksand` (menu entry "Quicksand Mode") is a survival mode played on a board that is slowly being swallowed by a spreading bog. The weather is pinned to `Weather::Rain` every tick (ambient weather randomization is skipped in this mode).
+
+- **Patches:** at reset `spawn_initial_quicksand` seeds `QUICKSAND_INITIAL_PATCHES` (3) patches (`quicksand`): each is a fair center cell at least `QUICKSAND_MIN_SPAWN_DIST` (5) cells (Manhattan) from the spawn plus up to `QUICKSAND_PATCH_CELLS` (4) fair orthogonal arms. Quicksand is walkable (it is *not* mirrored into `obstacles`) and renders as a dark-yellow `~` (terminal) / brown cells (web). The status bar shows `Bog: <cells> | Spreads: <n> | Sink: <t>/<QUICKSAND_SINK_TICKS>` (`quicksand_str`).
+- **Spreading:** on every `QUICKSAND_PERIOD` (8th) tick `manage_quicksand` claims new cells (counted in `quicksand_spreads`, "The bog spreads! (+N)"): with 50% chance (always while the bog is empty) it seeds a fresh patch whose center is at least 3 cells (Manhattan) from every snake head, otherwise it grows a random existing patch by up to 2 cells. Total bog is capped at `QUICKSAND_MAX_CELLS` (36) cells.
+- **Fairness:** a bog cell is never claimed off-board, on an obstacle, mine, or any entity or hazard tile, on a snake's body, on the cell any snake is about to enter this tick (`is_quicksand_cell_blocked` with the next-head cells: the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), or on an already-boggy cell — so the bog can never appear under anyone.
+- **Sinking:** quicksand is walkable but sticky: each tick a snake whose head ends the tick on a bog cell sinks one step (`quicksand_sink` / `quicksand_sink2` for the players, `quicksand_bot_sinks` per bot); leaving the bog resets the counter to 0. After `QUICKSAND_SINK_TICKS` (12) consecutive ticks in the bog the snake is swallowed and dies (players via the `swallowed` checks next to the thorn ones, bots via `bots_to_remove`, with dark-yellow `~` particles).
+- **Drain:** at tick 200 of every 250-tick cycle the whole bog drains at once ("The bog drains!"): all cells are removed and every sink counter resets.
+- **Stomping:** eating food removes the bog cells adjacent to the eaten cell and resets the eater's sink counter ("Stomped N bog!").
+- **Autopilot:** bog cells are hard constraints in the A* search, the `is_safe_final_p` verified-safe path checks, and the `trap_blocked_cells` flood fill (the bot never plans a route through quicksand), so it rides out the bog natively.
+- **Persistence:** `quicksand`, `quicksand_spreads`, `quicksand_sink`, `quicksand_sink2`, and `quicksand_bot_sinks` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_quicksand_mode.rs](../../tests/test_quicksand_mode.rs) and the save/load test in `src/game/tests.rs`.

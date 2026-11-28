@@ -313,6 +313,33 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_quicksand_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Quicksand;
+        game.reset();
+        game.quicksand.clear();
+        game.quicksand.insert(Point { x: 12, y: 9 });
+        game.quicksand.insert(Point { x: 13, y: 9 });
+        game.quicksand_spreads = 42;
+        game.quicksand_sink = 7;
+        game.quicksand_sink2 = 3;
+        game.quicksand_bot_sinks.insert(0, 5);
+        let file_path = "savegame_test_quicksand.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Quicksand);
+        assert!(loaded.quicksand.contains(&Point { x: 12, y: 9 }));
+        assert!(loaded.quicksand.contains(&Point { x: 13, y: 9 }));
+        assert_eq!(loaded.quicksand_spreads, 42);
+        assert_eq!(loaded.quicksand_sink, 7);
+        assert_eq!(loaded.quicksand_sink2, 3);
+        assert_eq!(loaded.quicksand_bot_sinks.get(&0), Some(&5));
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[test]
     fn test_save_and_load_sandstorm_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Sandstorm;
