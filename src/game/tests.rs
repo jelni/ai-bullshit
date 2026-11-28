@@ -814,6 +814,34 @@ mod tests {
         assert_eq!(loaded.landslide_rolls, 42);
         let _ = std::fs::remove_file(file_path);
     }
+    #[test]
+    fn test_save_and_load_comet_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Comet;
+        game.reset();
+        game.comets.clear();
+        game.comets.push(Comet {
+            position: Point { x: 3, y: 4 },
+            dx: 1,
+            dy: 1,
+        });
+        game.comet_launches = 42;
+        game.comet_deflections = 7;
+        let file_path = "savegame_test_comet.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Comet);
+        assert_eq!(loaded.weather, Weather::Clear);
+        assert_eq!(loaded.comets.len(), 1);
+        assert_eq!(loaded.comets[0].position, Point { x: 3, y: 4 });
+        assert_eq!(loaded.comets[0].dx, 1);
+        assert_eq!(loaded.comets[0].dy, 1);
+        assert_eq!(loaded.comet_launches, 42);
+        assert_eq!(loaded.comet_deflections, 7);
+        let _ = std::fs::remove_file(file_path);
+    }
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;

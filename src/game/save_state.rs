@@ -1,6 +1,6 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
-    Boss, Boulder, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
+    Boss, Boulder, Comet, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
     InGameUpgrade, LandslideRock, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme,
     Tournament, Weather, default_campaign_level, default_gale_dir, default_lives, default_skin,
     default_wrap_mode,
@@ -227,6 +227,12 @@ pub struct SaveState {
     pub crumble_collapses: u32,
     #[serde(default)]
     pub crumble_cracks: u32,
+    #[serde(default)]
+    pub comets: Vec<Comet>,
+    #[serde(default)]
+    pub comet_launches: u32,
+    #[serde(default)]
+    pub comet_deflections: u32,
     #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]

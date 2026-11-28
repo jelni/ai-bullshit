@@ -15,7 +15,7 @@
     clippy::similar_names
 )]
 use super::{
-    AStarState, Achievement, Boss, BossType, Boulder, Companion, CompanionType, Difficulty, Direction,
+    AStarState, Achievement, Boss, BossType, Boulder, Comet, Companion, CompanionType, Difficulty, Direction,
     Duration, File, FloatingText, GameMode, GameState, Goblin, HashSet, HistoryState,
     InGameUpgrade, Instant, LandslideRock, Laser, MatchOutcome, Meteor, Particle, Planet, Point,
     PowerUp,
@@ -264,6 +264,10 @@ pub struct Game {
 
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
+
+    pub comets: Vec<Comet>,
+    pub comet_launches: u32,
+    pub comet_deflections: u32,
 
     pub turret_volleys: u32,
     pub turret_jammed: u32,
@@ -817,6 +821,9 @@ impl Game {
 
             rocks: Vec::new(),
             landslide_rolls: 0,
+            comets: Vec::new(),
+            comet_launches: 0,
+            comet_deflections: 0,
             phase_gates: HashSet::new(),
             phase_solid: false,
             phase_shifts: 0,
@@ -1135,6 +1142,9 @@ impl Game {
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
+            comets: self.comets.clone(),
+            comet_launches: self.comet_launches,
+            comet_deflections: self.comet_deflections,
             phase_gates: self.phase_gates.clone(),
             phase_solid: self.phase_solid,
             phase_shifts: self.phase_shifts,
@@ -1406,6 +1416,9 @@ impl Game {
 
                 self.rocks = state.rocks;
                 self.landslide_rolls = state.landslide_rolls;
+                self.comets = state.comets;
+                self.comet_launches = state.comet_launches;
+                self.comet_deflections = state.comet_deflections;
                 self.phase_gates = state.phase_gates;
                 self.phase_solid = state.phase_solid;
                 self.phase_shifts = state.phase_shifts;
@@ -2508,6 +2521,236 @@ impl Game {
             kept.push(rock);
         }
         self.rocks = kept;
+    }
+    fn comet_ignite(&mut self, p: Point) {
+        self.fire_tiles.insert(p);
+        self.fire_ttl.insert(p, Self::COMET_TAIL_TICKS);
+        self.obstacles.insert(p);
+        self.ash_tiles.remove(&p);
+    }
+    // A comet streaks one cell per tick along its diagonal (dx, dy) until it
+    // leaves the board; returns None once the predicted cell is off the board
+    #[must_use]
+    pub fn comet_position_after(&self, c: Comet, steps: u16) -> Option<Point> {
+        let x = i32::from(c.position.x) + i32::from(c.dx) * i32::from(steps);
+        let y = i32::from(c.position.y) + i32::from(c.dy) * i32::from(steps);
+        if x < 0 || y < 0 || x >= i32::from(self.width) || y >= i32::from(self.height) {
+            return None;
+        }
+        Some(Point {
+            x: u16::try_from(x).unwrap_or(0),
+            y: u16::try_from(y).unwrap_or(0),
+        })
+    }
+    fn comet_would_hit(c: Comet, p: Point, steps: u16) -> bool {
+        let sx = i32::from(p.x) - i32::from(c.position.x);
+        let sy = i32::from(p.y) - i32::from(c.position.y);
+        let tx = sx * i32::from(c.dx);
+        let ty = sy * i32::from(c.dy);
+        tx == ty && tx >= 0 && u32::try_from(tx).unwrap_or(u32::MAX) <= u32::from(steps)
+    }
+    // Fairness: a comet may only launch if its whole diagonal path avoids every
+    // snake body segment and the cell every snake is about to enter
+    fn comet_path_fair(&self, start: Point, dx: i8, dy: i8) -> bool {
+        let next_heads = self.singularity_next_heads();
+        let mut p = start;
+        loop {
+            if self.snake.body_map.contains_key(&p)
+                || self
+                    .player2
+                    .as_ref()
+                    .is_some_and(|p2| p2.body_map.contains_key(&p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+                || next_heads.contains(&p)
+            {
+                return false;
+            }
+            let nx = i32::from(p.x) + i32::from(dx);
+            let ny = i32::from(p.y) + i32::from(dy);
+            if nx < 0 || ny < 0 || nx >= i32::from(self.width) || ny >= i32::from(self.height) {
+                return true;
+            }
+            p = Point {
+                x: u16::try_from(nx).unwrap_or(0),
+                y: u16::try_from(ny).unwrap_or(0),
+            };
+        }
+    }
+    fn launch_comet(&mut self) {
+        for _ in 0..8 {
+            // Launch from a random edge cell, always streaking inward
+            let (start, dx, dy) = match self.rng.gen_range(0..4_u8) {
+                0 => (
+                    Point {
+                        x: 0,
+                        y: self.rng.gen_range(0..self.height),
+                    },
+                    1,
+                    if self.rng.gen_bool(0.5) { 1 } else { -1 },
+                ),
+                1 => (
+                    Point {
+                        x: self.width.saturating_sub(1),
+                        y: self.rng.gen_range(0..self.height),
+                    },
+                    -1,
+                    if self.rng.gen_bool(0.5) { 1 } else { -1 },
+                ),
+                2 => (
+                    Point {
+                        x: self.rng.gen_range(0..self.width),
+                        y: 0,
+                    },
+                    if self.rng.gen_bool(0.5) { 1 } else { -1 },
+                    1,
+                ),
+                _ => (
+                    Point {
+                        x: self.rng.gen_range(0..self.width),
+                        y: self.height.saturating_sub(1),
+                    },
+                    if self.rng.gen_bool(0.5) { 1 } else { -1 },
+                    -1,
+                ),
+            };
+            if self.comet_path_fair(start, dx, dy) {
+                self.comets.push(Comet {
+                    position: start,
+                    dx,
+                    dy,
+                });
+                self.comet_launches += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "Comet!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+                crate::game::beep();
+                return;
+            }
+        }
+    }
+    fn comet_lane_penalty(&self, p: Point) -> u32 {
+        let mut penalty = 0u32;
+        for c in &self.comets {
+            for step in 1..=10_u16 {
+                if let Some(cp) = self.comet_position_after(*c, step) {
+                    if cp == p {
+                        penalty = penalty.saturating_add(500_000);
+                    } else {
+                        let d = self.travel_dist(p, cp, false);
+                        if d < 3 {
+                            penalty = penalty.saturating_add(u32::from(3 - d).saturating_mul(100_000));
+                        }
+                    }
+                }
+            }
+        }
+        penalty
+    }
+    fn comet_edge_cost(&self, p: Point) -> u16 {
+        let mut cost = 0u16;
+        for c in &self.comets {
+            for step in 1..=10_u16 {
+                if let Some(cp) = self.comet_position_after(*c, step) {
+                    let d = p.x.abs_diff(cp.x) + p.y.abs_diff(cp.y);
+                    if d < 10 {
+                        cost = cost.saturating_add((10 - d).saturating_mul(1_000));
+                    }
+                }
+            }
+        }
+        cost
+    }
+    fn manage_comet(&mut self) {
+        if self.mode != GameMode::Comet {
+            return;
+        }
+        // The sky never clouds over in Comet mode so comets stay visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale fire records
+        self.fire_tiles.retain(|p| self.obstacles.contains(p));
+        self.fire_ttl.retain(|p, _| self.fire_tiles.contains(p));
+        // Trail burn-down: every burning cell has a limited lifetime, then it cools off
+        let mut burned_out: Vec<Point> = Vec::new();
+        for (p, ttl) in &mut self.fire_ttl {
+            if *ttl <= 1 {
+                burned_out.push(*p);
+            } else {
+                *ttl -= 1;
+            }
+        }
+        for p in burned_out {
+            self.fire_tiles.remove(&p);
+            self.fire_ttl.remove(&p);
+            self.obstacles.remove(&p);
+        }
+        // At tick 200 of every 250-tick cycle the sky clears: all comets burn out
+        if self.tick_counter == 200 {
+            if !self.comets.is_empty() {
+                self.comets.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The sky clears!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            return;
+        }
+        // Ambient streak: a rare extra launch on top of the schedule
+        if self.comets.len() < Self::MAX_COMETS && self.rng.gen_bool(0.02) {
+            self.launch_comet();
+        }
+        // Scheduled launch: every COMET_PERIOD-th tick a comet is guaranteed to streak across
+        if self.tick_counter.is_multiple_of(Self::COMET_PERIOD)
+            && self.comets.len() < Self::MAX_COMETS
+        {
+            self.launch_comet();
+        }
+        // Move every comet one cell diagonally, leaving a burning trail behind
+        let mut kept = Vec::new();
+        for mut comet in std::mem::take(&mut self.comets) {
+            // The head cell burns while the comet occupies it
+            self.comet_ignite(comet.position);
+            let nx = i32::from(comet.position.x) + i32::from(comet.dx);
+            let ny = i32::from(comet.position.y) + i32::from(comet.dy);
+            if nx < 0 || ny < 0 || nx >= i32::from(self.width) || ny >= i32::from(self.height) {
+                continue; // streaked off the board
+            }
+            comet.position = Point {
+                x: u16::try_from(nx).unwrap_or(0),
+                y: u16::try_from(ny).unwrap_or(0),
+            };
+            // A comet smashes through obstacles and mines in its path
+            if self.obstacles.contains(&comet.position) {
+                self.remove_obstacle_and_hazards(comet.position);
+                self.spawn_particles(
+                    f32::from(comet.position.x),
+                    f32::from(comet.position.y),
+                    20,
+                    crate::color::Color::DarkYellow,
+                    '*',
+                );
+                crate::game::beep();
+            }
+            if self.mines.contains(&comet.position) {
+                self.mines.remove(&comet.position);
+                self.spawn_particles(
+                    f32::from(comet.position.x),
+                    f32::from(comet.position.y),
+                    20,
+                    crate::color::Color::DarkYellow,
+                    '*',
+                );
+            }
+            self.comet_ignite(comet.position);
+            kept.push(comet);
+        }
+        self.comets = kept;
     }
     fn manage_blizzard(&mut self) {
         if self.mode != GameMode::Blizzard {
@@ -9706,7 +9949,8 @@ impl Game {
             | GameMode::Quicksand
             | GameMode::Domino
             | GameMode::Magnet
-            | GameMode::Gale => {
+            | GameMode::Gale
+            | GameMode::Comet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9838,6 +10082,7 @@ impl Game {
             || self.mode == GameMode::Domino
             || self.mode == GameMode::Magnet
             || self.mode == GameMode::Gale
+            || self.mode == GameMode::Comet
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -9936,6 +10181,7 @@ impl Game {
         || self.mode == GameMode::Domino
         || self.mode == GameMode::Magnet
         || self.mode == GameMode::Gale
+        || self.mode == GameMode::Comet
         {
             &self.snake
         } else {
@@ -10114,6 +10360,9 @@ impl Game {
 
         self.rocks.clear();
         self.landslide_rolls = 0;
+        self.comets.clear();
+        self.comet_launches = 0;
+        self.comet_deflections = 0;
         self.lava_tiles.clear();
         self.volcano_vents.clear();
         self.volcano_eruptions = 0;
@@ -10956,6 +11205,9 @@ impl Game {
         if self.mode == GameMode::Domino {
             self.weather = Weather::Clear;
         }
+        if self.mode == GameMode::Comet {
+            self.weather = Weather::Clear;
+        }
         self.lightning_column = None;
         self.meteor_strike_column = None;
         self.mines = HashSet::new();
@@ -10996,6 +11248,9 @@ impl Game {
         }
         self.meteors.clear();
         self.rocks.clear();
+        self.comets.clear();
+        self.comet_launches = 0;
+        self.comet_deflections = 0;
         self.tornado = None;
         self.tornado_gusts = 0;
         self.tornado_spins = 0;
@@ -11390,7 +11645,8 @@ impl Game {
             | GameMode::Quicksand
             | GameMode::Domino
             | GameMode::Magnet
-            | GameMode::Gale => {
+            | GameMode::Gale
+            | GameMode::Comet => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12117,6 +12373,9 @@ impl Game {
 
             self.rocks = state.rocks;
             self.landslide_rolls = state.landslide_rolls;
+            self.comets = state.comets;
+            self.comet_launches = state.comet_launches;
+            self.comet_deflections = state.comet_deflections;
             self.phase_gates = state.phase_gates;
             self.phase_solid = state.phase_solid;
             self.phase_shifts = state.phase_shifts;
@@ -12360,6 +12619,9 @@ impl Game {
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
+            comets: self.comets.clone(),
+            comet_launches: self.comet_launches,
+            comet_deflections: self.comet_deflections,
             phase_gates: self.phase_gates.clone(),
             phase_solid: self.phase_solid,
             phase_shifts: self.phase_shifts,
@@ -13267,6 +13529,7 @@ impl Game {
             penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
 
             penalty = penalty.saturating_add(self.rock_lane_penalty(p));
+            penalty = penalty.saturating_add(self.comet_lane_penalty(p));
             for m in &self.mines {
                 if *m == p {
                     penalty = penalty.saturating_add(50000);
@@ -13421,6 +13684,8 @@ impl Game {
                         can_move = false;
                     } else if self.rocks.iter().any(|b| b.position == final_p) {
                         can_move = false;
+                    } else if self.comets.iter().any(|c| c.position == final_p) {
+                        can_move = false;
                     } else if self.black_hole == Some(final_p) {
                         can_move = false;
                     } else if self.tornado == Some(final_p) {
@@ -13500,6 +13765,7 @@ impl Game {
                         edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
 
                         edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.comet_edge_cost(final_p));
                         for m in &self.meteors {
                             if m.vx != 0 {
                                 continue;
@@ -13516,6 +13782,7 @@ impl Game {
                         edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
 
                         edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.comet_edge_cost(final_p));
                         if let Some((pf, _)) = self.poison_food {
                             let d_dist = calc_dist(final_p, pf);
                             if d_dist < 4 {
@@ -15245,6 +15512,7 @@ impl Game {
             && self.mode != GameMode::PhaseShift
             && self.mode != GameMode::Quicksand
             && self.mode != GameMode::Domino
+            && self.mode != GameMode::Comet
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -16240,6 +16508,7 @@ impl Game {
         self.manage_crumble();
 
         self.manage_landslide();
+        self.manage_comet();
         self.manage_sandstorm();
         self.manage_acid_rain();
         self.manage_storm();
@@ -16902,6 +17171,40 @@ impl Game {
                 );
             }
         }
+        let hit_comet1 = self.comets.iter().any(|c| {
+            c.position == final_head1 || self.snake.body_map.contains_key(&c.position)
+        });
+        let hit_comet2 = final_head2_opt.is_some_and(|fh2| {
+            self.comets.iter().any(|c| {
+                c.position == fh2
+                    || self
+                        .player2
+                        .as_ref()
+                        .is_some_and(|p2| p2.body_map.contains_key(&c.position))
+            })
+        });
+        if hit_comet1 && !is_invincible {
+            p1_dead = true;
+            self.spawn_particles(
+                f32::from(final_head1.x),
+                f32::from(final_head1.y),
+                30,
+                crate::color::Color::Yellow,
+                '*',
+            );
+        }
+        if hit_comet2 && !is_invincible {
+            p2_dead = true;
+            if let Some(fh2) = final_head2_opt {
+                self.spawn_particles(
+                    f32::from(fh2.x),
+                    f32::from(fh2.y),
+                    30,
+                    crate::color::Color::Yellow,
+                    '*',
+                );
+            }
+        }
         let hit_boulder1 = self.boulders.iter().any(|b| {
             b.position == final_head1 || self.snake.body_map.contains_key(&b.position)
         });
@@ -17258,6 +17561,10 @@ impl Game {
                 bots_to_remove.insert(*i);
                 continue;
             }
+            if self.comets.iter().any(|c| c.position == *final_head) {
+                bots_to_remove.insert(*i);
+                continue;
+            }
             if self.lasers.iter().any(|l| l.position == *final_head) {
                 bots_to_remove.insert(*i);
                 continue;
@@ -17444,6 +17751,7 @@ impl Game {
             || self.mode == GameMode::Domino
             || self.mode == GameMode::Magnet
             || self.mode == GameMode::Gale
+            || self.mode == GameMode::Comet
             {
                 self.handle_death("You Died!");
             } else {
@@ -17983,6 +18291,9 @@ impl Game {
                 self.resources.clear();
                 self.meteors.clear();
         self.rocks.clear();
+        self.comets.clear();
+        self.comet_launches = 0;
+        self.comet_deflections = 0;
                 self.mines.clear();
                 self.lasers.clear();
                 self.obstacles.clear();
@@ -19162,6 +19473,35 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Braced!".to_string(),
                 crate::color::Color::White,
+            );
+        }
+        if self.mode == GameMode::Comet && !self.comets.is_empty() {
+            // Eating food deflects the comet nearest to the eaten cell
+            let manhattan = |a: Point, b: Point| -> u32 {
+                u32::from(a.x.abs_diff(b.x)) + u32::from(a.y.abs_diff(b.y))
+            };
+            let mut nearest = 0;
+            for (i, c) in self.comets.iter().enumerate() {
+                if manhattan(c.position, final_head)
+                    < manhattan(self.comets[nearest].position, final_head)
+                {
+                    nearest = i;
+                }
+            }
+            let c = self.comets.remove(nearest);
+            self.comet_deflections += 1;
+            self.spawn_particles(
+                f32::from(c.position.x),
+                f32::from(c.position.y),
+                15,
+                crate::color::Color::Yellow,
+                '*',
+            );
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Deflected!".to_string(),
+                crate::color::Color::Yellow,
             );
         }
         if self.mode == GameMode::Seismic {
@@ -20834,6 +21174,11 @@ if self.mode == GameMode::Steamroller {
                     return false;
                 }
             }
+            for comet in &self.comets {
+                if Self::comet_would_hit(*comet, final_p, steps) {
+                    return false;
+                }
+            }
             if let Some(col) = self.lightning_column
                 && final_p.x == col
             {
@@ -21667,6 +22012,12 @@ if self.mode == GameMode::Steamroller {
     pub const TSUNAMI_PERIOD: u32 = 40;
     pub const TSUNAMI_WARNING: u32 = 8;
     pub const PHASE_PERIOD: u32 = 12;
+    /// Ticks between scheduled comet launches in Comet mode
+    pub const COMET_PERIOD: u32 = 18;
+    /// Maximum concurrent comets streaking across the board in Comet mode
+    pub const MAX_COMETS: usize = 2;
+    /// Ticks a comet's burning trail cell stays lethal in Comet mode
+    pub const COMET_TAIL_TICKS: u32 = 12;
     /// Cells a launch pad flings a snake in Trampoline mode (5 while overcharged)
     pub const TRAMP_LAUNCH: u16 = 3;
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
@@ -21934,6 +22285,25 @@ if self.mode == GameMode::Steamroller {
                             return false;
                         }
                         if let Some(i) = body.iter().position(|&bb| bb == bp) {
+                            let i = u32::try_from(i).unwrap_or(u32::MAX);
+                            if s32 <= l.saturating_sub(i) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            for c in &self.comets {
+                for s in 1..=meteor_horizon {
+                    if let Some(cp) = self.comet_position_after(*c, s) {
+                        let s32 = u32::from(s);
+                        if let Some(&j) = path_idx.get(&cp)
+                            && j < s32
+                            && s32 <= j + 1 + l
+                        {
+                            return false;
+                        }
+                        if let Some(i) = body.iter().position(|&cc| cc == cp) {
                             let i = u32::try_from(i).unwrap_or(u32::MAX);
                             if s32 <= l.saturating_sub(i) {
                                 return false;
@@ -22587,6 +22957,7 @@ if self.mode == GameMode::Steamroller {
             penalty = penalty.saturating_add(self.boulder_lane_penalty(p));
 
             penalty = penalty.saturating_add(self.rock_lane_penalty(p));
+            penalty = penalty.saturating_add(self.comet_lane_penalty(p));
             u32::from(targets.iter().map(|t| calc_dist(p, *t)).min().unwrap_or(0)).saturating_add(penalty)
         };
         let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
@@ -22673,6 +23044,7 @@ if self.mode == GameMode::Steamroller {
                 edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
 
                         edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.comet_edge_cost(final_p));
                 if let Some((pf, _)) = self.poison_food {
                     let d_dist = calc_dist(final_p, pf);
                     if d_dist < 4 {
@@ -22818,6 +23190,7 @@ if self.mode == GameMode::Steamroller {
                     edge_cost = edge_cost.saturating_add(self.boulder_edge_cost(final_p));
 
                         edge_cost = edge_cost.saturating_add(self.rock_edge_cost(final_p));
+                        edge_cost = edge_cost.saturating_add(self.comet_edge_cost(final_p));
                     if let Some((pf, _)) = self.poison_food {
                         let d_dist = calc_dist(final_p, pf);
                         if d_dist < 4 {
@@ -23008,6 +23381,14 @@ if self.mode == GameMode::Steamroller {
             for step in 1..10_u16 {
                 if let Some(bp) = self.boulder_position_after(*b, step) {
                     blocked.insert(bp);
+                }
+            }
+        }
+        for c in &self.comets {
+            blocked.insert(c.position);
+            for step in 1..10_u16 {
+                if let Some(cp) = self.comet_position_after(*c, step) {
+                    blocked.insert(cp);
                 }
             }
         }
@@ -23380,6 +23761,9 @@ if self.mode == GameMode::Steamroller {
         self.black_hole = None;
         self.meteors.clear();
         self.rocks.clear();
+        self.comets.clear();
+        self.comet_launches = 0;
+        self.comet_deflections = 0;
         self.portals = None;
         self.warp_targets = None;
         self.warp_relocate_countdown = 0;

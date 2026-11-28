@@ -691,3 +691,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Cracks: <count> | Collapses: <count> | New: <count>` (`crumble_str`).
 - **Persistence:** `crumble_tiles`, `crumble_collapses`, and `crumble_cracks` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_crumble_mode.rs](../../tests/test_crumble_mode.rs).
+
+## Comet Mode
+
+`GameMode::Comet` (menu entry "Comet Mode", entry 129 in the main menu) is a survival mode where comets streak diagonally across a permanently clear sky:
+
+- **Launch:** every `COMET_PERIOD` (18) ticks `manage_comet` guarantees a scheduled launch (`comet_launches`, "Comet!"), plus a rare ambient streak (2% per tick), capped at `MAX_COMETS` (2) concurrent comets. `launch_comet` picks a random edge cell and an inward diagonal `(dx, dy)` (±1, ±1) and only accepts it when `comet_path_fair` confirms the whole diagonal avoids every snake body segment and the cell every snake is about to enter — so a launch is dangerous but never cheap.
+- **Flight and trail:** each comet moves one cell per tick along its diagonal until it leaves the board. Every cell it touches is ignited via `comet_ignite` into `fire_tiles` + `fire_ttl` (`COMET_TAIL_TICKS` = 12) and mirrored into `obstacles`, so the burning trail is lethal on entry and a hard obstacle in the A* search and the verified-safe path checks; the head cell's timer is refreshed every tick while the comet occupies it. Burned-out cells cool off (removed from `fire_tiles`/`fire_ttl`/`obstacles`) each tick. A comet smashes through obstacles and mines on its path and kills any snake it touches (`hit_comet1`/`hit_comet2` and the bot kill checks in `update_tick`).
+- **Sky clear:** at tick 200 of every 250-tick cycle all comets burn out ("The sky clears!").
+- **Deflect:** eating food removes the comet nearest to the eaten cell (`comet_deflections`, "Deflected!").
+- **Autopilot:** `comet_position_after` / `comet_would_hit` predict the exact diagonal, so predicted comet cells are hard hazards in `is_safe_final_p`, in the body-sweep check of `path_is_safe`, in the A* lane penalties (`comet_lane_penalty`) and edge costs (`comet_edge_cost`, in both `astar_search` and `get_boss_path`), in the boss `can_move` checks, and in the `trap_blocked_cells` flood fill — the bot dodges comets and their trails natively.
+- **Status bar:** `Comets: <count> | Launches: <count> | Deflects: <count>` (`comet_str`). Comet heads render as a yellow `*` (terminal) / gold cell (web) over the red burning trail.
+- **Persistence:** `comets`, `comet_launches`, and `comet_deflections` are stored in `SaveState` and `HistoryState` (the trail rides along in the already-persisted `fire_tiles`/`fire_ttl`/`obstacles`), so save/load and time-rewind stay consistent.
+- **Tests:** see [tests/test_comet_mode.rs](../../tests/test_comet_mode.rs).

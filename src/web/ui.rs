@@ -727,8 +727,12 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
-    // Draw burning cells and ash (Wildfire mode)
-    if game.mode == crate::game::GameMode::Wildfire {
+    // Draw burning cells and ash (Wildfire mode; in Comet mode the burning
+    // cells are the comets' trails)
+    if matches!(
+        game.mode,
+        crate::game::GameMode::Wildfire | crate::game::GameMode::Comet
+    ) {
         ctx.set_fill_style_str("#FF0000"); // Red
         for fire in &game.fire_tiles {
             if fire.x < game.width
@@ -870,6 +874,22 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
             ctx.fill_rect(
                 f64::from(meteor.position.x) * cell_size,
                 f64::from(meteor.position.y) * cell_size,
+                cell_size,
+                cell_size,
+            );
+        }
+    }
+
+    // Draw Comet heads (Comet mode): a gold head over its red burning trail
+    ctx.set_fill_style_str("#FFD700"); // Gold
+    for comet in &game.comets {
+        if comet.position.x < game.width
+            && comet.position.y < game.height
+            && is_visible(f64::from(comet.position.x), f64::from(comet.position.y))
+        {
+            ctx.fill_rect(
+                f64::from(comet.position.x) * cell_size,
+                f64::from(comet.position.y) * cell_size,
                 cell_size,
                 cell_size,
             );

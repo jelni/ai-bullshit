@@ -104,4 +104,5 @@ pub enum GameMode {
     Magnet,
     Gale,
     Crumble,
+    Comet,
 }

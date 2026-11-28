@@ -1,7 +1,7 @@
 #![allow(clippy::struct_excessive_bools)]
 use super::{
-    Boss, Boulder, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant, LandslideRock,
-    Laser, Meteor, Point, PowerUp, Snake, Tournament, Weather,
+    Boss, Boulder, Comet, Companion, Direction, Goblin, HashSet, InGameUpgrade, Instant,
+    LandslideRock, Laser, Meteor, Point, PowerUp, Snake, Tournament, Weather,
 };
 #[allow(dead_code, clippy::allow_attributes)]
 #[derive(Clone)]
@@ -107,6 +107,9 @@ pub struct HistoryState {
     pub crumble_tiles: HashSet<Point>,
     pub crumble_collapses: u32,
     pub crumble_cracks: u32,
+    pub comets: Vec<Comet>,
+    pub comet_launches: u32,
+    pub comet_deflections: u32,
     pub thorn_tiles: HashSet<Point>,
     pub thorn_blooms: u32,
     pub mirage_foods: std::collections::HashMap<Point, u32>,
