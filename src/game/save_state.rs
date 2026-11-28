@@ -178,6 +178,18 @@ pub struct SaveState {
     #[serde(default)]
     pub tramp_overcharge: u32,
     #[serde(default)]
+    pub polarity_poles: HashSet<Point>,
+    #[serde(default)]
+    pub polarity_attract: bool,
+    #[serde(default)]
+    pub polarity_flips: u32,
+    #[serde(default)]
+    pub polarity_shuffles: u32,
+    #[serde(default)]
+    pub polarity_shoves: u32,
+    #[serde(default)]
+    pub polarity_shield: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

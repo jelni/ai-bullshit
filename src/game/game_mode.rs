@@ -96,4 +96,5 @@ pub enum GameMode {
     Landslide,
     PhaseShift,
     Trampoline,
+    Polarity,
 }

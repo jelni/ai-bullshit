@@ -216,6 +216,12 @@ pub struct Game {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub polarity_poles: HashSet<Point>,
+    pub polarity_attract: bool,
+    pub polarity_flips: u32,
+    pub polarity_shuffles: u32,
+    pub polarity_shoves: u32,
+    pub polarity_shield: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -746,6 +752,12 @@ impl Game {
             tramp_flings: 0,
             tramp_shuffles: 0,
             tramp_overcharge: 0,
+            polarity_poles: HashSet::new(),
+            polarity_attract: true,
+            polarity_flips: 0,
+            polarity_shuffles: 0,
+            polarity_shoves: 0,
+            polarity_shield: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1024,6 +1036,12 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            polarity_poles: self.polarity_poles.clone(),
+            polarity_attract: self.polarity_attract,
+            polarity_flips: self.polarity_flips,
+            polarity_shuffles: self.polarity_shuffles,
+            polarity_shoves: self.polarity_shoves,
+            polarity_shield: self.polarity_shield,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1260,6 +1278,12 @@ impl Game {
                 self.tramp_flings = state.tramp_flings;
                 self.tramp_shuffles = state.tramp_shuffles;
                 self.tramp_overcharge = state.tramp_overcharge;
+                self.polarity_poles = state.polarity_poles;
+                self.polarity_attract = state.polarity_attract;
+                self.polarity_flips = state.polarity_flips;
+                self.polarity_shuffles = state.polarity_shuffles;
+                self.polarity_shoves = state.polarity_shoves;
+                self.polarity_shield = state.polarity_shield;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -3966,6 +3990,188 @@ impl Game {
                     f32::from(head.y),
                     format!("The pads rearrange! ({placed})"),
                     crate::color::Color::Yellow,
+                );
+            }
+        }
+    }
+    fn polarity_pole_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 80).clamp(2, 6)
+    }
+    // A cell a magnetic shove may move a head onto must be fair right now:
+    // in bounds, free of snakes (bodies and the cells they are about to enter)
+    // and of every entity or lethal tile, so a shove can never directly kill.
+    fn polarity_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // On a polarity-flip tick, shove the head one cell toward the nearest pole
+    // while attracting, or away from it while repelling. Only fair destination
+    // cells are accepted (dominant axis first, then the other axis); if none is
+    // fair the snake is not shoved at all, so a pole can never shove a kill.
+    fn polarity_shove(&self, head: Point, is_player: bool) -> Option<Point> {
+        if self.mode != GameMode::Polarity {
+            return None;
+        }
+        if !self.tick_counter.is_multiple_of(Self::POLARITY_FLIP_PERIOD) {
+            return None;
+        }
+        if is_player && self.polarity_shield > 0 {
+            return None;
+        }
+        let (pole, _) = self
+            .polarity_poles
+            .iter()
+            .map(|p| {
+                (
+                    *p,
+                    p.x.abs_diff(head.x).saturating_add(p.y.abs_diff(head.y)),
+                )
+            })
+            .min_by_key(|(_, d)| *d)?;
+        let dx = pole.x.abs_diff(head.x);
+        let dy = pole.y.abs_diff(head.y);
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        let toward = |step_x: i32, step_y: i32| {
+            let dest = Point {
+                x: (i32::from(head.x) + step_x).clamp(0, i32::from(self.width) - 1) as u16,
+                y: (i32::from(head.y) + step_y).clamp(0, i32::from(self.height) - 1) as u16,
+            };
+            if self.polarity_cell_free(dest) {
+                Some(dest)
+            } else {
+                None
+            }
+        };
+        let sx = if pole.x > head.x { 1 } else { -1 };
+        let sy = if pole.y > head.y { 1 } else { -1 };
+        let (ax, ay) = if self.polarity_attract { (sx, sy) } else { (-sx, -sy) };
+        if dx >= dy {
+            toward(ax, 0).or_else(|| toward(0, ay))
+        } else {
+            toward(0, ay).or_else(|| toward(ax, 0))
+        }
+    }
+    fn manage_polarity(&mut self) {
+        if self.mode != GameMode::Polarity {
+            return;
+        }
+        // Poles under fresh obstacles are scrapped
+        self.polarity_poles.retain(|p| !self.obstacles.contains(p));
+        // The player's shield counts down once per tick
+        if self.polarity_shield > 0 {
+            self.polarity_shield = self.polarity_shield.saturating_sub(1);
+        }
+        // Scheduled flip: every POLARITY_FLIP_PERIOD-th tick the field flips
+        // between attracting and repelling; the shove itself is applied where
+        // belt_shove/tramp_launch are applied, on this same tick.
+        if self.tick_counter.is_multiple_of(Self::POLARITY_FLIP_PERIOD) {
+            self.polarity_attract = !self.polarity_attract;
+            self.polarity_flips += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                if self.polarity_attract {
+                    "Polarity flipped: Attract!".to_string()
+                } else {
+                    "Polarity flipped: Repel!".to_string()
+                },
+                if self.polarity_attract {
+                    crate::color::Color::Red
+                } else {
+                    crate::color::Color::Blue
+                },
+            );
+        }
+        // Scheduled shuffle: every POLARITY_SHUFFLE_PERIOD-th tick every pole
+        // relocates to a fresh fair cell. Fairness: a new pole never lands on a
+        // snake, on the cell any snake is about to enter, on any entity or
+        // hazard, or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::POLARITY_SHUFFLE_PERIOD) {
+            let count = self.polarity_pole_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_poles = std::mem::take(&mut self.polarity_poles);
+            let avoid_pole = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_poles.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pole,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.polarity_poles.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.polarity_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The poles rearrange! ({placed})"),
+                    crate::color::Color::Magenta,
                 );
             }
         }
@@ -8076,7 +8282,8 @@ impl Game {
             | GameMode::Pinball
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
-            | GameMode::Trampoline => {
+            | GameMode::Trampoline
+            | GameMode::Polarity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8200,6 +8407,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Polarity
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -8290,6 +8498,7 @@ impl Game {
             || self.mode == GameMode::Landslide
         || self.mode == GameMode::PhaseShift
         || self.mode == GameMode::Trampoline
+        || self.mode == GameMode::Polarity
         {
             &self.snake
         } else {
@@ -8418,6 +8627,12 @@ impl Game {
         self.tramp_flings = 0;
         self.tramp_shuffles = 0;
         self.tramp_overcharge = 0;
+        self.polarity_poles.clear();
+        self.polarity_attract = true;
+        self.polarity_flips = 0;
+        self.polarity_shuffles = 0;
+        self.polarity_shoves = 0;
+        self.polarity_shield = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -8939,6 +9154,40 @@ impl Game {
                     self.safe_zone_margin,
                 ) {
                     self.tramp_pads.insert(p);
+                }
+            }
+        }
+        if self.mode == GameMode::Polarity {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            for _ in 0..self.polarity_pole_count() {
+                let avoid_pole = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.mines.contains(p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.pinball_bumpers.contains(p)
+                        || self.tramp_pads.contains(p)
+                        || self.polarity_poles.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pole,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.polarity_poles.insert(p);
                 }
             }
         }
@@ -9614,7 +9863,8 @@ impl Game {
             | GameMode::Pinball
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
-            | GameMode::Trampoline => {
+            | GameMode::Trampoline
+            | GameMode::Polarity => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10308,6 +10558,12 @@ impl Game {
             self.tramp_flings = state.tramp_flings;
             self.tramp_shuffles = state.tramp_shuffles;
             self.tramp_overcharge = state.tramp_overcharge;
+            self.polarity_poles = state.polarity_poles;
+            self.polarity_attract = state.polarity_attract;
+            self.polarity_flips = state.polarity_flips;
+            self.polarity_shuffles = state.polarity_shuffles;
+            self.polarity_shoves = state.polarity_shoves;
+            self.polarity_shield = state.polarity_shield;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -10511,6 +10767,12 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            polarity_poles: self.polarity_poles.clone(),
+            polarity_attract: self.polarity_attract,
+            polarity_flips: self.polarity_flips,
+            polarity_shuffles: self.polarity_shuffles,
+            polarity_shoves: self.polarity_shoves,
+            polarity_shield: self.polarity_shield,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -14371,6 +14633,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_polarity();
         self.manage_thornfield();
         self.manage_mirage();
 
@@ -14471,6 +14734,14 @@ impl Game {
             } else {
                 final_head
             };
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(shoved) = self.polarity_shove(final_head, false) {
+                self.polarity_shoves += 1;
+                shoved
+            } else {
+                final_head
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -14499,6 +14770,39 @@ impl Game {
             {
                 final_head2_opt = Some(flung);
                 self.tramp_flings += 1;
+            }
+        }
+        // In Polarity mode a flip tick shoves the head one cell toward the
+        // nearest pole (attract) or away from it (repel); only fair cells are
+        // accepted, so the shove can never kill
+        if self.mode == GameMode::Polarity {
+            if !hit_wall1
+                && let Some(shoved) = self.polarity_shove(final_head1, true)
+            {
+                final_head1 = shoved;
+                self.polarity_shoves += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    if self.polarity_attract {
+                        "Pulled!".to_string()
+                    } else {
+                        "Pushed!".to_string()
+                    },
+                    if self.polarity_attract {
+                        crate::color::Color::Red
+                    } else {
+                        crate::color::Color::Blue
+                    },
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(shoved) = self.polarity_shove(fh2, false)
+            {
+                final_head2_opt = Some(shoved);
+                self.polarity_shoves += 1;
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -15382,6 +15686,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Polarity
             {
                 self.handle_death("You Died!");
             } else {
@@ -16770,6 +17075,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
+            );
+        }
+        if self.mode == GameMode::Polarity {
+            // Eating food charges a shield: the player is not shoved for a while
+            self.polarity_shield = Self::POLARITY_SHIELD_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Shielded!".to_string(),
+                crate::color::Color::Magenta,
             );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
@@ -19444,6 +19759,12 @@ if self.mode == GameMode::Steamroller {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Ticks between polarity flips in Polarity mode
+    pub const POLARITY_FLIP_PERIOD: u32 = 16;
+    /// Ticks between pole relocations in Polarity mode
+    pub const POLARITY_SHUFFLE_PERIOD: u32 = 24;
+    /// Ticks of shove immunity granted by eating food in Polarity mode
+    pub const POLARITY_SHIELD_TICKS: u32 = 10;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

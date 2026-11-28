@@ -668,6 +668,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Pinball Mode",
         "Phase Shift Mode",
         "Trampoline Mode",
+        "Polarity Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2002,6 +2003,22 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw magnetic poles (Polarity mode): red while attracting, blue while repelling
+    if game.mode == crate::game::GameMode::Polarity {
+        let pole_color = if game.polarity_attract {
+            Color::Red
+        } else {
+            Color::Blue
+        };
+        stdout.queue(SetForegroundColor(pole_color))?;
+        for pole in &game.polarity_poles {
+            if is_visible(pole.x, pole.y) {
+                stdout.queue(cursor::MoveTo(pole.x, pole.y))?;
+                write!(stdout, "M")?;
+            }
+        }
+    }
+
     // Draw geyser jets and vents (Geyser mode)
     if game.mode == crate::game::GameMode::Geyser {
         stdout.queue(SetForegroundColor(Color::Cyan))?;
@@ -3305,6 +3322,27 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let polarity_str = if game.mode == crate::game::GameMode::Polarity {
+        let shield = if game.polarity_shield > 0 {
+            format!(" | Shielded: {}", game.polarity_shield)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Poles: {} | Polarity: {} | Flips: {} | Shoves: {} | Shuffles: {}{shield}",
+            game.polarity_poles.len(),
+            if game.polarity_attract {
+                "Attract"
+            } else {
+                "Repel"
+            },
+            game.polarity_flips,
+            game.polarity_shoves,
+            game.polarity_shuffles
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -3492,7 +3530,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}"
     )?;
 
     if !game.bosses.is_empty() {

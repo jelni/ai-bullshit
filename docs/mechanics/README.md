@@ -579,3 +579,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Pads: <count> | Flings: <count> | Shuffles: <count>` plus `Overcharged: <ticks>` while overcharged (`tramp_str`).
 - **Persistence:** `tramp_pads`, `tramp_flings`, `tramp_shuffles`, and `tramp_overcharge` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_trampoline_mode.rs](../../tests/test_trampoline_mode.rs).
+
+## Polarity Mode
+
+`GameMode::Polarity` (menu entry "Polarity Mode", entry 86 in the main menu) is a survival mode played among a permanent set of magnetic poles whose polarity flips on a schedule:
+
+- **Magnetic poles:** on reset `polarity_pole_count()` = `clamp(width*height/80, 2, 6)` poles (`polarity_poles`) are seeded on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, another mode's fixture, or the food. Poles are walkable (they are *not* mirrored into `obstacles`) and render as a red `M` while attracting / blue `M` while repelling (terminal) and red / blue cells (web).
+- **Polarity flip:** every `POLARITY_FLIP_PERIOD` (16) ticks `manage_polarity` toggles `polarity_attract` and counts it in `polarity_flips` ("Polarity flipped: Attract!" / "Repel!"). The field starts attracting on reset.
+- **Shove:** on a flip tick, `polarity_shove` shoves the head one cell toward the nearest pole (Manhattan distance) while attracting, or away from it while repelling — dominant axis first, then the other axis — and counts it in `polarity_shoves` ("Pulled!" / "Pushed!"). The shove is applied to the player, player 2, and every bot at the same points where `belt_shove`/`tramp_launch` are applied in `update`, and only on flip ticks (never when the snake hit a wall).
+- **Fairness:** only destination cells passing `polarity_cell_free` are accepted — in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter (`singularity_cell_free`), plus the lightning column, every lethal tile set (fire, acid, puddles, lava, inferno, blaze, seismic rubble) and the Battle Royale safe zone. If no candidate cell is fair the snake is not shoved at all, so **a pole can never directly kill**.
+- **Shield:** eating food sets `polarity_shield = POLARITY_SHIELD_TICKS` (10) ("Shielded!"); while the timer is positive it counts down once per tick and the player is not shoved.
+- **Scheduled shuffle:** every `POLARITY_SHUFFLE_PERIOD` (24) ticks `manage_polarity` relocates every pole to a fresh fair cell (`polarity_shuffles += 1`, "The poles rearrange! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, or within 4 cells (Manhattan) of any snake head. Poles that end up under a fresh obstacle (e.g. a meteor crash) are scrapped at the start of each tick.
+- **Autopilot:** shove landings are always fair, so a shoved bot is never killed by the shove itself; the bot replans from its actual head every tick and rides the poles natively.
+- **Status bar:** `Poles: <count> | Polarity: <Attract/Repel> | Flips: <count> | Shoves: <count> | Shuffles: <count>` plus `Shielded: <ticks>` while shielded (`polarity_str`).
+- **Persistence:** `polarity_poles`, `polarity_attract`, `polarity_flips`, `polarity_shuffles`, `polarity_shoves`, and `polarity_shield` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_polarity_mode.rs](../../tests/test_polarity_mode.rs).

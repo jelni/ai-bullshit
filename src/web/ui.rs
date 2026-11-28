@@ -175,6 +175,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw magnetic poles (Polarity mode): red while attracting, blue while repelling
+    if game.mode == crate::game::GameMode::Polarity {
+        ctx.set_fill_style_str(if game.polarity_attract {
+            "#FF0000"
+        } else {
+            "#0000FF"
+        });
+        for pole in &game.polarity_poles {
+            if pole.x < game.width
+                && pole.y < game.height
+                && is_visible(f64::from(pole.x), f64::from(pole.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pole.x) * cell_size,
+                    f64::from(pole.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders
