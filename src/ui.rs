@@ -721,6 +721,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Flux Mode",
         "Maelstrom Mode",
         "Decay Mode",
+        "Erosion Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2077,6 +2078,25 @@ fn draw_entities<W: Write>(
             if is_visible(pad.x, pad.y) {
                 stdout.queue(cursor::MoveTo(pad.x, pad.y))?;
                 write!(stdout, "+")?;
+            }
+        }
+    }
+
+    // Draw the crumbling floor (Erosion mode): cells about to crumble are
+    // telegraphed as dark-yellow dots, open holes as dark-grey x
+    if game.mode == crate::game::GameMode::Erosion {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for (p, t) in &game.erode_timers {
+            if *t <= crate::game::Game::ERODE_WARN && is_visible(p.x, p.y) {
+                stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                write!(stdout, ".")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::DarkGrey))?;
+        for hole in &game.erode_holes {
+            if is_visible(hole.x, hole.y) {
+                stdout.queue(cursor::MoveTo(hole.x, hole.y))?;
+                write!(stdout, "x")?;
             }
         }
     }
@@ -4039,10 +4059,20 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let erode_str = if game.mode == crate::game::GameMode::Erosion {
+        format!(
+            " | Holes: {} | Crumbles: {} | Tremors: {}",
+            game.erode_holes.len(),
+            game.erode_crumbles,
+            game.erode_tremors
+        )
+    } else {
+        String::new()
+    };
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}"
     )?;
 
     if !game.bosses.is_empty() {

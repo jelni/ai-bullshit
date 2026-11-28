@@ -225,6 +225,40 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw the crumbling floor (Erosion mode): imminent cells telegraphed in
+    // dark yellow, open holes in dark grey (over the red obstacle cells)
+    if game.mode == crate::game::GameMode::Erosion {
+        ctx.set_fill_style_str("#8B8B00");
+        for (p, t) in &game.erode_timers {
+            if *t <= crate::game::Game::ERODE_WARN
+                && p.x < game.width
+                && p.y < game.height
+                && is_visible(f64::from(p.x), f64::from(p.y))
+            {
+                ctx.fill_rect(
+                    f64::from(p.x) * cell_size,
+                    f64::from(p.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#444444");
+        for hole in &game.erode_holes {
+            if hole.x < game.width
+                && hole.y < game.height
+                && is_visible(f64::from(hole.x), f64::from(hole.y))
+            {
+                ctx.fill_rect(
+                    f64::from(hole.x) * cell_size,
+                    f64::from(hole.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw magnetic poles (Polarity mode): red while attracting, blue while repelling
     if game.mode == crate::game::GameMode::Polarity {
         ctx.set_fill_style_str(if game.polarity_attract {

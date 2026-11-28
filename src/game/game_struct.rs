@@ -220,6 +220,10 @@ pub struct Game {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub erode_timers: std::collections::HashMap<Point, u32>,
+    pub erode_holes: HashSet<Point>,
+    pub erode_crumbles: u32,
+    pub erode_tremors: u32,
     pub flux_coils: HashSet<Point>,
     pub flux_attract: bool,
     pub flux_pulls: u32,
@@ -839,6 +843,10 @@ impl Game {
             tramp_flings: 0,
             tramp_shuffles: 0,
             tramp_overcharge: 0,
+            erode_timers: std::collections::HashMap::new(),
+            erode_holes: HashSet::new(),
+            erode_crumbles: 0,
+            erode_tremors: 0,
             flux_coils: HashSet::new(),
             flux_attract: true,
             flux_pulls: 0,
@@ -1187,6 +1195,10 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            erode_timers: self.erode_timers.clone(),
+            erode_holes: self.erode_holes.clone(),
+            erode_crumbles: self.erode_crumbles,
+            erode_tremors: self.erode_tremors,
             flux_coils: self.flux_coils.clone(),
             flux_attract: self.flux_attract,
             flux_pulls: self.flux_pulls,
@@ -1502,6 +1514,10 @@ impl Game {
                 self.tramp_flings = state.tramp_flings;
                 self.tramp_shuffles = state.tramp_shuffles;
                 self.tramp_overcharge = state.tramp_overcharge;
+                self.erode_timers = state.erode_timers;
+                self.erode_holes = state.erode_holes;
+                self.erode_crumbles = state.erode_crumbles;
+                self.erode_tremors = state.erode_tremors;
                 self.flux_coils = state.flux_coils;
                 self.flux_attract = state.flux_attract;
                 self.flux_pulls = state.flux_pulls;
@@ -5231,6 +5247,151 @@ impl Game {
                     format!("The pads rearrange! ({placed})"),
                     crate::color::Color::Yellow,
                 );
+            }
+        }
+    }
+
+    // Every cell covered by a snake's body or about to be entered by a snake's
+    // head. The eroding floor never crumbles on any of these (fairness).
+    fn erode_occupied_cells(&self) -> HashSet<Point> {
+        let mut occupied = HashSet::new();
+        let mut snakes: Vec<&Snake> = vec![&self.snake];
+        if let Some(p2) = &self.player2 {
+            snakes.push(p2);
+        }
+        snakes.extend(self.bots.iter());
+        for s in snakes {
+            occupied.extend(s.body_map.keys().copied());
+        }
+        occupied.extend(self.singularity_next_heads());
+        occupied
+    }
+    // A cell a fresh hole may open on must be fair right now: in bounds within
+    // the safe-zone margin and free of snakes (bodies and the cells they are
+    // about to enter) and of every entity or lethal tile, so a tremor can
+    // never directly kill.
+    fn erode_cell_fair(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) || self.erode_holes.contains(&p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.ice_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.phase_gates.contains(&p)
+            || self.thorn_tiles.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    fn manage_erosion(&mut self) {
+        if self.mode != GameMode::Erosion {
+            return;
+        }
+        // The skies stay clear so the crumbling floor is always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared an obstacle, drop the stale hole record
+        self.erode_holes.retain(|p| self.obstacles.contains(p));
+        // The floor under every snake's head is refreshed each tick, so it can
+        // never crumble while a snake stands on it (fairness).
+        let heads: Vec<Point> = std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect();
+        for h in &heads {
+            self.erode_timers.insert(*h, Self::ERODE_TICKS);
+        }
+        // Periodic resettle: at tick 200 of every 250-tick cycle the ground
+        // heals and every hole refills.
+        if self.tick_counter == 200 {
+            if !self.erode_holes.is_empty() || !self.erode_timers.is_empty() {
+                for p in self.erode_holes.drain() {
+                    self.obstacles.remove(&p);
+                }
+                self.erode_timers.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The ground resettles!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // Scheduled tremor: every ERODE_TREMOR_PERIOD-th tick a fresh hole
+        // opens on a random fair cell (capped at ERODE_MAX_HOLE_PCT of the board).
+        if self.tick_counter.is_multiple_of(Self::ERODE_TREMOR_PERIOD) {
+            let cap =
+                (u32::from(self.width) * u32::from(self.height) * Self::ERODE_MAX_HOLE_PCT) / 100;
+            if u32::try_from(self.erode_holes.len()).unwrap_or(u32::MAX) < cap {
+                // Retry a few random candidates until one passes the full
+                // fairness check (the closure below only captures
+                // `erode_holes`, keeping `self.rng` free to borrow mutably).
+                for _ in 0..20 {
+                    let Some(p) = Self::get_random_empty_point(
+                        self.width,
+                        self.height,
+                        &self.snake,
+                        |p| self.erode_holes.contains(p),
+                        &mut self.rng,
+                        self.safe_zone_margin,
+                    ) else {
+                        break;
+                    };
+                    if !self.erode_cell_fair(p) {
+                        continue;
+                    }
+                    self.erode_holes.insert(p);
+                    self.obstacles.insert(p);
+                    self.erode_tremors += 1;
+                    let head = self.snake.head();
+                    self.spawn_floating_text(
+                        f32::from(head.x),
+                        f32::from(head.y),
+                        "Tremor!".to_string(),
+                        crate::color::Color::DarkRed,
+                    );
+                    break;
+                }
+            }
+        }
+        // Countdown: every weakened cell that no snake occupies (or is about to
+        // enter) ticks down; at zero it crumbles into a hole. Holes are mirrored
+        // into `obstacles`, so they are lethal on entry and hard constraints in
+        // the A* search and the verified-safe path checks.
+        let occupied = self.erode_occupied_cells();
+        let mut crumbled = Vec::new();
+        for (p, t) in &mut self.erode_timers {
+            if occupied.contains(p) {
+                continue;
+            }
+            if *t <= 1 {
+                crumbled.push(*p);
+            } else {
+                *t -= 1;
+            }
+        }
+        for p in crumbled {
+            self.erode_timers.remove(&p);
+            self.erode_crumbles += 1;
+            // Only mirror into `obstacles` cells that were not already blocked
+            // by something else, so resettle/reinforce never removes a foreign
+            // obstacle.
+            if self.obstacles.insert(p) {
+                self.erode_holes.insert(p);
             }
         }
     }
@@ -12133,7 +12294,8 @@ impl Game {
             | GameMode::Electro
             | GameMode::Sludge | GameMode::Flux
             | GameMode::Maelstrom
-            | GameMode::Decay => {
+            | GameMode::Decay 
+            | GameMode::Erosion => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12511,6 +12673,10 @@ impl Game {
         self.tramp_flings = 0;
         self.tramp_shuffles = 0;
         self.tramp_overcharge = 0;
+        self.erode_timers.clear();
+        self.erode_holes.clear();
+        self.erode_crumbles = 0;
+        self.erode_tremors = 0;
         self.flux_coils.clear();
         self.flux_attract = true;
         self.flux_pulls = 0;
@@ -13979,7 +14145,8 @@ impl Game {
             | GameMode::Electro
             | GameMode::Sludge | GameMode::Flux
             | GameMode::Maelstrom
-            | GameMode::Decay => {
+            | GameMode::Decay 
+            | GameMode::Erosion => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -14676,6 +14843,10 @@ impl Game {
             self.tramp_flings = state.tramp_flings;
             self.tramp_shuffles = state.tramp_shuffles;
             self.tramp_overcharge = state.tramp_overcharge;
+            self.erode_timers = state.erode_timers;
+            self.erode_holes = state.erode_holes;
+            self.erode_crumbles = state.erode_crumbles;
+            self.erode_tremors = state.erode_tremors;
             self.flux_coils = state.flux_coils;
             self.flux_attract = state.flux_attract;
             self.flux_pulls = state.flux_pulls;
@@ -14958,6 +15129,10 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            erode_timers: self.erode_timers.clone(),
+            erode_holes: self.erode_holes.clone(),
+            erode_crumbles: self.erode_crumbles,
+            erode_tremors: self.erode_tremors,
             flux_coils: self.flux_coils.clone(),
             flux_attract: self.flux_attract,
             flux_pulls: self.flux_pulls,
@@ -18919,6 +19094,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_erosion();
         self.manage_decay();
         self.manage_mire();
         self.manage_elevator();
@@ -21822,6 +21998,28 @@ if self.mode == GameMode::Steamroller {
                 crate::color::Color::Yellow,
             );
         }
+        if self.mode == GameMode::Erosion {
+            // Eating food reinforces the floor around the eaten cell: adjacent
+            // weakened cells and holes are healed (holes leave `obstacles`)
+            let mut reinforced = 0u32;
+            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                let p = Self::calculate_next_head_dir(final_head, d);
+                if self.erode_holes.remove(&p) {
+                    self.obstacles.remove(&p);
+                    reinforced += 1;
+                } else if self.erode_timers.remove(&p).is_some() {
+                    reinforced += 1;
+                }
+            }
+            if reinforced > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Reinforced {reinforced} cell(s)!"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+        }
         if self.mode == GameMode::Decay {
             // Eating food patches the floor around the eaten cell: adjacent
             // cracks are sealed and adjacent pits are filled back in
@@ -23870,6 +24068,19 @@ if self.mode == GameMode::Sludge {
             if self.mode == GameMode::PhaseShift && self.phase_gates.contains(&final_p) {
                 return false;
             }
+            // In Erosion mode a hole is lethal, and a weakened cell whose timer
+            // expires by the arrival step will have crumbled, so the bot never
+            // plans onto collapsing floor.
+            if self.mode == GameMode::Erosion {
+                if self.erode_holes.contains(&final_p) {
+                    return false;
+                }
+                if let Some(t) = self.erode_timers.get(&final_p)
+                    && *t <= u32::from(steps)
+                {
+                    return false;
+                }
+            }
             // In Decay mode the autopilot rejects a cracked cell whose collapse
             // is due within the arrival horizon (like a predicted meteor); pits
             // are already hard obstacles, and a pit can never form on an
@@ -24813,6 +25024,14 @@ if self.mode == GameMode::Sludge {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Ticks a stepped-on cell survives before it crumbles into a hole in Erosion mode
+    pub const ERODE_TICKS: u32 = 24;
+    /// A tremor opens a fresh hole every this many ticks in Erosion mode
+    pub const ERODE_TREMOR_PERIOD: u32 = 6;
+    /// Maximum share of the board (in percent) that may be holes in Erosion mode
+    pub const ERODE_MAX_HOLE_PCT: u32 = 15;
+    /// Cells with at most this many ticks left are telegraphed as imminent crumbles
+    pub const ERODE_WARN: u32 = 6;
     /// Manhattan radius within which a flux coil drags a snake in Flux mode
     pub const FLUX_RADIUS: u16 = 4;
     /// Ticks between whole-layout coil shuffles in Flux mode

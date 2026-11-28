@@ -178,6 +178,14 @@ pub struct SaveState {
     pub tramp_shuffles: u32,
     #[serde(default)]
     pub tramp_overcharge: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub erode_timers: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub erode_holes: HashSet<Point>,
+    #[serde(default)]
+    pub erode_crumbles: u32,
+    #[serde(default)]
+    pub erode_tremors: u32,
     #[serde(default)]
     pub flux_coils: HashSet<Point>,
     #[serde(default)]

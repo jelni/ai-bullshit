@@ -817,3 +817,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Rendering:** cracks are a dark-yellow `'` (terminal) / brown cell (web), pits a dark-grey `#` (terminal) / dark-grey cell (web); the status bar shows `Cracks: <count> | Pits: <count> | Collapses: <count> | Tremors: <count> | Repairs: <count>` (`decay_str`).
 - **Persistence:** `decay_cracks` (serialized as `[key, value]` pairs via `map_as_pairs`), `decay_pits`, `decay_collapses`, `decay_tremors`, and `decay_repairs` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_decay_mode.rs](../../tests/test_decay_mode.rs).
+
+## Erosion Mode
+
+`GameMode::Erosion` (menu entry "Erosion Mode", entry 139 in the main menu) is a survival mode where the floor crumbles behind every snake:
+
+- **Weakening:** every tick `manage_erosion` refreshes `erode_timers[head] = ERODE_TICKS` (24) for the player's, player 2's, and every bot's head cell, then counts down every weakened cell that is *not* occupied — `erode_occupied_cells` collects every snake's whole `body_map` plus `singularity_next_heads` (the cells snakes are about to enter this tick). A cell whose timer reaches zero crumbles: it is inserted into `erode_holes`, mirrored into `obstacles` (lethal on entry), and counted in `erode_crumbles`. Cells already blocked by a foreign obstacle are not re-tracked, so resettle/reinforce never removes another system's obstacle.
+- **Fairness:** occupied and next-head timers freeze, so the floor never crumbles under a snake's body or on the cell any snake is about to enter — erosion can never kill anyone cheaply.
+- **Tremors:** every `ERODE_TREMOR_PERIOD` (6) ticks a tremor opens one fresh hole on a random cell passing `erode_cell_fair` (in bounds within the safe-zone margin and free of snakes, entities, and hazard tiles via `singularity_cell_free`, plus the lightning column and every lethal tile set), capped at `ERODE_MAX_HOLE_PCT` (15%) of the board, counted in `erode_tremors` ("Tremor!"). Weather is pinned to `Weather::Clear` so the floor stays visible.
+- **Resettle:** at tick 200 of every 250-tick cycle the ground heals — every hole is removed from `erode_holes` and `obstacles`, and `erode_timers` is cleared ("The ground resettles!").
+- **Reinforcement:** eating food heals the four orthogonally adjacent cells of the eaten cell — holes leave `obstacles` and timers are dropped ("Reinforced N cell(s)!").
+- **Autopilot:** holes are hard obstacles in the A* search and the verified-safe path checks, and `is_safe_final_p` additionally rejects any cell whose `erode_timers` value is `<=` its arrival `steps`, so the bot never plans onto collapsing floor.
+- **Status bar:** `Holes: <count> | Crumbles: <count> | Tremors: <count>` (`erode_str`). Holes render as a dark-grey `x` and cells with at most `ERODE_WARN` (6) ticks left as a dark-yellow `.` on the terminal, dark-grey / dark-yellow cells on the web.
+- **Persistence:** `erode_timers`, `erode_holes`, `erode_crumbles`, and `erode_tremors` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_erosion_mode.rs](../../tests/test_erosion_mode.rs).
