@@ -254,6 +254,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw loose-tar warnings and tar pits (Tar Pit mode)
+    if game.mode == crate::game::GameMode::TarPit {
+        ctx.set_fill_style_str("#FFFF00"); // Yellow loose-tar warnings
+        for warn in &game.tar_warnings {
+            if warn.x < game.width
+                && warn.y < game.height
+                && is_visible(f64::from(warn.x), f64::from(warn.y))
+            {
+                ctx.fill_rect(
+                    f64::from(warn.x) * cell_size,
+                    f64::from(warn.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#8B5A2B"); // Brown tar pits
+        for cell in &game.tar_pits {
+            if cell.x < game.width
+                && cell.y < game.height
+                && is_visible(f64::from(cell.x), f64::from(cell.y))
+            {
+                ctx.fill_rect(
+                    f64::from(cell.x) * cell_size,
+                    f64::from(cell.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw quicksand patches (Quicksand mode)
     if game.mode == crate::game::GameMode::Quicksand {
         ctx.set_fill_style_str("#8B5A2B"); // Brown bog

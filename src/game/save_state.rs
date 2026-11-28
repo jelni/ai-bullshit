@@ -286,6 +286,14 @@ pub struct SaveState {
     #[serde(default)]
     pub domino_reshuffles: u32,
     #[serde(default)]
+    pub tar_pits: HashSet<Point>,
+    #[serde(default)]
+    pub tar_patches: Vec<Point>,
+    #[serde(default)]
+    pub tar_warnings: HashSet<Point>,
+    #[serde(default)]
+    pub tar_spreads: u32,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,

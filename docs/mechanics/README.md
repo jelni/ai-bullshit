@@ -733,3 +733,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Mire: <count> | Waves: <count>` (`mire_bar`).
 - **Persistence:** `mire_cells`, `mire_warnings`, and `mire_waves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_mire_mode.rs](../../tests/test_mire_mode.rs).
+
+## Tar Pit Mode
+
+`GameMode::TarPit` (menu entry "Tar Pit Mode", entry 132 in the main menu) is a survival mode played on a board with spreading lethal tar pits:
+
+- **Seeding:** on reset `spawn_tar_patches` seeds `TAR_PATCHES` (3) plus-shaped pits: each pit center goes into `tar_patches`, and the center plus its four in-bounds neighbors become active tar (`tar_pits`, mirrored into `obstacles`) on fair interior cells at least 5 cells (Manhattan) from the spawn. The weather is pinned to `Weather::Clear` (ambient weather randomization is skipped in this mode).
+- **Schedule:** every `TAR_PERIOD` (6) ticks `manage_tar_pit` runs a cycle. At tick `TAR_TELEGRAPH_TICKS` (3) mod 6 the threatened cells are telegraphed into `tar_warnings` (loose tar, walkable, rendered as yellow `.` / yellow cells): a fresh plus-shaped pit is seeded every 12th tick while under `TAR_MAX_PATCHES` (6) centers and `TAR_MAX_CELLS` (80) active cells, and the existing pits creep outward by up to `TAR_SPREAD_CELLS` (2) cells per pit per cycle from the sorted tar frontier.
+- **Activation:** at every 6th tick the telegraphed cells activate into `tar_pits` + `obstacles` (counted in `tar_spreads`, "Tar spreads! (+N)"), capped at `TAR_MAX_CELLS`. Tar is lethal on entry and a hard hazard in the A* search and the verified-safe `is_safe_final_p` checks (via the `obstacles` mirror), so the bot routes around it natively.
+- **Fairness:** `is_tar_cell_blocked` never claims border-ring or off-board cells, a snake's body, the cell any snake is about to enter this tick (`phase_next_cells`: the player's and player 2's direction queues are popped before the manage calls, so their current direction is authoritative; the bots' queues are popped after, so their queued direction is used), the food, or any entity or hazard tile — and it is re-checked at activation time too, so spreading tar can never claim anyone cheaply.
+- **Setting cycle:** at tick `TAR_DRY_TICK` (200) of every 250-tick cycle all tar, warnings, and pit centers are cleared at once ("The tar sets hard!").
+- **Stomping:** eating food removes the tar cells adjacent to the eaten cell from `tar_pits` and `obstacles` ("Stomped N tar!") and drops pit centers that no longer have any tar.
+- **Self-heal:** each tick `manage_tar_pit` (and an end-of-tick pass) drops stale tar records if something else cleared obstacles mid-tick, keeping the `tar_pits`/`obstacles` mirror exact.
+- **Status bar:** `Tar: <count> | Pits: <count> | Spreads: <count>` (`tar_str`).
+- **Persistence:** `tar_pits`, `tar_patches`, `tar_warnings`, and `tar_spreads` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_tar_pit_mode.rs](../../tests/test_tar_pit_mode.rs) and the save/load test in `src/game/tests.rs`.

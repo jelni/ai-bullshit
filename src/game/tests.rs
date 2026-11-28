@@ -340,6 +340,31 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_tar_pit_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::TarPit;
+        game.reset();
+        game.tar_patches = vec![Point { x: 12, y: 9 }, Point { x: 20, y: 20 }];
+        game.tar_pits.insert(Point { x: 12, y: 10 });
+        game.tar_warnings.insert(Point { x: 11, y: 9 });
+        game.tar_spreads = 42;
+        let file_path = "savegame_test_tar_pit.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::TarPit);
+        assert_eq!(
+            loaded.tar_patches,
+            vec![Point { x: 12, y: 9 }, Point { x: 20, y: 20 }]
+        );
+        assert!(loaded.tar_pits.contains(&Point { x: 12, y: 10 }));
+        assert!(loaded.tar_warnings.contains(&Point { x: 11, y: 9 }));
+        assert_eq!(loaded.tar_spreads, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[test]
     fn test_save_and_load_sandstorm_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Sandstorm;

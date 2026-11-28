@@ -107,4 +107,5 @@ pub enum GameMode {
     Comet,
     Elevator,
     Mire,
+    TarPit,
 }

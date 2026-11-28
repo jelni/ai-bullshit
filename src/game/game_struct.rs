@@ -258,6 +258,10 @@ pub struct Game {
     pub quicksand_sink: u32,
     pub quicksand_sink2: u32,
     pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    pub tar_pits: HashSet<Point>,
+    pub tar_patches: Vec<Point>,
+    pub tar_warnings: HashSet<Point>,
+    pub tar_spreads: u32,
     pub mire_cells: std::collections::HashMap<Point, u32>,
     pub mire_warnings: HashSet<Point>,
     pub mire_waves: u32,
@@ -845,6 +849,10 @@ impl Game {
             quicksand_sink: 0,
             quicksand_sink2: 0,
             quicksand_bot_sinks: std::collections::HashMap::new(),
+            tar_pits: HashSet::new(),
+            tar_patches: Vec::new(),
+            tar_warnings: HashSet::new(),
+            tar_spreads: 0,
             mire_cells: std::collections::HashMap::new(),
             mire_warnings: HashSet::new(),
             mire_waves: 0,
@@ -1174,6 +1182,10 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            tar_pits: self.tar_pits.clone(),
+            tar_patches: self.tar_patches.clone(),
+            tar_warnings: self.tar_warnings.clone(),
+            tar_spreads: self.tar_spreads,
             mire_cells: self.mire_cells.clone(),
             mire_warnings: self.mire_warnings.clone(),
             mire_waves: self.mire_waves,
@@ -1456,6 +1468,10 @@ impl Game {
                 self.quicksand_sink = state.quicksand_sink;
                 self.quicksand_sink2 = state.quicksand_sink2;
                 self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+                self.tar_pits = state.tar_pits;
+                self.tar_patches = state.tar_patches;
+                self.tar_warnings = state.tar_warnings;
+                self.tar_spreads = state.tar_spreads;
                 self.mire_cells = state.mire_cells;
                 self.mire_warnings = state.mire_warnings;
                 self.mire_waves = state.mire_waves;
@@ -4383,6 +4399,262 @@ impl Game {
             || self.fortress_walls.contains(&p)
             || self.geyser_jets.contains_key(&p)
             || self.thorn_tiles.contains(&p)
+    }
+    fn manage_tar_pit(&mut self) {
+        if self.mode != GameMode::TarPit {
+            return;
+        }
+        // The skies stay clear so the loose tar and the tar pits are always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale tar records
+        self.tar_pits.retain(|p| self.obstacles.contains(p));
+        self.tar_patches
+            .retain(|p| self.tar_pits.contains(p) || self.tar_warnings.contains(p));
+        // Setting cycle: at TAR_DRY_TICK of every 250-tick cycle all the tar sets hard at once
+        if self.tick_counter % 250 == Self::TAR_DRY_TICK {
+            if !self.tar_pits.is_empty() || !self.tar_warnings.is_empty() {
+                let set: Vec<Point> = self.tar_pits.iter().copied().collect();
+                for p in set {
+                    self.tar_pits.remove(&p);
+                    self.obstacles.remove(&p);
+                }
+                self.tar_warnings.clear();
+                self.tar_patches.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The tar sets hard!".to_string(),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        let (p1_next, p2_next, bot_next) = self.phase_next_cells();
+        // Telegraph: TAR_TELEGRAPH_TICKS before activation the threatened cells show as loose tar
+        if self.tick_counter % Self::TAR_PERIOD == Self::TAR_TELEGRAPH_TICKS % Self::TAR_PERIOD {
+            self.tar_warnings.clear();
+            // Seed a fresh plus-shaped pit every other cycle while under the patch cap
+            if self.tick_counter % (Self::TAR_PERIOD * 2) == Self::TAR_TELEGRAPH_TICKS % Self::TAR_PERIOD
+                && self.tar_patches.len() < Self::TAR_MAX_PATCHES
+                && self.tar_pits.len() < Self::TAR_MAX_CELLS
+            {
+                let spawn_x = self.width / 2;
+                let spawn_y = self.height / 2;
+                let mut center = None;
+                for _ in 0..64 {
+                    let p = Point {
+                        x: self.rng.gen_range(0..self.width),
+                        y: self.rng.gen_range(0..self.height),
+                    };
+                    if p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5 {
+                        continue;
+                    }
+                    if !self.is_tar_cell_blocked(p, p1_next, p2_next, &bot_next) {
+                        center = Some(p);
+                        break;
+                    }
+                }
+                if let Some(center) = center {
+                    self.tar_patches.push(center);
+                    let mut cells = vec![center];
+                    for dir in [
+                        Direction::Up,
+                        Direction::Down,
+                        Direction::Left,
+                        Direction::Right,
+                    ] {
+                        let np = Self::calculate_next_head_dir(center, dir);
+                        if np.x < self.width && np.y < self.height {
+                            cells.push(np);
+                        }
+                    }
+                    for cell in cells {
+                        if !self.is_tar_cell_blocked(cell, p1_next, p2_next, &bot_next) {
+                            self.tar_warnings.insert(cell);
+                        }
+                    }
+                }
+            }
+            // Spreading: active pits creep into fair neighboring cells
+            if !self.tar_pits.is_empty() && self.tar_pits.len() < Self::TAR_MAX_CELLS {
+                let mut budget =
+                    Self::TAR_SPREAD_CELLS.saturating_mul(self.tar_patches.len().max(1));
+                let mut cells: Vec<Point> = self.tar_pits.iter().copied().collect();
+                cells.sort_by_key(|p| (p.x, p.y));
+                'spread: for cell in cells {
+                    for dir in [
+                        Direction::Up,
+                        Direction::Down,
+                        Direction::Left,
+                        Direction::Right,
+                    ] {
+                        let np = Self::calculate_next_head_dir(cell, dir);
+                        if np.x < self.width
+                            && np.y < self.height
+                            && !self.tar_pits.contains(&np)
+                            && !self.tar_warnings.contains(&np)
+                            && !self.is_tar_cell_blocked(np, p1_next, p2_next, &bot_next)
+                        {
+                            self.tar_warnings.insert(np);
+                            budget = budget.saturating_sub(1);
+                            if budget == 0 {
+                                break 'spread;
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        // Activation: every TAR_PERIOD-th tick the telegraphed cells turn to tar
+        if !self.tick_counter.is_multiple_of(Self::TAR_PERIOD) || self.tar_warnings.is_empty() {
+            return;
+        }
+        self.tar_spreads += 1;
+        let warned: Vec<Point> = self.tar_warnings.iter().copied().collect();
+        self.tar_warnings.clear();
+        let mut activated = 0u32;
+        for cell in warned {
+            if self.tar_pits.len() >= Self::TAR_MAX_CELLS {
+                break;
+            }
+            if self.is_tar_cell_blocked(cell, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            self.tar_pits.insert(cell);
+            self.obstacles.insert(cell);
+            activated += 1;
+        }
+        if activated > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("Tar spreads! (+{activated})"),
+                crate::color::Color::DarkYellow,
+            );
+        }
+    }
+    // Whether a tar cell is fair to claim: never on the border ring, off-board,
+    // on a snake's body, on the cell any snake is about to enter this tick, or on any entity.
+    fn is_tar_cell_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        // Tar only claims interior cells (the border ring is the drawn wall)
+        p.x == 0
+            || p.y == 0
+            || p.x >= self.width.saturating_sub(1)
+            || p.y >= self.height.saturating_sub(1)
+            || p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.tar_pits.contains(&p)
+            || self.tar_warnings.contains(&p)
+            || self.quicksand.contains(&p)
+            || self.crumble_tiles.contains(&p)
+            || self.domino_tiles.contains(&p)
+            || self.mines.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.blink_pads.contains(&p)
+            || self.magnet_poles.keys().any(|pole| *pole == p)
+            || self.polarity_poles.contains(&p)
+            || self.phase_gates.contains(&p)
+    }
+    fn spawn_tar_patches(&mut self) {
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let (p1_next, p2_next, bot_next) = self.phase_next_cells();
+        for _ in 0..Self::TAR_PATCHES {
+            let mut center = None;
+            for _ in 0..64 {
+                let p = Point {
+                    x: self.rng.gen_range(0..self.width),
+                    y: self.rng.gen_range(0..self.height),
+                };
+                if p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5 {
+                    continue;
+                }
+                if !self.is_tar_cell_blocked(p, p1_next, p2_next, &bot_next) {
+                    center = Some(p);
+                    break;
+                }
+            }
+            if let Some(center) = center {
+                self.tar_patches.push(center);
+                let mut cells = vec![center];
+                for dir in [
+                    Direction::Up,
+                    Direction::Down,
+                    Direction::Left,
+                    Direction::Right,
+                ] {
+                    let np = Self::calculate_next_head_dir(center, dir);
+                    if np.x < self.width && np.y < self.height {
+                        cells.push(np);
+                    }
+                }
+                for cell in cells {
+                    if !self.is_tar_cell_blocked(cell, p1_next, p2_next, &bot_next) {
+                        self.tar_pits.insert(cell);
+                        self.obstacles.insert(cell);
+                        self.spawn_particles(
+                            f32::from(cell.x),
+                            f32::from(cell.y),
+                            6,
+                            crate::color::Color::DarkYellow,
+                            '~',
+                        );
+                    }
+                }
+            }
+        }
     }
     fn manage_quicksand(&mut self) {
         if self.mode != GameMode::Quicksand {
@@ -10463,7 +10735,8 @@ impl Game {
             | GameMode::Gale
             | GameMode::Comet
             | GameMode::Elevator
-            | GameMode::Mire => {
+            | GameMode::Mire
+            | GameMode::TarPit => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10598,6 +10871,7 @@ impl Game {
             || self.mode == GameMode::Comet
             || self.mode == GameMode::Elevator
             || self.mode == GameMode::Mire
+            || self.mode == GameMode::TarPit
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -10699,6 +10973,7 @@ impl Game {
         || self.mode == GameMode::Comet
         || self.mode == GameMode::Elevator
         || self.mode == GameMode::Mire
+        || self.mode == GameMode::TarPit
         {
             &self.snake
         } else {
@@ -10869,6 +11144,10 @@ impl Game {
         self.quicksand_sink = 0;
         self.quicksand_sink2 = 0;
         self.quicksand_bot_sinks.clear();
+        self.tar_pits.clear();
+        self.tar_patches.clear();
+        self.tar_warnings.clear();
+        self.tar_spreads = 0;
         self.mire_cells.clear();
         self.mire_warnings.clear();
         self.mire_waves = 0;
@@ -11485,6 +11764,9 @@ impl Game {
         }
         if self.mode == GameMode::Quicksand {
             self.spawn_initial_quicksand();
+        }
+        if self.mode == GameMode::TarPit {
+            self.spawn_tar_patches();
         }
         if self.mode == GameMode::Mire {
             self.spawn_mire_warnings();
@@ -12182,7 +12464,8 @@ impl Game {
             | GameMode::Gale
             | GameMode::Comet
             | GameMode::Elevator
-            | GameMode::Mire => {
+            | GameMode::Mire
+            | GameMode::TarPit => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12925,6 +13208,10 @@ impl Game {
             self.quicksand_sink = state.quicksand_sink;
             self.quicksand_sink2 = state.quicksand_sink2;
             self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+            self.tar_pits = state.tar_pits;
+            self.tar_patches = state.tar_patches;
+            self.tar_warnings = state.tar_warnings;
+            self.tar_spreads = state.tar_spreads;
             self.mire_cells = state.mire_cells;
             self.mire_warnings = state.mire_warnings;
             self.mire_waves = state.mire_waves;
@@ -13179,6 +13466,10 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            tar_pits: self.tar_pits.clone(),
+            tar_patches: self.tar_patches.clone(),
+            tar_warnings: self.tar_warnings.clone(),
+            tar_spreads: self.tar_spreads,
             mire_cells: self.mire_cells.clone(),
             mire_warnings: self.mire_warnings.clone(),
             mire_waves: self.mire_waves,
@@ -16067,6 +16358,7 @@ impl Game {
             && self.mode != GameMode::Comet
             && self.mode != GameMode::Elevator
             && self.mode != GameMode::Mire
+            && self.mode != GameMode::TarPit
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -17061,6 +17353,7 @@ impl Game {
         self.manage_domino();
         self.manage_mirage();
         self.manage_quicksand();
+        self.manage_tar_pit();
         self.manage_crumble();
 
         self.manage_landslide();
@@ -18352,6 +18645,7 @@ impl Game {
             || self.mode == GameMode::Comet
             || self.mode == GameMode::Elevator
             || self.mode == GameMode::Mire
+            || self.mode == GameMode::TarPit
             {
                 self.handle_death("You Died!");
             } else {
@@ -18756,6 +19050,10 @@ impl Game {
         // Keep the mire/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::Mire {
             self.mire_cells.retain(|p, _| self.obstacles.contains(p));
+        }
+        // Keep the tar/obstacle mirror exact even if something else cleared obstacles mid-tick
+        if self.mode == GameMode::TarPit {
+            self.tar_pits.retain(|p| self.obstacles.contains(p));
         }
     }
     fn check_body_collisions(
@@ -19618,6 +19916,31 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.x),
                     f32::from(final_head.y),
                     format!("Reinforced {reinforced} crack(s)!"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+        }
+        if self.mode == GameMode::TarPit {
+            let mut stomped = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.tar_pits.remove(&np) {
+                    self.obstacles.remove(&np);
+                    stomped += 1;
+                }
+            }
+            self.tar_patches
+                .retain(|p| self.tar_pits.contains(p) || self.tar_warnings.contains(p));
+            if stomped > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Stomped {stomped} tar!"),
                     crate::color::Color::DarkYellow,
                 );
             }
@@ -22721,6 +23044,20 @@ if self.mode == GameMode::Steamroller {
     pub const QUICKSAND_SINK_TICKS: u32 = 12;
     /// Minimum Manhattan distance of initial quicksand patches from the spawn point
     pub const QUICKSAND_MIN_SPAWN_DIST: u16 = 5;
+    /// Number of tar pits seeded on reset in `GameMode::TarPit`.
+    pub const TAR_PATCHES: usize = 3;
+    /// Maximum number of tar pit centers kept on the board in `GameMode::TarPit`.
+    pub const TAR_MAX_PATCHES: usize = 6;
+    /// Schedule period (in ticks) of the tar telegraph/activation cycles.
+    pub const TAR_PERIOD: u32 = 6;
+    /// Ticks a tar pit telegraphs its cells (loose tar) beforehand.
+    pub const TAR_TELEGRAPH_TICKS: u32 = 3;
+    /// Maximum number of active tar cells on the board in `GameMode::TarPit`.
+    pub const TAR_MAX_CELLS: usize = 80;
+    /// New cells each pit creeps outward per cycle in `GameMode::TarPit`.
+    pub const TAR_SPREAD_CELLS: usize = 2;
+    /// Tick of every 250-tick cycle at which all tar sets hard in `GameMode::TarPit`.
+    pub const TAR_DRY_TICK: u32 = 200;
     /// Ticks between scheduled floor cracks in Crumble mode
     pub const CRUMBLE_PERIOD: u32 = 8;
     /// Fresh cracks seeded per scheduled period in Crumble mode
