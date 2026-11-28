@@ -120,4 +120,5 @@ pub enum GameMode {
     Dipole,
     Lodestone,
     Blight,
+    OneWay,
 }

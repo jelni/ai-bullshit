@@ -243,6 +243,9 @@ pub struct Game {
     pub flux_pulls: u32,
     pub flux_shuffles: u32,
     pub flux_flips: u32,
+    pub oneway_signs: std::collections::HashMap<Point, Direction>,
+    pub oneway_shuffles: u32,
+    pub oneway_flips: u32,
     pub induction_poles: Vec<Point>,
     pub induction_attract: bool,
     pub induction_tugs: u32,
@@ -891,6 +894,9 @@ impl Game {
             flux_pulls: 0,
             flux_shuffles: 0,
             flux_flips: 0,
+            oneway_signs: std::collections::HashMap::new(),
+            oneway_shuffles: 0,
+            oneway_flips: 0,
             elev_shafts: Vec::new(),
             elev_cooldowns: Vec::new(),
             elev_rides: 0,
@@ -1262,6 +1268,9 @@ impl Game {
             flux_pulls: self.flux_pulls,
             flux_shuffles: self.flux_shuffles,
             flux_flips: self.flux_flips,
+            oneway_signs: self.oneway_signs.clone(),
+            oneway_shuffles: self.oneway_shuffles,
+            oneway_flips: self.oneway_flips,
             elev_shafts: self.elev_shafts.clone(),
             elev_cooldowns: self.elev_cooldowns.clone(),
             elev_rides: self.elev_rides,
@@ -1600,6 +1609,9 @@ impl Game {
                 self.flux_pulls = state.flux_pulls;
                 self.flux_shuffles = state.flux_shuffles;
                 self.flux_flips = state.flux_flips;
+                self.oneway_signs = state.oneway_signs;
+                self.oneway_shuffles = state.oneway_shuffles;
+                self.oneway_flips = state.oneway_flips;
                 self.elev_shafts = state.elev_shafts;
                 self.elev_cooldowns = state.elev_cooldowns;
                 self.elev_rides = state.elev_rides;
@@ -7959,6 +7971,154 @@ impl Game {
             }
         }
     }
+    fn oneway_sign_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 60).clamp(4, 8)
+    }
+    // A sign at `to` with arrow `dir` may only be ENTERED while moving in that
+    // arrow direction; entering against the arrow is a wall hit. Leaving a
+    // sign cell in any direction is always fine.
+    fn oneway_allows(&self, to: Point, dir: Direction) -> bool {
+        if self.mode != GameMode::OneWay {
+            return true;
+        }
+        self.oneway_signs
+            .get(&to)
+            .is_none_or(|arrow| *arrow == dir)
+    }
+    fn spawn_oneway_signs(&mut self) {
+        self.oneway_signs.clear();
+        self.oneway_shuffles = 0;
+        self.oneway_flips = 0;
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        for _ in 0..self.oneway_sign_count() {
+            // Fairness: a sign never spawns on a snake, on an entity or hazard,
+            // on another sign, or within 5 cells of the spawn point.
+            let avoid_sign = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|r| r.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.tramp_pads.contains(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.flux_coils.contains(p)
+                    || self.oneway_signs.contains_key(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_sign,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                let dir = dirs[self.rng.gen_range(0..dirs.len())];
+                self.oneway_signs.insert(p, dir);
+            }
+        }
+    }
+    fn manage_oneway(&mut self) {
+        if self.mode != GameMode::OneWay {
+            return;
+        }
+        // The skies stay clear in One-Way Alley so the signs are always visible
+        self.weather = Weather::Clear;
+        // Signs under fresh obstacles are scrapped
+        self.oneway_signs.retain(|p, _| !self.obstacles.contains(p));
+        // Scheduled shuffle: every ONEWAY_PERIOD-th tick the whole layout
+        // rearranges and every sign relocates to a fresh fair cell with a
+        // re-rolled arrow. Fairness: a relocated sign never lands on a snake,
+        // on the cell any snake is about to enter, on any entity or hazard,
+        // or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(Self::ONEWAY_PERIOD) {
+            let count = self.oneway_sign_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_signs = std::mem::take(&mut self.oneway_signs);
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+            let avoid_sign = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.rocks.iter().any(|r| r.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_signs.contains_key(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_sign,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    let dir = dirs[self.rng.gen_range(0..dirs.len())];
+                    self.oneway_signs.insert(p, dir);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.oneway_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The signs rearrange! ({placed})"),
+                    crate::color::Color::White,
+                );
+            }
+        }
+    }
     fn decay_cap(&self) -> usize {
         (usize::from(self.width) * usize::from(self.height) / 20).max(6)
     }
@@ -13596,7 +13756,8 @@ impl Game {
             | GameMode::Erosion
             | GameMode::Induction
 | GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight
-            | GameMode::Lodestone => {
+            | GameMode::Lodestone
+            | GameMode::OneWay => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13743,6 +13904,7 @@ impl Game {
             || self.mode == GameMode::Decay
             || self.mode == GameMode::Induction
             || self.mode == GameMode::Sinkhole
+            || self.mode == GameMode::OneWay
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -13856,6 +14018,7 @@ impl Game {
         || self.mode == GameMode::Decay
         || self.mode == GameMode::Induction
         || self.mode == GameMode::Sinkhole
+        || self.mode == GameMode::OneWay
         {
             &self.snake
         } else {
@@ -14003,6 +14166,9 @@ impl Game {
         self.induction_relocs = 0;
         self.induction_shield = 0;
         self.flux_flips = 0;
+        self.oneway_signs.clear();
+        self.oneway_shuffles = 0;
+        self.oneway_flips = 0;
         self.elev_shafts.clear();
         self.elev_cooldowns.clear();
         self.elev_rides = 0;
@@ -14766,6 +14932,9 @@ impl Game {
         if self.mode == GameMode::Blight {
             self.spawn_blight_patches();
         }
+        if self.mode == GameMode::OneWay {
+            self.spawn_oneway_signs();
+        }
         if self.mode == GameMode::SpikePit {
             self.spawn_spike_vents();
         }
@@ -15032,6 +15201,10 @@ impl Game {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Domino {        if self.mode == GameMode::Dipole {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::OneWay {
+            // The skies stay clear in One-Way Alley so the signs are always visible
             self.weather = Weather::Clear;
         }
 
@@ -15508,7 +15681,8 @@ impl Game {
             | GameMode::Erosion
             | GameMode::Induction
 | GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight
-            | GameMode::Lodestone => {
+            | GameMode::Lodestone
+            | GameMode::OneWay => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -16076,6 +16250,7 @@ impl Game {
                 || next_head1.x >= self.width - 1 - margin
                 || next_head1.y <= margin
                 || next_head1.y >= self.height - 1 - margin
+                || !self.oneway_allows(next_head1, self.snake.direction)
             {
                 hit_wall1 = true;
             }
@@ -16105,6 +16280,10 @@ impl Game {
                     || next_head2.x >= self.width - 1 - margin
                     || next_head2.y <= margin
                     || next_head2.y >= self.height - 1 - margin
+                    || !self.oneway_allows(
+                        next_head2,
+                        self.player2.as_ref().map_or(Direction::Up, |p| p.direction),
+                    )
                 {
                     hit_wall2 = true;
                 }
@@ -16219,6 +16398,9 @@ impl Game {
             self.flux_pulls = state.flux_pulls;
             self.flux_shuffles = state.flux_shuffles;
             self.flux_flips = state.flux_flips;
+            self.oneway_signs = state.oneway_signs;
+            self.oneway_shuffles = state.oneway_shuffles;
+            self.oneway_flips = state.oneway_flips;
             self.induction_poles = state.induction_poles;
             self.induction_attract = state.induction_attract;
             self.induction_tugs = state.induction_tugs;
@@ -16530,6 +16712,9 @@ impl Game {
             flux_pulls: self.flux_pulls,
             flux_shuffles: self.flux_shuffles,
             flux_flips: self.flux_flips,
+            oneway_signs: self.oneway_signs.clone(),
+            oneway_shuffles: self.oneway_shuffles,
+            oneway_flips: self.oneway_flips,
             elev_shafts: self.elev_shafts.clone(),
             elev_cooldowns: self.elev_cooldowns.clone(),
             elev_rides: self.elev_rides,
@@ -17617,6 +17802,9 @@ impl Game {
             let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
+                if !self.oneway_allows(next_p, d) {
+                    continue;
+                }
 
                 let margin = if self.mode == GameMode::BattleRoyale {
                     self.safe_zone_margin
@@ -19514,6 +19702,7 @@ impl Game {
             && self.mode != GameMode::Decay
             && self.mode != GameMode::Sinkhole
             && self.mode != GameMode::Blight
+            && self.mode != GameMode::OneWay
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -20508,6 +20697,7 @@ impl Game {
         self.manage_crossfire();
         self.manage_magnet();
         self.manage_flux();
+        self.manage_oneway();
         self.manage_gale();
         self.manage_faultline();
         self.manage_electro();
@@ -20609,6 +20799,7 @@ impl Game {
                     || next_head.x >= self.width - 1 - margin
                     || next_head.y <= margin
                     || next_head.y >= self.height - 1 - margin
+                    || !self.oneway_allows(next_head, self.bots[i].direction)
                 {
                     hit_wall = true;
                 }
@@ -21972,6 +22163,7 @@ impl Game {
             || self.mode == GameMode::Decay
             || self.mode == GameMode::Induction
             || self.mode == GameMode::Sinkhole
+            || self.mode == GameMode::OneWay
             {
                 self.handle_death("You Died!");
             } else {
@@ -23545,6 +23737,21 @@ if self.mode == GameMode::Steamroller {
                 );
             }
         }
+        if self.mode == GameMode::OneWay && !self.oneway_signs.is_empty() {
+            // Eating food spins one random sign 90 degrees clockwise
+            let keys: Vec<Point> = self.oneway_signs.keys().copied().collect();
+            let key = keys[self.rng.gen_range(0..keys.len())];
+            if let Some(dir) = self.oneway_signs.get_mut(&key) {
+                *dir = Self::rotate_belt(*dir);
+                self.oneway_flips += 1;
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    "Spun a sign!".to_string(),
+                    crate::color::Color::White,
+                );
+            }
+        }
         if self.mode == GameMode::Induction {
             // Eating food shields the snakes: no magnet tugs for a while
             self.induction_shield = Self::INDUCTION_SHIELD_TICKS;
@@ -24107,6 +24314,7 @@ if self.mode == GameMode::Sludge {
                 || *p == final_head
                 || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
                 || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.oneway_signs.contains_key(p)
         };
         let spawn_zombie = self.mode == GameMode::Zombie;
 
@@ -26613,6 +26821,8 @@ if self.mode == GameMode::Sludge {
     pub const FLUX_RADIUS: u16 = 4;
     /// Ticks between whole-layout coil shuffles in Flux mode
     pub const FLUX_PERIOD: u32 = 24;
+    /// Ticks between sign shuffles in One-Way Alley mode
+    pub const ONEWAY_PERIOD: u32 = 24;
     /// Ticks a cracked floor cell lasts in Decay mode once every snake has left it
     pub const DECAY_DELAY: u32 = 36;
     /// Fresh cracks dropped by each scheduled tremor in Decay mode
@@ -27018,6 +27228,9 @@ if self.mode == GameMode::Sludge {
                 if new_dir != cur_dir && self.ice_tiles.contains(&prev) {
                     return false;
                 }
+            }
+            if idx >= 1 && !self.oneway_allows(p, dir_between(path[idx - 1], p)) {
+                return false;
             }
             let is_final = idx + 1 == path.len();
             if is_final && targets.contains(&p) && self.bosses.iter().any(|b| b.position == p) {
@@ -27650,6 +27863,9 @@ if self.mode == GameMode::Sludge {
                 continue;
             }
             let next_p = Self::calculate_next_head_dir(start, d);
+            if !self.oneway_allows(next_p, d) {
+                continue;
+            }
             if let Some(final_p) = self.get_final_p(next_p)
                 && (next_p == final_p
                     || (self.is_safe_final_p(next_p, 1, checking_player)
@@ -27779,6 +27995,9 @@ if self.mode == GameMode::Sludge {
             let current_g = *g_score.get(&current).unwrap_or(&u16::MAX);
             for &d in &dirs {
                 let next_p = Self::calculate_next_head_dir(current, d);
+                if !self.oneway_allows(next_p, d) {
+                    continue;
+                }
                 let dir_at_current = came_from.get(&current).map_or_else(
                     || current_dir.unwrap_or(d),
                     |&prev| {
@@ -27946,6 +28165,12 @@ if self.mode == GameMode::Sludge {
         }
         if self.mode == GameMode::Faultline {
             blocked.extend(self.fault_tiles.keys().copied());
+        }
+        if self.mode == GameMode::OneWay {
+            // Conservatively treat every one-way sign as blocked in the trap
+            // flood fill; the directional entry rule is enforced in A* and
+            // path_is_safe, which know the travel direction.
+            blocked.extend(self.oneway_signs.keys().copied());
         }
         blocked.extend(self.mines.iter().copied());
         for t in &self.turrets {
@@ -28164,6 +28389,7 @@ if self.mode == GameMode::Sludge {
                 let next_p = Self::calculate_next_head_dir(curr, d);
                 if let Some(final_p) = self.get_final_p(next_p)
                     && self.within_safe_zone(final_p, horizon)
+                    && self.oneway_allows(next_p, d)
                     && !blocked.contains(&final_p)
                     && !visited.contains(&final_p)
                 {
@@ -28231,6 +28457,9 @@ if self.mode == GameMode::Sludge {
                 continue;
             }
             let next_p = Self::calculate_next_head_dir(start, d);
+            if !self.oneway_allows(next_p, d) {
+                continue;
+            }
             if let Some(final_p) = self.get_final_p(next_p)
                 && (next_p == final_p
                     || (self.is_safe_final_p(next_p, 1, checking_player)
@@ -28254,6 +28483,7 @@ if self.mode == GameMode::Sludge {
                         let step_p = Self::calculate_next_head_dir(curr, next_d);
                         let next_steps = steps.saturating_add(1);
                         if let Some(valid_p) = self.get_final_p(step_p)
+                            && self.oneway_allows(step_p, next_d)
                             && (step_p == valid_p
                                 || (self.is_safe_final_p(step_p, next_steps, checking_player)
                                     && !self.obstacles.contains(&step_p)))
@@ -28290,6 +28520,9 @@ if self.mode == GameMode::Sludge {
                     continue;
                 }
                 let next_p = Self::calculate_next_head_dir(start, d);
+                if !self.oneway_allows(next_p, d) {
+                    continue;
+                }
                 let Some(final_p) = self.get_final_p(next_p) else {
                     continue;
                 };

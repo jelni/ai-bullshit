@@ -198,6 +198,12 @@ pub struct SaveState {
     pub flux_coils: HashSet<Point>,
     #[serde(default)]
     pub flux_attract: bool,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub oneway_signs: std::collections::HashMap<Point, Direction>,
+    #[serde(default)]
+    pub oneway_shuffles: u32,
+    #[serde(default)]
+    pub oneway_flips: u32,
     #[serde(default)]
     pub flux_pulls: u32,
     #[serde(default)]

@@ -924,6 +924,31 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_one_way_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::OneWay;
+        game.reset();
+        game.oneway_signs.clear();
+        game.oneway_signs
+            .insert(Point { x: 12, y: 9 }, crate::snake::Direction::Right);
+        game.oneway_shuffles = 42;
+        game.oneway_flips = 7;
+        let file_path = "savegame_test_one_way.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::OneWay);
+        assert_eq!(loaded.weather, Weather::Clear);
+        assert_eq!(
+            loaded.oneway_signs.get(&Point { x: 12, y: 9 }),
+            Some(&crate::snake::Direction::Right)
+        );
+        assert_eq!(loaded.oneway_shuffles, 42);
+        assert_eq!(loaded.oneway_flips, 7);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_avalanche_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Avalanche;

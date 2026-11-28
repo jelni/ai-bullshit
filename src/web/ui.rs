@@ -153,6 +153,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw one-way signs (One-Way Alley mode)
+    if game.mode == crate::game::GameMode::OneWay {
+        ctx.set_fill_style_str("#FFFFFF");
+        for (p, _dir) in &game.oneway_signs {
+            if p.x < game.width
+                && p.y < game.height
+                && is_visible(f64::from(p.x), f64::from(p.y))
+            {
+                ctx.fill_rect(
+                    f64::from(p.x) * cell_size,
+                    f64::from(p.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw flux coils (Flux mode): magenta while attracting, cyan while repelling
     if game.mode == crate::game::GameMode::Flux {
         ctx.set_fill_style_str(if game.flux_attract {

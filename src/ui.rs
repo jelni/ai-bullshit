@@ -723,9 +723,11 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Maelstrom Mode",
         "Decay Mode",
         "Erosion Mode",
+        "Induction Mode",
         "Sinkhole Mode",
         "Dipole Mode",
         "Blight Mode",
+        "One-Way Alley",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2815,6 +2817,23 @@ fn draw_entities<W: Write>(
         write!(stdout, "@")?;
     }
 
+    // Draw one-way signs (One-Way Alley mode)
+    if game.mode == crate::game::GameMode::OneWay {
+        for (p, dir) in &game.oneway_signs {
+            if is_visible(p.x, p.y) {
+                let c = match dir {
+                    Direction::Up => '^',
+                    Direction::Down => 'v',
+                    Direction::Left => '<',
+                    Direction::Right => '>',
+                };
+                stdout.queue(cursor::MoveTo(p.x, p.y))?;
+                stdout.queue(SetForegroundColor(Color::White))?;
+                write!(stdout, "{c}")?;
+            }
+        }
+    }
+
     // Draw conveyor belts (Conveyor mode)
     if game.mode == crate::game::GameMode::Conveyor {
         for (p, dir) in &game.belt_tiles {
@@ -3937,6 +3956,16 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let oneway_str = if game.mode == crate::game::GameMode::OneWay {
+        format!(
+            " | Signs: {} | Shuffles: {} | Flips: {}",
+            game.oneway_signs.len(),
+            game.oneway_shuffles,
+            game.oneway_flips
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -4218,7 +4247,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}{dipole_str}{blight_hud}{lodestone_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}{tar_str}{fault_str}{electro_str}{crumble_str}{sludge_str}{flux_str}{maelstrom_str}{decay_str}{erode_str}{induction_str}{sinkhole_str}{dipole_str}{blight_hud}{lodestone_str}{oneway_str}"
     )?;
 
     if !game.bosses.is_empty() {
