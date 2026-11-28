@@ -365,6 +365,33 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_fault_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Faultline;
+        game.reset();
+        game.fault_tiles.clear();
+        game.fault_tiles.insert(Point { x: 12, y: 10 }, 7);
+        game.fault_pits.insert(Point { x: 13, y: 13 });
+        game.fault_waves = 3;
+        game.fault_collapses = 5;
+        game.fault_heals = 1;
+        game.fault_repairs = 2;
+        let file_path = "savegame_test_faultline.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Faultline);
+        assert_eq!(loaded.fault_tiles.get(&Point { x: 12, y: 10 }), Some(&7));
+        assert!(loaded.fault_pits.contains(&Point { x: 13, y: 13 }));
+        assert_eq!(loaded.fault_waves, 3);
+        assert_eq!(loaded.fault_collapses, 5);
+        assert_eq!(loaded.fault_heals, 1);
+        assert_eq!(loaded.fault_repairs, 2);
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[test]
     fn test_save_and_load_sandstorm_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Sandstorm;

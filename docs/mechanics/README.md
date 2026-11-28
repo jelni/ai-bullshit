@@ -748,3 +748,16 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Tar: <count> | Pits: <count> | Spreads: <count>` (`tar_str`).
 - **Persistence:** `tar_pits`, `tar_patches`, `tar_warnings`, and `tar_spreads` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_tar_pit_mode.rs](../../tests/test_tar_pit_mode.rs) and the save/load test in `src/game/tests.rs`.
+## Faultline Mode
+
+`GameMode::Faultline` (menu entry "Faultline Mode", entry 133 in the main menu) is a survival mode where the floor itself crumbles away under the snakes:
+
+- **Crack waves:** on reset one wave of cracks (`fault_tiles: HashMap<Point, u32>`, each mapped to its remaining ticks) is seeded by `spawn_fault_wave(5)` on `clamp(width*height/60, 4, 10)` fair cells at least 5 cells (Manhattan) from the spawn; every `FAULT_PERIOD` (20) ticks `manage_crumble` seeds another wave (`fault_waves += 1`, "The floor cracks! (N)") at least 4 cells from every snake head. A crack never lands on a snake, on the cell any snake is about to enter (`fault_next_cells`: player/p2 use their current direction, bots their queued direction), on any entity, obstacle, mine, portal, pit, existing crack, food, power-up, hazard tile (fire, acid, puddles, lava, inferno, blaze, seismic rubble, ice, belts), or another mode's tile set.
+- **Telegraph and collapse:** each crack ticks down once per tick; at zero it collapses into `fault_pits` (`fault_collapses += 1`), which is mirrored into `obstacles` every tick — so a pit kills on entry and is a hard wall for the A* search, `is_safe_final_p`, and the `trap_blocked_cells` flood fill. Cracks themselves are also hard walls for the autopilot in `is_safe_final_p` and `trap_blocked_cells`, so the bot never routes onto cracking floor.
+- **Fairness:** `fault_collapse_blocked` never lets a crack collapse on a snake's body or on the cell any snake is about to enter this tick — the collapse is deferred (the crack stays armed at 1 tick and retries next tick), so **the floor can never collapse under anyone**. Cracks that end up under a fresh obstacle (e.g. a meteor crash) are scrapped at the start of each tick.
+- **Heal:** every `FAULT_HEAL_PERIOD` (200) ticks the whole floor stabilizes (`fault_heals += 1`, "The floor heals!"): all pits leave the obstacle mirror and all cracks clear, after which the tick-200 crack wave (200 is a multiple of 20) re-cracks the floor.
+- **Reinforcement:** eating food removes the cracked cells adjacent to the eaten cell (`fault_repairs += N`, "Repaired N tile(s)!").
+- **Visibility:** the weather is pinned to `Weather::Clear` so cracks and pits are always visible; cracks render as a dark-yellow `.` and pits as a dark-blue `~` on the terminal, saddle-brown and royal-blue cells on the web.
+- **Status bar:** `Cracks: <count> | Pits: <count> | Waves: <count> | Collapses: <count>` (`fault_str`).
+- **Persistence:** `fault_tiles`, `fault_pits`, `fault_waves`, `fault_collapses`, `fault_heals`, and `fault_repairs` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_fault_mode.rs](../../tests/test_fault_mode.rs).

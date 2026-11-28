@@ -108,4 +108,5 @@ pub enum GameMode {
     Elevator,
     Mire,
     TarPit,
+    Faultline,
 }

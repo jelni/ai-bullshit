@@ -243,6 +243,12 @@ pub struct Game {
     pub gale_pushes: u32,
     pub gale_shifts: u32,
     pub gale_braces: u32,
+    pub fault_tiles: std::collections::HashMap<Point, u32>,
+    pub fault_pits: HashSet<Point>,
+    pub fault_waves: u32,
+    pub fault_collapses: u32,
+    pub fault_heals: u32,
+    pub fault_repairs: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -828,6 +834,12 @@ impl Game {
             gale_pushes: 0,
             gale_shifts: 0,
             gale_braces: 0,
+            fault_tiles: std::collections::HashMap::new(),
+            fault_pits: HashSet::new(),
+            fault_waves: 0,
+            fault_collapses: 0,
+            fault_heals: 0,
+            fault_repairs: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1156,6 +1168,12 @@ impl Game {
             gale_pushes: self.gale_pushes,
             gale_shifts: self.gale_shifts,
             gale_braces: self.gale_braces,
+            fault_tiles: self.fault_tiles.clone(),
+            fault_pits: self.fault_pits.clone(),
+            fault_waves: self.fault_waves,
+            fault_collapses: self.fault_collapses,
+            fault_heals: self.fault_heals,
+            fault_repairs: self.fault_repairs,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1442,6 +1460,12 @@ impl Game {
                 self.gale_pushes = state.gale_pushes;
                 self.gale_shifts = state.gale_shifts;
                 self.gale_braces = state.gale_braces;
+                self.fault_tiles = state.fault_tiles;
+                self.fault_pits = state.fault_pits;
+                self.fault_waves = state.fault_waves;
+                self.fault_collapses = state.fault_collapses;
+                self.fault_heals = state.fault_heals;
+                self.fault_repairs = state.fault_repairs;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -6571,6 +6595,189 @@ impl Game {
             self.mire_warnings.insert(p);
         }
     }
+    fn fault_wave_size(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 60).clamp(4, 10)
+    }
+    fn fault_next_cells(&self) -> (Point, Option<Point>, Vec<Point>) {
+        // Same convention as phase_next_cells: the players' direction queues are
+        // popped before the manage_* calls, so their current direction is the one
+        // they will move in this tick; the bots are popped afterwards, so for
+        // them the queued direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        (p1_next, p2_next, bot_next)
+    }
+    // A crack may only collapse into a pit on a cell no snake occupies and none
+    // is about to enter this tick, so a collapse can never directly kill.
+    fn fault_collapse_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|s| s.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+    }
+    // Seeds one wave of telegraphed cracks on fair cells: never on a snake, on
+    // the cell any snake is about to enter, on any entity or hazard tile, on an
+    // obstacle, pit, or existing crack, or within min_head_dist of any snake head.
+    fn spawn_fault_wave(&mut self, min_head_dist: u16) -> usize {
+        let (p1_next, p2_next, bot_next) = self.fault_next_cells();
+        let mut next_heads = vec![p1_next];
+        if let Some(p2) = p2_next {
+            next_heads.push(p2);
+        }
+        next_heads.extend(bot_next);
+        let heads: Vec<Point> = std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect();
+        let mut placed = 0usize;
+        for _ in 0..self.fault_wave_size() {
+            let avoid_crack = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.fault_pits.contains(p)
+                    || self.fault_tiles.contains_key(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || self.tramp_pads.contains(p)
+                    || self.thorn_tiles.contains(p)
+                    || self.spike_warnings.contains(p)
+                    || heads.iter().any(|h| {
+                        p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < min_head_dist
+                    })
+            };
+            if let Some(p) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_crack,
+                &mut self.rng,
+                self.safe_zone_margin,
+            ) {
+                self.fault_tiles.insert(p, Self::FAULT_TICKS);
+                placed += 1;
+            }
+        }
+        placed
+    }
+    fn manage_faultline(&mut self) {
+        if self.mode != GameMode::Faultline {
+            return;
+        }
+        // The skies stay clear so the cracks and pits are always visible
+        self.weather = Weather::Clear;
+        // Scraps: cracks under fresh obstacles vanish. Pits stay mirrored into
+        // `obstacles` every tick (this also self-heals if something else cleared
+        // obstacles mid-tick, e.g. a Bomb), so a pit kills on entry and the
+        // autopilot treats it as a hard wall.
+        self.fault_tiles
+            .retain(|p, _| !self.obstacles.contains(p) && !self.fault_pits.contains(p));
+        let pits: Vec<Point> = self.fault_pits.iter().copied().collect();
+        for p in pits {
+            self.obstacles.insert(p);
+        }
+        // Periodic heal: every FAULT_HEAL_PERIOD-th tick the whole floor
+        // stabilizes - all pits fill in and all cracks clear.
+        if self.tick_counter.is_multiple_of(Self::FAULT_HEAL_PERIOD)
+            && (!self.fault_pits.is_empty() || !self.fault_tiles.is_empty())
+        {
+            let pit_list: Vec<Point> = self.fault_pits.iter().copied().collect();
+            for p in pit_list {
+                self.obstacles.remove(&p);
+            }
+            self.fault_pits.clear();
+            self.fault_tiles.clear();
+            self.fault_heals += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "The floor heals!".to_string(),
+                crate::color::Color::Green,
+            );
+        }
+        // Countdown: every crack ticks down one; at zero it tries to collapse.
+        for ticks in self.fault_tiles.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        let (p1_next, p2_next, bot_next) = self.fault_next_cells();
+        let doomed: Vec<Point> = self
+            .fault_tiles
+            .iter()
+            .filter(|(_, ticks)| **ticks == 0)
+            .map(|(p, _)| *p)
+            .collect();
+        for p in doomed {
+            if self.fault_collapse_blocked(p, p1_next, p2_next, &bot_next) {
+                // Deferred: a snake is standing on the cell or entering it this
+                // tick, so the crack stays armed at one tick and retries next tick.
+                self.fault_tiles.insert(p, 1);
+            } else {
+                self.fault_tiles.remove(&p);
+                self.fault_pits.insert(p);
+                self.obstacles.insert(p);
+                self.fault_collapses += 1;
+            }
+        }
+        // Scheduled wave: every FAULT_PERIOD-th tick the floor cracks anew.
+        if self.tick_counter.is_multiple_of(Self::FAULT_PERIOD) {
+            let placed = self.spawn_fault_wave(4);
+            if placed > 0 {
+                self.fault_waves += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The floor cracks! ({placed})"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -10736,7 +10943,8 @@ impl Game {
             | GameMode::Comet
             | GameMode::Elevator
             | GameMode::Mire
-            | GameMode::TarPit => {
+            | GameMode::TarPit
+            | GameMode::Faultline => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10872,6 +11080,7 @@ impl Game {
             || self.mode == GameMode::Elevator
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
+            || self.mode == GameMode::Faultline
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -10974,6 +11183,7 @@ impl Game {
         || self.mode == GameMode::Elevator
         || self.mode == GameMode::Mire
         || self.mode == GameMode::TarPit
+        || self.mode == GameMode::Faultline
         {
             &self.snake
         } else {
@@ -11129,6 +11339,12 @@ impl Game {
         self.gale_pushes = 0;
         self.gale_shifts = 0;
         self.gale_braces = 0;
+        self.fault_tiles.clear();
+        self.fault_pits.clear();
+        self.fault_waves = 0;
+        self.fault_collapses = 0;
+        self.fault_heals = 0;
+        self.fault_repairs = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -11755,6 +11971,12 @@ impl Game {
         }
         if self.mode == GameMode::Elevator {
             self.spawn_elevators();
+        }
+
+
+
+        if self.mode == GameMode::Faultline {
+            self.spawn_fault_wave(5);
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -12465,7 +12687,8 @@ impl Game {
             | GameMode::Comet
             | GameMode::Elevator
             | GameMode::Mire
-            | GameMode::TarPit => {
+            | GameMode::TarPit
+            | GameMode::Faultline => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13187,6 +13410,12 @@ impl Game {
             self.gale_pushes = state.gale_pushes;
             self.gale_shifts = state.gale_shifts;
             self.gale_braces = state.gale_braces;
+            self.fault_tiles = state.fault_tiles;
+            self.fault_pits = state.fault_pits;
+            self.fault_waves = state.fault_waves;
+            self.fault_collapses = state.fault_collapses;
+            self.fault_heals = state.fault_heals;
+            self.fault_repairs = state.fault_repairs;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -13440,6 +13669,12 @@ impl Game {
             gale_pushes: self.gale_pushes,
             gale_shifts: self.gale_shifts,
             gale_braces: self.gale_braces,
+            fault_tiles: self.fault_tiles.clone(),
+            fault_pits: self.fault_pits.clone(),
+            fault_waves: self.fault_waves,
+            fault_collapses: self.fault_collapses,
+            fault_heals: self.fault_heals,
+            fault_repairs: self.fault_repairs,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -17349,6 +17584,7 @@ impl Game {
         self.manage_crossfire();
         self.manage_magnet();
         self.manage_gale();
+        self.manage_faultline();
         self.manage_thornfield();
         self.manage_domino();
         self.manage_mirage();
@@ -18646,6 +18882,7 @@ impl Game {
             || self.mode == GameMode::Elevator
             || self.mode == GameMode::Mire
             || self.mode == GameMode::TarPit
+            || self.mode == GameMode::Faultline
             {
                 self.handle_death("You Died!");
             } else {
@@ -20238,6 +20475,31 @@ if self.mode == GameMode::Steamroller {
                 "Braced!".to_string(),
                 crate::color::Color::Cyan,
             );
+        }
+        if self.mode == GameMode::Faultline {
+            // Eating food reinforces the floor: cracked cells adjacent to the
+            // eaten cell are repaired and never collapse
+            let mut repaired = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.fault_tiles.remove(&np).is_some() {
+                    repaired += 1;
+                }
+            }
+            if repaired > 0 {
+                self.fault_repairs += repaired;
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Repaired {repaired} tile(s)!"),
+                    crate::color::Color::Green,
+                );
+            }
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
             // Eating food greases the belts: one random belt rotates 90 degrees
@@ -22084,6 +22346,12 @@ if self.mode == GameMode::Steamroller {
             {
                 return false;
             }
+            // Cracked floor in Faultline mode is a hard wall for the autopilot:
+            // it collapses within FAULT_TICKS ticks (pits are already in
+            // `obstacles`), so the bot never routes onto a crack.
+            if self.mode == GameMode::Faultline && self.fault_tiles.contains_key(&final_p) {
+                return false;
+            }
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
             }
@@ -23072,6 +23340,12 @@ if self.mode == GameMode::Steamroller {
     pub const GALE_PERIOD: u32 = 18;
     /// Ticks of bracing (wind immunity) granted by eating food in Gale mode
     pub const GALE_BRACE_TICKS: u32 = 10;
+    /// Ticks between scheduled crack waves in Faultline mode
+    pub const FAULT_PERIOD: u32 = 20;
+    /// Ticks a cracked floor cell telegraphs before collapsing into a pit in Faultline mode
+    pub const FAULT_TICKS: u32 = 12;
+    /// Ticks between full floor heals in Faultline mode (all pits fill in, all cracks clear)
+    pub const FAULT_HEAL_PERIOD: u32 = 200;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
@@ -24273,6 +24547,9 @@ if self.mode == GameMode::Steamroller {
         let mut blocked: HashSet<Point> = self.obstacles.iter().copied().collect();
         if self.mode == GameMode::PhaseShift {
             blocked.extend(self.phase_gates.iter().copied());
+        }
+        if self.mode == GameMode::Faultline {
+            blocked.extend(self.fault_tiles.keys().copied());
         }
         blocked.extend(self.mines.iter().copied());
         for t in &self.turrets {

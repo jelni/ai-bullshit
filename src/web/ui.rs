@@ -382,6 +382,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw cracked floor and pits (Faultline mode)
+    if game.mode == crate::game::GameMode::Faultline {
+        ctx.set_fill_style_str("#8B4513"); // Saddle-brown cracks
+        for crack in game.fault_tiles.keys() {
+            if crack.x < game.width
+                && crack.y < game.height
+                && is_visible(f64::from(crack.x), f64::from(crack.y))
+            {
+                ctx.fill_rect(
+                    f64::from(crack.x) * cell_size,
+                    f64::from(crack.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#4169E1"); // Royal-blue pits
+        for pit in &game.fault_pits {
+            if pit.x < game.width
+                && pit.y < game.height
+                && is_visible(f64::from(pit.x), f64::from(pit.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pit.x) * cell_size,
+                    f64::from(pit.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

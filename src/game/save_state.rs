@@ -210,6 +210,18 @@ pub struct SaveState {
     pub gale_shifts: u32,
     #[serde(default)]
     pub gale_braces: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub fault_tiles: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub fault_pits: HashSet<Point>,
+    #[serde(default)]
+    pub fault_waves: u32,
+    #[serde(default)]
+    pub fault_collapses: u32,
+    #[serde(default)]
+    pub fault_heals: u32,
+    #[serde(default)]
+    pub fault_repairs: u32,
     #[serde(default)]
     pub polarity_poles: HashSet<Point>,
     #[serde(default)]
