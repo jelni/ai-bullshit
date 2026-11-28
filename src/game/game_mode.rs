@@ -105,4 +105,5 @@ pub enum GameMode {
     Gale,
     Crumble,
     Comet,
+    Elevator,
 }

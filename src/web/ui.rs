@@ -290,6 +290,34 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw elevator shaft ends (Elevator mode): cyan, dark cyan while the
+    // shaft is recharging, white while overcharged
+    if game.mode == crate::game::GameMode::Elevator {
+        for (idx, (a, b)) in game.elev_shafts.iter().enumerate() {
+            let style = if game.elev_overcharge > 0 {
+                "#FFFFFF"
+            } else if game.elev_cooldowns.get(idx).copied().unwrap_or(0) > 0 {
+                "#0E6E6E"
+            } else {
+                "#00FFFF"
+            };
+            ctx.set_fill_style_str(style);
+            for end in [a, b] {
+                if end.x < game.width
+                    && end.y < game.height
+                    && is_visible(f64::from(end.x), f64::from(end.y))
+                {
+                    ctx.fill_rect(
+                        f64::from(end.x) * cell_size,
+                        f64::from(end.y) * cell_size,
+                        cell_size,
+                        cell_size,
+                    );
+                }
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders
@@ -595,6 +623,9 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                     cell_size,
                 );
             }
+        }
+    }
+
     // Draw the tsunami warning edge / wave front (Tsunami mode)
     if game.mode == crate::game::GameMode::Tsunami {
         let line_cells = |line: i32| -> Vec<(f64, f64)> {

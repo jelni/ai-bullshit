@@ -704,3 +704,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Comets: <count> | Launches: <count> | Deflects: <count>` (`comet_str`). Comet heads render as a yellow `*` (terminal) / gold cell (web) over the red burning trail.
 - **Persistence:** `comets`, `comet_launches`, and `comet_deflections` are stored in `SaveState` and `HistoryState` (the trail rides along in the already-persisted `fire_tiles`/`fire_ttl`/`obstacles`), so save/load and time-rewind stay consistent.
 - **Tests:** see [tests/test_comet_mode.rs](../../tests/test_comet_mode.rs).
+
+## Elevator Mode
+
+`GameMode::Elevator` (menu entry "Elevator Mode", entry 130 in the main menu) is a movement mode played among a permanent set of elevator shafts:
+
+- **Shafts:** on reset `elev_shaft_count()` = `clamp(width*height/160, 2, 5)` shafts (`elev_shafts`, each an ordered `(a, b)` pair of cells sharing one column, `ELEV_MIN_GAP`..=`ELEV_MAX_GAP` = 4..=10 rows apart) are seeded by `place_elev_shafts` on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, on the cell any snake is about to enter, on any entity, an obstacle, a mine, a portal, the black hole, the tornado, a hazard tile, or the food. Shaft ends are walkable (they are *not* mirrored into `obstacles`) and render as a cyan `|` (terminal) / cyan cell (web), dark cyan while the shaft is recharging, white while overcharged. The weather is pinned to `Weather::Clear` so the lifts stay visible.
+- **Ride:** when a snake's next head cell is one end of a shaft, `elev_ride` carries the head to the other end and counts it in `elev_rides` ("Ride!"). The ride is applied to the player, player 2, and every bot in `update` right after the belt/tramp/polarity/blink steps. The snake's direction is left unchanged.
+- **Fairness:** the destination must pass `elev_cell_free` — in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter (`singularity_cell_free`), plus the lightning column and every lethal tile set (fire, acid, puddles, lava, inferno, blaze, seismic rubble) and the Battle Royale safe zone — and the shaft must not be recharging (`elev_cooldowns[idx] == 0`). If no ride is fair the snake simply rests on the walkable shaft end, so **a lift can never directly kill**.
+- **Cooldown:** after a ride the shaft recharges for `ELEV_COOLDOWN` (6) ticks (`elev_cooldowns[idx]`), counted down once per tick in `manage_elevator`; a recharging shaft never fires.
+- **Scheduled relocation:** every `ELEV_SHUFFLE_PERIOD` (20) ticks `manage_elevator` relocates every shaft to fresh fair cells (`elev_shuffles += 1`, "The elevators shift! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, on another shaft, or within 3 cells (Manhattan) of any snake head. Shafts with an end under a fresh obstacle or lethal tile are scrapped at the start of each tick.
+- **Overcharge:** eating food sets `elev_overcharge = ELEV_OVERCHARGE_TICKS` (12) ("Overcharged!"); while the timer is positive it counts down once per tick and rides ignore cooldowns (and do not refresh them).
+- **Autopilot:** ride destinations are always fair, so a lifted bot is never killed by the ride itself; the bot replans from its actual head every tick and rides the lifts natively.
+- **Status bar:** `Lifts: <count> | Rides: <count> | Shifts: <count>` plus `Overcharged: <ticks>` while overcharged (`elev_str`).
+- **Persistence:** `elev_shafts`, `elev_cooldowns`, `elev_rides`, `elev_shuffles`, and `elev_overcharge` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_elevator_mode.rs](../../tests/test_elevator_mode.rs).

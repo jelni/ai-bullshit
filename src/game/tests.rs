@@ -377,6 +377,34 @@ mod tests {
         let _ = std::fs::remove_file(file_path);
     }
     #[test]
+    fn test_save_and_load_elevator_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Elevator;
+        game.reset();
+        game.elev_shafts.clear();
+        game.elev_shafts
+            .push((Point { x: 5, y: 5 }, Point { x: 5, y: 12 }));
+        game.elev_cooldowns = vec![3];
+        game.elev_rides = 42;
+        game.elev_shuffles = 7;
+        game.elev_overcharge = 9;
+        let file_path = "savegame_test_elevator.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Elevator);
+        assert_eq!(
+            loaded.elev_shafts,
+            vec![(Point { x: 5, y: 5 }, Point { x: 5, y: 12 })]
+        );
+        assert_eq!(loaded.elev_cooldowns, vec![3]);
+        assert_eq!(loaded.elev_rides, 42);
+        assert_eq!(loaded.elev_shuffles, 7);
+        assert_eq!(loaded.elev_overcharge, 9);
+        let _ = std::fs::remove_file(file_path);
+    }
+    #[test]
     fn test_save_and_load_acid_rain_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::AcidRain;

@@ -711,6 +711,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Domino Mode",
         "Magnet Mode",
         "Gale Mode",
+        "Elevator Mode",
         "Comet Mode",
         "Quit",
     ];
@@ -2126,6 +2127,27 @@ fn draw_entities<W: Write>(
             }))?;
             stdout.queue(cursor::MoveTo(cx, cy))?;
             write!(stdout, "{arrow}")?;
+        }
+    }
+
+    // Draw elevator shaft ends (Elevator mode): cyan, dark cyan while the
+    // shaft is recharging, white while overcharged
+    if game.mode == crate::game::GameMode::Elevator {
+        for (idx, (a, b)) in game.elev_shafts.iter().enumerate() {
+            let shaft_color = if game.elev_overcharge > 0 {
+                Color::White
+            } else if game.elev_cooldowns.get(idx).copied().unwrap_or(0) > 0 {
+                Color::DarkCyan
+            } else {
+                Color::Cyan
+            };
+            stdout.queue(SetForegroundColor(shaft_color))?;
+            for end in [a, b] {
+                if is_visible(end.x, end.y) {
+                    stdout.queue(cursor::MoveTo(end.x, end.y))?;
+                    write!(stdout, "|")?;
+                }
+            }
         }
     }
 
@@ -3560,6 +3582,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let elev_str = if game.mode == crate::game::GameMode::Elevator {
+        let overcharge = if game.elev_overcharge > 0 {
+            format!(" | Overcharged: {}", game.elev_overcharge)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Lifts: {} | Rides: {} | Shifts: {}{overcharge}",
+            game.elev_shafts.len(),
+            game.elev_rides,
+            game.elev_shuffles
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -3768,7 +3805,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}"
     )?;
 
     if !game.bosses.is_empty() {

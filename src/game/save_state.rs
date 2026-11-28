@@ -178,6 +178,16 @@ pub struct SaveState {
     pub tramp_shuffles: u32,
     #[serde(default)]
     pub tramp_overcharge: u32,
+    #[serde(default)]
+    pub elev_shafts: Vec<(Point, Point)>,
+    #[serde(default)]
+    pub elev_cooldowns: Vec<u32>,
+    #[serde(default)]
+    pub elev_rides: u32,
+    #[serde(default)]
+    pub elev_shuffles: u32,
+    #[serde(default)]
+    pub elev_overcharge: u32,
     #[serde(default, with = "super::map_as_pairs")]
     pub magnet_poles: std::collections::HashMap<Point, bool>,
     #[serde(default)]

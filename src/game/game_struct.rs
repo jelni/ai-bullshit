@@ -216,6 +216,11 @@ pub struct Game {
     pub tramp_flings: u32,
     pub tramp_shuffles: u32,
     pub tramp_overcharge: u32,
+    pub elev_shafts: Vec<(Point, Point)>,
+    pub elev_cooldowns: Vec<u32>,
+    pub elev_rides: u32,
+    pub elev_shuffles: u32,
+    pub elev_overcharge: u32,
     pub polarity_poles: HashSet<Point>,
     pub polarity_attract: bool,
     pub polarity_flips: u32,
@@ -789,6 +794,11 @@ impl Game {
             tramp_flings: 0,
             tramp_shuffles: 0,
             tramp_overcharge: 0,
+            elev_shafts: Vec::new(),
+            elev_cooldowns: Vec::new(),
+            elev_rides: 0,
+            elev_shuffles: 0,
+            elev_overcharge: 0,
             polarity_poles: HashSet::new(),
             polarity_attract: true,
             polarity_flips: 0,
@@ -1105,6 +1115,11 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            elev_shafts: self.elev_shafts.clone(),
+            elev_cooldowns: self.elev_cooldowns.clone(),
+            elev_rides: self.elev_rides,
+            elev_shuffles: self.elev_shuffles,
+            elev_overcharge: self.elev_overcharge,
             polarity_poles: self.polarity_poles.clone(),
             polarity_attract: self.polarity_attract,
             polarity_flips: self.polarity_flips,
@@ -1379,6 +1394,11 @@ impl Game {
                 self.tramp_flings = state.tramp_flings;
                 self.tramp_shuffles = state.tramp_shuffles;
                 self.tramp_overcharge = state.tramp_overcharge;
+                self.elev_shafts = state.elev_shafts;
+                self.elev_cooldowns = state.elev_cooldowns;
+                self.elev_rides = state.elev_rides;
+                self.elev_shuffles = state.elev_shuffles;
+                self.elev_overcharge = state.elev_overcharge;
                 self.polarity_poles = state.polarity_poles;
                 self.polarity_attract = state.polarity_attract;
                 self.polarity_flips = state.polarity_flips;
@@ -5788,7 +5808,268 @@ impl Game {
                 crate::color::Color::DarkYellow,
             );
         }
-    }    fn spawn_phase_gates(&mut self) {
+    }    fn elev_shaft_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 160).clamp(2, 5)
+    }
+    // A cell a lift may deposit a snake on must be fair right now: in bounds,
+    // free of snakes (bodies and the cells they are about to enter) and of
+    // every entity or lethal tile, so a ride can never directly kill.
+    fn elev_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // A shaft end must never be placed on a snake, on the cell any snake is
+    // about to enter, on any entity or hazard tile, on another shaft, or too
+    // close to a spawn point or snake head.
+    fn elev_cell_blocked(
+        &self,
+        p: Point,
+        spawn: Point,
+        min_spawn_dist: u16,
+        heads: &[Point],
+        min_head_dist: u16,
+        old_shafts: &[(Point, Point)],
+    ) -> bool {
+        self.obstacles.contains(&p)
+            || self.mines.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.rocks.iter().any(|r| r.position == p)
+            || self.xp_gems.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || old_shafts.iter().any(|(s1, s2)| p == *s1 || p == *s2)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.ice_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || p.x.abs_diff(spawn.x).saturating_add(p.y.abs_diff(spawn.y)) < min_spawn_dist
+            || heads
+                .iter()
+                .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < min_head_dist)
+    }
+    // One fair candidate cell for a shaft end, sampled like
+    // get_random_empty_point but with the elevator-specific fairness rules.
+    fn random_elev_end(
+        &mut self,
+        spawn: Point,
+        min_spawn_dist: u16,
+        heads: &[Point],
+        min_head_dist: u16,
+        old_shafts: &[(Point, Point)],
+    ) -> Option<Point> {
+        let next_heads = self.singularity_next_heads();
+        let mut all_heads = heads.to_vec();
+        all_heads.extend_from_slice(&next_heads);
+        let min_x = 1 + self.safe_zone_margin;
+        let max_x = (self.width - 1).saturating_sub(self.safe_zone_margin).max(min_x + 1);
+        let min_y = 1 + self.safe_zone_margin;
+        let max_y = (self.height - 1).saturating_sub(self.safe_zone_margin).max(min_y + 1);
+        if min_x >= max_x || min_y >= max_y {
+            return None;
+        }
+        for i in 0..100 {
+            let x = self.rng.gen_range(min_x..max_x);
+            let y = self.rng.gen_range(min_y..max_y);
+            let p = Point { x, y };
+            if !self.snake.body_map.contains_key(&p)
+                && !next_heads.contains(&p)
+                && !self.elev_cell_blocked(p, spawn, min_spawn_dist, &all_heads, min_head_dist, old_shafts)
+            {
+                return Some(p);
+            }
+            if i == 99 {
+                let mut empty = Vec::new();
+                for y_ in min_y..max_y {
+                    for x_ in min_x..max_x {
+                        let p_ = Point { x: x_, y: y_ };
+                        if !self.snake.body_map.contains_key(&p_)
+                            && !next_heads.contains(&p_)
+                            && !self.elev_cell_blocked(p_, spawn, min_spawn_dist, &all_heads, min_head_dist, old_shafts)
+                        {
+                            empty.push(p_);
+                        }
+                    }
+                }
+                if !empty.is_empty() {
+                    let idx = self.rng.gen_range(0..empty.len());
+                    return Some(empty[idx]);
+                }
+                return None;
+            }
+        }
+        None
+    }
+    // (Re)build the lift layout: `count` shafts, each a pair of cells in the
+    // same column at least ELEV_MIN_GAP rows apart, on fair cells only.
+    fn place_elev_shafts(&mut self, count: usize, spawn: Point, min_spawn_dist: u16, min_head_dist: u16) {
+        let heads: Vec<Point> = std::iter::once(self.snake.head())
+            .chain(self.player2.as_ref().map(Snake::head))
+            .chain(self.bots.iter().map(Snake::head))
+            .collect();
+        let old_shafts = std::mem::take(&mut self.elev_shafts);
+        let next_heads = self.singularity_next_heads();
+        let mut all_heads = heads;
+        all_heads.extend_from_slice(&next_heads);
+        let mut placed: Vec<(Point, Point)> = Vec::new();
+        let min_y = 1 + self.safe_zone_margin;
+        let max_y = (self.height - 1).saturating_sub(self.safe_zone_margin);
+        for _ in 0..count {
+            let mut done = false;
+            for _ in 0..25 {
+                if done {
+                    break;
+                }
+                let Some(a) = self.random_elev_end(spawn, min_spawn_dist, &all_heads, min_head_dist, &old_shafts)
+                else {
+                    break;
+                };
+                let up = self.rng.gen_bool(0.5);
+                for _ in 0..8 {
+                    let gap = self.rng.gen_range(Self::ELEV_MIN_GAP..=Self::ELEV_MAX_GAP);
+                    let b = if up {
+                        Point { x: a.x, y: a.y.saturating_sub(gap) }
+                    } else {
+                        Point { x: a.x, y: a.y.saturating_add(gap) }
+                    };
+                    if b.y < min_y || b.y >= max_y {
+                        continue;
+                    }
+                    if next_heads.contains(&b)
+                        || self.elev_cell_blocked(b, spawn, min_spawn_dist, &all_heads, min_head_dist, &old_shafts)
+                    {
+                        continue;
+                    }
+                    if placed.iter().any(|(s1, s2)| a == *s1 || a == *s2 || b == *s1 || b == *s2) {
+                        continue;
+                    }
+                    placed.push((a, b));
+                    done = true;
+                    break;
+                }
+            }
+        }
+        self.elev_shafts = placed;
+        self.elev_cooldowns = vec![0; self.elev_shafts.len()];
+    }
+    fn spawn_elevators(&mut self) {
+        self.elev_shafts.clear();
+        self.elev_cooldowns.clear();
+        let spawn = Point { x: self.width / 2, y: self.height / 2 };
+        self.place_elev_shafts(self.elev_shaft_count(), spawn, 5, 3);
+    }
+    // A shaft end is walkable; when a snake's next head cell is one end of a
+    // shaft that is not recharging, the head is lifted to the other end.
+    // Only a fair destination is accepted; otherwise the snake simply rests
+    // on the walkable cell, so a lift can never directly kill.
+    fn elev_ride(&self, cell: Point) -> Option<(usize, Point)> {
+        if self.mode != GameMode::Elevator {
+            return None;
+        }
+        let idx = self
+            .elev_shafts
+            .iter()
+            .position(|(a, b)| *a == cell || *b == cell)?;
+        if self.elev_overcharge == 0 && self.elev_cooldowns.get(idx).copied().unwrap_or(0) > 0 {
+            return None;
+        }
+        let (a, b) = self.elev_shafts[idx];
+        let dest = if a == cell { b } else { a };
+        if !self.elev_cell_free(dest) {
+            return None;
+        }
+        Some((idx, dest))
+    }
+    fn manage_elevator(&mut self) {
+        if self.mode != GameMode::Elevator {
+            return;
+        }
+        // Shafts with an end under a fresh obstacle or lethal tile are scrapped
+        let shafts = std::mem::take(&mut self.elev_shafts);
+        let cooldowns = std::mem::take(&mut self.elev_cooldowns);
+        let mut kept_shafts = Vec::with_capacity(shafts.len());
+        let mut kept_cooldowns = Vec::with_capacity(cooldowns.len());
+        for (i, (a, b)) in shafts.into_iter().enumerate() {
+            let clear = |p: Point| {
+                !self.obstacles.contains(&p)
+                    && !self.fire_tiles.contains(&p)
+                    && !self.acid_puddles.contains(&p)
+                    && !self.puddle_tiles.contains(&p)
+                    && !self.lava_tiles.contains(&p)
+                    && !self.inferno_tiles.contains(&p)
+                    && !self.blaze_tiles.contains_key(&p)
+                    && !self.seismic_rubble.contains(&p)
+            };
+            if clear(a) && clear(b) {
+                kept_shafts.push((a, b));
+                kept_cooldowns.push(cooldowns.get(i).copied().unwrap_or(0));
+            }
+        }
+        self.elev_shafts = kept_shafts;
+        self.elev_cooldowns = kept_cooldowns;
+        // Cooldowns and the overcharge timer count down once per tick
+        for cd in &mut self.elev_cooldowns {
+            *cd = cd.saturating_sub(1);
+        }
+        if self.elev_overcharge > 0 {
+            self.elev_overcharge = self.elev_overcharge.saturating_sub(1);
+        }
+        // Scheduled relocation: every ELEV_SHUFFLE_PERIOD-th tick the whole
+        // lift layout shifts to fresh fair cells. Fairness: a new end never
+        // lands on a snake, on the cell any snake is about to enter, on any
+        // entity or hazard, on another shaft, or within min_head_dist of any
+        // snake head.
+        if self.tick_counter.is_multiple_of(Self::ELEV_SHUFFLE_PERIOD) {
+            let spawn = Point { x: self.width / 2, y: self.height / 2 };
+            self.place_elev_shafts(self.elev_shaft_count(), spawn, 0, 3);
+            if !self.elev_shafts.is_empty() {
+                self.elev_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The elevators shift! ({})", self.elev_shafts.len()),
+                    crate::color::Color::Cyan,
+                );
+            }
+        }
+    }
+    fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
         self.phase_shifts = 0;
@@ -9950,7 +10231,8 @@ impl Game {
             | GameMode::Domino
             | GameMode::Magnet
             | GameMode::Gale
-            | GameMode::Comet => {
+            | GameMode::Comet
+            | GameMode::Elevator => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10083,6 +10365,7 @@ impl Game {
             || self.mode == GameMode::Magnet
             || self.mode == GameMode::Gale
             || self.mode == GameMode::Comet
+            || self.mode == GameMode::Elevator
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -10182,6 +10465,7 @@ impl Game {
         || self.mode == GameMode::Magnet
         || self.mode == GameMode::Gale
         || self.mode == GameMode::Comet
+        || self.mode == GameMode::Elevator
         {
             &self.snake
         } else {
@@ -10310,6 +10594,11 @@ impl Game {
         self.tramp_flings = 0;
         self.tramp_shuffles = 0;
         self.tramp_overcharge = 0;
+        self.elev_shafts.clear();
+        self.elev_cooldowns.clear();
+        self.elev_rides = 0;
+        self.elev_shuffles = 0;
+        self.elev_overcharge = 0;
         self.polarity_poles.clear();
         self.polarity_attract = true;
         self.polarity_flips = 0;
@@ -10949,6 +11238,9 @@ impl Game {
             let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
             self.gale_dir = dirs[self.rng.gen_range(0..dirs.len())];
         }
+        if self.mode == GameMode::Elevator {
+            self.spawn_elevators();
+        }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
         }
@@ -11206,6 +11498,9 @@ impl Game {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Comet {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Elevator {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -11646,7 +11941,8 @@ impl Game {
             | GameMode::Domino
             | GameMode::Magnet
             | GameMode::Gale
-            | GameMode::Comet => {
+            | GameMode::Comet
+            | GameMode::Elevator => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12341,6 +12637,11 @@ impl Game {
             self.tramp_flings = state.tramp_flings;
             self.tramp_shuffles = state.tramp_shuffles;
             self.tramp_overcharge = state.tramp_overcharge;
+            self.elev_shafts = state.elev_shafts;
+            self.elev_cooldowns = state.elev_cooldowns;
+            self.elev_rides = state.elev_rides;
+            self.elev_shuffles = state.elev_shuffles;
+            self.elev_overcharge = state.elev_overcharge;
             self.polarity_poles = state.polarity_poles;
             self.polarity_attract = state.polarity_attract;
             self.polarity_flips = state.polarity_flips;
@@ -12582,6 +12883,11 @@ impl Game {
             tramp_flings: self.tramp_flings,
             tramp_shuffles: self.tramp_shuffles,
             tramp_overcharge: self.tramp_overcharge,
+            elev_shafts: self.elev_shafts.clone(),
+            elev_cooldowns: self.elev_cooldowns.clone(),
+            elev_rides: self.elev_rides,
+            elev_shuffles: self.elev_shuffles,
+            elev_overcharge: self.elev_overcharge,
             polarity_poles: self.polarity_poles.clone(),
             polarity_attract: self.polarity_attract,
             polarity_flips: self.polarity_flips,
@@ -15513,6 +15819,7 @@ impl Game {
             && self.mode != GameMode::Quicksand
             && self.mode != GameMode::Domino
             && self.mode != GameMode::Comet
+            && self.mode != GameMode::Elevator
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -16496,6 +16803,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_elevator();
         self.manage_polarity();
         self.manage_blink();
         self.manage_crossfire();
@@ -16641,6 +16949,17 @@ impl Game {
                 final_head
             };
             gale_claimed.insert(final_head);
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some((idx, dest)) = self.elev_ride(final_head) {
+                if self.elev_overcharge == 0 {
+                    self.elev_cooldowns[idx] = Self::ELEV_COOLDOWN;
+                }
+                self.elev_rides += 1;
+                dest
+            } else {
+                final_head
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -16758,6 +17077,37 @@ impl Game {
                     self.gale_pushes += 1;
                     gale_claimed.insert(shoved);
                 }
+            }
+        }
+        // In Elevator mode a lift shaft carries the head to its other end
+        // (the shaft cell itself stays walkable, so this can never kill)
+        if self.mode == GameMode::Elevator {
+            if !hit_wall1
+                && let Some((idx, dest)) = self.elev_ride(final_head1)
+            {
+                final_head1 = dest;
+                if self.elev_overcharge == 0 {
+                    self.elev_cooldowns[idx] = Self::ELEV_COOLDOWN;
+                }
+                self.elev_rides += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Ride!".to_string(),
+                    crate::color::Color::Cyan,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(_p2) = &self.player2
+                && let Some((idx, dest)) = self.elev_ride(fh2)
+            {
+                final_head2_opt = Some(dest);
+                if self.elev_overcharge == 0 {
+                    self.elev_cooldowns[idx] = Self::ELEV_COOLDOWN;
+                }
+                self.elev_rides += 1;
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -17752,6 +18102,7 @@ impl Game {
             || self.mode == GameMode::Magnet
             || self.mode == GameMode::Gale
             || self.mode == GameMode::Comet
+            || self.mode == GameMode::Elevator
             {
                 self.handle_death("You Died!");
             } else {
@@ -19225,6 +19576,16 @@ if self.mode == GameMode::Steamroller {
                 crate::color::Color::Yellow,
             );
         }
+        if self.mode == GameMode::Elevator {
+            // Eating food overcharges the lifts: cooldown-free rides for a while
+            self.elev_overcharge = Self::ELEV_OVERCHARGE_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Overcharged!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
         if self.mode == GameMode::Magnet {
             // Eating food reverses the polarity of the nearest pole
             let nearest = self
@@ -19827,6 +20188,7 @@ if self.mode == GameMode::Steamroller {
         self.stats.total_time_s += self.start_time.elapsed().as_secs();
         self.save_stats();
         self.check_achievements();
+        #[cfg(not(target_arch = "wasm32"))]
         if let (GameMode::Speedrun, Ok(json)) =
             (self.mode, serde_json::to_string(&self.current_replay))
         {
@@ -22023,6 +22385,15 @@ if self.mode == GameMode::Steamroller {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Row gap range of an elevator shaft in Elevator mode
+    pub const ELEV_MIN_GAP: u16 = 4;
+    pub const ELEV_MAX_GAP: u16 = 10;
+    /// Ticks a shaft stays recharging after a ride in Elevator mode
+    pub const ELEV_COOLDOWN: u32 = 6;
+    /// Ticks between scheduled elevator relocations in Elevator mode
+    pub const ELEV_SHUFFLE_PERIOD: u32 = 20;
+    /// Ticks of overcharge granted by eating food in Elevator mode
+    pub const ELEV_OVERCHARGE_TICKS: u32 = 12;
     /// A magnetic pulse fires on every MAGNET_PULSE_PERIOD-th tick in Magnet mode
     pub const MAGNET_PULSE_PERIOD: u32 = 6;
     /// Every MAGNET_RELOCATE_PERIOD-th tick the poles relocate in Magnet mode
