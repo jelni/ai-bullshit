@@ -236,6 +236,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         let _ = ctx.fill_text(arrow, cx, cy);
     }
 
+    // Draw cracked floor (Crumble mode)
+    if game.mode == crate::game::GameMode::Crumble {
+        ctx.set_fill_style_str("#CD853F"); // Peru
+        for crack in &game.crumble_tiles {
+            if crack.x < game.width
+                && crack.y < game.height
+                && is_visible(f64::from(crack.x), f64::from(crack.y))
+            {
+                ctx.fill_rect(
+                    f64::from(crack.x) * cell_size,
+                    f64::from(crack.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw quicksand patches (Quicksand mode)
     if game.mode == crate::game::GameMode::Quicksand {
         ctx.set_fill_style_str("#8B5A2B"); // Brown bog

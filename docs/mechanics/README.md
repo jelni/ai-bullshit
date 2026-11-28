@@ -676,3 +676,18 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Wind: <dir> | Pushes: <count> | Shifts: <count>` plus `Braced: <ticks>` while braced (`gale_str`); a compass arrow renders in the top-right playable cell (dark-cyan `^`/`v`/`<`/`>` on the terminal, white while braced; dark-cyan arrow text on the web UI).
 - **Persistence:** `gale_dir`, `gale_pushes`, `gale_shifts`, and `gale_braces` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_gale_mode.rs](../../tests/test_gale_mode.rs).
+
+## Crumble Mode
+
+`GameMode::Crumble` (menu entry "Crumble Mode", entry 88 in the main menu) is a survival mode played over a floor of cracked tiles — each crack is a one-time bridge:
+
+- **Cracked floor:** on reset `spawn_crumble_cracks` seeds `clamp(width*height/50, 4, 10)` cracks (`crumble_tiles`) on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a hazard tile, or the food. Cracks render as a dark-yellow `:` (terminal) / brown cell (web). The weather is pinned to `Weather::Clear` so the cracks are always visible.
+- **Collapse:** a crack is walkable, but when a snake head leaves it, `manage_crumble` (at the start of the tick, before movement) turns the tile into a permanent `obstacles` pit and counts it in `crumble_collapses` ("Crumble!"). Obstacle death is only ever checked on the *new* head, so the mover can never be crushed by its own trail.
+- **Fairness:** a crack never collapses while any snake is about to enter its cell (`singularity_next_heads`) or while an entity (food, bonus/poison food, power-up, mine, portal, black hole, tornado) sits on it (`crumble_cell_claimed`), so a collapse can never kill anyone cheaply.
+- **Scheduled cracking:** every `CRUMBLE_PERIOD` (8) ticks up to `CRUMBLE_NEW_PER_PERIOD` (2) fresh cracks appear on fair cells (`crumble_candidates` / `crumble_cell_free`), counted in `crumble_cracks` ("The floor cracks! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, within 3 cells of any snake head, and capped at `clamp(width*height/40, 6, 16)` live cracks.
+- **Periodic fill:** at tick 200 of every 250-tick cycle all remaining cracks fill back in without ever becoming pits ("The cracks fill in!").
+- **Reinforcement:** eating food removes the cracks adjacent (4-neighborhood) to the eaten cell ("Reinforced N crack(s)!").
+- **Autopilot:** cracks are treated as permanent walls in `is_safe_final_p` and `trap_blocked_cells`, so the bot never routes over a crack in the A* search, the verified-safe path checks, or the trap-avoidance flood fill.
+- **Status bar:** `Cracks: <count> | Collapses: <count> | New: <count>` (`crumble_str`).
+- **Persistence:** `crumble_tiles`, `crumble_collapses`, and `crumble_cracks` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_crumble_mode.rs](../../tests/test_crumble_mode.rs).

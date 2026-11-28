@@ -670,6 +670,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Trampoline Mode",
         "Polarity Mode",
         "Blink Mode",
+        "Crumble Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -2065,6 +2066,17 @@ fn draw_entities<W: Write>(
             if is_visible(pad.x, pad.y) {
                 stdout.queue(cursor::MoveTo(pad.x, pad.y))?;
                 write!(stdout, "*")?;
+            }
+        }
+    }
+
+    // Draw cracked floor (Crumble mode)
+    if game.mode == crate::game::GameMode::Crumble {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for crack in &game.crumble_tiles {
+            if is_visible(crack.x, crack.y) {
+                stdout.queue(cursor::MoveTo(crack.x, crack.y))?;
+                write!(stdout, ":")?;
             }
         }
     }
@@ -3480,6 +3492,16 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         } else {
             format!(" | Crossfire | Strikes: {}", game.crossfire_strikes)
         }
+    } else {
+        String::new()
+    };
+    let crumble_str = if game.mode == crate::game::GameMode::Crumble {
+        format!(
+            " | Cracks: {} | Collapses: {} | New: {}",
+            game.crumble_tiles.len(),
+            game.crumble_collapses,
+            game.crumble_cracks
+        )
     } else {
         String::new()
     };

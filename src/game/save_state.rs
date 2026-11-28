@@ -222,6 +222,12 @@ pub struct SaveState {
     #[serde(default)]
     pub crossfire_strikes: u32,
     #[serde(default)]
+    pub crumble_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub crumble_collapses: u32,
+    #[serde(default)]
+    pub crumble_cracks: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

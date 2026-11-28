@@ -253,6 +253,9 @@ pub struct Game {
     pub quicksand_sink: u32,
     pub quicksand_sink2: u32,
     pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    pub crumble_tiles: HashSet<Point>,
+    pub crumble_collapses: u32,
+    pub crumble_cracks: u32,
     pub domino_tiles: HashSet<Point>,
     pub domino_waves: u32,
     pub domino_falls: u32,
@@ -822,6 +825,9 @@ impl Game {
             quicksand_sink: 0,
             quicksand_sink2: 0,
             quicksand_bot_sinks: std::collections::HashMap::new(),
+            crumble_tiles: HashSet::new(),
+            crumble_collapses: 0,
+            crumble_cracks: 0,
             domino_tiles: HashSet::new(),
             domino_waves: 0,
             domino_falls: 0,
@@ -1137,6 +1143,9 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            crumble_tiles: self.crumble_tiles.clone(),
+            crumble_collapses: self.crumble_collapses,
+            crumble_cracks: self.crumble_cracks,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -1405,6 +1414,9 @@ impl Game {
                 self.quicksand_sink = state.quicksand_sink;
                 self.quicksand_sink2 = state.quicksand_sink2;
                 self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+                self.crumble_tiles = state.crumble_tiles;
+                self.crumble_collapses = state.crumble_collapses;
+                self.crumble_cracks = state.crumble_cracks;
                 self.lava_tiles = state.lava_tiles;
                 self.volcano_vents = state.volcano_vents;
                 self.volcano_eruptions = state.volcano_eruptions;
@@ -5361,7 +5373,179 @@ impl Game {
             );
         }
     }
-    fn spawn_phase_gates(&mut self) {
+    fn crumble_tile_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 50).clamp(4, 10)
+    }
+    fn crumble_cap(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 40).clamp(6, 16)
+    }
+    // A cell a new crack may appear on must be fair right now: in bounds within
+    // the safe-zone margin, free of snakes (bodies and the cells they are about
+    // to enter) and every entity, and clear of every hazard tile, so cracking
+    // the floor can never seal or kill anyone.
+    fn crumble_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.ice_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.polarity_poles.contains(&p)
+            || self.quicksand.contains(&p)
+            || self.blink_pads.contains(&p)
+            || self.phase_gates.contains(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.spike_tiles.contains_key(&p)
+            || self.spike_warnings.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.crumble_tiles.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // Fair crack candidates: every free cell at least min_head_dist (Manhattan)
+    // away from the given snake heads.
+    fn crumble_candidates(&self, heads: &[Point], min_head_dist: u16) -> Vec<Point> {
+        let margin = self.safe_zone_margin;
+        let min_x = 1 + margin;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x + 1);
+        let min_y = 1 + margin;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y + 1);
+        let mut out = Vec::new();
+        for y in min_y..max_y {
+            for x in min_x..max_x {
+                let p = Point { x, y };
+                if self.crumble_cell_free(p)
+                    && heads.iter().all(|h| {
+                        p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) >= min_head_dist
+                    })
+                {
+                    out.push(p);
+                }
+            }
+        }
+        out
+    }
+    // A crack cell is claimed while any snake is about to enter it or an entity
+    // sits on it; such a crack must not collapse this tick.
+    fn crumble_cell_claimed(&self, p: Point, next_heads: &[Point]) -> bool {
+        next_heads.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.mines.contains(&p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+    }
+    fn spawn_crumble_cracks(&mut self) {
+        self.crumble_tiles.clear();
+        self.crumble_collapses = 0;
+        self.crumble_cracks = 0;
+        let spawn = Point {
+            x: self.width / 2,
+            y: self.height / 2,
+        };
+        let mut candidates = self.crumble_candidates(&[spawn], 5);
+        for _ in 0..self.crumble_tile_count() {
+            if candidates.is_empty() {
+                break;
+            }
+            let idx = self.rng.gen_range(0..candidates.len());
+            let p = candidates.swap_remove(idx);
+            self.crumble_tiles.insert(p);
+        }
+    }
+    fn manage_crumble(&mut self) {
+        if self.mode != GameMode::Crumble {
+            return;
+        }
+        // The skies stay clear so the cracks are always visible
+        self.weather = Weather::Clear;
+        // Collapse: a crack under a snake head turns into a permanent pit as
+        // that head leaves, i.e. at the start of the tick before the snake
+        // moves. Obstacle death is only ever checked on the new head, so the
+        // mover can never be crushed by its own trail, and a crack never
+        // collapses while another snake is about to enter its cell or an
+        // entity sits on it, so a collapse can never kill anyone cheaply.
+        let next_heads = self.singularity_next_heads();
+        let mut heads: Vec<Point> = vec![self.snake.head()];
+        if let Some(p2) = &self.player2 {
+            heads.push(p2.head());
+        }
+        heads.extend(self.bots.iter().map(Snake::head));
+        let mut collapsed: Vec<Point> = Vec::new();
+        for h in &heads {
+            if self.crumble_tiles.contains(h) && !self.crumble_cell_claimed(*h, &next_heads) {
+                collapsed.push(*h);
+            }
+        }
+        for p in collapsed {
+            self.crumble_tiles.remove(&p);
+            self.obstacles.insert(p);
+            self.crumble_collapses += 1;
+            self.spawn_floating_text(
+                f32::from(p.x),
+                f32::from(p.y),
+                "Crumble!".to_string(),
+                crate::color::Color::DarkYellow,
+            );
+        }
+        // Scheduled cracking: every CRUMBLE_PERIOD ticks fresh cracks appear on
+        // fair cells (up to the cap), never on a snake, on the cell any snake is
+        // about to enter, on any entity or hazard tile, or close to a snake head
+        if self.tick_counter.is_multiple_of(Self::CRUMBLE_PERIOD) {
+            let cap = self.crumble_cap();
+            let need =
+                Self::CRUMBLE_NEW_PER_PERIOD.min(cap.saturating_sub(self.crumble_tiles.len()));
+            if need > 0 {
+                let mut candidates = self.crumble_candidates(&heads, 3);
+                let mut spawned = 0usize;
+                while spawned < need && !candidates.is_empty() {
+                    let idx = self.rng.gen_range(0..candidates.len());
+                    let p = candidates.swap_remove(idx);
+                    self.crumble_tiles.insert(p);
+                    spawned += 1;
+                }
+                if spawned > 0 {
+                    self.crumble_cracks += u32::try_from(spawned).unwrap_or(u32::MAX);
+                    let head = self.snake.head();
+                    self.spawn_floating_text(
+                        f32::from(head.x),
+                        f32::from(head.y),
+                        format!("The floor cracks! ({spawned})"),
+                        crate::color::Color::DarkYellow,
+                    );
+                }
+            }
+        }
+        // Periodic fill: at tick 200 of every 250-tick cycle the remaining
+        // cracks fill back in without ever becoming pits
+        if self.tick_counter == 200 && !self.crumble_tiles.is_empty() {
+            self.crumble_tiles.clear();
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "The cracks fill in!".to_string(),
+                crate::color::Color::DarkYellow,
+            );
+        }
+    }    fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
         self.phase_shifts = 0;
@@ -9516,7 +9700,7 @@ impl Game {
             | GameMode::Pinball
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
-            | GameMode::Trampoline
+            | GameMode::Trampoline | GameMode::Crumble
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
             | GameMode::Quicksand
@@ -9646,6 +9830,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
@@ -9743,6 +9928,7 @@ impl Game {
             || self.mode == GameMode::Landslide
         || self.mode == GameMode::PhaseShift
         || self.mode == GameMode::Trampoline
+        || self.mode == GameMode::Crumble
         || self.mode == GameMode::Polarity
         || self.mode == GameMode::Blink
         || self.mode == GameMode::Crossfire
@@ -9915,6 +10101,9 @@ impl Game {
         self.quicksand_sink = 0;
         self.quicksand_sink2 = 0;
         self.quicksand_bot_sinks.clear();
+        self.crumble_tiles.clear();
+        self.crumble_collapses = 0;
+        self.crumble_cracks = 0;
         self.domino_tiles.clear();
         self.domino_waves = 0;
         self.domino_falls = 0;
@@ -10519,6 +10708,9 @@ impl Game {
         }
         if self.mode == GameMode::Quicksand {
             self.spawn_initial_quicksand();
+        }
+        if self.mode == GameMode::Crumble {
+            self.spawn_crumble_cracks();
         }
         if self.mode == GameMode::Wildfire {
             self.ignite_initial_wildfire();
@@ -11192,7 +11384,7 @@ impl Game {
             | GameMode::Pinball
             | GameMode::Steamroller
             | GameMode::Landslide | GameMode::PhaseShift
-            | GameMode::Trampoline
+            | GameMode::Trampoline | GameMode::Crumble
             | GameMode::Polarity | GameMode::Blink
             | GameMode::Crossfire
             | GameMode::Quicksand
@@ -11933,6 +12125,9 @@ impl Game {
             self.quicksand_sink = state.quicksand_sink;
             self.quicksand_sink2 = state.quicksand_sink2;
             self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+            self.crumble_tiles = state.crumble_tiles;
+            self.crumble_collapses = state.crumble_collapses;
+            self.crumble_cracks = state.crumble_cracks;
             self.domino_tiles = state.domino_tiles;
             self.domino_waves = state.domino_waves;
             self.domino_falls = state.domino_falls;
@@ -12173,6 +12368,9 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            crumble_tiles: self.crumble_tiles.clone(),
+            crumble_collapses: self.crumble_collapses,
+            crumble_cracks: self.crumble_cracks,
             lava_tiles: self.lava_tiles.clone(),
             volcano_vents: self.volcano_vents.clone(),
             volcano_eruptions: self.volcano_eruptions,
@@ -16039,6 +16237,7 @@ impl Game {
         self.manage_domino();
         self.manage_mirage();
         self.manage_quicksand();
+        self.manage_crumble();
 
         self.manage_landslide();
         self.manage_sandstorm();
@@ -17237,6 +17436,7 @@ impl Game {
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
+            || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
             || self.mode == GameMode::Crossfire
@@ -18480,6 +18680,30 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Retracted {retracted} spikes!"),
                     crate::color::Color::Red,
+                );
+            }
+        }
+        if self.mode == GameMode::Crumble {
+            // Eating food reinforces the floor: the cracks adjacent to the
+            // eaten cell are filled in and never become pits
+            let mut reinforced = 0u32;
+            for d in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let c = Self::calculate_next_head_dir(final_head, d);
+                if self.crumble_tiles.remove(&c) {
+                    reinforced += 1;
+                }
+            }
+            if reinforced > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Reinforced {reinforced} crack(s)!"),
+                    crate::color::Color::DarkYellow,
                 );
             }
         }
@@ -20565,6 +20789,11 @@ if self.mode == GameMode::Steamroller {
             if self.mode == GameMode::Quicksand && self.quicksand.contains(&final_p) {
                 return false;
             }
+            // Cracked floor in Crumble mode collapses behind the head that
+            // crossed it, so the autopilot treats every crack as a permanent wall.
+            if self.mode == GameMode::Crumble && self.crumble_tiles.contains(&final_p) {
+                return false;
+            }
             if self.black_hole.is_some_and(|bh| bh == final_p) {
                 return false;
             }
@@ -21475,6 +21704,10 @@ if self.mode == GameMode::Steamroller {
     pub const QUICKSAND_SINK_TICKS: u32 = 12;
     /// Minimum Manhattan distance of initial quicksand patches from the spawn point
     pub const QUICKSAND_MIN_SPAWN_DIST: u16 = 5;
+    /// Ticks between scheduled floor cracks in Crumble mode
+    pub const CRUMBLE_PERIOD: u32 = 8;
+    /// Fresh cracks seeded per scheduled period in Crumble mode
+    pub const CRUMBLE_NEW_PER_PERIOD: usize = 2;
     /// Ticks between scheduled domino topple waves in Domino mode
     pub const DOMINO_PERIOD: u32 = 8;
     /// Most dominoes a single topple wave can shove along one chain
@@ -22692,6 +22925,9 @@ if self.mode == GameMode::Steamroller {
             for cell in &self.quicksand {
                 blocked.insert(*cell);
             }
+        }
+        if self.mode == GameMode::Crumble {
+            blocked.extend(self.crumble_tiles.iter().copied());
         }
         if let Some(col) = self.lightning_column {
             for y in 1..self.height.saturating_sub(1) {

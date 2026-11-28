@@ -103,4 +103,5 @@ pub enum GameMode {
     Domino,
     Magnet,
     Gale,
+    Crumble,
 }
