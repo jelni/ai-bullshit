@@ -664,3 +664,15 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Poles: <count> | Pulses: <count> | Relocations: <count> | Flips: <count>` (`magnet_str`).
 - **Persistence:** `magnet_poles`, `magnet_pulses`, `magnet_relocations`, and `magnet_flips` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_magnet_mode.rs](../../tests/test_magnet_mode.rs).
+## Gale Mode
+
+`GameMode::Gale` (menu entry "Gale Mode", entry 127 in the main menu) is a survival mode played under a board-wide wind:
+
+- **Wind:** `gale_dir` is randomized at reset. After every snake's regular move (player, player 2, and every bot — applied right where `belt_shove`/`tramp_launch` are applied in `update`), `gale_shove` pushes the head one extra cell along `gale_dir` and counts it in `gale_pushes` ("Gust!").
+- **Fairness:** a gust only fires when the target cell is in bounds, passes `tramp_cell_free` (in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter via `singularity_cell_free`, plus obstacles, food, mines, the black hole, portals, entities, the lightning column, and every lethal tile set), lies outside every falling meteor's lane (`gale_meteor_lane`), and is not claimed by another snake's head this tick (`gale_claimed`, seeded from `singularity_next_heads` and extended with every final head). If the target is not fair the snake simply braces in place, so **a gust can never push anyone into a kill or into another head**.
+- **Scheduled shifts:** every `GALE_PERIOD` (18) ticks `manage_gale` turns the wind to a new random direction different from the current one (`gale_shifts += 1`, "The wind shifts <dir>!").
+- **Bracing:** eating food sets `gale_braces = GALE_BRACE_TICKS` (10) ("Braced!"); while the timer is positive it counts down once per tick in `manage_gale` and the player is never pushed (`gale_shove` returns `None` for a braced snake).
+- **Autopilot:** gust landings are always fair, so a pushed bot is never killed by the gust itself; the bot replans from its actual head every tick and rides the wind natively.
+- **Status bar:** `Wind: <dir> | Pushes: <count> | Shifts: <count>` plus `Braced: <ticks>` while braced (`gale_str`); a compass arrow renders in the top-right playable cell (dark-cyan `^`/`v`/`<`/`>` on the terminal, white while braced; dark-cyan arrow text on the web UI).
+- **Persistence:** `gale_dir`, `gale_pushes`, `gale_shifts`, and `gale_braces` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_gale_mode.rs](../../tests/test_gale_mode.rs).

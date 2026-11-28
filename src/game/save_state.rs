@@ -2,7 +2,8 @@
 use super::{
     Boss, Boulder, Companion, Deserialize, Difficulty, Direction, GameMode, Goblin, HashSet,
     InGameUpgrade, LandslideRock, Laser, Meteor, Point, PowerUp, Serialize, Snake, Theme,
-    Tournament, Weather, default_campaign_level, default_lives, default_skin, default_wrap_mode,
+    Tournament, Weather, default_campaign_level, default_gale_dir, default_lives, default_skin,
+    default_wrap_mode,
 };
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
@@ -185,6 +186,14 @@ pub struct SaveState {
     pub magnet_relocations: u32,
     #[serde(default)]
     pub magnet_flips: u32,
+    #[serde(default = "default_gale_dir")]
+    pub gale_dir: Direction,
+    #[serde(default)]
+    pub gale_pushes: u32,
+    #[serde(default)]
+    pub gale_shifts: u32,
+    #[serde(default)]
+    pub gale_braces: u32,
     #[serde(default)]
     pub polarity_poles: HashSet<Point>,
     #[serde(default)]

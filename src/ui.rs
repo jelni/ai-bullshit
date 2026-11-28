@@ -709,6 +709,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Quicksand Mode",
         "Domino Mode",
         "Magnet Mode",
+        "Gale Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2091,6 +2092,27 @@ fn draw_entities<W: Write>(
                 stdout.queue(cursor::MoveTo(pole.x, pole.y))?;
                 write!(stdout, "{}", if *attract { "+" } else { "-" })?;
             }
+        }
+    }
+
+    // Draw the wind compass arrow in the top-right corner (Gale mode)
+    if game.mode == crate::game::GameMode::Gale {
+        let arrow = match game.gale_dir {
+            Direction::Up => "^",
+            Direction::Down => "v",
+            Direction::Left => "<",
+            Direction::Right => ">",
+        };
+        let cx = game.width.saturating_sub(2);
+        let cy = 1;
+        if is_visible(cx, cy) {
+            stdout.queue(SetForegroundColor(if game.gale_braces > 0 {
+                Color::White
+            } else {
+                Color::DarkCyan
+            }))?;
+            stdout.queue(cursor::MoveTo(cx, cy))?;
+            write!(stdout, "{arrow}")?;
         }
     }
 
@@ -3483,6 +3505,25 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let gale_str = if game.mode == crate::game::GameMode::Gale {
+        let wind = match game.gale_dir {
+            Direction::Up => "Up",
+            Direction::Down => "Down",
+            Direction::Left => "Left",
+            Direction::Right => "Right",
+        };
+        let brace = if game.gale_braces > 0 {
+            format!(" | Braced: {}", game.gale_braces)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Wind: {} | Pushes: {} | Shifts: {}{brace}",
+            wind, game.gale_pushes, game.gale_shifts
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -3681,7 +3722,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}"
     )?;
 
     if !game.bosses.is_empty() {

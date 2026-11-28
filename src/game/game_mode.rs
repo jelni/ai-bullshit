@@ -102,4 +102,5 @@ pub enum GameMode {
     Quicksand,
     Domino,
     Magnet,
+    Gale,
 }

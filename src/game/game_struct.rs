@@ -234,6 +234,10 @@ pub struct Game {
     pub magnet_pulses: u32,
     pub magnet_relocations: u32,
     pub magnet_flips: u32,
+    pub gale_dir: Direction,
+    pub gale_pushes: u32,
+    pub gale_shifts: u32,
+    pub gale_braces: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -263,6 +267,10 @@ pub struct Game {
     pub blaze_tiles: std::collections::HashMap<Point, u32>,
     pub blaze_sources: Vec<Point>,
     pub firestorm_blazes: u32,
+}
+#[must_use]
+pub const fn default_gale_dir() -> Direction {
+    Direction::Right
 }
 impl Game {
     pub fn spawn_turret(&mut self) {
@@ -792,6 +800,10 @@ impl Game {
             magnet_pulses: 0,
             magnet_relocations: 0,
             magnet_flips: 0,
+            gale_dir: Direction::Right,
+            gale_pushes: 0,
+            gale_shifts: 0,
+            gale_braces: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1098,6 +1110,10 @@ impl Game {
             magnet_pulses: self.magnet_pulses,
             magnet_relocations: self.magnet_relocations,
             magnet_flips: self.magnet_flips,
+            gale_dir: self.gale_dir,
+            gale_pushes: self.gale_pushes,
+            gale_shifts: self.gale_shifts,
+            gale_braces: self.gale_braces,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1362,6 +1378,10 @@ impl Game {
                 self.magnet_pulses = state.magnet_pulses;
                 self.magnet_relocations = state.magnet_relocations;
                 self.magnet_flips = state.magnet_flips;
+                self.gale_dir = state.gale_dir;
+                self.gale_pushes = state.gale_pushes;
+                self.gale_shifts = state.gale_shifts;
+                self.gale_braces = state.gale_braces;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -5277,6 +5297,68 @@ impl Game {
                     },
                 );
             }
+        }
+    }
+    const fn gale_dir_name(dir: Direction) -> &'static str {
+        match dir {
+            Direction::Up => "Up",
+            Direction::Down => "Down",
+            Direction::Left => "Left",
+            Direction::Right => "Right",
+        }
+    }
+    // A cell is in a falling meteor's lane when it sits at or below the meteor
+    // in its column (or the drifted column for sweeping meteors); a gust must
+    // never drop a snake into a lane a meteor is about to sweep through.
+    fn gale_meteor_lane(&self, p: Point) -> bool {
+        self.meteors.iter().any(|m| {
+            p.y >= m.position.y
+                && (p.x == m.position.x
+                    || (m.vx != 0 && (p.x == m.position.x + 1 || p.x == m.position.x - 1)))
+        })
+    }
+    // The wind shoves a snake whose head just moved one extra cell along the
+    // gale direction — but only onto a cell that is fair right now, outside
+    // every meteor lane, and not already claimed by another snake's head this
+    // tick, so a gust can never push anyone into a kill or into another head.
+    fn gale_shove(&self, head: Point, braced: bool, claimed: &HashSet<Point>) -> Option<Point> {
+        if self.mode != GameMode::Gale || braced {
+            return None;
+        }
+        let dest = Self::calculate_next_head_dir(head, self.gale_dir);
+        if dest.x == 0 || dest.x >= self.width - 1 || dest.y == 0 || dest.y >= self.height - 1 {
+            return None;
+        }
+        if claimed.contains(&dest) || !self.tramp_cell_free(dest) || self.gale_meteor_lane(dest) {
+            return None;
+        }
+        Some(dest)
+    }
+    fn manage_gale(&mut self) {
+        if self.mode != GameMode::Gale {
+            return;
+        }
+        // A brace counts down once per tick
+        if self.gale_braces > 0 {
+            self.gale_braces = self.gale_braces.saturating_sub(1);
+        }
+        // Scheduled shift: every GALE_PERIOD-th tick the wind turns to a new
+        // direction different from the current one
+        if self.tick_counter.is_multiple_of(Self::GALE_PERIOD) {
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+            let mut new_dir = self.gale_dir;
+            while new_dir == self.gale_dir {
+                new_dir = dirs[self.rng.gen_range(0..dirs.len())];
+            }
+            self.gale_dir = new_dir;
+            self.gale_shifts += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The wind shifts {}!", Self::gale_dir_name(new_dir)),
+                crate::color::Color::Cyan,
+            );
         }
     }
     fn spawn_phase_gates(&mut self) {
@@ -9439,7 +9521,8 @@ impl Game {
             | GameMode::Crossfire
             | GameMode::Quicksand
             | GameMode::Domino
-            | GameMode::Magnet => {
+            | GameMode::Magnet
+            | GameMode::Gale => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -9569,6 +9652,7 @@ impl Game {
             || self.mode == GameMode::Quicksand
             || self.mode == GameMode::Domino
             || self.mode == GameMode::Magnet
+            || self.mode == GameMode::Gale
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -9665,6 +9749,7 @@ impl Game {
         || self.mode == GameMode::Quicksand
         || self.mode == GameMode::Domino
         || self.mode == GameMode::Magnet
+        || self.mode == GameMode::Gale
         {
             &self.snake
         } else {
@@ -9811,6 +9896,10 @@ impl Game {
         self.magnet_pulses = 0;
         self.magnet_relocations = 0;
         self.magnet_flips = 0;
+        self.gale_dir = Direction::Right;
+        self.gale_pushes = 0;
+        self.gale_shifts = 0;
+        self.gale_braces = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -10416,6 +10505,11 @@ impl Game {
         }
         if self.mode == GameMode::Magnet {
             self.spawn_magnet_poles();
+        }
+        if self.mode == GameMode::Gale {
+            // The wind starts blowing in a random direction
+            let dirs = [Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+            self.gale_dir = dirs[self.rng.gen_range(0..dirs.len())];
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -11103,7 +11197,8 @@ impl Game {
             | GameMode::Crossfire
             | GameMode::Quicksand
             | GameMode::Domino
-            | GameMode::Magnet => {
+            | GameMode::Magnet
+            | GameMode::Gale => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -11816,6 +11911,10 @@ impl Game {
             self.magnet_pulses = state.magnet_pulses;
             self.magnet_relocations = state.magnet_relocations;
             self.magnet_flips = state.magnet_flips;
+            self.gale_dir = state.gale_dir;
+            self.gale_pushes = state.gale_pushes;
+            self.gale_shifts = state.gale_shifts;
+            self.gale_braces = state.gale_braces;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -12047,6 +12146,10 @@ impl Game {
             magnet_pulses: self.magnet_pulses,
             magnet_relocations: self.magnet_relocations,
             magnet_flips: self.magnet_flips,
+            gale_dir: self.gale_dir,
+            gale_pushes: self.gale_pushes,
+            gale_shifts: self.gale_shifts,
+            gale_braces: self.gale_braces,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -15931,6 +16034,7 @@ impl Game {
         self.manage_blink();
         self.manage_crossfire();
         self.manage_magnet();
+        self.manage_gale();
         self.manage_thornfield();
         self.manage_domino();
         self.manage_mirage();
@@ -15963,6 +16067,14 @@ impl Game {
         self.apply_gravity();
 
         let bots_len_start_tick = self.bots.len();
+
+        // In Gale mode the wind shoves every snake one extra cell this tick;
+        // cells already claimed by a snake's head are never valid gust targets
+        let mut gale_claimed: HashSet<Point> = if self.mode == GameMode::Gale {
+            self.singularity_next_heads().into_iter().collect()
+        } else {
+            HashSet::new()
+        };
 
         // Handle bots movement and check collisions with walls/boundaries
         let mut final_bot_heads = Vec::new();
@@ -16049,6 +16161,18 @@ impl Game {
             } else {
                 final_head
             };
+            // In Gale mode the wind gusts the bot one extra cell (never onto a
+            // kill or a claimed head, so a gust can never kill the bot)
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(shoved) = self.gale_shove(final_head, false, &gale_claimed) {
+                self.gale_pushes += 1;
+                gale_claimed.insert(shoved);
+                shoved
+            } else {
+                final_head
+            };
+            gale_claimed.insert(final_head);
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
@@ -16134,6 +16258,38 @@ impl Game {
             {
                 final_head2_opt = Some(dest);
                 self.blink_teleports += 1;
+            }
+        }
+        // In Gale mode the wind gusts the head one extra cell along the gale
+        // direction (a braced player resists the gust); the target must be fair
+        // and unclaimed, so a gust can never kill
+        if self.mode == GameMode::Gale {
+            if !hit_wall1 {
+                gale_claimed.insert(final_head1);
+                if let Some(shoved) =
+                    self.gale_shove(final_head1, self.gale_braces > 0, &gale_claimed)
+                {
+                    final_head1 = shoved;
+                    self.gale_pushes += 1;
+                    gale_claimed.insert(shoved);
+                    let head1 = self.snake.head();
+                    self.spawn_floating_text(
+                        f32::from(head1.x),
+                        f32::from(head1.y),
+                        "Gust!".to_string(),
+                        crate::color::Color::Cyan,
+                    );
+                }
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+            {
+                gale_claimed.insert(fh2);
+                if let Some(shoved) = self.gale_shove(fh2, false, &gale_claimed) {
+                    final_head2_opt = Some(shoved);
+                    self.gale_pushes += 1;
+                    gale_claimed.insert(shoved);
+                }
             }
         }
         // In Ricochet mode walls bounce the snake back instead of killing it
@@ -17087,6 +17243,7 @@ impl Game {
             || self.mode == GameMode::Quicksand
             || self.mode == GameMode::Domino
             || self.mode == GameMode::Magnet
+            || self.mode == GameMode::Gale
             {
                 self.handle_death("You Died!");
             } else {
@@ -18573,6 +18730,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.x),
                 f32::from(final_head.y),
                 "Overcharged!".to_string(),
+                crate::color::Color::Cyan,
+            );
+        }
+        if self.mode == GameMode::Gale {
+            // Eating food braces the snake against the wind for a while
+            self.gale_braces = Self::GALE_BRACE_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Braced!".to_string(),
                 crate::color::Color::Cyan,
             );
         }
@@ -21314,6 +21481,10 @@ if self.mode == GameMode::Steamroller {
     pub const DOMINO_CHAIN_MAX: usize = 6;
     /// Fresh dominoes dropped every `DOMINO_DROP_PERIOD` ticks while under the cap
     pub const DOMINO_DROP_PERIOD: u32 = 24;
+    /// Ticks between scheduled wind shifts in Gale mode
+    pub const GALE_PERIOD: u32 = 18;
+    /// Ticks of bracing (wind immunity) granted by eating food in Gale mode
+    pub const GALE_BRACE_TICKS: u32 = 10;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

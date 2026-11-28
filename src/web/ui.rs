@@ -217,6 +217,23 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 );
             }
         }
+    // Draw the wind compass arrow in the top-right corner (Gale mode)
+    if game.mode == crate::game::GameMode::Gale {
+        let arrow = match game.gale_dir {
+            crate::snake::Direction::Up => "^",
+            crate::snake::Direction::Down => "v",
+            crate::snake::Direction::Left => "<",
+            crate::snake::Direction::Right => ">",
+        };
+        ctx.set_fill_style_str(if game.gale_braces > 0 {
+            "#FFFFFF"
+        } else {
+            "#008B8B"
+        });
+        ctx.set_font("14px 'Courier New', Courier, monospace");
+        let cx = f64::from(game.width.saturating_sub(2)) * cell_size + 3.0;
+        let cy = 1.0 * cell_size + cell_size - 3.0;
+        let _ = ctx.fill_text(arrow, cx, cy);
     }
 
     // Draw quicksand patches (Quicksand mode)
