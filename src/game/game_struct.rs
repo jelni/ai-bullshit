@@ -258,6 +258,9 @@ pub struct Game {
     pub quicksand_sink: u32,
     pub quicksand_sink2: u32,
     pub quicksand_bot_sinks: std::collections::HashMap<usize, u32>,
+    pub mire_cells: std::collections::HashMap<Point, u32>,
+    pub mire_warnings: HashSet<Point>,
+    pub mire_waves: u32,
     pub crumble_tiles: HashSet<Point>,
     pub crumble_collapses: u32,
     pub crumble_cracks: u32,
@@ -842,6 +845,9 @@ impl Game {
             quicksand_sink: 0,
             quicksand_sink2: 0,
             quicksand_bot_sinks: std::collections::HashMap::new(),
+            mire_cells: std::collections::HashMap::new(),
+            mire_warnings: HashSet::new(),
+            mire_waves: 0,
             crumble_tiles: HashSet::new(),
             crumble_collapses: 0,
             crumble_cracks: 0,
@@ -1168,6 +1174,9 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            mire_cells: self.mire_cells.clone(),
+            mire_warnings: self.mire_warnings.clone(),
+            mire_waves: self.mire_waves,
             crumble_tiles: self.crumble_tiles.clone(),
             crumble_collapses: self.crumble_collapses,
             crumble_cracks: self.crumble_cracks,
@@ -1447,6 +1456,9 @@ impl Game {
                 self.quicksand_sink = state.quicksand_sink;
                 self.quicksand_sink2 = state.quicksand_sink2;
                 self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+                self.mire_cells = state.mire_cells;
+                self.mire_warnings = state.mire_warnings;
+                self.mire_waves = state.mire_waves;
                 self.crumble_tiles = state.crumble_tiles;
                 self.crumble_collapses = state.crumble_collapses;
                 self.crumble_cracks = state.crumble_cracks;
@@ -6069,6 +6081,224 @@ impl Game {
             }
         }
     }
+    fn manage_mire(&mut self) {
+        if self.mode != GameMode::Mire {
+            return;
+        }
+        // The skies stay clear so the cracks and pools are always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale mire records
+        self.mire_cells.retain(|p, _| self.obstacles.contains(p));
+        // Each pool dries up one tick earlier and then disappears, leaving open ground
+        let dried: Vec<Point> = self
+            .mire_cells
+            .iter()
+            .filter(|(_, ticks)| **ticks <= 1)
+            .map(|(p, _)| *p)
+            .collect();
+        for p in dried {
+            self.mire_cells.remove(&p);
+            self.obstacles.remove(&p);
+        }
+        for ticks in self.mire_cells.values_mut() {
+            *ticks = ticks.saturating_sub(1);
+        }
+        // Periodic settling: at tick 200 of every 250-tick cycle all mire dries up
+        if self.tick_counter == 200 {
+            let doomed: Vec<Point> = self.mire_cells.keys().copied().collect();
+            if !doomed.is_empty() {
+                for p in doomed {
+                    self.mire_cells.remove(&p);
+                    self.obstacles.remove(&p);
+                }
+                self.mire_warnings.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The mire settles!".to_string(),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the manage_* calls,
+        // so their current direction is the one they will move in this tick; the bots are
+        // popped afterwards, so for them the queued direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        // Telegraph: MIRE_TELEGRAPH_TICKS before a wave the threatened cells crack
+        if self.tick_counter % Self::MIRE_PERIOD == Self::MIRE_TELEGRAPH_TICKS % Self::MIRE_PERIOD {
+            self.mire_warnings.clear();
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            let margin = self.safe_zone_margin;
+            let min_x = 1 + margin;
+            let max_x = (self.width - 1).saturating_sub(margin).max(min_x + 1);
+            let min_y = 1 + margin;
+            let max_y = (self.height - 1).saturating_sub(margin).max(min_y + 1);
+            let mut candidates: Vec<Point> = Vec::new();
+            for x in min_x..max_x {
+                for y in min_y..max_y {
+                    let p = Point { x, y };
+                    if !self.mire_cell_blocked(p, p1_next, p2_next, &bot_next)
+                        && !self.mire_warnings.contains(&p)
+                        && p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) >= 5
+                    {
+                        candidates.push(p);
+                    }
+                }
+            }
+            for _ in 0..Self::MIRE_PER_WAVE {
+                if candidates.is_empty() {
+                    break;
+                }
+                let idx = self.rng.gen_range(0..candidates.len());
+                let p = candidates.swap_remove(idx);
+                self.mire_warnings.insert(p);
+            }
+            return;
+        }
+        // Scheduled wave: every MIRE_PERIOD-th tick the warned cells sink into pools
+        if !self.tick_counter.is_multiple_of(Self::MIRE_PERIOD) {
+            return;
+        }
+        self.mire_waves += 1;
+        let warned: Vec<Point> = self.mire_warnings.drain().collect();
+        let mut sunk = 0u32;
+        for cell in warned {
+            if self.mire_cell_blocked(cell, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            // Re-sinking an already-pooled cell just refreshes its timer
+            self.mire_cells.insert(cell, Self::MIRE_POOL_TICKS);
+            self.obstacles.insert(cell);
+            sunk += 1;
+        }
+        if sunk > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The mire claims {sunk} cell(s)!"),
+                crate::color::Color::DarkYellow,
+            );
+        }
+    }
+    // Whether a mire cell is unfair to sink on: never on a snake's body, on the
+    // cell any snake is about to enter this tick, or on any entity.
+    fn mire_cell_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.mines.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.geyser_vents.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.tramp_pads.contains(&p)
+            || self.quicksand.contains(&p)
+            || self.crumble_tiles.contains(&p)
+    }
+    fn spawn_mire_warnings(&mut self) {
+        self.mire_cells.clear();
+        self.mire_warnings.clear();
+        self.mire_waves = 0;
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        let margin = self.safe_zone_margin;
+        let min_x = 1 + margin;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x + 1);
+        let min_y = 1 + margin;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y + 1);
+        let mut candidates: Vec<Point> = Vec::new();
+        for x in min_x..max_x {
+            for y in min_y..max_y {
+                let p = Point { x, y };
+                if !self.mire_cell_blocked(p, p1_next, None, &bot_next)
+                    && !self.mire_warnings.contains(&p)
+                    && p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) >= 5
+                {
+                    candidates.push(p);
+                }
+            }
+        }
+        for _ in 0..Self::MIRE_INITIAL_WARNINGS {
+            if candidates.is_empty() {
+                break;
+            }
+            let idx = self.rng.gen_range(0..candidates.len());
+            let p = candidates.swap_remove(idx);
+            self.mire_warnings.insert(p);
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -10232,7 +10462,8 @@ impl Game {
             | GameMode::Magnet
             | GameMode::Gale
             | GameMode::Comet
-            | GameMode::Elevator => {
+            | GameMode::Elevator
+            | GameMode::Mire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10366,6 +10597,7 @@ impl Game {
             || self.mode == GameMode::Gale
             || self.mode == GameMode::Comet
             || self.mode == GameMode::Elevator
+            || self.mode == GameMode::Mire
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -10466,6 +10698,7 @@ impl Game {
         || self.mode == GameMode::Gale
         || self.mode == GameMode::Comet
         || self.mode == GameMode::Elevator
+        || self.mode == GameMode::Mire
         {
             &self.snake
         } else {
@@ -10636,6 +10869,9 @@ impl Game {
         self.quicksand_sink = 0;
         self.quicksand_sink2 = 0;
         self.quicksand_bot_sinks.clear();
+        self.mire_cells.clear();
+        self.mire_warnings.clear();
+        self.mire_waves = 0;
         self.crumble_tiles.clear();
         self.crumble_collapses = 0;
         self.crumble_cracks = 0;
@@ -11249,6 +11485,9 @@ impl Game {
         }
         if self.mode == GameMode::Quicksand {
             self.spawn_initial_quicksand();
+        }
+        if self.mode == GameMode::Mire {
+            self.spawn_mire_warnings();
         }
         if self.mode == GameMode::Crumble {
             self.spawn_crumble_cracks();
@@ -11942,7 +12181,8 @@ impl Game {
             | GameMode::Magnet
             | GameMode::Gale
             | GameMode::Comet
-            | GameMode::Elevator => {
+            | GameMode::Elevator
+            | GameMode::Mire => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12685,6 +12925,9 @@ impl Game {
             self.quicksand_sink = state.quicksand_sink;
             self.quicksand_sink2 = state.quicksand_sink2;
             self.quicksand_bot_sinks = state.quicksand_bot_sinks;
+            self.mire_cells = state.mire_cells;
+            self.mire_warnings = state.mire_warnings;
+            self.mire_waves = state.mire_waves;
             self.crumble_tiles = state.crumble_tiles;
             self.crumble_collapses = state.crumble_collapses;
             self.crumble_cracks = state.crumble_cracks;
@@ -12936,6 +13179,9 @@ impl Game {
             quicksand_sink: self.quicksand_sink,
             quicksand_sink2: self.quicksand_sink2,
             quicksand_bot_sinks: self.quicksand_bot_sinks.clone(),
+            mire_cells: self.mire_cells.clone(),
+            mire_warnings: self.mire_warnings.clone(),
+            mire_waves: self.mire_waves,
             crumble_tiles: self.crumble_tiles.clone(),
             crumble_collapses: self.crumble_collapses,
             crumble_cracks: self.crumble_cracks,
@@ -15820,6 +16066,7 @@ impl Game {
             && self.mode != GameMode::Domino
             && self.mode != GameMode::Comet
             && self.mode != GameMode::Elevator
+            && self.mode != GameMode::Mire
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -16803,6 +17050,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_mire();
         self.manage_elevator();
         self.manage_polarity();
         self.manage_blink();
@@ -18103,6 +18351,7 @@ impl Game {
             || self.mode == GameMode::Gale
             || self.mode == GameMode::Comet
             || self.mode == GameMode::Elevator
+            || self.mode == GameMode::Mire
             {
                 self.handle_death("You Died!");
             } else {
@@ -18503,6 +18752,10 @@ impl Game {
         // Keep the spike/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::SpikePit {
             self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
+        }
+        // Keep the mire/obstacle mirror exact even if something else cleared obstacles mid-tick
+        if self.mode == GameMode::Mire {
+            self.mire_cells.retain(|p, _| self.obstacles.contains(p));
         }
     }
     fn check_body_collisions(
@@ -19575,6 +19828,30 @@ if self.mode == GameMode::Steamroller {
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
             );
+        }
+        if self.mode == GameMode::Mire {
+            // Eating food stirs the mire: pools next to the eaten cell dry up
+            let mut stirred = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.mire_cells.remove(&np).is_some() {
+                    self.obstacles.remove(&np);
+                    stirred += 1;
+                }
+            }
+            if stirred > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Stirred {stirred} pool!"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
         }
         if self.mode == GameMode::Elevator {
             // Eating food overcharges the lifts: cooldown-free rides for a while
@@ -21476,6 +21753,14 @@ if self.mode == GameMode::Steamroller {
             if self.mode == GameMode::PhaseShift && self.phase_gates.contains(&final_p) {
                 return false;
             }
+            // Mire pools are obstacles, and the telegraphed cracks are treated
+            // as walls too, so the bot never plans onto ground that is about to
+            // give way.
+            if self.mode == GameMode::Mire
+                && (self.mire_cells.contains_key(&final_p) || self.mire_warnings.contains(&final_p))
+            {
+                return false;
+            }
             if self.poison_food.is_some_and(|(pp, _)| pp == final_p) {
                 return false;
             }
@@ -22385,6 +22670,16 @@ if self.mode == GameMode::Steamroller {
     pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
     /// Ticks of overcharge granted by eating food in Trampoline mode
     pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
+    /// Ticks between scheduled mire waves in `GameMode::Mire`.
+    pub const MIRE_PERIOD: u32 = 6;
+    /// Ticks before a wave that threatened cells are telegraphed as cracks.
+    pub const MIRE_TELEGRAPH_TICKS: u32 = 3;
+    /// Ticks a mire pool stays lethal in `GameMode::Mire`.
+    pub const MIRE_POOL_TICKS: u32 = 24;
+    /// Fresh threatened cells telegraphed per wave in `GameMode::Mire`.
+    pub const MIRE_PER_WAVE: usize = 3;
+    /// Threatened cells seeded on reset in `GameMode::Mire`.
+    pub const MIRE_INITIAL_WARNINGS: usize = 4;
     /// Row gap range of an elevator shaft in Elevator mode
     pub const ELEV_MIN_GAP: u16 = 4;
     pub const ELEV_MAX_GAP: u16 = 10;

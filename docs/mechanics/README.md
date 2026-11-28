@@ -719,3 +719,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Lifts: <count> | Rides: <count> | Shifts: <count>` plus `Overcharged: <ticks>` while overcharged (`elev_str`).
 - **Persistence:** `elev_shafts`, `elev_cooldowns`, `elev_rides`, `elev_shuffles`, and `elev_overcharge` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_elevator_mode.rs](../../tests/test_elevator_mode.rs).
+
+## Mire Mode
+
+`GameMode::Mire` (menu entry "Mire Mode", entry 131 in the main menu) is a survival mode played on treacherous ground. The weather is pinned to `Weather::Clear` (the ambient weather re-roll skips this mode) so the cracks and pools are always visible:
+
+- **Telegraph:** every `MIRE_PERIOD` (6) ticks, `MIRE_TELEGRAPH_TICKS` (3) ticks before the wave (tick % 6 == 3), `manage_mire` clears `mire_warnings` and cracks up to `MIRE_PER_WAVE` (3) fresh cells chosen at random from the fair candidate cells, at least 5 cells (Manhattan) from the spawn. On reset, `spawn_mire_warnings` seeds `MIRE_INITIAL_WARNINGS` (4) such cracks.
+- **Scheduled wave:** every 6th tick the warned cells sink: each becomes a mire pool (`mire_cells`, cell -> remaining ticks) and is mirrored into `obstacles`, so entering one kills through the standard obstacle path. Waves are counted in `mire_waves` ("The mire claims N cell(s)!").
+- **Fairness:** a cell never sinks on a snake's body, on the cell any snake is about to enter this tick (player/player 2 use their current direction, bots their queued direction), or on any entity or hazard tile (`mire_cell_blocked`) — so a wave can never cheaply kill anyone. Cracks render as dark-yellow `.` (terminal) / dark-brown cells (web); pools as yellow `~` / brown cells.
+- **Drying:** each pool counts down one tick per tick and dries up after `MIRE_POOL_TICKS` (24) ticks, leaving open ground (removed from both `mire_cells` and `obstacles`). At tick 200 of every 250-tick cycle all mire dries up and all cracks clear ("The mire settles!"). If something else clears obstacles mid-tick (e.g. a Bomb), stale mire records are pruned on the next tick so the mirror stays exact.
+- **Eating food:** stirs the mire — every pool orthogonally adjacent to the eaten cell dries up ("Stirred N pool!").
+- **Autopilot:** `is_safe_final_p` rejects both active pools and telegraphed cracks as hard constraints, so the bot never plans onto ground that is up or about to give way.
+- **Status bar:** `Mire: <count> | Waves: <count>` (`mire_bar`).
+- **Persistence:** `mire_cells`, `mire_warnings`, and `mire_waves` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_mire_mode.rs](../../tests/test_mire_mode.rs).

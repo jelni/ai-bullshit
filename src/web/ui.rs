@@ -318,6 +318,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw mire cracks and pools (Mire mode)
+    if game.mode == crate::game::GameMode::Mire {
+        ctx.set_fill_style_str("#6B4F1D"); // Dark brown cracks
+        for crack in &game.mire_warnings {
+            if crack.x < game.width
+                && crack.y < game.height
+                && is_visible(f64::from(crack.x), f64::from(crack.y))
+            {
+                ctx.fill_rect(
+                    f64::from(crack.x) * cell_size,
+                    f64::from(crack.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#8B5A2B"); // Brown pools
+        for pool in game.mire_cells.keys() {
+            if pool.x < game.width
+                && pool.y < game.height
+                && is_visible(f64::from(pool.x), f64::from(pool.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pool.x) * cell_size,
+                    f64::from(pool.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

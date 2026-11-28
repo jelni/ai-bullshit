@@ -189,6 +189,12 @@ pub struct SaveState {
     #[serde(default)]
     pub elev_overcharge: u32,
     #[serde(default, with = "super::map_as_pairs")]
+    pub mire_cells: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub mire_warnings: HashSet<Point>,
+    #[serde(default)]
+    pub mire_waves: u32,
+    #[serde(default, with = "super::map_as_pairs")]
     pub magnet_poles: std::collections::HashMap<Point, bool>,
     #[serde(default)]
     pub magnet_pulses: u32,

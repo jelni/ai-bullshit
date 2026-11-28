@@ -713,6 +713,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Gale Mode",
         "Comet Mode",
         "Elevator Mode",
+        "Mire Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
@@ -2036,6 +2037,24 @@ fn draw_entities<W: Write>(
             if is_visible(pad.x, pad.y) {
                 stdout.queue(cursor::MoveTo(pad.x, pad.y))?;
                 write!(stdout, "+")?;
+            }
+        }
+    }
+
+    // Draw mire cracks and pools (Mire mode)
+    if game.mode == crate::game::GameMode::Mire {
+        stdout.queue(SetForegroundColor(Color::DarkYellow))?;
+        for crack in &game.mire_warnings {
+            if is_visible(crack.x, crack.y) {
+                stdout.queue(cursor::MoveTo(crack.x, crack.y))?;
+                write!(stdout, ".")?;
+            }
+        }
+        stdout.queue(SetForegroundColor(Color::Yellow))?;
+        for pool in game.mire_cells.keys() {
+            if is_visible(pool.x, pool.y) {
+                stdout.queue(cursor::MoveTo(pool.x, pool.y))?;
+                write!(stdout, "~")?;
             }
         }
     }
@@ -3552,6 +3571,15 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let mire_bar = if game.mode == crate::game::GameMode::Mire {
+        format!(
+            " | Mire: {} | Waves: {}",
+            game.mire_cells.len(),
+            game.mire_waves
+        )
+    } else {
+        String::new()
+    };
     let magnet_str = if game.mode == crate::game::GameMode::Magnet {
         format!(
             " | Poles: {} | Pulses: {} | Relocations: {} | Flips: {}",
@@ -3805,7 +3833,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}{polarity_str}{blink_str}{crossfire_str}{quicksand_str}{domino_str}{magnet_str}{gale_str}{comet_str}{elev_str}{mire_bar}"
     )?;
 
     if !game.bosses.is_empty() {
