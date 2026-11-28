@@ -911,6 +911,10 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.reset();
             },
             141 => {
+                game.mode = game::GameMode::Sinkhole;
+                game.reset();
+            },
+            142 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
             },
@@ -920,11 +924,11 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 141;
+                game.menu_selection = 142;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 141 {
+            if game.menu_selection < 142 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 139;

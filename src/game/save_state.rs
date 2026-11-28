@@ -353,6 +353,12 @@ pub struct SaveState {
     #[serde(default)]
     pub tar_spreads: u32,
     #[serde(default)]
+    pub sinkholes: HashSet<Point>,
+    #[serde(default)]
+    pub sinkhole_warnings: HashSet<Point>,
+    #[serde(default)]
+    pub sinkhole_collapses: u32,
+    #[serde(default)]
     pub lava_tiles: HashSet<Point>,
     #[serde(default)]
     pub volcano_vents: Vec<Point>,

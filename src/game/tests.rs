@@ -945,6 +945,26 @@ mod tests {
         assert_eq!(loaded.comet_deflections, 7);
         let _ = std::fs::remove_file(file_path);
     }
+    #[test]
+    fn test_save_and_load_sinkhole_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Sinkhole;
+        game.reset();
+        game.sinkholes.clear();
+        game.sinkholes.insert(Point { x: 12, y: 9 });
+        game.sinkhole_warnings.insert(Point { x: 20, y: 20 });
+        game.sinkhole_collapses = 42;
+        let file_path = "savegame_test_sinkhole.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Sinkhole);
+        assert!(loaded.sinkholes.contains(&Point { x: 12, y: 9 }));
+        assert!(loaded.sinkhole_warnings.contains(&Point { x: 20, y: 20 }));
+        assert_eq!(loaded.sinkhole_collapses, 42);
+        let _ = std::fs::remove_file(file_path);
+    }
     fn test_save_and_load_auto_pilot() {
         let mut game = Game::new(20, 20, false, '#', Theme::Dark, Difficulty::Normal);
         game.auto_pilot = true;
@@ -2204,7 +2224,7 @@ fn test_astar_pathfind_uses_portals() {
         }
     }
 
-    assert!(reached, "BFS should reach the target using portals");
+    assert!(reached, "BFS should reach the sinkholeget using portals");
     assert!(path_len < 10, "Path should be short, indicating it used the portal");
 }
 

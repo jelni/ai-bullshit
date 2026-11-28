@@ -664,6 +664,38 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw sinkhole warnings and pits (Sinkhole mode)
+    if game.mode == crate::game::GameMode::Sinkhole {
+        ctx.set_fill_style_str("#FFFF00"); // Yellow bubbling warnings
+        for bubble in &game.sinkhole_warnings {
+            if bubble.x < game.width
+                && bubble.y < game.height
+                && is_visible(f64::from(bubble.x), f64::from(bubble.y))
+            {
+                ctx.fill_rect(
+                    f64::from(bubble.x) * cell_size,
+                    f64::from(bubble.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#404040"); // Dark grey pits
+        for hole in &game.sinkholes {
+            if hole.x < game.width
+                && hole.y < game.height
+                && is_visible(f64::from(hole.x), f64::from(hole.y))
+            {
+                ctx.fill_rect(
+                    f64::from(hole.x) * cell_size,
+                    f64::from(hole.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw illusory mirage food (Mirage mode)
     if game.mode == crate::game::GameMode::Mirage {
         ctx.set_fill_style_str("#DA70D6"); // Orchid mirages

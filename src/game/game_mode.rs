@@ -116,4 +116,5 @@ pub enum GameMode {
     Decay,
     Erosion,
     Induction,
+    Sinkhole,
 }

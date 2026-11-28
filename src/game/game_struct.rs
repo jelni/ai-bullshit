@@ -307,6 +307,9 @@ pub struct Game {
     pub domino_falls: u32,
     pub domino_drops: u32,
     pub domino_reshuffles: u32,
+    pub sinkholes: HashSet<Point>,
+    pub sinkhole_warnings: HashSet<Point>,
+    pub sinkhole_collapses: u32,
 
     pub rocks: Vec<LandslideRock>,
     pub landslide_rolls: u32,
@@ -942,6 +945,9 @@ impl Game {
             domino_falls: 0,
             domino_drops: 0,
             domino_reshuffles: 0,
+            sinkholes: HashSet::new(),
+            sinkhole_warnings: HashSet::new(),
+            sinkhole_collapses: 0,
         }
     }
     #[must_use]
@@ -1276,6 +1282,9 @@ impl Game {
             domino_falls: self.domino_falls,
             domino_drops: self.domino_drops,
             domino_reshuffles: self.domino_reshuffles,
+            sinkholes: self.sinkholes.clone(),
+            sinkhole_warnings: self.sinkhole_warnings.clone(),
+            sinkhole_collapses: self.sinkhole_collapses,
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
@@ -1601,6 +1610,9 @@ impl Game {
                 self.domino_falls = state.domino_falls;
                 self.domino_drops = state.domino_drops;
                 self.domino_reshuffles = state.domino_reshuffles;
+                self.sinkholes = state.sinkholes;
+                self.sinkhole_warnings = state.sinkhole_warnings;
+                self.sinkhole_collapses = state.sinkhole_collapses;
 
                 self.rocks = state.rocks;
                 self.landslide_rolls = state.landslide_rolls;
@@ -3855,6 +3867,219 @@ impl Game {
             format!("The dominoes topple! ({fallen})"),
             crate::color::Color::DarkYellow,
         );
+    }
+    /// Max number of sinkhole cells on the board at once in `GameMode::Sinkhole` (10%).
+    fn sinkhole_cap(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 10).max(1)
+    }
+    // Whether a cell is blocked for a sinkhole: never on a snake's body, on the cell
+    // any snake is about to enter this tick, or on any entity or hazard, so a
+    // collapse can never swallow anyone cheaply.
+    fn sinkhole_cell_blocked(
+        &self,
+        p: Point,
+        p1_next: Point,
+        p2_next: Option<Point>,
+        bot_next: &[Point],
+    ) -> bool {
+        p == p1_next
+            || p2_next == Some(p)
+            || bot_next.contains(&p)
+            || self.obstacles.contains(&p)
+            || self.sinkholes.contains(&p)
+            || self.mines.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| p == pu.location)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.lightning_column.is_some_and(|col| p.x == col)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.xp_gems.contains(&p)
+            || self.painted_tiles.contains_key(&p)
+            || self.equipment_boxes.contains(&p)
+            || self.crops.iter().any(|c| c.position == p)
+            || self.eggs_on_board.contains_key(&p)
+            || self.koth_zone == Some(p)
+            || self.p1_flag == Some(p)
+            || self.p2_flag == Some(p)
+            || self.resources.contains_key(&p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.ash_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.ice_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.fortress_walls.contains(&p)
+            || self.geyser_jets.contains_key(&p)
+            || self.geyser_vents.contains(&p)
+            || self.thorn_tiles.contains(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.phase_gates.contains(&p)
+            || self.mirage_foods.contains_key(&p)
+            || self.quicksand.contains(&p)
+            || self.domino_tiles.contains(&p)
+            || self.polarity_poles.contains(&p)
+            || self.blink_pads.contains(&p)
+            || self.crossfire_target == Some((p.x, p.y))
+            || self.magnet_poles.contains_key(&p)
+            || self.crumble_tiles.contains(&p)
+    }
+    fn manage_sinkhole(&mut self) {
+        if self.mode != GameMode::Sinkhole {
+            return;
+        }
+        // The skies stay clear so the bubbling warnings and sinkholes are always visible
+        self.weather = Weather::Clear;
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale sinkhole records
+        self.sinkholes.retain(|p| self.obstacles.contains(p));
+        // Periodic cool-down: at tick 200 of every 250-tick cycle all sinkholes cools away
+        if self.tick_counter == 200 {
+            let cooled: Vec<Point> = self.sinkholes.drain().collect();
+            if !cooled.is_empty() {
+                for p in &cooled {
+                    self.obstacles.remove(p);
+                }
+                self.sinkhole_warnings.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The ground heals!".to_string(),
+                    crate::color::Color::DarkGrey,
+                );
+            }
+            return;
+        }
+        // The player's and player 2's direction queues are popped before the manage_* calls,
+        // so their current direction is the one they will move in this tick; the bots are
+        // popped afterwards, so for them the queued direction is the cell they are about to enter.
+        let p1_next = Self::calculate_next_head_dir(self.snake.head(), self.snake.direction);
+        let p2_next = self
+            .player2
+            .as_ref()
+            .map(|p2| Self::calculate_next_head_dir(p2.head(), p2.direction));
+        let bot_next: Vec<Point> = self
+            .bots
+            .iter()
+            .map(|b| {
+                let d = b.direction_queue.front().copied().unwrap_or(b.direction);
+                Self::calculate_next_head_dir(b.head(), d)
+            })
+            .collect();
+        // Telegraph: SINKHOLE_TELEGRAPH_TICKS before a collapse the threatened cells bubble
+        if self.tick_counter % 6 == Self::SINKHOLE_TELEGRAPH_TICKS % 6 {
+            self.sinkhole_warnings.clear();
+            for _ in 0..Self::SINKHOLE_PER_COLLAPSE {
+                if self.sinkholes.len() + self.sinkhole_warnings.len() >= self.sinkhole_cap() {
+                    break;
+                }
+                let taken_warnings = std::mem::take(&mut self.sinkhole_warnings);
+                let avoid_hole = |p: &Point| taken_warnings.contains(p);
+                let candidate = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_hole,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                );
+                self.sinkhole_warnings = taken_warnings;
+                if let Some(p) = candidate
+                    && !self.sinkhole_cell_blocked(p, p1_next, p2_next, &bot_next)
+                {
+                    self.sinkhole_warnings.insert(p);
+                }
+            }
+            return;
+        }
+        // Scheduled collapse: every 6th tick the telegraphed cells give way (re-checked
+        // for fairness at collapse time, so a snake that moved onto a warning is spared)
+        if !self.tick_counter.is_multiple_of(6) {
+            return;
+        }
+        self.sinkhole_collapses += 1;
+        let warnings: Vec<Point> = self.sinkhole_warnings.drain().collect();
+        let mut collapsed = 0u32;
+        for cell in warnings {
+            if self.sinkhole_cell_blocked(cell, p1_next, p2_next, &bot_next) {
+                continue;
+            }
+            if self.sinkholes.len() >= self.sinkhole_cap() {
+                break;
+            }
+            self.sinkholes.insert(cell);
+            self.obstacles.insert(cell);
+            collapsed += 1;
+        }
+        if collapsed > 0 {
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The sinkhole collapses! (+{collapsed})"),
+                crate::color::Color::DarkGrey,
+            );
+        }
+    }
+    fn spawn_sinkholes(&mut self) {
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        for _ in 0..Self::SINKHOLE_SEED {
+            let avoid_hole = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.sinkholes.contains(p)
+                    || self.sinkhole_warnings.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+            };
+            if let Some(pos) = Self::get_random_empty_point(
+                self.width,
+                self.height,
+                &self.snake,
+                avoid_hole,
+                &mut self.rng,
+                0,
+            ) {
+                self.sinkholes.insert(pos);
+                self.obstacles.insert(pos);
+                self.spawn_particles(
+                    f32::from(pos.x),
+                    f32::from(pos.y),
+                    10,
+                    crate::color::Color::DarkGrey,
+                    '"',
+                );
+            }
+        }
     }
     fn mirage_snake_next_cells(&self) -> (Point, Option<Point>, Vec<Point>) {
         // The player's and player 2's direction queues are popped before the
@@ -12538,7 +12763,8 @@ impl Game {
             | GameMode::Maelstrom
             | GameMode::Decay 
             | GameMode::Erosion
-            | GameMode::Induction => {
+            | GameMode::Induction
+            | GameMode::Sinkhole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12681,6 +12907,7 @@ impl Game {
             || self.mode == GameMode::Maelstrom
             || self.mode == GameMode::Decay
             || self.mode == GameMode::Induction
+            || self.mode == GameMode::Sinkhole
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -12790,6 +13017,7 @@ impl Game {
         || self.mode == GameMode::Maelstrom
         || self.mode == GameMode::Decay
         || self.mode == GameMode::Induction
+        || self.mode == GameMode::Sinkhole
         {
             &self.snake
         } else {
@@ -13005,6 +13233,9 @@ impl Game {
         self.domino_falls = 0;
         self.domino_drops = 0;
         self.domino_reshuffles = 0;
+        self.sinkholes.clear();
+        self.sinkhole_warnings.clear();
+        self.sinkhole_collapses = 0;
         self.boulders.clear();
         self.avalanche_rolls = 0;
 
@@ -13743,6 +13974,9 @@ impl Game {
         if self.mode == GameMode::Domino {
             self.spawn_initial_dominoes();
         }
+        if self.mode == GameMode::Sinkhole {
+            self.spawn_sinkholes();
+        }
         self.bonus_food = None;
         self.poison_food = None;
         if self.skin == '🚀' {
@@ -13951,6 +14185,9 @@ impl Game {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Electro {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Sinkhole {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -14401,7 +14638,8 @@ impl Game {
             | GameMode::Maelstrom
             | GameMode::Decay 
             | GameMode::Erosion
-            | GameMode::Induction => {
+            | GameMode::Induction
+            | GameMode::Sinkhole => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -14470,6 +14708,7 @@ impl Game {
         self.thorn_tiles.retain(|p| self.obstacles.contains(p));
         self.domino_tiles.retain(|p| self.obstacles.contains(p));
         self.sludge_tiles.retain(|p| self.obstacles.contains(p));
+        self.sinkholes.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
         self.decay_pits.retain(|p| self.obstacles.contains(p));
@@ -15191,6 +15430,9 @@ impl Game {
             self.domino_falls = state.domino_falls;
             self.domino_drops = state.domino_drops;
             self.domino_reshuffles = state.domino_reshuffles;
+            self.sinkholes = state.sinkholes;
+            self.sinkhole_warnings = state.sinkhole_warnings;
+            self.sinkhole_collapses = state.sinkhole_collapses;
             self.lava_tiles = state.lava_tiles;
             self.volcano_vents = state.volcano_vents;
             self.volcano_eruptions = state.volcano_eruptions;
@@ -15459,6 +15701,9 @@ impl Game {
             domino_falls: self.domino_falls,
             domino_drops: self.domino_drops,
             domino_reshuffles: self.domino_reshuffles,
+            sinkholes: self.sinkholes.clone(),
+            sinkhole_warnings: self.sinkhole_warnings.clone(),
+            sinkhole_collapses: self.sinkhole_collapses,
 
             rocks: self.rocks.clone(),
             landslide_rolls: self.landslide_rolls,
@@ -18378,6 +18623,7 @@ impl Game {
             && self.mode != GameMode::Electro
             && self.mode != GameMode::Maelstrom
             && self.mode != GameMode::Decay
+            && self.mode != GameMode::Sinkhole
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -19380,6 +19626,7 @@ impl Game {
         self.manage_quicksand();
         self.manage_tar_pit();
         self.manage_crumble();
+        self.manage_sinkhole();
 
         self.manage_landslide();
         self.manage_comet();
@@ -19675,7 +19922,7 @@ impl Game {
             }
         }
         // In Gale mode the wind gusts the head one extra cell along the gale
-        // direction (a braced player resists the gust); the target must be fair
+        // direction (a braced player resists the gust); the sinkholeget must be fair
         // and unclaimed, so a gust can never kill
         if self.mode == GameMode::Gale {
             if !hit_wall1 {
@@ -20793,6 +21040,7 @@ impl Game {
             || self.mode == GameMode::Maelstrom
             || self.mode == GameMode::Decay
             || self.mode == GameMode::Induction
+            || self.mode == GameMode::Sinkhole
             {
                 self.handle_death("You Died!");
             } else {
@@ -21202,6 +21450,10 @@ impl Game {
         // Keep the tar/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::TarPit {
             self.tar_pits.retain(|p| self.obstacles.contains(p));
+        }
+        // Keep the sinkhole/obstacle mirror exact even if something else cleared obstacles mid-tick
+        if self.mode == GameMode::Sinkhole {
+            self.sinkholes.retain(|p| self.obstacles.contains(p));
         }
     }
     fn check_body_collisions(
@@ -21984,6 +22236,30 @@ if self.mode == GameMode::Steamroller {
                     f32::from(final_head.y),
                     format!("Braced {braced} domino(es)!"),
                     crate::color::Color::DarkYellow,
+                );
+            }
+        }
+        if self.mode == GameMode::Sinkhole {
+            // Eating food clears the sinkhole around the eaten cell
+            let mut cleared = 0u32;
+            for dir in [
+                Direction::Up,
+                Direction::Down,
+                Direction::Left,
+                Direction::Right,
+            ] {
+                let np = Self::calculate_next_head_dir(final_head, dir);
+                if self.sinkholes.remove(&np) {
+                    self.obstacles.remove(&np);
+                    cleared += 1;
+                }
+            }
+            if cleared > 0 {
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Shored up {cleared} sinkhole(s)!"),
+                    crate::color::Color::DarkGrey,
                 );
             }
         }
@@ -24775,7 +25051,7 @@ if self.mode == GameMode::Sludge {
                                     // Instead, we just know it will do something unpredictable, but the clones spawn at random points.
                                     // We'll just continue so we don't treat its axes as a laser threat.
                                 } else if boss.kind == BossType::Mage {
-                                    // The mage will spawn a meteor exactly at the target's current head.
+                                    // The mage will spawn a meteor exactly at the sinkholeget's current head.
                                     // So if we are considering staying at or moving to a point that is the same as
                                     // the CURRENT head of the player/bot being targeted, it's dangerous.
                                     // However, the meteor takes 15 ticks to hit.
@@ -24790,7 +25066,7 @@ if self.mode == GameMode::Sludge {
                                     };
 
                                     // We don't know the exact time it will take for the bot to reach `final_p`.
-                                    // If `final_p` IS the target_pos, a meteor is about to be spawned there.
+                                    // If `final_p` IS the sinkholeget_pos, a meteor is about to be spawned there.
                                     // Better to avoid `target_pos` right now to ensure the bot paths away from it.
                                     if final_p == target_pos {
                                         return false;
@@ -25461,6 +25737,12 @@ if self.mode == GameMode::Sludge {
     pub const INDUCTION_RELOC_PERIOD: u32 = 30;
     /// Ticks of magnet shield granted by eating food in Induction mode
     pub const INDUCTION_SHIELD_TICKS: u32 = 12;
+    /// Sinkhole patches seeded at reset in `GameMode::Sinkhole`.
+    pub const SINKHOLE_SEED: usize = 3;
+    /// Cells that collapse into a sinkhole per scheduled collapse in `GameMode::Sinkhole`.
+    pub const SINKHOLE_PER_COLLAPSE: usize = 2;
+    /// Ticks a sinkhole collapse telegraphs its bubbling cells beforehand.
+    pub const SINKHOLE_TELEGRAPH_TICKS: u32 = 3;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
@@ -25764,7 +26046,7 @@ if self.mode == GameMode::Sludge {
     }
     /// Targets that a rival snake is predicted to reach strictly before the
     /// mover starting at `start`, either by wrap/portal-aware travel distance
-    /// or because the rival's committed head path crosses the target sooner.
+    /// or because the rival's committed head path crosses the sinkholeget sooner.
     /// A target sitting on a rival's current head is never contested (those
     /// are hunt targets, e.g. Zombie mode). Empty while invincible or when no
     /// rivals exist, so single-player behavior is unchanged.
