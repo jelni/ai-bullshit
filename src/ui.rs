@@ -711,8 +711,8 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Domino Mode",
         "Magnet Mode",
         "Gale Mode",
-        "Elevator Mode",
         "Comet Mode",
+        "Elevator Mode",
         "Quit",
     ];
     for (i, item) in menu_items.iter().enumerate() {
