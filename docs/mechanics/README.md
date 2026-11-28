@@ -877,3 +877,19 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Status bar:** `Poles: <count> | Shoves: <count> | Flips: <count> | Shifts: <count>` (`dipole_str`).
 - **Persistence:** `dipole_poles`, `dipole_shoves`, `dipole_flips`, and `dipole_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
 - **Tests:** see [tests/test_dipole_mode.rs](../../tests/test_dipole_mode.rs) and the save/load unit test `test_save_and_load_dipole_mode` in `src/game/tests.rs`.
+
+## Blight Mode
+
+`GameMode::Blight` (menu entry "Blight Mode", entry 143 in the main menu) is a survival hazard mode where patches of blight slowly spread across the board. Unlike the Quicksand bog (walkable but sticky) and the Mire pools, blight is a **hard wall**:
+
+- **Blight tiles:** `blight_tiles` is a `HashSet<Point>` mirrored into `obstacles`, so every blight cell blocks movement like a wall and is lethal on entry (magenta `▓` on the terminal / medium-purple `#9370DB` cell on the web).
+- **Seeding:** on reset `spawn_blight_patches` places `BLIGHT_SEED_PATCHES` (3) patches of up to `BLIGHT_PATCH_SIZE` (3) cells each on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, or the food.
+- **Scheduled spread:** every `BLIGHT_SPREAD_PERIOD` (6th) tick `manage_blight` → `blight_spread` lets each patch creep onto one random fair adjacent cell (60% chance per patch) and occasionally spawns a brand-new patch, all capped at `width*height/BLIGHT_MAX_DIVISOR` (20% of the board). Spreads are counted in `blight_spreads` ("The blight spreads! (+N)").
+- **Fairness:** `blight_cell_fair` rejects any cell outside the safe-zone margin, on an obstacle (which includes existing blight), on any snake body, on the cell any snake is about to enter this tick (`singularity_next_heads`), or on any entity/hazard tile — so the blight can never spawn on or under a snake and never cheaply kill.
+- **Dry-up:** at tick 200 of every 250-tick cycle all blight withers — removed from both `blight_tiles` and `obstacles` ("The blight withers!").
+- **Draining:** eating food calls `blight_cleanse_at(final_head)`, clearing the four orthogonally adjacent blight cells (`blight_clears += N`, "Cleansed N blight!").
+- **Weather:** pinned to `Weather::Clear` every tick (and the ambient weather re-roll is skipped) so the blight is always visible.
+- **Autopilot:** because blight lives in `obstacles`, the A* search and the verified-safe `is_safe_final_p` checks treat it as a hard obstacle, so the bot re-plans around the spreading blight each tick and survives natively.
+- **Status bar:** `Blight: <count> | Spreads: <count> | Clears: <count>` (`blight_hud`).
+- **Persistence:** `blight_tiles`, `blight_spreads`, and `blight_clears` are stored in `SaveState` and `HistoryState` (save/load and time-rewind).
+- **Tests:** see [tests/test_blight_mode.rs](../../tests/test_blight_mode.rs).

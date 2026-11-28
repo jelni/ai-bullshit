@@ -555,6 +555,24 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw blight (Blight mode)
+    if game.mode == crate::game::GameMode::Blight {
+        ctx.set_fill_style_str("#9370DB"); // Medium purple blight
+        for cell in &game.blight_tiles {
+            if cell.x < game.width
+                && cell.y < game.height
+                && is_visible(f64::from(cell.x), f64::from(cell.y))
+            {
+                ctx.fill_rect(
+                    f64::from(cell.x) * cell_size,
+                    f64::from(cell.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders

@@ -220,6 +220,12 @@ pub struct SaveState {
     pub mire_warnings: HashSet<Point>,
     #[serde(default)]
     pub mire_waves: u32,
+    #[serde(default)]
+    pub blight_tiles: HashSet<Point>,
+    #[serde(default)]
+    pub blight_spreads: u32,
+    #[serde(default)]
+    pub blight_clears: u32,
     #[serde(default, with = "super::map_as_pairs")]
     pub magnet_poles: std::collections::HashMap<Point, bool>,
     #[serde(default)]

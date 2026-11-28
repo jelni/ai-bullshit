@@ -918,21 +918,25 @@ fn handle_menu_input(code: KeyCode, game: &mut Game) -> bool {
                 game.mode = game::GameMode::Dipole;
                 game.reset();
                 },
-143 => {
+            143 => {
+                game.mode = game::GameMode::Blight;
+                game.reset();
+            },
+            144 => {
                 game.previous_state = Some(GameState::Menu);
                 game.state = GameState::ConfirmQuit;
-                },
+            },
             _ => {},
         },
         KeyCode::Up | KeyCode::Char('w' | 'W') => {
             if game.menu_selection > 0 {
                 game.menu_selection -= 1;
             } else {
-                game.menu_selection = 143;
+                game.menu_selection = 144;
             }
         },
         KeyCode::Down | KeyCode::Char('s' | 'S') => {
-            if game.menu_selection < 143 {
+            if game.menu_selection < 144 {
                 game.menu_selection += 1;
             } else {
                 game.menu_selection = 139;

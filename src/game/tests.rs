@@ -415,6 +415,28 @@ mod tests {
     }
 
     #[test]
+    fn test_save_and_load_blight_mode() {
+        let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        game.mode = GameMode::Blight;
+        game.reset();
+        game.blight_tiles.clear();
+        game.blight_tiles.insert(Point { x: 12, y: 9 });
+        game.obstacles.insert(Point { x: 12, y: 9 });
+        game.blight_spreads = 42;
+        game.blight_clears = 7;
+        let file_path = "savegame_test_blight.json";
+        game.save_game_to_file(file_path);
+        let mut loaded = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
+        let success = loaded.load_game_from_file(file_path);
+        assert!(success);
+        assert_eq!(loaded.mode, GameMode::Blight);
+        assert!(loaded.blight_tiles.contains(&Point { x: 12, y: 9 }));
+        assert_eq!(loaded.blight_spreads, 42);
+        assert_eq!(loaded.blight_clears, 7);
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[test]
     fn test_save_and_load_sandstorm_mode() {
         let mut game = Game::new(30, 30, false, 'x', Theme::Classic, Difficulty::Normal);
         game.mode = GameMode::Sandstorm;

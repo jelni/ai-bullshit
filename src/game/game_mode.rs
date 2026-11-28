@@ -118,4 +118,5 @@ pub enum GameMode {
     Induction,
     Sinkhole,
     Dipole,
+    Blight,
 }

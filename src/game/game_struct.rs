@@ -276,6 +276,9 @@ pub struct Game {
     pub gale_pushes: u32,
     pub gale_shifts: u32,
     pub gale_braces: u32,
+    pub blight_tiles: HashSet<Point>,
+    pub blight_spreads: u32,
+    pub blight_clears: u32,
     pub fault_tiles: std::collections::HashMap<Point, u32>,
     pub fault_pits: HashSet<Point>,
     pub fault_waves: u32,
@@ -912,6 +915,9 @@ impl Game {
             gale_pushes: 0,
             gale_shifts: 0,
             gale_braces: 0,
+            blight_tiles: HashSet::new(),
+            blight_spreads: 0,
+            blight_clears: 0,
             fault_tiles: std::collections::HashMap::new(),
             fault_pits: HashSet::new(),
             fault_waves: 0,
@@ -1277,6 +1283,9 @@ impl Game {
             gale_pushes: self.gale_pushes,
             gale_shifts: self.gale_shifts,
             gale_braces: self.gale_braces,
+            blight_tiles: self.blight_tiles.clone(),
+            blight_spreads: self.blight_spreads,
+            blight_clears: self.blight_clears,
             fault_tiles: self.fault_tiles.clone(),
             fault_pits: self.fault_pits.clone(),
             fault_waves: self.fault_waves,
@@ -1609,6 +1618,9 @@ impl Game {
                 self.gale_pushes = state.gale_pushes;
                 self.gale_shifts = state.gale_shifts;
                 self.gale_braces = state.gale_braces;
+                self.blight_tiles = state.blight_tiles;
+                self.blight_spreads = state.blight_spreads;
+                self.blight_clears = state.blight_clears;
                 self.fault_tiles = state.fault_tiles;
                 self.fault_pits = state.fault_pits;
                 self.fault_waves = state.fault_waves;
@@ -2300,6 +2312,7 @@ impl Game {
         self.acid_puddles.remove(&p);
         self.rubble_tiles.remove(&p);
         self.seismic_rubble.remove(&p);
+        self.blight_tiles.remove(&p);
     }
     fn manage_meteors(&mut self) {
         let asteroids = self.mode == GameMode::Asteroids;
@@ -8582,6 +8595,246 @@ impl Game {
             );
         }
     }
+    const fn blight_cap(&self) -> usize {
+        (self.width as usize * self.height as usize) / Self::BLIGHT_MAX_DIVISOR
+    }
+    // A cell is fair for blight to spread onto only if it is in bounds within
+    // the safe-zone margin and free of every snake (body and the cell any snake
+    // is about to enter) and every entity or hazard. Blight is mirrored into
+    // `obstacles`, so the obstacles check also rejects cells already sunk.
+    fn blight_cell_fair(&self, p: Point, next_heads: &[Point]) -> bool {
+        let margin = self.safe_zone_margin;
+        if p.x <= margin
+            || p.x >= self.width - 1 - margin
+            || p.y <= margin
+            || p.y >= self.height - 1 - margin
+        {
+            return false;
+        }
+        if self.obstacles.contains(&p)
+            || p == self.food
+            || self.bonus_food.is_some_and(|(bp, _)| p == bp)
+            || self.poison_food.is_some_and(|(pp, _)| p == pp)
+            || self.power_up.as_ref().is_some_and(|pu| pu.location == p)
+            || self.mines.contains(&p)
+            || self.black_hole == Some(p)
+            || self.tornado == Some(p)
+            || self.portals.is_some_and(|(p1, p2)| p == p1 || p == p2)
+            || self.goblin.as_ref().is_some_and(|g| g.position == p)
+            || self.bosses.iter().any(|b| b.position == p)
+            || self.companion.as_ref().is_some_and(|c| c.position == p)
+            || self.turrets.iter().any(|t| t.position == p)
+            || self.lasers.iter().any(|l| l.position == p)
+            || self.meteors.iter().any(|m| m.position == p)
+            || self.xp_gems.contains(&p)
+            || self.snake.body_map.contains_key(&p)
+            || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(&p))
+            || self.bots.iter().any(|b| b.body_map.contains_key(&p))
+            || next_heads.contains(&p)
+            || self.snow_tiles.contains(&p)
+            || self.sand_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.fire_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.seismic_rubble.contains(&p)
+            || self.rubble_tiles.contains(&p)
+            || self.ice_tiles.contains(&p)
+            || self.belt_tiles.contains_key(&p)
+            || self.pinball_bumpers.contains(&p)
+            || self.tramp_pads.contains(&p)
+            || self.phase_gates.contains(&p)
+            || self.spike_tiles.contains_key(&p)
+            || self.thorn_tiles.contains(&p)
+        {
+            return false;
+        }
+        true
+    }
+    fn blight_add(&mut self, p: Point) {
+        if self.blight_tiles.insert(p) {
+            self.obstacles.insert(p);
+        }
+    }
+    fn blight_remove(&mut self, p: Point) -> bool {
+        if self.blight_tiles.remove(&p) {
+            self.obstacles.remove(&p);
+            true
+        } else {
+            false
+        }
+    }
+    fn blight_random_fair_point(&mut self, next_heads: &[Point], min_dist: u16) -> Option<Point> {
+        let spawn_x = self.width / 2;
+        let spawn_y = self.height / 2;
+        let margin = self.safe_zone_margin;
+        let min_x = 1 + margin;
+        let max_x = (self.width - 1).saturating_sub(margin).max(min_x + 1);
+        let min_y = 1 + margin;
+        let max_y = (self.height - 1).saturating_sub(margin).max(min_y + 1);
+        if min_x >= max_x || min_y >= max_y {
+            return None;
+        }
+        for _ in 0..100 {
+            let x = self.rng.gen_range(min_x..max_x);
+            let y = self.rng.gen_range(min_y..max_y);
+            let p = Point { x, y };
+            if self.blight_cell_fair(p, next_heads)
+                && p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) >= min_dist
+            {
+                return Some(p);
+            }
+        }
+        let mut empty = Vec::new();
+        for y_ in min_y..max_y {
+            for x_ in min_x..max_x {
+                let p_ = Point { x: x_, y: y_ };
+                if self.blight_cell_fair(p_, next_heads)
+                    && p_.x.abs_diff(spawn_x).saturating_add(p_.y.abs_diff(spawn_y)) >= min_dist
+                {
+                    empty.push(p_);
+                }
+            }
+        }
+        if !empty.is_empty() {
+            let idx = self.rng.gen_range(0..empty.len());
+            return Some(empty[idx]);
+        }
+        None
+    }
+    fn spawn_blight_patches(&mut self) {
+        self.blight_tiles.clear();
+        self.blight_spreads = 0;
+        self.blight_clears = 0;
+        let cap = self.blight_cap();
+        let next_heads = self.singularity_next_heads();
+        for _ in 0..Self::BLIGHT_SEED_PATCHES {
+            if self.blight_tiles.len() >= cap {
+                break;
+            }
+            if let Some(anchor) = self.blight_random_fair_point(&next_heads, 5) {
+                self.blight_add(anchor);
+                let mut frontier = vec![anchor];
+                for _ in 0..Self::BLIGHT_PATCH_SIZE.saturating_sub(1) {
+                    if frontier.is_empty() || self.blight_tiles.len() >= cap {
+                        break;
+                    }
+                    let base = frontier[self.rng.gen_range(0..frontier.len())];
+                    let dirs = [
+                        Direction::Up,
+                        Direction::Down,
+                        Direction::Left,
+                        Direction::Right,
+                    ];
+                    let dir = dirs[self.rng.gen_range(0..dirs.len())];
+                    let np = Self::calculate_next_head_dir(base, dir);
+                    if self.blight_cell_fair(np, &next_heads) {
+                        self.blight_add(np);
+                        frontier.push(np);
+                    }
+                }
+            }
+        }
+    }
+    fn blight_spread(&mut self) {
+        let cap = self.blight_cap();
+        if self.blight_tiles.len() >= cap {
+            return;
+        }
+        let next_heads = self.singularity_next_heads();
+        let seeds: Vec<Point> = self.blight_tiles.iter().copied().collect();
+        let dirs = [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        let mut added = 0u32;
+        // Each existing patch creeps onto one random fair adjacent cell
+        for patch in &seeds {
+            if self.blight_tiles.len() >= cap {
+                break;
+            }
+            if self.rng.gen_bool(0.6) {
+                let dir = dirs[self.rng.gen_range(0..dirs.len())];
+                let np = Self::calculate_next_head_dir(*patch, dir);
+                if self.blight_cell_fair(np, &next_heads) {
+                    self.blight_add(np);
+                    added += 1;
+                }
+            }
+        }
+        // Occasionally a brand-new patch springs up elsewhere
+        if added == 0 && self.rng.gen_bool(0.5) && self.blight_tiles.len() < cap
+            && let Some(anchor) = self.blight_random_fair_point(&next_heads, 4)
+        {
+            self.blight_add(anchor);
+            added += 1;
+        }
+        if added > 0 {
+            self.blight_spreads += 1;
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                format!("The blight spreads! (+{added})"),
+                crate::color::Color::DarkYellow,
+            );
+        }
+    }
+    fn blight_cleanse_at(&mut self, center: Point) {
+        let mut cleansed = 0u32;
+        for dir in [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            let np = Self::calculate_next_head_dir(center, dir);
+            if self.blight_remove(np) {
+                cleansed += 1;
+            }
+        }
+        if cleansed > 0 {
+            self.blight_clears += cleansed;
+            self.spawn_floating_text(
+                f32::from(center.x),
+                f32::from(center.y),
+                format!("Cleansed {cleansed} blight!"),
+                crate::color::Color::Cyan,
+            );
+        }
+    }
+    fn manage_blight(&mut self) {
+        if self.mode != GameMode::Blight {
+            return;
+        }
+        // Clear skies in Blight mode: the blight must always stay visible
+        self.weather = Weather::Clear;
+        // Keep the mirror consistent: drop blight entries whose obstacle was
+        // removed elsewhere (e.g. crushed by a boulder or burned by fire)
+        self.blight_tiles.retain(|p| self.obstacles.contains(p));
+        // Periodic dry-up: at tick 200 of every 250-tick cycle all blight dries away
+        if self.tick_counter == 200 && !self.blight_tiles.is_empty() {
+            let cells: Vec<Point> = self.blight_tiles.drain().collect();
+            for p in cells {
+                self.obstacles.remove(&p);
+            }
+            let head = self.snake.head();
+            self.spawn_floating_text(
+                f32::from(head.x),
+                f32::from(head.y),
+                "The blight withers!".to_string(),
+                crate::color::Color::Yellow,
+            );
+        }
+        // Scheduled spread: every 6th tick the blight creeps outward
+        if self.tick_counter.is_multiple_of(Self::BLIGHT_SPREAD_PERIOD) {
+            self.blight_spread();
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -13048,7 +13301,7 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-            | GameMode::Sinkhole | GameMode::Dipole => {
+| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13173,6 +13426,7 @@ impl Game {
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Dipole
+            || self.mode == GameMode::Blight
             || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
@@ -13284,6 +13538,7 @@ impl Game {
         || self.mode == GameMode::PhaseShift
         || self.mode == GameMode::Trampoline
         || self.mode == GameMode::Dipole
+        || self.mode == GameMode::Blight
         || self.mode == GameMode::Crumble
         || self.mode == GameMode::Polarity
         || self.mode == GameMode::Blink
@@ -13478,6 +13733,9 @@ impl Game {
         self.gale_pushes = 0;
         self.gale_shifts = 0;
         self.gale_braces = 0;
+        self.blight_tiles.clear();
+        self.blight_spreads = 0;
+        self.blight_clears = 0;
         self.fault_tiles.clear();
         self.fault_pits.clear();
         self.fault_waves = 0;
@@ -14203,6 +14461,9 @@ impl Game {
         if self.mode == GameMode::Dipole {
             self.spawn_dipole_poles();
         }
+        if self.mode == GameMode::Blight {
+            self.spawn_blight_patches();
+        }
         if self.mode == GameMode::SpikePit {
             self.spawn_spike_vents();
         }
@@ -14484,6 +14745,9 @@ impl Game {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::Sinkhole {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Blight {
             self.weather = Weather::Clear;
         }
         self.lightning_column = None;
@@ -14935,7 +15199,7 @@ impl Game {
             | GameMode::Decay 
             | GameMode::Erosion
             | GameMode::Induction
-            | GameMode::Sinkhole | GameMode::Dipole => {
+| GameMode::Sinkhole | GameMode::Dipole | GameMode::Blight => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -15679,6 +15943,9 @@ impl Game {
             self.gale_pushes = state.gale_pushes;
             self.gale_shifts = state.gale_shifts;
             self.gale_braces = state.gale_braces;
+            self.blight_tiles = state.blight_tiles;
+            self.blight_spreads = state.blight_spreads;
+            self.blight_clears = state.blight_clears;
             self.fault_tiles = state.fault_tiles;
             self.fault_pits = state.fault_pits;
             self.fault_waves = state.fault_waves;
@@ -15978,6 +16245,9 @@ impl Game {
             gale_pushes: self.gale_pushes,
             gale_shifts: self.gale_shifts,
             gale_braces: self.gale_braces,
+            blight_tiles: self.blight_tiles.clone(),
+            blight_spreads: self.blight_spreads,
+            blight_clears: self.blight_clears,
             fault_tiles: self.fault_tiles.clone(),
             fault_pits: self.fault_pits.clone(),
             fault_waves: self.fault_waves,
@@ -18928,6 +19198,7 @@ impl Game {
             && self.mode != GameMode::Maelstrom
             && self.mode != GameMode::Decay
             && self.mode != GameMode::Sinkhole
+            && self.mode != GameMode::Blight
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -21363,6 +21634,7 @@ impl Game {
             || self.mode == GameMode::PhaseShift
             || self.mode == GameMode::Trampoline
             || self.mode == GameMode::Dipole
+            || self.mode == GameMode::Blight
             || self.mode == GameMode::Crumble
             || self.mode == GameMode::Polarity
             || self.mode == GameMode::Blink
@@ -21777,6 +22049,7 @@ impl Game {
         self.manage_magnet_pulse();
         self.manage_maelstrom_swirl();
         self.manage_event_horizon_surge();
+        self.manage_blight();
         // Keep the blaze/obstacle mirror exact even if something else cleared obstacles mid-tick
         if self.mode == GameMode::Firestorm {
             self.blaze_tiles.retain(|p, _| self.obstacles.contains(p));
@@ -23173,6 +23446,10 @@ if self.mode == GameMode::Steamroller {
                 "Calmed!".to_string(),
                 crate::color::Color::Blue,
             );
+        }
+        if self.mode == GameMode::Blight {
+            // Eating food cleanses the blight around the eaten cell
+            self.blight_cleanse_at(final_head);
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
             // Eating food greases the belts: one random belt rotates 90 degrees
@@ -26127,6 +26404,14 @@ if self.mode == GameMode::Sludge {
     pub const SINKHOLE_PER_COLLAPSE: usize = 2;
     /// Ticks a sinkhole collapse telegraphs its bubbling cells beforehand.
     pub const SINKHOLE_TELEGRAPH_TICKS: u32 = 3;
+    /// Ticks between scheduled blight spread events in Blight mode
+    pub const BLIGHT_SPREAD_PERIOD: u32 = 6;
+    /// Number of seed patches created at the start of a Blight match
+    pub const BLIGHT_SEED_PATCHES: usize = 3;
+    /// Cells per seed patch in Blight mode
+    pub const BLIGHT_PATCH_SIZE: usize = 3;
+    /// Blight may never cover more than one fifth of the board (20%)
+    pub const BLIGHT_MAX_DIVISOR: usize = 5;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)
