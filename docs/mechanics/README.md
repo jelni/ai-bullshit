@@ -565,3 +565,17 @@ The autopilot is fully zone-aware (see the "Shrinking-zone awareness" bullet abo
 - **Disruption:** eating food removes the gate cells adjacent to the eaten cell from the solid set ("Disrupted N gate!").
 - **Persistence:** `phase_gates`, `phase_solid`, and `phase_shifts` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent). The status bar shows `Gates: <count> | Phase: <phase> | Shifts: <count>` (`phase_str`).
 - **Tests:** see [tests/test_phase_shift_mode.rs](../../tests/test_phase_shift_mode.rs).
+
+## Trampoline Mode
+
+`GameMode::Trampoline` (menu entry "Trampoline Mode", entry 85 in the main menu) is a survival mode played among a permanent set of launch pads:
+
+- **Launch pads:** on reset `tramp_pad_count()` = `clamp(width*height/60, 3, 8)` pads (`tramp_pads`) are seeded on fair cells at least 5 cells (Manhattan) from the spawn — never on a snake, an entity, an obstacle, a mine, a portal, the black hole, the tornado, another bumper, or the food. Pads are walkable (they are *not* mirrored into `obstacles`) and render as a yellow `+` (terminal) / yellow cell (web), white while overcharged.
+- **Fling:** when a snake's next head cell is a pad, `tramp_launch` flings the head up to `TRAMP_LAUNCH` (3) cells — or `TRAMP_LAUNCH_CHARGED` (5) while overcharged — along its current direction, and counts it in `tramp_flings` ("Fling!"). The launch is applied to the player, player 2, and every bot at the same points where `belt_shove` is applied in `update`. The snake's direction is left unchanged, exactly like a belt shove.
+- **Fairness:** only whole paths whose every cell passes `tramp_cell_free` are accepted, longest first — in bounds within the safe-zone margin and free of snake bodies and the cells snakes are about to enter (`singularity_cell_free`), plus the lightning column and every lethal tile set (fire, acid, puddles, lava, inferno, blaze, seismic rubble) and the Battle Royale safe zone. If no path is fair the snake simply rests on the walkable pad, so **a pad can never directly kill**.
+- **Scheduled shuffle:** every 24th tick `manage_trampoline` relocates every pad to a fresh fair cell (`tramp_shuffles += 1`, "The pads rearrange! (N)") — never on a snake, on the cell any snake is about to enter, on any entity or hazard tile, or within 4 cells (Manhattan) of any snake head. Pads that end up under a fresh obstacle (e.g. a meteor crash) are scrapped at the start of each tick.
+- **Overcharge:** eating food sets `tramp_overcharge = TRAMP_OVERCHARGE_TICKS` (12) ("Overcharged!"); while the timer is positive it counts down once per tick and flings go up to `TRAMP_LAUNCH_CHARGED` (5) cells.
+- **Autopilot:** fling landings are always fair, so a launched bot is never killed by the launch itself; the bot replans from its actual head every tick and rides the pads natively.
+- **Status bar:** `Pads: <count> | Flings: <count> | Shuffles: <count>` plus `Overcharged: <ticks>` while overcharged (`tramp_str`).
+- **Persistence:** `tramp_pads`, `tramp_flings`, `tramp_shuffles`, and `tramp_overcharge` are stored in `SaveState` and `HistoryState` (so save/load and time-rewind stay consistent).
+- **Tests:** see [tests/test_trampoline_mode.rs](../../tests/test_trampoline_mode.rs).

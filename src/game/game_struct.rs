@@ -212,6 +212,10 @@ pub struct Game {
     pub pinball_bumpers: HashSet<Point>,
     pub pinball_bumps: u32,
     pub pinball_relocations: u32,
+    pub tramp_pads: HashSet<Point>,
+    pub tramp_flings: u32,
+    pub tramp_shuffles: u32,
+    pub tramp_overcharge: u32,
     pub geyser_vents: Vec<Point>,
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     pub geyser_eruptions: u32,
@@ -738,6 +742,10 @@ impl Game {
             pinball_bumpers: HashSet::new(),
             pinball_bumps: 0,
             pinball_relocations: 0,
+            tramp_pads: HashSet::new(),
+            tramp_flings: 0,
+            tramp_shuffles: 0,
+            tramp_overcharge: 0,
             geyser_vents: Vec::new(),
             geyser_jets: std::collections::HashMap::new(),
             geyser_eruptions: 0,
@@ -1012,6 +1020,10 @@ impl Game {
             pinball_bumpers: self.pinball_bumpers.clone(),
             pinball_bumps: self.pinball_bumps,
             pinball_relocations: self.pinball_relocations,
+            tramp_pads: self.tramp_pads.clone(),
+            tramp_flings: self.tramp_flings,
+            tramp_shuffles: self.tramp_shuffles,
+            tramp_overcharge: self.tramp_overcharge,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -1244,6 +1256,10 @@ impl Game {
                 self.pinball_bumpers = state.pinball_bumpers;
                 self.pinball_bumps = state.pinball_bumps;
                 self.pinball_relocations = state.pinball_relocations;
+                self.tramp_pads = state.tramp_pads;
+                self.tramp_flings = state.tramp_flings;
+                self.tramp_shuffles = state.tramp_shuffles;
+                self.tramp_overcharge = state.tramp_overcharge;
                 self.geyser_vents = state.geyser_vents;
                 self.geyser_jets = state.geyser_jets;
                 self.geyser_eruptions = state.geyser_eruptions;
@@ -3808,6 +3824,149 @@ impl Game {
         } else {
             for p in &self.phase_gates {
                 self.obstacles.remove(p);
+            }
+        }
+    }
+    fn tramp_pad_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 60).clamp(3, 8)
+    }
+    // A cell a launch path may pass through or land on must be fair right now:
+    // in bounds, free of snakes (bodies and the cells they are about to enter)
+    // and of every entity or lethal tile, so a fling can never directly kill.
+    fn tramp_cell_free(&self, p: Point) -> bool {
+        if !self.singularity_cell_free(p) {
+            return false;
+        }
+        if self.lightning_column.is_some_and(|col| p.x == col)
+            || self.fire_tiles.contains(&p)
+            || self.acid_puddles.contains(&p)
+            || self.puddle_tiles.contains(&p)
+            || self.lava_tiles.contains(&p)
+            || self.inferno_tiles.contains(&p)
+            || self.blaze_tiles.contains_key(&p)
+            || self.seismic_rubble.contains(&p)
+        {
+            return false;
+        }
+        if self.mode == GameMode::BattleRoyale && !self.within_safe_zone(p, 0) {
+            return false;
+        }
+        true
+    }
+    // When a snake's next cell is a launch pad, fling its head up to
+    // TRAMP_LAUNCH cells (TRAMP_LAUNCH_CHARGED while overcharged) along its
+    // current direction. Only whole fair paths are accepted, longest first;
+    // the pad cell itself stays walkable, so if no launch is fair the snake
+    // simply rests on the pad and can never be flung into a kill.
+    fn tramp_launch(&self, pad: Point, dir: Direction) -> Option<Point> {
+        if self.mode != GameMode::Trampoline {
+            return None;
+        }
+        if !self.tramp_pads.contains(&pad) {
+            return None;
+        }
+        let dists: &[u16] = if self.tramp_overcharge > 0 {
+            &[Self::TRAMP_LAUNCH_CHARGED, 4, Self::TRAMP_LAUNCH, 2, 1]
+        } else {
+            &[Self::TRAMP_LAUNCH, 2, 1]
+        };
+        for &k in dists {
+            let mut dest = pad;
+            let mut ok = true;
+            for _ in 0..k {
+                dest = Self::calculate_next_head_dir(dest, dir);
+                if !self.tramp_cell_free(dest) {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                return Some(dest);
+            }
+        }
+        None
+    }
+    fn manage_trampoline(&mut self) {
+        if self.mode != GameMode::Trampoline {
+            return;
+        }
+        // Pads under fresh obstacles are scrapped
+        self.tramp_pads.retain(|p| !self.obstacles.contains(p));
+        // Overcharge counts down once per tick
+        if self.tramp_overcharge > 0 {
+            self.tramp_overcharge = self.tramp_overcharge.saturating_sub(1);
+        }
+        // Scheduled shuffle: every 24th tick the whole layout rearranges and
+        // every pad relocates to a fresh fair cell. Fairness: a new pad never
+        // lands on a snake, on the cell any snake is about to enter, on any
+        // entity or hazard, or within 4 cells of any snake head.
+        if self.tick_counter.is_multiple_of(24) {
+            let count = self.tramp_pad_count();
+            let next_heads = self.singularity_next_heads();
+            let heads: Vec<Point> = std::iter::once(self.snake.head())
+                .chain(self.player2.as_ref().map(Snake::head))
+                .chain(self.bots.iter().map(Snake::head))
+                .collect();
+            let old_pads = std::mem::take(&mut self.tramp_pads);
+            let avoid_pad = |p: &Point| {
+                self.obstacles.contains(p)
+                    || self.mines.contains(p)
+                    || *p == self.food
+                    || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                    || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                    || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                    || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                    || self.black_hole == Some(*p)
+                    || self.tornado == Some(*p)
+                    || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                    || self.bosses.iter().any(|b| b.position == *p)
+                    || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                    || self.turrets.iter().any(|t| t.position == *p)
+                    || self.lasers.iter().any(|l| l.position == *p)
+                    || self.meteors.iter().any(|m| m.position == *p)
+                    || self.xp_gems.contains(p)
+                    || self.snake.body_map.contains_key(p)
+                    || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                    || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                    || next_heads.contains(p)
+                    || old_pads.contains(p)
+                    || self.fire_tiles.contains(p)
+                    || self.acid_puddles.contains(p)
+                    || self.puddle_tiles.contains(p)
+                    || self.lava_tiles.contains(p)
+                    || self.inferno_tiles.contains(p)
+                    || self.blaze_tiles.contains_key(p)
+                    || self.seismic_rubble.contains(p)
+                    || self.ice_tiles.contains(p)
+                    || self.belt_tiles.contains_key(p)
+                    || self.pinball_bumpers.contains(p)
+                    || heads
+                        .iter()
+                        .any(|h| p.x.abs_diff(h.x).saturating_add(p.y.abs_diff(h.y)) < 4)
+            };
+            let mut placed = 0usize;
+            for _ in 0..count {
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pad,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.tramp_pads.insert(p);
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.tramp_shuffles += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("The pads rearrange! ({placed})"),
+                    crate::color::Color::Yellow,
+                );
             }
         }
     }
@@ -7916,7 +8075,8 @@ impl Game {
             | GameMode::Avalanche
             | GameMode::Pinball
             | GameMode::Steamroller
-            | GameMode::Landslide | GameMode::PhaseShift => {
+            | GameMode::Landslide | GameMode::PhaseShift
+            | GameMode::Trampoline => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -8039,6 +8199,7 @@ impl Game {
 
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
+            || self.mode == GameMode::Trampoline
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -8128,6 +8289,7 @@ impl Game {
 
             || self.mode == GameMode::Landslide
         || self.mode == GameMode::PhaseShift
+        || self.mode == GameMode::Trampoline
         {
             &self.snake
         } else {
@@ -8252,6 +8414,10 @@ impl Game {
         self.pinball_bumpers.clear();
         self.pinball_bumps = 0;
         self.pinball_relocations = 0;
+        self.tramp_pads.clear();
+        self.tramp_flings = 0;
+        self.tramp_shuffles = 0;
+        self.tramp_overcharge = 0;
         self.geyser_vents.clear();
         self.geyser_jets.clear();
         self.geyser_eruptions = 0;
@@ -8742,6 +8908,39 @@ impl Game {
         }
         if self.mode == GameMode::Pinball {
             self.spawn_pinball_bumpers();
+        }
+        if self.mode == GameMode::Trampoline {
+            let spawn_x = self.width / 2;
+            let spawn_y = self.height / 2;
+            for _ in 0..self.tramp_pad_count() {
+                let avoid_pad = |p: &Point| {
+                    self.obstacles.contains(p)
+                        || *p == self.food
+                        || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                        || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                        || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                        || self.mines.contains(p)
+                        || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                        || self.black_hole == Some(*p)
+                        || self.tornado == Some(*p)
+                        || self.pinball_bumpers.contains(p)
+                        || self.tramp_pads.contains(p)
+                        || self.snake.body_map.contains_key(p)
+                        || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                        || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                        || p.x.abs_diff(spawn_x).saturating_add(p.y.abs_diff(spawn_y)) < 5
+                };
+                if let Some(p) = Self::get_random_empty_point(
+                    self.width,
+                    self.height,
+                    &self.snake,
+                    avoid_pad,
+                    &mut self.rng,
+                    self.safe_zone_margin,
+                ) {
+                    self.tramp_pads.insert(p);
+                }
+            }
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -9414,7 +9613,8 @@ impl Game {
             | GameMode::Avalanche
             | GameMode::Pinball
             | GameMode::Steamroller
-            | GameMode::Landslide | GameMode::PhaseShift => {
+            | GameMode::Landslide | GameMode::PhaseShift
+            | GameMode::Trampoline => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -10104,6 +10304,10 @@ impl Game {
             self.pinball_bumpers = state.pinball_bumpers;
             self.pinball_bumps = state.pinball_bumps;
             self.pinball_relocations = state.pinball_relocations;
+            self.tramp_pads = state.tramp_pads;
+            self.tramp_flings = state.tramp_flings;
+            self.tramp_shuffles = state.tramp_shuffles;
+            self.tramp_overcharge = state.tramp_overcharge;
             self.geyser_vents = state.geyser_vents;
             self.geyser_jets = state.geyser_jets;
             self.geyser_eruptions = state.geyser_eruptions;
@@ -10303,6 +10507,10 @@ impl Game {
             pinball_bumpers: self.pinball_bumpers.clone(),
             pinball_bumps: self.pinball_bumps,
             pinball_relocations: self.pinball_relocations,
+            tramp_pads: self.tramp_pads.clone(),
+            tramp_flings: self.tramp_flings,
+            tramp_shuffles: self.tramp_shuffles,
+            tramp_overcharge: self.tramp_overcharge,
             geyser_vents: self.geyser_vents.clone(),
             geyser_jets: self.geyser_jets.clone(),
             geyser_eruptions: self.geyser_eruptions,
@@ -14162,6 +14370,7 @@ impl Game {
         self.manage_pinball();
         self.manage_geyser();
         self.manage_phase_shift();
+        self.manage_trampoline();
         self.manage_thornfield();
         self.manage_mirage();
 
@@ -14248,16 +14457,50 @@ impl Game {
                 }
                 next_head
             };
+            let bot_dir = self.bots[i].direction;
             let final_head = if hit_wall {
                 final_head
             } else {
                 self.belt_shove(final_head).unwrap_or(final_head)
             };
+            let final_head = if hit_wall {
+                final_head
+            } else if let Some(flung) = self.tramp_launch(final_head, bot_dir) {
+                self.tramp_flings += 1;
+                flung
+            } else {
+                final_head
+            };
             final_bot_heads.push((i, final_head, hit_wall));
         }
 
-        let (mut final_head1, final_head2_opt, mut hit_wall1, hit_wall2) =
+        let (mut final_head1, mut final_head2_opt, mut hit_wall1, hit_wall2) =
             self.calculate_final_heads();
+        // In Trampoline mode a launch pad flings the head along its direction
+        // (the pad cell itself stays walkable, so this can never kill)
+        if self.mode == GameMode::Trampoline {
+            if !hit_wall1
+                && let Some(flung) = self.tramp_launch(final_head1, self.snake.direction)
+            {
+                final_head1 = flung;
+                self.tramp_flings += 1;
+                let head1 = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head1.x),
+                    f32::from(head1.y),
+                    "Fling!".to_string(),
+                    crate::color::Color::Yellow,
+                );
+            }
+            if !hit_wall2
+                && let Some(fh2) = final_head2_opt
+                && let Some(p2) = &self.player2
+                && let Some(flung) = self.tramp_launch(fh2, p2.direction)
+            {
+                final_head2_opt = Some(flung);
+                self.tramp_flings += 1;
+            }
+        }
         // In Ricochet mode walls bounce the snake back instead of killing it
         if hit_wall1 && self.mode == GameMode::Ricochet {
             let head1 = self.snake.head();
@@ -15138,6 +15381,7 @@ impl Game {
 
                 || self.mode == GameMode::Landslide
             || self.mode == GameMode::PhaseShift
+            || self.mode == GameMode::Trampoline
             {
                 self.handle_death("You Died!");
             } else {
@@ -16516,6 +16760,16 @@ if self.mode == GameMode::Steamroller {
                 f32::from(final_head.y),
                 "Jammed!".to_string(),
                 crate::color::Color::Red,
+            );
+        }
+        if self.mode == GameMode::Trampoline {
+            // Eating food overcharges the pads: longer flings for a while
+            self.tramp_overcharge = Self::TRAMP_OVERCHARGE_TICKS;
+            self.spawn_floating_text(
+                f32::from(final_head.x),
+                f32::from(final_head.y),
+                "Overcharged!".to_string(),
+                crate::color::Color::Yellow,
             );
         }
         if self.mode == GameMode::Conveyor && !self.belt_tiles.is_empty() {
@@ -19185,6 +19439,11 @@ if self.mode == GameMode::Steamroller {
     pub const TSUNAMI_PERIOD: u32 = 40;
     pub const TSUNAMI_WARNING: u32 = 8;
     pub const PHASE_PERIOD: u32 = 12;
+    /// Cells a launch pad flings a snake in Trampoline mode (5 while overcharged)
+    pub const TRAMP_LAUNCH: u16 = 3;
+    pub const TRAMP_LAUNCH_CHARGED: u16 = 5;
+    /// Ticks of overcharge granted by eating food in Trampoline mode
+    pub const TRAMP_OVERCHARGE_TICKS: u32 = 12;
     pub const RIVAL_HEAD_HORIZON: u16 = 8;
 
     /// Maps each cell to a bitmask of arrival steps (`1..=RIVAL_HEAD_HORIZON`)

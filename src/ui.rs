@@ -667,6 +667,7 @@ fn draw_menu<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
         "Mirage Mode",
         "Pinball Mode",
         "Phase Shift Mode",
+        "Trampoline Mode",
         "Load Game",
         "Settings",
         "NFT Shop",
@@ -1985,6 +1986,22 @@ fn draw_entities<W: Write>(
         }
     }
 
+    // Draw launch pads (Trampoline mode)
+    if game.mode == crate::game::GameMode::Trampoline {
+        let pad_color = if game.tramp_overcharge > 0 {
+            Color::White
+        } else {
+            Color::Yellow
+        };
+        stdout.queue(SetForegroundColor(pad_color))?;
+        for pad in &game.tramp_pads {
+            if is_visible(pad.x, pad.y) {
+                stdout.queue(cursor::MoveTo(pad.x, pad.y))?;
+                write!(stdout, "+")?;
+            }
+        }
+    }
+
     // Draw geyser jets and vents (Geyser mode)
     if game.mode == crate::game::GameMode::Geyser {
         stdout.queue(SetForegroundColor(Color::Cyan))?;
@@ -3273,6 +3290,21 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     } else {
         String::new()
     };
+    let tramp_str = if game.mode == crate::game::GameMode::Trampoline {
+        let overcharge = if game.tramp_overcharge > 0 {
+            format!(" | Overcharged: {}", game.tramp_overcharge)
+        } else {
+            String::new()
+        };
+        format!(
+            " | Pads: {} | Flings: {} | Shuffles: {}{overcharge}",
+            game.tramp_pads.len(),
+            game.tramp_flings,
+            game.tramp_shuffles
+        )
+    } else {
+        String::new()
+    };
     let geyser_str = if game.mode == crate::game::GameMode::Geyser {
         format!(
             " | Jets: {} | Eruptions: {}",
@@ -3460,7 +3492,7 @@ fn draw_status<W: Write>(game: &Game, stdout: &mut W) -> io::Result<()> {
     write!(
         stdout,
 
-"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}"
+"{weather_str}{tod_str}{snow_str}{strikes_str}{quakes_str}{lava_str}{showers_str}{impacts_str}{tournament_str}{gusts_str}{spins_str}{tremors_str}{flares_str}{blasts_str}{sand_str}{acid_str}{puddle_str}{ice_str}{bomb_str}{singularity_str}{fire_str}{event_horizon_str}{infection_str}{inferno_str}{mine_str}{laser_grid_str}{tsunami_str}{warp_str}{well_str}{belt_str}{hole_str}{ricochet_str}{turret_str}{blaze_str}{fortress_str}{geyser_str}{thorn_str}{mirage_str}{avalanche_str}{pinball_str}{roller_str}{spike_str}{landslide_str}{phase_str}{tramp_str}"
     )?;
 
     if !game.bosses.is_empty() {

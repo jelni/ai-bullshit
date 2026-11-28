@@ -170,6 +170,14 @@ pub struct SaveState {
     #[serde(default)]
     pub pinball_relocations: u32,
     #[serde(default)]
+    pub tramp_pads: HashSet<Point>,
+    #[serde(default)]
+    pub tramp_flings: u32,
+    #[serde(default)]
+    pub tramp_shuffles: u32,
+    #[serde(default)]
+    pub tramp_overcharge: u32,
+    #[serde(default)]
     pub thorn_tiles: HashSet<Point>,
     #[serde(default)]
     pub thorn_blooms: u32,

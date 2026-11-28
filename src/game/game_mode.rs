@@ -95,4 +95,5 @@ pub enum GameMode {
     SpikePit,
     Landslide,
     PhaseShift,
+    Trampoline,
 }

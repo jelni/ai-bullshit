@@ -153,6 +153,28 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    // Draw launch pads (Trampoline mode)
+    if game.mode == crate::game::GameMode::Trampoline {
+        ctx.set_fill_style_str(if game.tramp_overcharge > 0 {
+            "#FFFFFF"
+        } else {
+            "#FFFF00"
+        });
+        for pad in &game.tramp_pads {
+            if pad.x < game.width
+                && pad.y < game.height
+                && is_visible(f64::from(pad.x), f64::from(pad.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pad.x) * cell_size,
+                    f64::from(pad.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+    }
+
     // Draw rolling boulders (Avalanche mode)
     if game.mode == crate::game::GameMode::Avalanche {
         ctx.set_fill_style_str("#DAA520"); // Goldenrod boulders
