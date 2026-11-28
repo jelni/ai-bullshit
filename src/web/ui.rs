@@ -168,6 +168,34 @@ pub fn draw(game: &Game, ctx: &CanvasRenderingContext2d) {
                 ctx.fill_rect(
                     f64::from(coil.x) * cell_size,
                     f64::from(coil.y) * cell_size,
+}
+}
+}
+    // Draw cracked floor and pits (Decay mode)
+    if game.mode == crate::game::GameMode::Decay {
+        ctx.set_fill_style_str("#8B4513"); // Brown cracks
+        for crack in game.decay_cracks.keys() {
+            if crack.x < game.width
+                && crack.y < game.height
+                && is_visible(f64::from(crack.x), f64::from(crack.y))
+            {
+                ctx.fill_rect(
+                    f64::from(crack.x) * cell_size,
+                    f64::from(crack.y) * cell_size,
+                    cell_size,
+                    cell_size,
+                );
+            }
+        }
+        ctx.set_fill_style_str("#404040"); // Dark pits
+        for pit in &game.decay_pits {
+            if pit.x < game.width
+                && pit.y < game.height
+                && is_visible(f64::from(pit.x), f64::from(pit.y))
+            {
+                ctx.fill_rect(
+                    f64::from(pit.x) * cell_size,
+                    f64::from(pit.y) * cell_size,
                     cell_size,
                     cell_size,
                 );

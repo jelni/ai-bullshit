@@ -310,6 +310,11 @@ pub struct Game {
     pub blaze_tiles: std::collections::HashMap<Point, u32>,
     pub blaze_sources: Vec<Point>,
     pub firestorm_blazes: u32,
+    pub decay_cracks: std::collections::HashMap<Point, u32>,
+    pub decay_pits: HashSet<Point>,
+    pub decay_collapses: u32,
+    pub decay_tremors: u32,
+    pub decay_repairs: u32,
 }
 #[must_use]
 pub const fn default_gale_dir() -> Direction {
@@ -788,6 +793,11 @@ impl Game {
             blaze_tiles: std::collections::HashMap::new(),
             blaze_sources: Vec::new(),
             firestorm_blazes: 0,
+            decay_cracks: std::collections::HashMap::new(),
+            decay_pits: HashSet::new(),
+            decay_collapses: 0,
+            decay_tremors: 0,
+            decay_repairs: 0,
             sand_blasts: 0,
             gravity_well_surges: 0,
             acid_puddles: HashSet::new(),
@@ -1333,6 +1343,11 @@ impl Game {
             blaze_tiles: self.blaze_tiles.clone(),
             blaze_sources: self.blaze_sources.clone(),
             firestorm_blazes: self.firestorm_blazes,
+            decay_cracks: self.decay_cracks.clone(),
+            decay_pits: self.decay_pits.clone(),
+            decay_collapses: self.decay_collapses,
+            decay_tremors: self.decay_tremors,
+            decay_repairs: self.decay_repairs,
         };
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = Self::atomic_write(path, json);
@@ -1651,6 +1666,11 @@ impl Game {
                 self.blaze_tiles = state.blaze_tiles;
                 self.blaze_sources = state.blaze_sources;
                 self.firestorm_blazes = state.firestorm_blazes;
+                self.decay_cracks = state.decay_cracks;
+                self.decay_pits = state.decay_pits;
+                self.decay_collapses = state.decay_collapses;
+                self.decay_tremors = state.decay_tremors;
+                self.decay_repairs = state.decay_repairs;
                 self.belt_shifts = state.belt_shifts;
                 self.ice_tiles = state.ice_tiles;
                 self.ice_slips = state.ice_slips;
@@ -7478,6 +7498,178 @@ impl Game {
             }
         }
     }
+    fn decay_cap(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 20).max(6)
+    }
+    fn decay_seed_count(&self) -> usize {
+        (usize::from(self.width) * usize::from(self.height) / 100).clamp(2, 6)
+    }
+    // Drop one fresh crack on a random fair cell. Fairness: the cell is in
+    // bounds within the safe-zone margin and free of snakes (bodies and the
+    // cells they are about to enter), existing cracks/pits, obstacles, and
+    // every entity or hazard tile, and at least `min_spawn_dist` (Manhattan)
+    // from the spawn point.
+    fn place_decay_crack(&mut self, min_spawn_dist: u16) -> bool {
+        let spawn = Point {
+            x: self.width / 2,
+            y: self.height / 2,
+        };
+        let next_heads = self.singularity_next_heads();
+        let avoid_crack = |p: &Point| {
+            p.x.abs_diff(spawn.x).saturating_add(p.y.abs_diff(spawn.y)) < min_spawn_dist
+                || self.decay_cracks.contains_key(p)
+                || self.decay_pits.contains(p)
+                || self.obstacles.contains(p)
+                || *p == self.food
+                || self.bonus_food.is_some_and(|(bp, _)| *p == bp)
+                || self.poison_food.is_some_and(|(pp, _)| *p == pp)
+                || self.power_up.as_ref().is_some_and(|pu| *p == pu.location)
+                || self.portals.is_some_and(|(p1, p2)| *p == p1 || *p == p2)
+                || self.mines.contains(p)
+                || self.black_hole == Some(*p)
+                || self.tornado == Some(*p)
+                || self.goblin.as_ref().is_some_and(|g| g.position == *p)
+                || self.bosses.iter().any(|b| b.position == *p)
+                || self.companion.as_ref().is_some_and(|c| c.position == *p)
+                || self.turrets.iter().any(|t| t.position == *p)
+                || self.lasers.iter().any(|l| l.position == *p)
+                || self.meteors.iter().any(|m| m.position == *p)
+                || self.rocks.iter().any(|r| r.position == *p)
+                || self.xp_gems.contains(p)
+                || self.snake.body_map.contains_key(p)
+                || self.player2.as_ref().is_some_and(|p2| p2.body_map.contains_key(p))
+                || self.bots.iter().any(|b| b.body_map.contains_key(p))
+                || next_heads.contains(p)
+                || self.fire_tiles.contains(p)
+                || self.acid_puddles.contains(p)
+                || self.puddle_tiles.contains(p)
+                || self.lava_tiles.contains(p)
+                || self.inferno_tiles.contains(p)
+                || self.blaze_tiles.contains_key(p)
+                || self.seismic_rubble.contains(p)
+                || self.ice_tiles.contains(p)
+                || self.belt_tiles.contains_key(p)
+                || self.pinball_bumpers.contains(p)
+                || self.tramp_pads.contains(p)
+                || self.phase_gates.contains(p)
+                || self.thorn_tiles.contains(p)
+                || self.spike_tiles.contains_key(p)
+                || self.fault_tiles.contains_key(p)
+                || self.lightning_column.is_some_and(|col| p.x == col)
+        };
+        if let Some(p) = Self::get_random_empty_point(
+            self.width,
+            self.height,
+            &self.snake,
+            avoid_crack,
+            &mut self.rng,
+            self.safe_zone_margin,
+        ) {
+            self.decay_cracks.insert(p, Self::DECAY_DELAY);
+            return true;
+        }
+        false
+    }
+    fn seed_initial_decay_cracks(&mut self) {
+        self.decay_cracks.clear();
+        self.decay_pits.clear();
+        for _ in 0..self.decay_seed_count() {
+            let _ = self.place_decay_crack(5);
+        }
+    }
+    fn manage_decay(&mut self) {
+        if self.mode != GameMode::Decay {
+            return;
+        }
+        // Self-heal: if something else cleared obstacles (e.g. a Bomb), drop stale records
+        self.decay_pits.retain(|p| self.obstacles.contains(p));
+        self.decay_cracks.retain(|p, _| !self.obstacles.contains(p));
+        // Periodic renewal: at tick 200 the floor is rebuilt, every pit fills
+        // back in and every remaining crack is sealed
+        if self.tick_counter == 200 {
+            if !self.decay_pits.is_empty() || !self.decay_cracks.is_empty() {
+                for p in self.decay_pits.drain() {
+                    self.obstacles.remove(&p);
+                }
+                self.decay_cracks.clear();
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    "The floor is renewed!".to_string(),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+            return;
+        }
+        // Every snake head cracks the floor cell it stands on
+        let mut heads: Vec<Point> = vec![self.snake.head()];
+        if let Some(p2) = &self.player2 {
+            heads.push(p2.head());
+        }
+        heads.extend(self.bots.iter().map(Snake::head));
+        for h in heads {
+            if !self.obstacles.contains(&h) {
+                self.decay_cracks.entry(h).or_insert(Self::DECAY_DELAY);
+            }
+        }
+        // Scheduled tremor: every 6th tick a handful of fresh cracks appear on
+        // fair cells (never on a snake, on the cell any snake is about to
+        // enter, on any entity, or on an existing crack/pit), capped at 10%
+        // of the board
+        if self.tick_counter.is_multiple_of(6) {
+            let cap = self.decay_cap();
+            let mut placed = 0usize;
+            for _ in 0..Self::DECAY_TREMOR_CRACKS {
+                if self.decay_cracks.len() >= cap {
+                    break;
+                }
+                if self.place_decay_crack(0) {
+                    placed += 1;
+                }
+            }
+            if placed > 0 {
+                self.decay_tremors += 1;
+                let head = self.snake.head();
+                self.spawn_floating_text(
+                    f32::from(head.x),
+                    f32::from(head.y),
+                    format!("Tremor! ({placed})"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
+        }
+        // Countdown: a crack collapses into a pit only once it is free of every
+        // snake and of every cell a snake is about to enter, so the floor can
+        // never give way under a snake or on its very next step
+        let mut occupied: HashSet<Point> = self.singularity_next_heads().into_iter().collect();
+        occupied.insert(self.snake.head());
+        occupied.extend(self.snake.body_map.keys().copied());
+        if let Some(p2) = &self.player2 {
+            occupied.insert(p2.head());
+            occupied.extend(p2.body_map.keys().copied());
+        }
+        for b in &self.bots {
+            occupied.insert(b.head());
+            occupied.extend(b.body_map.keys().copied());
+        }
+        let mut collapsed: Vec<Point> = Vec::new();
+        for (p, timer) in &mut self.decay_cracks {
+            if occupied.contains(p) {
+                continue;
+            }
+            *timer = timer.saturating_sub(1);
+            if *timer == 0 {
+                collapsed.push(*p);
+            }
+        }
+        for p in collapsed {
+            self.decay_cracks.remove(&p);
+            self.decay_pits.insert(p);
+            self.obstacles.insert(p);
+            self.decay_collapses += 1;
+        }
+    }
     fn spawn_phase_gates(&mut self) {
         self.phase_gates.clear();
         self.phase_solid = true;
@@ -11940,7 +12132,8 @@ impl Game {
             | GameMode::Faultline
             | GameMode::Electro
             | GameMode::Sludge | GameMode::Flux
-            | GameMode::Maelstrom => {
+            | GameMode::Maelstrom
+            | GameMode::Decay => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -12081,6 +12274,7 @@ impl Game {
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
             || self.mode == GameMode::Maelstrom
+            || self.mode == GameMode::Decay
             {
                 p.x == start_x && p.y == start_y - 1
             } else {
@@ -12188,6 +12382,7 @@ impl Game {
         || self.mode == GameMode::Sludge
         || self.mode == GameMode::Flux
         || self.mode == GameMode::Maelstrom
+        || self.mode == GameMode::Decay
         {
             &self.snake
         } else {
@@ -12443,6 +12638,11 @@ impl Game {
         self.blaze_tiles.clear();
         self.blaze_sources.clear();
         self.firestorm_blazes = 0;
+        self.decay_cracks.clear();
+        self.decay_pits.clear();
+        self.decay_collapses = 0;
+        self.decay_tremors = 0;
+        self.decay_repairs = 0;
         self.ice_tiles.clear();
         self.ice_slips = 0;
         self.fire_ttl.clear();
@@ -13052,6 +13252,9 @@ impl Game {
         }
         if self.mode == GameMode::Maelstrom {
             self.spawn_maelstrom();
+}
+        if self.mode == GameMode::Decay {
+            self.seed_initial_decay_cracks();
         }
         if self.mode == GameMode::Geyser {
             self.spawn_geyser_vents();
@@ -13286,6 +13489,9 @@ impl Game {
         if self.mode == GameMode::Conveyor {
         }
         if self.mode == GameMode::IceRink {
+            self.weather = Weather::Clear;
+        }
+        if self.mode == GameMode::Decay {
             self.weather = Weather::Clear;
         }
         if self.mode == GameMode::BlackHole {
@@ -13772,7 +13978,8 @@ impl Game {
             | GameMode::Faultline
             | GameMode::Electro
             | GameMode::Sludge | GameMode::Flux
-            | GameMode::Maelstrom => {
+            | GameMode::Maelstrom
+            | GameMode::Decay => {
                 self.snake = Snake::new(Point {
                     x: start_x,
                     y: start_y,
@@ -13843,6 +14050,7 @@ impl Game {
         self.sludge_tiles.retain(|p| self.obstacles.contains(p));
         self.rubble_tiles.retain(|p| self.obstacles.contains(p));
         self.seismic_rubble.retain(|p| self.obstacles.contains(p));
+        self.decay_pits.retain(|p| self.obstacles.contains(p));
         self.spike_tiles.retain(|p, _| self.obstacles.contains(p));
         self.safe_zone_margin = 0;
         self.last_shrink_time = web_time::Instant::now();
@@ -14617,6 +14825,11 @@ impl Game {
             self.blaze_tiles = state.blaze_tiles;
             self.blaze_sources = state.blaze_sources;
             self.firestorm_blazes = state.firestorm_blazes;
+            self.decay_cracks = state.decay_cracks;
+            self.decay_pits = state.decay_pits;
+            self.decay_collapses = state.decay_collapses;
+            self.decay_tremors = state.decay_tremors;
+            self.decay_repairs = state.decay_repairs;
             self.belt_shifts = state.belt_shifts;
             self.ice_tiles = state.ice_tiles;
             self.ice_slips = state.ice_slips;
@@ -14899,6 +15112,11 @@ impl Game {
             blaze_tiles: self.blaze_tiles.clone(),
             blaze_sources: self.blaze_sources.clone(),
             firestorm_blazes: self.firestorm_blazes,
+            decay_cracks: self.decay_cracks.clone(),
+            decay_pits: self.decay_pits.clone(),
+            decay_collapses: self.decay_collapses,
+            decay_tremors: self.decay_tremors,
+            decay_repairs: self.decay_repairs,
         };
         self.history.push_back(state);
         if self.history.len() > 50 {
@@ -17717,6 +17935,7 @@ impl Game {
             && self.mode != GameMode::TarPit
             && self.mode != GameMode::Electro
             && self.mode != GameMode::Maelstrom
+            && self.mode != GameMode::Decay
         {
             self.weather = match self.rng.gen_range(0..8) {
                 0 => Weather::Clear,
@@ -18700,6 +18919,7 @@ impl Game {
         self.manage_geyser();
         self.manage_phase_shift();
         self.manage_trampoline();
+        self.manage_decay();
         self.manage_mire();
         self.manage_elevator();
         self.manage_polarity();
@@ -20094,6 +20314,7 @@ impl Game {
             || self.mode == GameMode::Sludge
             || self.mode == GameMode::Flux
             || self.mode == GameMode::Maelstrom
+            || self.mode == GameMode::Decay
             {
                 self.handle_death("You Died!");
             } else {
@@ -21600,6 +21821,45 @@ if self.mode == GameMode::Steamroller {
                 "Overcharged!".to_string(),
                 crate::color::Color::Yellow,
             );
+        }
+        if self.mode == GameMode::Decay {
+            // Eating food patches the floor around the eaten cell: adjacent
+            // cracks are sealed and adjacent pits are filled back in
+            let mut patched = 0u32;
+            for dx in -1i32..=1 {
+                for dy in -1i32..=1 {
+                    if dx.abs() + dy.abs() > 1 {
+                        continue;
+                    }
+                    let x = i32::from(final_head.x) + dx;
+                    let y = i32::from(final_head.y) + dy;
+                    if x < 0 || y < 0 || x >= i32::from(self.width) || y >= i32::from(self.height)
+                    {
+                        continue;
+                    }
+                    let p = Point {
+                        x: u16::try_from(x).unwrap_or_default(),
+                        y: u16::try_from(y).unwrap_or_default(),
+                    };
+                    let was_crack = self.decay_cracks.remove(&p).is_some();
+                    let was_pit = self.decay_pits.remove(&p);
+                    if was_pit {
+                        self.obstacles.remove(&p);
+                    }
+                    if was_crack || was_pit {
+                        patched += 1;
+                    }
+                }
+            }
+            if patched > 0 {
+                self.decay_repairs += patched;
+                self.spawn_floating_text(
+                    f32::from(final_head.x),
+                    f32::from(final_head.y),
+                    format!("Patched {patched}!"),
+                    crate::color::Color::DarkYellow,
+                );
+            }
         }
         if self.mode == GameMode::Mire {
             // Eating food stirs the mire: pools next to the eaten cell dry up
@@ -23610,6 +23870,18 @@ if self.mode == GameMode::Sludge {
             if self.mode == GameMode::PhaseShift && self.phase_gates.contains(&final_p) {
                 return false;
             }
+            // In Decay mode the autopilot rejects a cracked cell whose collapse
+            // is due within the arrival horizon (like a predicted meteor); pits
+            // are already hard obstacles, and a pit can never form on an
+            // occupied or next-head cell, so a collapse can never kill the bot.
+            if self.mode == GameMode::Decay
+                && self
+                    .decay_cracks
+                    .get(&final_p)
+                    .is_some_and(|t| *t <= u32::from(steps))
+            {
+                return false;
+            }
             // Mire pools are obstacles, and the telegraphed cracks are treated
             // as walls too, so the bot never plans onto ground that is about to
             // give way.
@@ -24545,6 +24817,10 @@ if self.mode == GameMode::Sludge {
     pub const FLUX_RADIUS: u16 = 4;
     /// Ticks between whole-layout coil shuffles in Flux mode
     pub const FLUX_PERIOD: u32 = 24;
+    /// Ticks a cracked floor cell lasts in Decay mode once every snake has left it
+    pub const DECAY_DELAY: u32 = 36;
+    /// Fresh cracks dropped by each scheduled tremor in Decay mode
+    pub const DECAY_TREMOR_CRACKS: usize = 2;
     /// Ticks between scheduled mire waves in `GameMode::Mire`.
     pub const MIRE_PERIOD: u32 = 6;
     /// Ticks before a wave that threatened cells are telegraphed as cracks.

@@ -113,4 +113,5 @@ pub enum GameMode {
     Sludge,
     Flux,
     Maelstrom,
+    Decay,
 }

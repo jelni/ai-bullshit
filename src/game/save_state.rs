@@ -462,6 +462,16 @@ pub struct SaveState {
     pub geyser_jets: std::collections::HashMap<Point, u32>,
     #[serde(default)]
     pub geyser_eruptions: u32,
+    #[serde(default, with = "super::map_as_pairs")]
+    pub decay_cracks: std::collections::HashMap<Point, u32>,
+    #[serde(default)]
+    pub decay_pits: HashSet<Point>,
+    #[serde(default)]
+    pub decay_collapses: u32,
+    #[serde(default)]
+    pub decay_tremors: u32,
+    #[serde(default)]
+    pub decay_repairs: u32,
 }
 
 #[must_use]

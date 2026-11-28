@@ -238,4 +238,9 @@ pub struct HistoryState {
     pub spike_vents: Vec<Point>,
     pub spike_warnings: HashSet<Point>,
     pub spike_eruptions: u32,
+    pub decay_cracks: std::collections::HashMap<Point, u32>,
+    pub decay_pits: HashSet<Point>,
+    pub decay_collapses: u32,
+    pub decay_tremors: u32,
+    pub decay_repairs: u32,
 }
